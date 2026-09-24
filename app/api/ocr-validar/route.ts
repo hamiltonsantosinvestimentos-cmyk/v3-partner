@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createClient as sc } from "@supabase/supabase-js";
+import { salvarOcrResultados } from "@/lib/credit-proposal-meta";
 
 export const maxDuration = 120;
 
@@ -107,7 +109,9 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { doc_id, doc_label, doc_url, proposal_context } = body as {
+  const { doc_id, doc_label, doc_url, proposal_context, proposal_id } = body as {
+    /** Quando vem, o resultado é gravado aqui no servidor (não depende do modal continuar aberto). */
+    proposal_id?: string;
     doc_id: string;
     doc_label: string;
     doc_url: string;
@@ -242,6 +246,12 @@ Regras:
       ...(parsed.extrato_info ? { extrato_info: parsed.extrato_info as OcrResultado["extrato_info"] } : {}),
     };
 
+    if (proposal_id) {
+      const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      const salvo = await salvarOcrResultados(db, proposal_id, { set: { [doc_id]: resultado } });
+      if (!salvo.ok) console.error("[OCR] Falha ao gravar resultado:", salvo.error);
+      return NextResponse.json({ resultado, salvo: salvo.ok, metadata: salvo.ok ? salvo.metadata : undefined });
+    }
     return NextResponse.json({ resultado });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Erro ao processar OCR";

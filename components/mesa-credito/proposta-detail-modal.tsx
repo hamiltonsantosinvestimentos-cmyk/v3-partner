@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight, ArrowLeft,
   FileText, CreditCard, Calendar, Link2, Pencil, Check, Edit2,
@@ -77,6 +77,41 @@ export interface ImovelMeta {
   proprietario?: string;
   area_m2?: number;
   pesquisa_mercado?: PesquisaMercado;
+  /** Gravado pelo servidor a partir das fotos (api/credit-proposals/avaliacao-imovel/padrao). */
+  padrao_construtivo?: PadraoConstrutivoMeta;
+  /** Ajuste manual da Mesa; quando existe, vale no lugar do padrão das fotos. */
+  padrao_manual?: PadraoNivel;
+}
+
+type PadraoNivel = "BAIXO" | "MEDIO" | "ALTO";
+
+export interface PadraoConstrutivoMeta {
+  padrao: PadraoNivel;
+  confianca: "ALTA" | "MEDIA" | "BAIXA";
+  justificativa: string;
+  conservacao: string | null;
+  observacoes: string | null;
+  fotos_internas: number;
+  fotos_externas: number;
+  arquivos: string[];
+  analisado_em: string;
+}
+
+const PADRAO_LABEL: Record<PadraoNivel, string> = { BAIXO: "Baixo padrão", MEDIO: "Médio padrão", ALTO: "Alto padrão" };
+
+/**
+ * R$/m² aplicado conforme o padrão construtivo (23/09/2026): baixo = menor R$/m² dos
+ * comparáveis, médio = média, alto = maior. Sem padrão definido, usa a média (como antes).
+ */
+function valorPorPadrao(pm: PesquisaMercado, area: number, padrao: PadraoNivel | undefined) {
+  const precos = pm.comparaveis.map((c) => c.preco_m2).filter((v) => v > 0);
+  if (precos.length === 0 || !area) return null;
+  const menor = Math.min(...precos);
+  const maior = Math.max(...precos);
+  const media = precos.reduce((a, b) => a + b, 0) / precos.length;
+  const aplicado = padrao === "BAIXO" ? menor : padrao === "ALTO" ? maior : media;
+  const criterio = padrao === "BAIXO" ? "menor R$/m²" : padrao === "ALTO" ? "maior R$/m²" : "R$/m² médio";
+  return { menor, media, maior, aplicado, criterio, valor: aplicado * area };
 }
 
 export interface ProposalMeta {
@@ -1232,6 +1267,41 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [ocrBatchLoading, setOcrBatchLoading] = useState(false);
   const [ocrBatchProgress, setOcrBatchProgress] = useState<string>("");
 
+  // O modal fica montado e só abre/fecha: sem isso o estado do OCR era lido do metadata uma
+  // vez só (1ª montagem) e, ao fechar e abrir de novo ou trocar de proposta, os resultados
+  // gravados "sumiam" da tela. Recarrega do metadata a cada abertura/troca de proposta.
+  useEffect(() => {
+    if (!open || !proposal) return;
+    const aplicar = (meta: Record<string, unknown> | null | undefined) => {
+      const salvos = (meta?.ocr_resultados ?? {}) as Record<string, OcrResultado>;
+      setOcrResultados(salvos);
+      setOcrStatus(Object.fromEntries(Object.keys(salvos).map((k) => [k, "done" as OcrStatus])));
+    };
+    aplicar(proposal.metadata as Record<string, unknown> | null);
+    setOcrErros({});
+    if (IS_DEMO) return;
+    // A cópia da lista pode estar defasada (outra aba, outra pessoa, edição anterior):
+    // o que vale é o banco.
+    let cancelado = false;
+    fetch(`/api/credit-proposals?id=${proposal.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const meta = j?.proposal?.metadata as Record<string, unknown> | undefined;
+        if (cancelado || !meta) return;
+        aplicar(meta);
+        onProposalUpdate?.(proposal.id, { metadata: meta as typeof proposal.metadata });
+      })
+      .catch(() => {});
+    return () => { cancelado = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, proposal?.id]);
+
+  /** Metadata devolvido pelo servidor depois de gravar (OCR) — mantém a lista da Mesa em dia. */
+  function aplicarMetadataDoServidor(metadata: unknown) {
+    if (!proposal || !metadata || typeof metadata !== "object") return;
+    onProposalUpdate?.(proposal.id, { metadata: metadata as typeof proposal.metadata });
+  }
+
   // ── Workflow de aprovação ─────────────────────────────────────────────────
   const [showAprovar, setShowAprovar] = useState(false);
   const [showReprovar, setShowReprovar] = useState(false);
@@ -1576,18 +1646,17 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setUploadedFiles(prev => ({ ...prev, [docId]: remaining }));
     if (remaining.length === 0) {
       setCheckedDocs(prev => ({ ...prev, [docId]: false }));
-      // Remove resultado OCR ao excluir o último arquivo do documento
-      setOcrStatus(prev => { const n = { ...prev }; delete n[docId]; return n; });
-      setOcrResultados(prev => { const n = { ...prev }; delete n[docId]; return n; });
-      const newOcrResultados = { ...(proposal.metadata?.ocr_resultados as Record<string, unknown> ?? {}) };
-      delete newOcrResultados[docId];
-      const newMeta = { ...(proposal.metadata ?? {}), ocr_resultados: newOcrResultados };
-      onProposalUpdate?.(proposal.id, { metadata: newMeta as typeof proposal.metadata });
-      fetch("/api/credit-proposals", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: proposal.id, metadata: newMeta }),
-      }).catch(() => {});
+    }
+    // Remove o OCR desse arquivo (chave "docId::fileKey"; antes apagava só "docId", que nunca
+    // existia, e o resultado ficava órfão). Gravado no servidor, sem reescrever o metadata.
+    const ocrKey = `${docId}::${fileKey}`;
+    setOcrStatus(prev => { const n = { ...prev }; delete n[ocrKey]; delete n[docId]; return n; });
+    setOcrResultados(prev => { const n = { ...prev }; delete n[ocrKey]; delete n[docId]; return n; });
+    if (!IS_DEMO) {
+      fetch(
+        `/api/credit-proposals/ocr-resultados?proposal_id=${proposal.id}&doc_id=${encodeURIComponent(docId)}${remaining.length === 0 ? "" : `&file_key=${encodeURIComponent(fileKey)}`}`,
+        { method: "DELETE" }
+      ).then((r) => r.json()).then((j) => aplicarMetadataDoServidor(j?.metadata)).catch(() => {});
     }
     if (!IS_DEMO) {
       fetch(
@@ -1629,7 +1698,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       const res = await fetch("/api/ocr-validar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ doc_id: ocrKey, doc_label: docLabel, doc_url: url, proposal_context: ctx }),
+        body: JSON.stringify({ proposal_id: proposal.id, doc_id: ocrKey, doc_label: docLabel, doc_url: url, proposal_context: ctx }),
       });
       const rawOcr = await res.text();
       let json: Record<string, unknown> = {};
@@ -1639,14 +1708,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       if (!res.ok) throw new Error((json.error as string) ?? "Erro ao validar");
       setOcrResultados(prev => ({ ...prev, [ocrKey]: json.resultado as OcrResultado }));
       setOcrStatus(prev => ({ ...prev, [ocrKey]: "done" }));
-      // Persiste resultado no metadata para não perder ao recarregar
-      const newMeta = { ...(proposal.metadata ?? {}), ocr_resultados: { ...(proposal.metadata?.ocr_resultados as Record<string, unknown> ?? {}), [ocrKey]: json.resultado } };
-      onProposalUpdate?.(proposal.id, { metadata: newMeta as typeof proposal.metadata });
-      fetch("/api/credit-proposals", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: proposal.id, metadata: newMeta }),
-      }).catch(() => {});
+      // Já gravado pelo /api/ocr-validar (proposal_id); só atualiza a cópia local.
+      if (json.salvo === false) setOcrErros(prev => ({ ...prev, [ocrKey]: "Resultado exibido, mas não foi gravado. Valide de novo." }));
+      aplicarMetadataDoServidor(json.metadata);
     } catch (e: unknown) {
       setOcrErros(prev => ({ ...prev, [ocrKey]: e instanceof Error ? e.message : "Erro desconhecido" }));
       setOcrStatus(prev => ({ ...prev, [ocrKey]: "error" }));
@@ -1726,7 +1790,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             const res = await fetch("/api/ocr-validar", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ doc_id: ocrKey, doc_label: label, doc_url: file.url, proposal_context: ctx }),
+              body: JSON.stringify({ proposal_id: proposal.id, doc_id: ocrKey, doc_label: label, doc_url: file.url, proposal_context: ctx }),
             });
             const rawText = await res.text();
             let json: Record<string, unknown> = {};
@@ -1738,6 +1802,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             allResultados[ocrKey] = resultado;
             setOcrResultados(prev => ({ ...prev, [ocrKey]: resultado }));
             setOcrStatus(prev => ({ ...prev, [ocrKey]: "done" }));
+            aplicarMetadataDoServidor(json.metadata);
           } catch (e) {
             setOcrStatus(prev => ({ ...prev, [ocrKey]: "error" }));
             setOcrErros(prev => ({ ...prev, [ocrKey]: e instanceof Error ? e.message : "Erro" }));
@@ -1745,18 +1810,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         }
       }
 
-      // Persiste todos os resultados OCR no metadata
-      const newMeta = {
-        ...(proposal.metadata ?? {}),
-        ocr_resultados: { ...(proposal.metadata?.ocr_resultados as Record<string, unknown> ?? {}), ...allResultados },
-        ocr_analyzed_at: new Date().toISOString(),
-      };
-      onProposalUpdate?.(proposal.id, { metadata: newMeta as typeof proposal.metadata });
+      // Cada resultado já foi gravado pelo /api/ocr-validar; aqui só a data da análise
+      // (o PATCH mescla com o banco e preserva ocr_resultados).
       fetch("/api/credit-proposals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: proposal.id, metadata: newMeta }),
-      }).catch(() => {});
+        body: JSON.stringify({ id: proposal.id, metadata: { ocr_analyzed_at: new Date().toISOString() } }),
+      }).then((r) => r.json()).then((j) => aplicarMetadataDoServidor(j?.proposal?.metadata)).catch(() => {});
 
       // Dispara análise IA
       setOcrBatchProgress("Gerando análise inteligente...");
@@ -2093,9 +2153,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   async function persistImovelPatch(idx: number, patch: Partial<ImovelMeta>) {
     if (!proposal) return null;
     const meta = { ...(proposal.metadata ?? {}) };
-    const imoveis: ImovelMeta[] = Array.isArray(meta.imoveis) ? meta.imoveis.map((im: ImovelMeta, i: number) =>
+    // Proposta antiga sem metadata.imoveis: a aba mostra o imóvel das colunas legadas, então
+    // parte dele (antes a edição virava uma lista vazia e não gravava nada).
+    const base: ImovelMeta[] = Array.isArray(meta.imoveis) && meta.imoveis.length > 0
+      ? meta.imoveis
+      : [{ endereco: proposal.imovel_endereco ?? undefined, valor_medio: proposal.imovel_valor_medio ?? undefined, cidade: proposal.imovel_cidade ?? undefined, estado: proposal.imovel_estado ?? undefined }];
+    const imoveis: ImovelMeta[] = base.map((im: ImovelMeta, i: number) =>
       i === idx ? { ...im, ...patch } : im
-    ) : [];
+    );
     meta.imoveis = imoveis;
     const res = await fetch("/api/credit-proposals", {
       method: "PATCH",
@@ -2103,8 +2168,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       body: JSON.stringify({ id: proposal.id, metadata: meta }),
     });
     if (res.ok) {
-      onProposalUpdate?.(proposal.id, { metadata: meta as ProposalMeta });
-      return meta;
+      // O servidor mescla com o banco (e preserva OCR/padrão construtivo): usa o que ele devolveu.
+      const j = await res.json().catch(() => null);
+      const salvo = (j?.proposal?.metadata ?? meta) as ProposalMeta;
+      onProposalUpdate?.(proposal.id, { metadata: salvo });
+      return salvo;
     }
     return null;
   }
@@ -2140,6 +2208,58 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       setVmSaving(false);
     }
   }
+
+  // ── Padrão construtivo pelas fotos do imóvel (23/09/2026) ───────────────────
+  // Fotos = documentos do checklist cujo rótulo fala em "fotos internas/externas". Roda
+  // sozinho quando o modal abre (ou quando uma foto é anexada/removida) e o conjunto de fotos
+  // mudou desde a última análise gravada; o resultado fica em metadata (servidor).
+  const [padraoLoadingIdx, setPadraoLoadingIdx] = useState<number | null>(null);
+  const [padraoErro, setPadraoErro] = useState<string | null>(null);
+  const padraoAutoRef = useRef<string | null>(null);
+
+  const fotosDoImovel = (() => {
+    if (!proposal) return { internas: [] as string[], externas: [] as string[], arquivos: [] as string[] };
+    const ct = ((proposal.metadata?.client_type ?? proposal.client_type) === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
+    const itens = portfolioDocs[proposal.credit_line?.toLowerCase()]?.[ct] ?? CHECKLISTS[proposal.credit_line]?.[ct] ?? DEFAULT_CHECKLIST[ct];
+    const comArquivo = (re: RegExp) => itens.filter((d) => re.test(d.label) && (uploadedFiles[d.id] ?? []).length > 0).map((d) => d.id);
+    const internas = comArquivo(/fotos?\s+internas?/i);
+    const externas = comArquivo(/fotos?\s+externas?/i);
+    const arquivos = [...internas, ...externas].flatMap((id) => (uploadedFiles[id] ?? []).map((f) => f.key)).sort();
+    return { internas, externas, arquivos };
+  })();
+  const assinaturaFotos = fotosDoImovel.arquivos.join("|");
+
+  async function analisarPadrao(idx: number) {
+    if (!proposal) return;
+    setPadraoErro(null);
+    setPadraoLoadingIdx(idx);
+    try {
+      const res = await fetch("/api/credit-proposals/avaliacao-imovel/padrao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposal.id, imovel_idx: idx, docs_internas: fotosDoImovel.internas, docs_externas: fotosDoImovel.externas }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) { setPadraoErro(typeof j.error === "string" ? j.error : "Erro ao analisar as fotos."); return; }
+      if (j.metadata) onProposalUpdate?.(proposal.id, { metadata: j.metadata as ProposalMeta });
+    } catch {
+      setPadraoErro("Erro de conexão ao analisar as fotos.");
+    } finally {
+      setPadraoLoadingIdx(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!open || !proposal || IS_DEMO || !assinaturaFotos) return;
+    const meta = proposal.metadata ?? {};
+    const primeiro = (Array.isArray(meta.imoveis) ? meta.imoveis[0] : undefined) as ImovelMeta | undefined;
+    const jaAnalisado = (primeiro?.padrao_construtivo?.arquivos ?? []).slice().sort().join("|");
+    const chave = `${proposal.id}:${assinaturaFotos}`;
+    if (jaAnalisado === assinaturaFotos || padraoAutoRef.current === chave) return;
+    padraoAutoRef.current = chave; // uma tentativa automática por conjunto de fotos
+    analisarPadrao(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, proposal?.id, assinaturaFotos]);
 
   // ── Aba Avaliação de Imóvel — cadastro do zero e edição de localização ────
   const [addingImovel, setAddingImovel] = useState(false);
@@ -4107,6 +4227,66 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                         )}
                       </div>
 
+                      {/* ── Padrão construtivo (IA sobre as fotos internas/externas) ── */}
+                      {(() => {
+                        const pc = im.padrao_construtivo;
+                        const efetivo = im.padrao_manual ?? pc?.padrao;
+                        const semFotos = fotosDoImovel.arquivos.length === 0;
+                        return (
+                          <div className="col-span-2 pt-1.5 border-t border-amber-500/20 space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs text-muted-foreground">Padrão construtivo</span>
+                              <div className="flex items-center gap-1.5">
+                                <select
+                                  value={efetivo ?? ""}
+                                  onChange={(e) => persistImovelPatch(idx, { padrao_manual: (e.target.value || undefined) as PadraoNivel | undefined })}
+                                  className="h-7 px-1.5 text-xs bg-secondary border border-amber-500/40 rounded text-foreground"
+                                  title="Ajuste manual (vale no lugar da análise das fotos)"
+                                >
+                                  <option value="">—</option>
+                                  <option value="BAIXO">{PADRAO_LABEL.BAIXO}</option>
+                                  <option value="MEDIO">{PADRAO_LABEL.MEDIO}</option>
+                                  <option value="ALTO">{PADRAO_LABEL.ALTO}</option>
+                                </select>
+                                <button
+                                  onClick={() => analisarPadrao(idx)}
+                                  disabled={padraoLoadingIdx !== null || semFotos}
+                                  title={semFotos ? "Anexe as fotos internas/externas do imóvel na aba Documentos" : "Analisar as fotos com IA"}
+                                  className="h-7 px-2 rounded border border-amber-500/40 text-amber-400 text-[11px] font-semibold flex items-center gap-1 hover:bg-amber-500/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                  {padraoLoadingIdx === idx ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                                  {pc ? "Reanalisar fotos" : "Analisar fotos"}
+                                </button>
+                              </div>
+                            </div>
+                            {padraoLoadingIdx === idx && (
+                              <p className="text-[10px] text-muted-foreground">Analisando {fotosDoImovel.arquivos.length} foto(s) do imóvel…</p>
+                            )}
+                            {padraoErro && padraoLoadingIdx === null && (
+                              <p className="text-[10px] text-red-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {padraoErro}</p>
+                            )}
+                            {semFotos && !pc && (
+                              <p className="text-[10px] text-muted-foreground italic">Sem fotos internas/externas anexadas. A análise roda sozinha quando forem anexadas nos Documentos.</p>
+                            )}
+                            {pc && (
+                              <div className="p-2 rounded-lg bg-secondary/40 border border-border/40 space-y-1">
+                                <p className="text-[11px] text-foreground">
+                                  <strong>{PADRAO_LABEL[pc.padrao]}</strong> pelas fotos
+                                  <span className="text-muted-foreground"> · confiança {pc.confianca.toLowerCase()} · {pc.fotos_internas} interna(s), {pc.fotos_externas} externa(s)</span>
+                                  {im.padrao_manual && im.padrao_manual !== pc.padrao && (
+                                    <span className="text-amber-400"> · ajustado para {PADRAO_LABEL[im.padrao_manual].toLowerCase()}</span>
+                                  )}
+                                </p>
+                                {pc.justificativa && <p className="text-[10px] text-muted-foreground">{pc.justificativa}</p>}
+                                {pc.conservacao && <p className="text-[10px] text-muted-foreground">Conservação: {pc.conservacao}</p>}
+                                {pc.observacoes && <p className="text-[10px] text-muted-foreground italic">{pc.observacoes}</p>}
+                                <p className="text-[9px] text-muted-foreground/70">Analisado em {new Date(pc.analisado_em).toLocaleString("pt-BR")}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+
                       {/* ── Pesquisa de Valor de Mercado (IA + web search) ── */}
                       <div className="col-span-2 pt-1.5 border-t border-amber-500/20 space-y-2">
                         <button
@@ -4141,15 +4321,34 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                               </span>
                             </div>
 
-                            {im.pesquisa_mercado.comparaveis.length > 0 ? (
+                            {im.pesquisa_mercado.comparaveis.length > 0 ? (() => {
+                              const padraoEf = im.padrao_manual ?? im.padrao_construtivo?.padrao;
+                              const vp = valorPorPadrao(im.pesquisa_mercado!, im.area_m2 ?? 0, padraoEf);
+                              const valorAplicado = vp?.valor ?? im.pesquisa_mercado!.valor_estimado;
+                              return (
                               <>
+                                {vp && (
+                                  <div className="grid grid-cols-3 gap-1.5 text-center">
+                                    {([["Menor", vp.menor, "BAIXO"], ["Média", vp.media, "MEDIO"], ["Maior", vp.maior, "ALTO"]] as const).map(([rot, val, niv]) => {
+                                      const ativo = (padraoEf ?? "MEDIO") === niv;
+                                      return (
+                                        <div key={rot} className={`rounded-md border px-1.5 py-1 ${ativo ? "border-cyan-400/60 bg-cyan-500/10" : "border-border/40"}`}>
+                                          <p className="text-[9px] uppercase text-muted-foreground">{rot} R$/m²</p>
+                                          <p className={`text-[11px] font-semibold ${ativo ? "text-cyan-300" : "text-foreground"}`}>{formatCurrency(val)}</p>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                                 <div className="flex items-center justify-between text-xs">
-                                  <span className="text-muted-foreground">R$/m² médio da região</span>
-                                  <span className="font-semibold text-foreground">{formatCurrency(im.pesquisa_mercado.preco_m2_medio)}</span>
+                                  <span className="text-muted-foreground">
+                                    R$/m² aplicado {vp ? `(${vp.criterio}${padraoEf ? ` · ${PADRAO_LABEL[padraoEf].toLowerCase()}` : " · padrão não definido"})` : ""}
+                                  </span>
+                                  <span className="font-semibold text-foreground">{formatCurrency(vp?.aplicado ?? im.pesquisa_mercado!.preco_m2_medio)}</span>
                                 </div>
                                 <div className="flex items-center justify-between">
                                   <span className="text-xs text-muted-foreground">Valor estimado ({im.area_m2}m²)</span>
-                                  <span className="text-sm font-black text-cyan-300">{formatCurrency(im.pesquisa_mercado.valor_estimado)}</span>
+                                  <span className="text-sm font-black text-cyan-300">{formatCurrency(valorAplicado)}</span>
                                 </div>
 
                                 <div className="space-y-1 pt-1 border-t border-cyan-500/15">
@@ -4174,14 +4373,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                                 </div>
 
                                 <button
-                                  onClick={() => usarComoValorMedio(idx, im.pesquisa_mercado!.valor_estimado)}
+                                  onClick={() => usarComoValorMedio(idx, valorAplicado)}
                                   disabled={vmSaving}
                                   className="w-full h-7 px-2 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-[11px] font-semibold hover:bg-cyan-500/30 transition-colors disabled:opacity-40"
                                 >
                                   Usar como Valor Médio de Avaliação
                                 </button>
                               </>
-                            ) : (
+                              );
+                            })() : (
                               <p className="text-[10px] text-muted-foreground italic">Nenhum comparável válido encontrado para a região.</p>
                             )}
 
