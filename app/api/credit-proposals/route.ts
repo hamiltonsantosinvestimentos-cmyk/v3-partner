@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { protegerMetadata } from "@/lib/credit-proposal-meta";
 import { semAnaliseDoSite } from "@/lib/analise-site";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -365,6 +366,13 @@ export async function PATCH(req: NextRequest) {
   }
 
   const updateData: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
+
+  // metadata: mescla com o banco e preserva o que só o servidor grava (OCR, padrão construtivo),
+  // senão uma cópia antiga vinda do modal apaga resultados já salvos (lib/credit-proposal-meta.ts).
+  if (fields.metadata && typeof fields.metadata === "object") {
+    const { data: atual } = await serviceClient().from("credit_desk_proposals").select("metadata").eq("id", id).single();
+    updateData.metadata = protegerMetadata(atual?.metadata as Record<string, unknown> | null, fields.metadata as Record<string, unknown>);
+  }
 
   // "Transferência de linha" (mesa/admin) muda credit_line direto — resolve
   // credit_line_id junto, sempre, senão o vínculo fica obsoleto e o gate
