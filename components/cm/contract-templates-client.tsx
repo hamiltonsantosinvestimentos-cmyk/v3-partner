@@ -353,7 +353,10 @@ export function ContractTemplatesClient() {
   const hasVigenciaVar = ((selected?.variables_map ?? []) as { key: string; source?: string }[])
     .some((v) => v.key === "vigencia_prazo" && v.source === "manual");
 
-  const openGenerateModal = () => {
+  // presetBatchId (24/09/2026, caso real da Taísa Pedroso): o botão dentro do lote abre este mesmo modal
+  // JÁ com aquele lote escolhido, então ninguém gera contrato a partir do lote errado. Chamado como
+  // onClick={openGenerateModal} o primeiro argumento é o evento, por isso só aceita string.
+  const openGenerateModal = (presetBatchId?: unknown) => {
     setGenParties([{ name: "", email: "", doc: "", role: "indicador" }]);
     setGenCommission("");
     setGenValorOperacao("");
@@ -364,7 +367,7 @@ export function ContractTemplatesClient() {
     setGenVigenciaModo("dias");
     setGenVigenciaDias("");
     setGenVertical("");
-    setSelectedQualBatchId("");
+    setSelectedQualBatchId(typeof presetBatchId === "string" ? presetBatchId : "");
     setGenResult(null);
     setGenError(null);
     setShowGenerateModal(true);
@@ -1437,6 +1440,22 @@ ${allParties.length > 0 ? `<div class="qualbox">
                               ? `Lote já consumido pelo contrato ${batch.consumido_contrato?.contract_code ?? "gerado"} (single-use, não reaproveitável). Para outra operação/cliente com esta minuta, clique em "Gerar Link de Qualificação Antecipada" para criar um lote novo.`
                               : "Lote completo. Os dados serão herdados automaticamente no próximo contrato gerado a partir desta minuta (single-use: não reaproveitável em outro contrato depois disso)."}
                           </p>
+                        )}
+
+                        {/* Botão de geração DENTRO do lote (24/09/2026, pedido de João, caso real: lote 2/2
+                            qualificados sem ação nenhuma na tela). Abre o modal de geração com este lote
+                            selecionado; o servidor segue recusando lote consumido, incompleto ou de outra minuta. */}
+                        {batch.status === "completo" && !batch.consumido_por_contract_id && !batch.cm_party_qualifications.some((p) => p.status !== "preenchido") && (
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <button onClick={() => openGenerateModal(batch.id)} disabled={selected.approval_status !== "aprovado"}
+                              title={selected.approval_status !== "aprovado" ? "A minuta precisa estar Aprovada para gerar contrato" : "Gerar o contrato a partir deste lote"}
+                              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/40 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/25 disabled:opacity-40 disabled:cursor-not-allowed transition">
+                              <FilePlus2 size={13} /> Gerar Contrato deste lote
+                            </button>
+                            {selected.approval_status !== "aprovado" && (
+                              <span className="text-[10px] text-[#9BAFC5]">A minuta precisa estar Aprovada para gerar contrato.</span>
+                            )}
+                          </div>
                         )}
 
                         {!batch.consumido_por_contract_id && (
