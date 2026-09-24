@@ -28,6 +28,8 @@ export interface EstadoFonte {
   /** Ligada na config de fontes desta análise. Desligada = nem conta como pendente. */
   habilitada: boolean;
   ultimo_erro: string | null;
+  /** Já consultada, mas antes de um campo novo existir (SCR sem a vencer/limites). */
+  desatualizada?: boolean;
 }
 
 export interface EstadoAnalise {
@@ -94,7 +96,10 @@ async function carregar(db: SupabaseClient, proposalId: string) {
 function montarFontes(perfil: PerfilRow, cfg: SourceConfig, isPj: boolean): EstadoFonte[] {
   const status = (perfil.raw_result?.fontes_status ?? {}) as Record<string, { ok?: boolean; erro?: string }>;
   const serasaOk = !!perfil.serasa_data && !(perfil.serasa_data as { error?: unknown }).error;
-  const bacenOk = !!perfil.bacen_scr_data;
+  // 23/09/2026: SCR consultado antes da leitura de "crédito a vencer" e "limites" não tem
+  // consolidado_bruto — conta como pendente pra o Reanalisar buscar de novo (uma vez só:
+  // depois disso o consolidado_bruto existe, mesmo que o CheckTudo não traga os campos).
+  const bacenOk = !!perfil.bacen_scr_data && "consolidado_bruto" in perfil.bacen_scr_data;
   return [
     {
       fonte: "serasa",
@@ -107,6 +112,7 @@ function montarFontes(perfil: PerfilRow, cfg: SourceConfig, isPj: boolean): Esta
       fonte: "bacen",
       label: FONTE_LABEL.bacen,
       consultada: bacenOk,
+      desatualizada: !!perfil.bacen_scr_data && !bacenOk,
       habilitada: !!cfg.registrato_bacen,
       ultimo_erro: !bacenOk && status.bacen?.ok === false ? status.bacen.erro ?? null : null,
     },

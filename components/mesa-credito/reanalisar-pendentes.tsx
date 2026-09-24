@@ -14,6 +14,7 @@ interface EstadoFonte {
   consultada: boolean;
   habilitada: boolean;
   ultimo_erro: string | null;
+  desatualizada?: boolean;
 }
 
 interface Estado {
@@ -107,7 +108,7 @@ export function ReanalisarPendentes({
                   : <AlertTriangle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-px" />}
                 <span className="min-w-0">
                   <span className={f.consultada ? "text-foreground" : "text-amber-300"}>
-                    {f.label} — {f.consultada ? "consultado" : "não consultado"}
+                    {f.label} — {f.consultada ? "consultado" : f.desatualizada ? "desatualizado (sem crédito a vencer e limites)" : "não consultado"}
                   </span>
                   {!f.consultada && f.ultimo_erro && (
                     <span className="block text-[10px] text-muted-foreground break-words">Último erro: {f.ultimo_erro}</span>
@@ -132,7 +133,10 @@ export function ReanalisarPendentes({
 
       {pendentes.length > 0 && (
         <p className="text-[11px] text-muted-foreground">
-          Vai consultar apenas: {pendentes.map((f) => f.label).join(" e ")}. O que já foi consultado não é refeito nem cobrado de novo.
+          Vai consultar apenas: {pendentes.map((f) => f.label).join(" e ")}.{" "}
+          {pendentes.some((f) => f.desatualizada)
+            ? "O BACEN é consultado de novo (1 consulta) pra trazer crédito a vencer e limites; o dossiê é refeito em seguida."
+            : "O que já foi consultado não é refeito nem cobrado de novo."}
         </p>
       )}
       {semCredencial.length > 0 && (

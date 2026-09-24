@@ -165,6 +165,14 @@ export interface CreditReportData {
     creditoVencidoOperacoes: Array<{ descricao: string | null; valor: string | null; qtdMeses: string | null }>;
     prejuizoValor: string | null;
     prejuizoOperacoes: Array<{ descricao: string | null; valor: string | null; qtdMeses: string | null }>;
+    /** Tomado no mercado e em dia (carteira a vencer). null = consulta anterior a 23/09/2026 ou sem dado. */
+    creditoAVencerValor: string | null;
+    creditoAVencerPercentual: string | null;
+    creditoAVencerOperacoes: Array<{ descricao: string | null; valor: string | null; percentual: string | null }>;
+    /** Limites de crédito concedidos. */
+    limiteCreditoValor: string | null;
+    limiteCreditoPercentual: string | null;
+    limiteCreditoOperacoes: Array<{ descricao: string | null; valor: string | null; percentual: string | null }>;
     consultadoEm: string | null;
   };
 
@@ -277,6 +285,21 @@ function addDaysISO(iso: string, days: number): string {
  * marca hasData como false para o template dizer "não consultado" ou
  * "nada localizado", em vez de exibir tabela vazia como se fosse resultado.
  */
+// Campos do SCR adicionados em 23/09/2026 (a vencer / limites): o CheckTudo pode devolver
+// número ou string; normaliza pra string e descarta vazio.
+function txt(v: unknown): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  return String(v);
+}
+function opsComPercentual(ops: unknown): Array<{ descricao: string | null; valor: string | null; percentual: string | null }> {
+  if (!Array.isArray(ops)) return [];
+  return (ops as Array<Record<string, unknown>>).map((o) => ({
+    descricao: txt(o.descricao),
+    valor: txt(o.valor),
+    percentual: txt(o.percentual),
+  }));
+}
+
 export async function buildCreditReportData(creditProfileId: string): Promise<CreditReportData | null> {
   const svc = serviceClient();
 
@@ -578,6 +601,12 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
             qtdMeses: o.qtd_meses ?? null,
           }))
         : [],
+      creditoAVencerValor: txt(bacenScr?.credito_a_vencer_valor),
+      creditoAVencerPercentual: txt(bacenScr?.credito_a_vencer_percentual),
+      creditoAVencerOperacoes: opsComPercentual(bacenScr?.credito_a_vencer_operacoes),
+      limiteCreditoValor: txt(bacenScr?.limite_credito_valor),
+      limiteCreditoPercentual: txt(bacenScr?.limite_credito_percentual),
+      limiteCreditoOperacoes: opsComPercentual(bacenScr?.limite_credito_operacoes),
       consultadoEm: bacenScr?.consultado_em
         ? new Date(bacenScr.consultado_em as string).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
         : null,
