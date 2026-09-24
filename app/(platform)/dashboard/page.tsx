@@ -1,4 +1,5 @@
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
+import { semAnaliseDoSite } from "@/lib/analise-site";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
@@ -87,7 +88,8 @@ export default async function DashboardPage({
 
   // Contadores — partner vê só os seus, admin vê todos
   let dealCountQ  = svc.from("ma_deals").select("*", { count: "exact", head: true });
-  let propCountQ  = svc.from("credit_desk_proposals").select("*", { count: "exact", head: true }).in("status", ["PENDING", "IN_REVIEW"]);
+  // Sem head/count: precisa do metadata pra tirar as análises do site (lib/analise-site.ts).
+  let propCountQ  = svc.from("credit_desk_proposals").select("metadata").in("status", ["PENDING", "IN_REVIEW"]);
   let ticketCountQ = svc.from("operational_tickets").select("*", { count: "exact", head: true }).in("status", ["PENDING", "IN_REVIEW"]);
 
   if (!isAdmin) {
@@ -103,11 +105,11 @@ export default async function DashboardPage({
   const countsResult = await Promise.allSettled([dealCountQ, ticketCountQ, propCountQ]);
   const totalDeals    = countsResult[0].status === "fulfilled" ? (countsResult[0].value.count ?? 0) : 0;
   const totalTickets  = countsResult[1].status === "fulfilled" ? (countsResult[1].value.count ?? 0) : 0;
-  const totalProposals = countsResult[2].status === "fulfilled" ? (countsResult[2].value.count ?? 0) : 0;
+  const totalProposals = countsResult[2].status === "fulfilled" ? semAnaliseDoSite(countsResult[2].value.data as { metadata?: unknown }[] | null).length : 0;
 
   // Recentes — mesmo filtro
   let dealsQ  = svc.from("ma_deals").select("id, code, title, stage, deal_value, target_company, created_at").order("created_at", { ascending: false }).limit(5);
-  let propsQ  = svc.from("credit_desk_proposals").select("id, code, title, client_name, requested_value, current_level, status, created_at").order("created_at", { ascending: false }).limit(5);
+  let propsQ  = svc.from("credit_desk_proposals").select("id, code, title, client_name, requested_value, current_level, status, created_at, metadata").order("created_at", { ascending: false }).limit(10);
 
   if (!isAdmin) {
     dealsQ  = dealsQ.or(`created_by.eq.${uid},assigned_to.eq.${uid}`) as typeof dealsQ;
@@ -120,7 +122,7 @@ export default async function DashboardPage({
 
   const [dealsResult, propsResult] = await Promise.allSettled([dealsQ, propsQ]);
   const recentDeals     = dealsResult.status  === "fulfilled" ? (dealsResult.value.data  ?? []) : [];
-  const recentProposals = propsResult.status  === "fulfilled" ? (propsResult.value.data  ?? []) : [];
+  const recentProposals = propsResult.status  === "fulfilled" ? semAnaliseDoSite(propsResult.value.data).slice(0, 5) : [];
 
   // Busca propostas dos últimos 12 meses para montar o gráfico de volume
   const dozeAtras = new Date();
@@ -130,14 +132,14 @@ export default async function DashboardPage({
 
   let revenueQ = svc
     .from("credit_desk_proposals")
-    .select("created_at, requested_value, status")
+    .select("created_at, requested_value, status, metadata")
     .gte("created_at", dozeAtras.toISOString())
     .order("created_at", { ascending: true });
 
   if (!isAdmin) revenueQ = revenueQ.eq("partner_id", uid) as typeof revenueQ;
 
   const revenueResult = await Promise.allSettled([revenueQ]);
-  const revenueRaw = revenueResult[0].status === "fulfilled" ? (revenueResult[0].value.data ?? []) : [];
+  const revenueRaw = revenueResult[0].status === "fulfilled" ? semAnaliseDoSite(revenueResult[0].value.data) : [];
 
   // Agrupa por mês — total e em aprovação (PENDING + IN_REVIEW)
   const monthMap: Record<string, number> = {};

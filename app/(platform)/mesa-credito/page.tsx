@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { semAnaliseDoSite } from "@/lib/analise-site";
 import {
   CreditCard,
   Home,
@@ -60,15 +61,15 @@ export default async function MesaCreditoPage() {
       const [allResult, monthResult] = await Promise.allSettled([
         supabase
           .from("credit_desk_proposals")
-          .select("current_level, status, requested_value"),
+          .select("current_level, status, requested_value, metadata"),
         supabase
           .from("credit_desk_proposals")
-          .select("current_level, status, requested_value")
+          .select("current_level, status, requested_value, metadata")
           .gte("created_at", monthStart),
       ]);
 
       if (allResult.status === "fulfilled" && allResult.value.data) {
-        const rows = allResult.value.data as Array<{
+        const rows = semAnaliseDoSite(allResult.value.data as { metadata?: unknown }[]) as unknown as Array<{
           current_level: string;
           status: string;
           requested_value: number;
@@ -96,7 +97,7 @@ export default async function MesaCreditoPage() {
       }
 
       if (monthResult.status === "fulfilled" && monthResult.value.data) {
-        const monthRows = monthResult.value.data as Array<{
+        const monthRows = semAnaliseDoSite(monthResult.value.data as { metadata?: unknown }[]) as unknown as Array<{
           current_level: string;
         }>;
         for (const row of monthRows) {

@@ -18,6 +18,13 @@ interface Props {
   podeExcluirAnalise?: boolean;
 }
 
+// Pedido comprado direto no site: não é operação de crédito. A proposta técnica que o motor
+// precisa é criada por baixo dos panos no "Rodar análise" e nunca aparece como vínculo/link
+// pra Mesa (ver lib/analise-site.ts).
+function ehPedidoSite(order: PartnerOrder) {
+  return order.source === "direct" && order.origem !== "mesa_credito";
+}
+
 function StepRow({ done, label, action }: { done: boolean; label: string; action?: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3 py-3 border-b border-border/30 last:border-b-0">
@@ -48,7 +55,7 @@ interface OrderDocument {
   report_delivered_at: string | null;
 }
 
-function DocRow({ orderId, doc, onUpdated, podeExcluirAnalise }: { orderId: string; doc: OrderDocument; onUpdated: () => void; podeExcluirAnalise?: boolean }) {
+function DocRow({ orderId, doc, onUpdated, podeExcluirAnalise, site }: { orderId: string; doc: OrderDocument; onUpdated: () => void; podeExcluirAnalise?: boolean; site?: boolean }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -65,6 +72,7 @@ function DocRow({ orderId, doc, onUpdated, podeExcluirAnalise }: { orderId: stri
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Falha na operação");
       onUpdated();
+      return json;
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -107,13 +115,31 @@ function DocRow({ orderId, doc, onUpdated, podeExcluirAnalise }: { orderId: stri
         </Button>
       )}
 
-      {consented && !hasProposal && (
+      {site && consented && !hasAnalysis && (
+        <Button
+          size="sm"
+          className="w-full"
+          disabled={busy !== null}
+          onClick={async () => {
+            let proposalId = doc.credit_desk_proposal_id;
+            if (!proposalId) {
+              const linked = await call("analyze", `/api/credit-engine/orders/${orderId}/link-proposal`, { consent_id: doc.id });
+              proposalId = linked?.proposal?.id ?? null;
+            }
+            if (proposalId) await call("analyze", "/api/credit-engine/trigger", { proposal_id: proposalId });
+          }}
+        >
+          {busy === "analyze" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Rodar análise"}
+        </Button>
+      )}
+
+      {!site && consented && !hasProposal && (
         <Button size="sm" className="w-full" disabled={busy !== null} onClick={() => call("link", `/api/credit-engine/orders/${orderId}/link-proposal`, { consent_id: doc.id })}>
           {busy === "link" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Vincular proposta"}
         </Button>
       )}
 
-      {hasProposal && !hasAnalysis && (
+      {!site && hasProposal && !hasAnalysis && (
         <Button size="sm" className="w-full" disabled={busy !== null} onClick={() => call("analyze", "/api/credit-engine/trigger", { proposal_id: doc.credit_desk_proposal_id })}>
           {busy === "analyze" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Rodar análise"}
         </Button>
@@ -255,7 +281,7 @@ function AdditionalDocuments({ order, onUpdated, podeExcluirAnalise }: { order: 
       ) : (
         <div className="space-y-2">
           {docs.map((d) => (
-            <DocRow key={d.id} orderId={order.id} doc={d} onUpdated={() => { load(); onUpdated(); }} podeExcluirAnalise={podeExcluirAnalise} />
+            <DocRow key={d.id} orderId={order.id} doc={d} onUpdated={() => { load(); onUpdated(); }} podeExcluirAnalise={podeExcluirAnalise} site={ehPedidoSite(order)} />
           ))}
         </div>
       )}
@@ -310,8 +336,15 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
   }
 
   async function handleTriggerAnalysis() {
-    if (!order.credit_desk_proposal_id) return;
-    const json = await call("analyze", "/api/credit-engine/trigger", { proposal_id: order.credit_desk_proposal_id });
+    let proposalId = order.credit_desk_proposal_id;
+    // Pedido do site: cria a proposta técnica na hora, sem passo de "vínculo" visível.
+    if (!proposalId && site) {
+      const linked = await call("analyze", `/api/credit-engine/orders/${order.id}/link-proposal`);
+      proposalId = linked?.proposal?.id ?? null;
+      if (!proposalId) return;
+    }
+    if (!proposalId) return;
+    const json = await call("analyze", "/api/credit-engine/trigger", { proposal_id: proposalId });
     if (json) onUpdated();
   }
 
@@ -336,6 +369,7 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
     if (json) onUpdated();
   }
 
+  const site = ehPedidoSite(order);
   const hasProposal = Boolean(order.credit_desk_proposal_id);
   const hasAnalysis = Boolean(order.credit_profile_id);
   const hasReport = Boolean(order.report_public_token);
@@ -365,7 +399,7 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
             <div>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Origem</p>
               <p className="text-foreground font-medium">
-                {order.source === "direct" ? "Venda direta" : "Via partner"}
+                {site ? "Site" : order.source === "direct" ? "Venda direta" : "Via partner"}
                 {order.source === "direct" && order.ref_partner_name && ` (ref. ${order.ref_partner_name})`}
                 {order.source !== "direct" && order.partner_name && `: ${order.partner_name}`}
               </p>
@@ -407,7 +441,7 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
           <div className="rounded-xl border border-border/50 bg-card p-1">
             <div className="px-3">
               <StepRow done={order.consent_status === "consented"} label="Consentimento preenchido pelo cliente" />
-              <StepRow
+              {!site && <StepRow
                 done={hasProposal}
                 label="Proposta vinculada"
                 action={
@@ -426,12 +460,12 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
                     </a>
                   )
                 }
-              />
+              />}
               <StepRow
                 done={hasAnalysis}
                 label="Análise rodada (Motor V3)"
                 action={
-                  hasProposal && !hasAnalysis ? (
+                  (hasProposal || (site && order.status === "PAID")) && !hasAnalysis ? (
                     <Button size="sm" disabled={busy !== null} onClick={handleTriggerAnalysis}>
                       {busy === "analyze" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Rodar análise"}
                     </Button>

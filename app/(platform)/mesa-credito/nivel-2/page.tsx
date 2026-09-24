@@ -1,4 +1,5 @@
 import { CreditDeskClient } from "@/components/mesa-credito/credit-desk-client";
+import { semAnaliseDoSite } from "@/lib/analise-site";
 import { DEMO_CREDIT_PROPOSALS } from "@/lib/demo-data";
 import { cookies } from "next/headers";
 
@@ -32,5 +33,5 @@ export default async function Nivel2Page() {
   if (!isAdmin) query = query.eq("partner_id", currentUser.id);
 
   const { data } = await query;
-  return <CreditDeskClient proposals={(data ?? []) as Parameters<typeof CreditDeskClient>[0]["proposals"]} level="NIVEL_2" currentUser={currentUser} />;
+  return <CreditDeskClient proposals={semAnaliseDoSite(data as { metadata?: unknown }[] | null) as unknown as Parameters<typeof CreditDeskClient>[0]["proposals"]} level="NIVEL_2" currentUser={currentUser} />;
 }
