@@ -24,3 +24,8 @@ export const VERTICAL_LABELS: Record<string, string> = {
 // Exclui multi_vertical em si (não existe operação "multi-vertical" de
 // verdade, é só o rótulo da minuta genérica).
 export const CONCRETE_VERTICALS = Object.keys(VERTICAL_LABELS).filter((v) => v !== "multi_vertical");
+
+// Verticais que a MESA_OPERACIONAL (analista) enxerga e opera na Central de Contratos: lista, envio
+// para assinatura e atualização de status. Fonte única (antes vivia só em app/api/contracts/list),
+// para lista e envio nunca divergirem: analista nunca opera contrato fora do próprio escopo.
+export const MESA_OPERACIONAL_VERTICALS = ["ma", "capital_markets"];

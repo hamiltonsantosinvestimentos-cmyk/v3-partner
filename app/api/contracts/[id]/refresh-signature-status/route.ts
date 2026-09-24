@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { listClickSignSignEvents } from "@/lib/esignature/clicksign-provider";
 import { applyEnvelopeClosed, recordSignatureNote } from "@/lib/contract-signature-timeline";
+import { MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -13,8 +14,8 @@ async function requireRole() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
-  if (!profile || !["ADMIN", "GESTAO"].includes(profile.role as string)) return null;
-  return { userId: user.id };
+  if (!profile || !["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role as string)) return null;
+  return { userId: user.id, role: profile.role as string };
 }
 
 // POST /api/contracts/[id]/refresh-signature-status (21/09/2026)
@@ -34,10 +35,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, status_signature, external_envelope_id, esignature_provider, parties")
+    .select("id, vertical, status_signature, external_envelope_id, esignature_provider, parties")
     .eq("id", id)
     .single();
   if (!contract) return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
+  if (caller.role === "MESA_OPERACIONAL" && !MESA_OPERACIONAL_VERTICALS.includes(contract.vertical as string)) {
+    return NextResponse.json({ error: "Este contrato não pertence às verticais da Mesa Operacional." }, { status: 403 });
+  }
   if (!contract.external_envelope_id) {
     return NextResponse.json({ error: "Este contrato não tem envelope de assinatura." }, { status: 409 });
   }
