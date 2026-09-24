@@ -315,7 +315,7 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
   <div class="subject-block">
     <div>
       <div class="subject-field-label">${isPJ ? "Razão social" : "Nome"}</div>
-      <div class="subject-field-value">${esc(cad.razaoSocial ?? data.subjectName)}</div>
+      <div class="subject-field-value">${esc(data.subjectName)}</div>
     </div>
     <div>
       <div class="subject-field-label">${isPJ ? "CNPJ" : "CPF"}</div>
@@ -325,7 +325,13 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
       <div class="subject-field-label">Natureza</div>
       <div class="subject-field-value">${isPJ ? "Pessoa Jurídica" : "Pessoa Física"}</div>
     </div>
-  </div>`;
+  </div>${
+    data.nomeInformado
+      ? `<p class="note" style="margin-top:-16px">Nome informado na solicitação: <strong>${esc(data.nomeInformado)}</strong>. Este dossiê identifica o analisado pelo nome ${
+          isPJ ? "da Receita Federal" : "das bases oficiais consultadas"
+        }, vinculado ao ${isPJ ? "CNPJ" : "CPF"} acima.</p>`
+      : ""
+  }`;
 
   // ----- Classificação -----
   const classificacao = `<h3 class="sec">Classificação de risco</h3>

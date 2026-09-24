@@ -1,4 +1,5 @@
 import { createClient as sc } from "@supabase/supabase-js";
+import { nomeOficialDoPerfil, mesmoNome, semRotulo } from "@/lib/credit-nome-oficial";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -42,7 +43,10 @@ export interface CreditReportProcesso {
 
 export interface CreditReportData {
   code: string;
+  /** Nome oficial (Receita/Serasa) quando existe; senão o informado. */
   subjectName: string;
+  /** Nome digitado na solicitação, só quando difere do oficial (ver lib/credit-nome-oficial.ts). */
+  nomeInformado: string | null;
   subjectCpfCnpj: string;
   subjectType: "PF" | "PJ";
   emittedAt: string;
@@ -347,6 +351,10 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
   }));
 
   const rawResult = (profile.raw_result ?? {}) as Record<string, unknown>;
+  // Vale também pra análise antiga que nunca passou pela correção gravada.
+  const nomeOficial = nomeOficialDoPerfil(profile);
+  const informadoBruto = semRotulo((rawResult.nome_informado as string | undefined) ?? profile.subject_name);
+  const nomeInformado = nomeOficial && informadoBruto && !mesmoNome(nomeOficial, informadoBruto) ? informadoBruto : null;
   const registratoData = (profile.registrato_data ?? {}) as Record<string, unknown>;
   const registratoHasData = Object.keys(registratoData).length > 0;
   const flags = (profile.flags ?? {}) as Record<string, unknown>;
@@ -454,7 +462,8 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
 
   return {
     code: profile.id.slice(0, 8).toUpperCase(),
-    subjectName: profile.subject_name,
+    subjectName: nomeOficial ?? profile.subject_name,
+    nomeInformado,
     subjectCpfCnpj: fmtDoc(profile.subject_cpf_cnpj),
     subjectType,
     emittedAt: fmtDateBR(profile.created_at),

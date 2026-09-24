@@ -72,7 +72,11 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Cliente ainda não preencheu o consentimento deste documento" }, { status: 422 });
     }
     clientCpfCnpj = consent.subject_cpf_cnpj;
-    clientLabel = consent.document_label ? `${order.client_name} (${consent.document_label})` : order.client_name;
+    // Sócio informado no consentimento do site já tem o próprio nome em subject_name
+    // (link gerado pela Mesa usa o nome do cliente do pedido ali).
+    clientLabel = consent.subject_name && consent.subject_name !== order.client_name
+      ? consent.subject_name
+      : consent.document_label ? `${order.client_name} (${consent.document_label})` : order.client_name;
     additionalConsent = { id: consent.id };
   } else {
     if (order.credit_desk_proposal_id) {
