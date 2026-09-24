@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { idsDaEquipe } from "@/lib/enterprise";
 import { protegerMetadata } from "@/lib/credit-proposal-meta";
 import { semAnaliseDoSite } from "@/lib/analise-site";
 import { createClient } from "@/lib/supabase/server";
@@ -116,9 +117,12 @@ export async function GET(req: NextRequest) {
 
   const svc = serviceClient();
 
+  // Master de Enterprise enxerga também as propostas dos usuários dele (lib/enterprise.ts).
+  const equipeIds = isAdmin ? [] : await idsDaEquipe(svc, user.id);
+
   if (id) {
     let single = svc.from("credit_desk_proposals").select(PROPOSAL_SELECT).eq("id", id).is("deleted_at", null);
-    if (!isAdmin) single = single.eq("partner_id", user.id);
+    if (!isAdmin) single = single.in("partner_id", equipeIds);
     const { data, error } = await single.single();
     if (error || !data) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
     return NextResponse.json({ proposal: data });
@@ -130,7 +134,7 @@ export async function GET(req: NextRequest) {
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
-  if (!isAdmin) query = query.eq("partner_id", user.id);
+  if (!isAdmin) query = query.in("partner_id", equipeIds);
   if (status)   query = query.eq("status", status.toUpperCase());
   if (level)    query = query.eq("current_level", level.toUpperCase());
   // "not.eq" trataria NULL como não-correspondente e esconderia toda proposta

@@ -63,9 +63,11 @@ interface TopbarProps {
   };
   onMenuClick: () => void;
   notificationCount?: number;
+  /** White label do Enterprise (null = marca V3). */
+  marca?: { nome: string; logoUrl: string | null } | null;
 }
 
-export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps) {
+export function Topbar({ user, onMenuClick, notificationCount = 0, marca = null }: TopbarProps) {
   const pathname = usePathname();
   const [avatarUrl, setAvatarUrl] = React.useState(user.avatar_url);
 
@@ -130,7 +132,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0 }: TopbarProps
         <div className="hidden lg:flex items-center gap-2">
           <div className="w-1 h-4 rounded-full bg-gradient-to-b from-[#C9A84C] to-[#E8C97A]" />
           <span className="text-[11px] font-bold tracking-[0.18em] text-[#C9A84C] uppercase select-none">
-            V3 Partners
+            {marca?.nome ?? "V3 Partners"}
           </span>
           <span className="text-[#7A8FA8]/30 text-sm select-none">/</span>
         </div>

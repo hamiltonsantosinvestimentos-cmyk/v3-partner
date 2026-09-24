@@ -2603,8 +2603,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const comissaoLiquida = totalComissao - impostoComissao;
 
   // Comissão do licenciado = % do plano contratado pelo parceiro, aplicado
-  // sobre a comissão líquida (total bruto − impostos). ENTERPRISE é negociável
-  // e não tem percentual fixo, então fica sem valor automático.
+  // sobre a comissão líquida (total bruto − impostos). ENTERPRISE = 55% (pago ao master do
+  // Enterprise, inclusive nas vendas dos usuários dele).
   const partnerRole = (proposal.partner_role ?? "") as UserRole;
   const planoComissaoPerc = PLAN_COMMISSION_PCT[partnerRole] ?? null;
   const planoLabel = ROLE_LABELS[partnerRole] ?? (proposal.partner_role || "plano não identificado");

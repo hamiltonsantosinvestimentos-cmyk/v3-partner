@@ -5,6 +5,7 @@ import { launchBrowser } from "@/lib/credit-report-generate";
 import {
   htmlRelatorioPartner, htmlRelatorioSocios, montarRelatorioMensal, periodoDoMes, PARTNER_ROLES,
 } from "@/lib/relatorio-mensal-partners";
+import { aplicarMarca, idsDaEquipe, marcaDoPerfil } from "@/lib/enterprise";
 
 export const maxDuration = 120;
 
@@ -27,20 +28,27 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const periodo = periodoDoMes(searchParams.get("mes"));
-  const alvo = equipe ? searchParams.get("partner_id") : user.id;
   const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-  const rel = await montarRelatorioMensal(db, periodo, alvo ?? undefined);
+  // Master de Enterprise: a equipe dele (ou um usuário dela via partner_id); partner comum: o próprio.
+  const equipeEnterprise = equipe ? null : await idsDaEquipe(db, user.id);
+  const pedido = searchParams.get("partner_id");
+  let alvo: string | null;
+  if (equipe) alvo = pedido;
+  else if (equipeEnterprise && equipeEnterprise.length > 1) alvo = pedido && equipeEnterprise.includes(pedido) ? pedido : null;
+  else alvo = user.id;
+  const rel = await montarRelatorioMensal(db, periodo, alvo ?? (equipe ? undefined : equipeEnterprise ?? undefined));
+  const marca = equipe ? null : await marcaDoPerfil(db, user.id);
 
   let html: string;
   let nome: string;
   if (alvo) {
     const r = rel.partners[0];
     if (!r) return NextResponse.json({ error: "Partner não encontrado" }, { status: 404 });
-    html = htmlRelatorioPartner(rel, r, true);
+    html = aplicarMarca(htmlRelatorioPartner(rel, r, true), marca);
     nome = r.partner.nome;
   } else {
-    html = htmlRelatorioSocios(rel, true);
-    nome = "Rede";
+    html = aplicarMarca(htmlRelatorioSocios(rel, true), marca);
+    nome = equipe ? "Rede" : "Equipe";
   }
 
   let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;

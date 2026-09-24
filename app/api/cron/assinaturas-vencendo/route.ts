@@ -157,6 +157,7 @@ export async function GET(req: NextRequest) {
     .from("profiles")
     .select("id, full_name, email, role, cpf, cnpj, trial_expires_at, created_at")
     .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"])
+    .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
     .eq("is_active", true);
 
   const partnersComVencimento = (allActivePartners ?? []) as Partner[];

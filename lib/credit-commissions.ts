@@ -75,7 +75,7 @@ export async function gerarComissoesCreditoLiberado(
       id, code, title, client_name, partner_id,
       requested_value, approved_value, valor_credito_atual,
       comissao_mandato_perc, comissao_instituicao_perc, metadata,
-      partner:profiles!partner_id(id, full_name, role, referred_by_partner_id)
+      partner:profiles!partner_id(id, full_name, role, referred_by_partner_id, enterprise_id, enterprise_repasse_percent)
     `)
     .eq("id", proposalId)
     .single();
@@ -88,10 +88,26 @@ export async function gerarComissoesCreditoLiberado(
   }
 
   const partnerRaw = proposal.partner as unknown;
-  const partner = (Array.isArray(partnerRaw) ? partnerRaw[0] : partnerRaw) as
-    | { id: string; full_name: string | null; role: string | null; referred_by_partner_id: string | null }
+  const vendedor = (Array.isArray(partnerRaw) ? partnerRaw[0] : partnerRaw) as
+    | { id: string; full_name: string | null; role: string | null; referred_by_partner_id: string | null; enterprise_id?: string | null; enterprise_repasse_percent?: number | null }
     | null
     | undefined;
+
+  // Venda de usuário de Enterprise (24/09/2026): a comissão (55%) é do MASTER — a V3 paga o
+  // master — e nasce um repasse do master para o usuário (% definido pelo master sobre os 55%).
+  let partner = vendedor;
+  let usuarioEnterprise: { id: string; full_name: string | null; percent: number } | null = null;
+  if (vendedor?.enterprise_id) {
+    const { data: master } = await db
+      .from("profiles")
+      .select("id, full_name, role, referred_by_partner_id")
+      .eq("id", vendedor.enterprise_id)
+      .maybeSingle();
+    if (master) {
+      partner = master as typeof vendedor;
+      usuarioEnterprise = { id: vendedor.id, full_name: vendedor.full_name, percent: Number(vendedor.enterprise_repasse_percent ?? 0) };
+    }
+  }
 
   if (!proposal.partner_id || !partner) {
     await db.from("credit_desk_proposals").update({
@@ -134,7 +150,7 @@ export async function gerarComissoesCreditoLiberado(
 
   const { data: licenciado, error: errLic } = await db.from("commissions").insert({
     code: await nextCode(),
-    partner_id: proposal.partner_id,
+    partner_id: partner.id,
     operation_type: "CREDITO",
     operation_id: proposalId,
     operation_code: proposal.code,
@@ -146,7 +162,9 @@ export async function gerarComissoesCreditoLiberado(
     operation_closed_at: hoje,
     created_by: actorId,
     is_referral_commission: false,
-    notes: notaLicenciado,
+    notes: usuarioEnterprise
+      ? `${notaLicenciado} · Venda do usuário ${usuarioEnterprise.full_name ?? ""} (repasse de ${usuarioEnterprise.percent}% pago pelo Enterprise)`
+      : notaLicenciado,
   }).select("id, commission_value").single();
 
   if (errLic) {
@@ -156,6 +174,16 @@ export async function gerarComissoesCreditoLiberado(
   }
 
   const licenciadoFinal = Number(licenciado?.commission_value ?? licenciadoValue);
+
+  if (usuarioEnterprise && licenciado?.id) {
+    const { error: errRep } = await db.from("enterprise_repasses").insert({
+      commission_id: licenciado.id,
+      enterprise_id: partner.id,
+      usuario_id: usuarioEnterprise.id,
+      repasse_percent: usuarioEnterprise.percent,
+    });
+    if (errRep) console.error("[credit-commissions] repasse Enterprise não gravado:", errRep.message);
+  }
   let referralId: string | undefined;
 
   // ── Comissão de indicação (10% da comissão do licenciado) ──
