@@ -6,5 +6,5 @@ interface Props { searchParams: Promise<{ mes?: string }> }
 
 export default async function RelatorioMensalPage({ searchParams }: Props) {
   const { mes } = await searchParams;
-  return <RelatorioMensalView mes={mes} basePath="/mesa-credito/relatorio-mensal" />;
+  return <RelatorioMensalView mes={mes} basePath="/mesa-operacional/relatorio-mensal" somenteEquipe />;
 }

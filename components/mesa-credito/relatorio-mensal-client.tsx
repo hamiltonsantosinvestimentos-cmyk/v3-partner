@@ -105,7 +105,7 @@ function DetalhePartner({ r }: { r: RelatorioPartner }) {
   );
 }
 
-export function RelatorioMensalClient({ rel, equipe, podeReenviar }: { rel: RelatorioMensal; equipe: boolean; podeReenviar: boolean }) {
+export function RelatorioMensalClient({ rel, equipe, podeReenviar, basePath = "/mesa-credito/relatorio-mensal" }: { rel: RelatorioMensal; equipe: boolean; podeReenviar: boolean; basePath?: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const [aberto, setAberto] = useState<string | null>(null);
@@ -116,7 +116,7 @@ export function RelatorioMensalClient({ rel, equipe, podeReenviar }: { rel: Rela
   function trocarMes(chave: string) {
     const p = new URLSearchParams(params.toString());
     p.set("mes", chave);
-    router.push(`/mesa-credito/relatorio-mensal?${p.toString()}`);
+    router.push(`${basePath}?${p.toString()}`);
   }
 
   async function reenviar() {
