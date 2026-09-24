@@ -301,10 +301,11 @@ function tabela(cab: string[], linhas: string[][]) {
   </table>`;
 }
 
-function moldura(titulo: string, subtitulo: string, corpo: string, ctaUrl: string) {
+/** `pdf`: sem botão "Ver na plataforma" e rodapé com a data de geração (PDF baixado pela tela). */
+function moldura(titulo: string, subtitulo: string, corpo: string, ctaUrl: string, pdf = false) {
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(titulo)}</title></head>
 <body style="margin:0;padding:0;background:${C.navy};font-family:'DM Sans',Arial,sans-serif;">
-<div style="max-width:720px;margin:32px auto;background:${C.card};border-radius:12px;overflow:hidden;border:1px solid ${C.borda};">
+<div style="max-width:${pdf ? "100%" : "720px"};margin:${pdf ? "0" : "32px auto"};background:${C.card};border-radius:12px;overflow:hidden;border:1px solid ${C.borda};">
   <div style="padding:22px 28px;border-bottom:1px solid ${C.borda};background:${C.navy};">
     <img src="https://app.v3partners.com.br/v3-logo-flat-gold-alpha.png" alt="V3 Partners" style="height:30px;display:block;">
   </div>
@@ -313,10 +314,12 @@ function moldura(titulo: string, subtitulo: string, corpo: string, ctaUrl: strin
     <h2 style="margin:6px 0 4px;font-size:20px;font-weight:700;color:${C.cream};">${esc(titulo)}</h2>
     <p style="margin:0 0 8px;font-size:13px;color:${C.muted};">${esc(subtitulo)}</p>
     ${corpo}
-    <div style="margin-top:28px;"><a href="${ctaUrl}" style="display:inline-block;background:${C.ouro};color:${C.navy};text-decoration:none;padding:11px 24px;border-radius:8px;font-weight:700;font-size:13px;">Ver na plataforma →</a></div>
+    ${pdf ? "" : `<div style="margin-top:28px;"><a href="${ctaUrl}" style="display:inline-block;background:${C.ouro};color:${C.navy};text-decoration:none;padding:11px 24px;border-radius:8px;font-weight:700;font-size:13px;">Ver na plataforma →</a></div>`}
   </div>
   <div style="padding:16px 28px;border-top:1px solid ${C.borda};background:${C.navy};">
-    <p style="margin:0;font-size:11px;color:${C.muted};">V3 Partners · E-mail automático enviado todo dia 1, não responda.</p>
+    <p style="margin:0;font-size:11px;color:${C.muted};">${pdf
+      ? `V3 Partners · Relatório gerado em ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })} · Confidencial`
+      : "V3 Partners · E-mail automático enviado todo dia 1, não responda."}</p>
   </div>
 </div></body></html>`;
 }
@@ -357,14 +360,16 @@ function blocoPartner(r: RelatorioPartner) {
   <p style="margin:8px 0 0;font-size:12px;color:${C.muted};">Total em aberto: <strong style="color:${C.cream};">${r.carteira.emAberto} proposta(s) · ${brl(r.carteira.valorEmAberto)}</strong></p>`;
 }
 
-export function htmlRelatorioPartner(rel: RelatorioMensal, r: RelatorioPartner) {
+export function htmlRelatorioPartner(rel: RelatorioMensal, r: RelatorioPartner, pdf = false) {
   const semMov = r.mes.enviadas === 0;
   const corpo = `${semMov ? `<div style="margin-top:14px;padding:12px 16px;background:#13223A;border-radius:8px;border-left:3px solid ${C.muted};font-size:13px;color:${C.muted};">Nenhuma proposta enviada em ${esc(rel.periodo.label)}. A carteira e as comissões abaixo seguem valendo.</div>` : ""}${blocoPartner(r)}
   <p style="margin:18px 0 0;font-size:11px;color:${C.muted};">Previsão = comissão estimada dos créditos já aprovados, com % de mandato e instituição definidos, que ainda não foram liberados, pela regra do seu plano (${esc(r.partner.plano)}). O valor final é confirmado na liberação do recurso.</p>`;
-  return moldura(`Olá, ${r.partner.nome}`, `Seu resumo de ${rel.periodo.label}`, corpo, `${APP_URL}/mesa-credito/relatorio-mensal?mes=${rel.periodo.chave}`);
+  return pdf
+    ? moldura(`${r.partner.nome} · ${r.partner.plano}`, `Resumo de ${rel.periodo.label}`, corpo, "", true)
+    : moldura(`Olá, ${r.partner.nome}`, `Seu resumo de ${rel.periodo.label}`, corpo, `${APP_URL}/mesa-credito/relatorio-mensal?mes=${rel.periodo.chave}`);
 }
 
-export function htmlRelatorioSocios(rel: RelatorioMensal) {
+export function htmlRelatorioSocios(rel: RelatorioMensal, pdf = false) {
   const t = rel.totais;
   const resumo = `
   ${secao("Consolidado da rede")}
@@ -393,7 +398,7 @@ export function htmlRelatorioSocios(rel: RelatorioMensal) {
       <p style="margin:14px 0 0;font-size:15px;font-weight:700;color:${C.cream};">${esc(r.partner.nome)} <span style="font-size:12px;font-weight:400;color:${C.muted};">· ${esc(r.partner.plano)}</span></p>
       ${blocoPartner(r)}</div>`)
     .join("");
-  return moldura(`Relatório de partners · ${rel.periodo.label}`, "Consolidado para os sócios da V3", resumo + detalhes, `${APP_URL}/mesa-credito/relatorio-mensal?mes=${rel.periodo.chave}`);
+  return moldura(`Relatório de partners · ${rel.periodo.label}`, pdf ? "Consolidado da rede de partners" : "Consolidado para os sócios da V3", resumo + detalhes, `${APP_URL}/mesa-credito/relatorio-mensal?mes=${rel.periodo.chave}`, pdf);
 }
 
 // ─── Envio (cron do dia 1 e reenvio manual pela tela) ─────────────────────────

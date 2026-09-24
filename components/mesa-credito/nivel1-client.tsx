@@ -78,7 +78,10 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [newOpen, setNewOpen]   = useState(false);
   const [detailProposal, setDetailProposal] = useState<Proposal | null>(null);
-  const [view, setView] = useState<"table" | "kanban">("table");
+  // Partner abre direto no Kanban; equipe (Mesa/Gestão/Admin) segue na tabela.
+  const [view, setView] = useState<"table" | "kanban">(
+    ["MESA_OPERACIONAL", "ADMIN", "GESTAO"].includes(currentUser?.role ?? "") ? "table" : "kanban"
+  );
 
   useEffect(() => {
     fetch("/api/credit-proposals?level=NIVEL_1")

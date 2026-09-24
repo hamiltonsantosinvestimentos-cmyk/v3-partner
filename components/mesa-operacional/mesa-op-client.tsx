@@ -2206,6 +2206,12 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           </div>
         </div>
         <div className="flex gap-2">
+          <a
+            href="/mesa-operacional/relatorio-mensal"
+            className="px-3 py-1.5 rounded-lg border border-[#C9A84C]/40 text-[#E8C97A] text-xs font-medium flex items-center gap-1.5 hover:bg-[#C9A84C]/10 transition-colors"
+          >
+            <BarChart2 className="w-3.5 h-3.5" /> Relatório Mensal
+          </a>
           <div className="flex rounded-lg border border-border overflow-hidden">
             <button onClick={() => setView("dashboard")}
               className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition-colors ${view === "dashboard" ? "bg-[#C9A84C]/15 text-[#E8C97A]" : "text-muted-foreground hover:text-white hover:bg-secondary"}`}>

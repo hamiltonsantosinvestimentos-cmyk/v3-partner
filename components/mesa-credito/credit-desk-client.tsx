@@ -97,7 +97,10 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [newOpen, setNewOpen]   = useState(false);
   const [detailProposal, setDetailProposal] = useState<Proposal | null>(null);
-  const [view, setView] = useState<"table" | "kanban">("table");
+  // Partner abre direto no Kanban; equipe (Mesa/Gestão/Admin) segue na tabela.
+  const [view, setView] = useState<"table" | "kanban">(
+    ["MESA_OPERACIONAL", "ADMIN", "GESTAO"].includes(currentUser?.role ?? "") ? "table" : "kanban"
+  );
 
   useEffect(() => {
     let isMounted = true;
