@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { randomBytes } from "crypto";
+import { isValidCPF } from "@/lib/utils";
 
 export const maxDuration = 60;
 
@@ -38,6 +40,30 @@ async function resolveConsent(token: string) {
   return { ...data, expired: false };
 }
 
+// Sócios no consentimento (23/09/2026, pedido do Hamilton): pedido de empresa (CNPJ) que
+// contratou CPFs de sócios/garantidores pede, já no consentimento do titular, nome completo
+// + CPF + autorização de cada sócio. Cada sócio vira um credit_consents adicional do pedido
+// já "consented" (mesmo formato do link que a Mesa gerava à mão em orders/[id]/documents),
+// pronto pra "Rodar análise". Só vale no link do documento PRINCIPAL do pedido.
+async function sociosPendentes(token: string, principalDoc: string | null) {
+  const digits = (principalDoc ?? "").replace(/\D/g, "");
+  if (digits.length !== 14) return null;
+  const db = svc();
+  const { data: order } = await db
+    .from("partner_service_orders")
+    .select("id, cpf_count")
+    .eq("intake_token", token)
+    .maybeSingle();
+  if (!order || !order.cpf_count) return null;
+  const { data: existentes } = await db
+    .from("credit_consents")
+    .select("subject_cpf_cnpj")
+    .eq("partner_service_order_id", order.id);
+  const jaCadastrados = (existentes ?? []).filter((c) => (c.subject_cpf_cnpj ?? "").replace(/\D/g, "").length === 11).length;
+  const faltam = Math.max(0, order.cpf_count - jaCadastrados);
+  return { orderId: order.id as string, faltam };
+}
+
 // GET — valida link, retorna dados nao-sensiveis para exibicao
 export async function GET(_req: NextRequest, { params }: RouteParams) {
   const { token } = await params;
@@ -46,8 +72,11 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
   if (!consent) return NextResponse.json({ error: "Link inválido." }, { status: 404 });
   if (consent.expired) return NextResponse.json({ error: "Este link expirou. Solicite um novo à mesa V3 Partners." }, { status: 410 });
 
+  const socios = consent.status === "pending" ? await sociosPendentes(token, consent.subject_cpf_cnpj) : null;
+
   return NextResponse.json({
     valid: true,
+    socios_necessarios: socios?.faltam ?? 0,
     subject_name_masked: maskName(consent.subject_name ?? ""),
     already_consented: consent.status !== "pending",
     registrato_uploaded: !!consent.registrato_pdf_path,
@@ -77,6 +106,58 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
 
   const db = svc();
   const nowIso = new Date().toISOString();
+  const userAgent = req.headers.get("user-agent") ?? "";
+
+  // Sócios: valida tudo ANTES de gravar o aceite do titular, pra não deixar o pedido
+  // "consentido" com sócio faltando.
+  const socios = consent.status === "pending" ? await sociosPendentes(token, consent.subject_cpf_cnpj) : null;
+  const sociosValidos: { nome: string; cpf: string }[] = [];
+  if (socios && socios.faltam > 0) {
+    let lista: { nome?: string; cpf?: string; autorizado?: boolean }[] = [];
+    try {
+      lista = JSON.parse(String(formData.get("socios") ?? "[]"));
+    } catch {
+      return NextResponse.json({ error: "Dados dos sócios inválidos." }, { status: 400 });
+    }
+    if (!Array.isArray(lista) || lista.length !== socios.faltam) {
+      return NextResponse.json({ error: `Informe os ${socios.faltam} sócio(s) contratados.` }, { status: 422 });
+    }
+    const vistos = new Set<string>();
+    for (const [i, s] of lista.entries()) {
+      const nome = (s.nome ?? "").trim().replace(/\s+/g, " ");
+      const cpf = (s.cpf ?? "").replace(/\D/g, "");
+      if (nome.split(" ").length < 2) return NextResponse.json({ error: `Sócio ${i + 1}: informe o nome completo.` }, { status: 422 });
+      if (!isValidCPF(cpf)) return NextResponse.json({ error: `Sócio ${i + 1}: CPF inválido.` }, { status: 422 });
+      if (vistos.has(cpf)) return NextResponse.json({ error: `Sócio ${i + 1}: CPF repetido.` }, { status: 422 });
+      if (s.autorizado !== true) return NextResponse.json({ error: `Sócio ${i + 1}: confirme a autorização do sócio.` }, { status: 422 });
+      vistos.add(cpf);
+      sociosValidos.push({ nome, cpf });
+    }
+  }
+
+  // Sócios primeiro: se falhar, o titular continua pendente e pode reenviar.
+  if (socios && sociosValidos.length > 0) {
+    const expires = new Date(Date.now() + 72 * 3600 * 1000).toISOString();
+    const { error: sociosErr } = await db.from("credit_consents").insert(
+      sociosValidos.map((s) => ({
+        subject_cpf_cnpj: s.cpf,
+        subject_name: s.nome,
+        intake_token: randomBytes(24).toString("hex"),
+        intake_expires_at: expires,
+        consent_scope: ["credit_bureau", "judicial", "patrimonial", "registrato_bacen"],
+        status: "consented",
+        consented_at: nowIso,
+        consent_ip: ip,
+        consent_user_agent: userAgent,
+        partner_service_order_id: socios.orderId,
+        document_label: `Sócio · ${s.nome}`,
+      }))
+    );
+    if (sociosErr) {
+      console.error("[credit-intake] Falha ao gravar sócios:", sociosErr);
+      return NextResponse.json({ error: "Falha ao registrar os sócios. Tente novamente." }, { status: 500 });
+    }
+  }
 
   // Registra o aceite (idempotente — sobrescreve se reenviado antes de expirar)
   const { error: consentErr } = await db
@@ -85,7 +166,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       status: "consented",
       consented_at: nowIso,
       consent_ip: ip,
-      consent_user_agent: req.headers.get("user-agent") ?? "",
+      consent_user_agent: userAgent,
     })
     .eq("id", consent.id);
 
