@@ -75,7 +75,9 @@ function OriginBadge({ order }: { order: PartnerOrder }) {
 // Código do crédito (proposta da Mesa de Crédito) ou do deal M&A. Clicar abre a proposta
 // na Mesa Operacional (mesmo deep-link do modal do pedido) sem abrir o modal da linha.
 function CodigoCell({ order }: { order: PartnerOrder }) {
-  if (order.proposal_code && order.credit_desk_proposal_id) {
+  // Pedido do site não é crédito: a proposta técnica da análise não é exibida nem linkada.
+  const site = order.source === "direct" && order.origem !== "mesa_credito";
+  if (!site && order.proposal_code && order.credit_desk_proposal_id) {
     return (
       <a
         href={`/mesa-operacional?proposalId=${order.credit_desk_proposal_id}`}
@@ -97,6 +99,9 @@ function StageBadge({ order }: { order: PartnerOrder }) {
   if (order.report_delivered_at) return <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Entregue</Badge>;
   if (order.report_public_token) return <Badge className="bg-teal-500/10 text-teal-400 border-teal-500/20">Relatório pronto</Badge>;
   if (order.credit_profile_id) return <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">Análise concluída</Badge>;
+  if (order.source === "direct" && order.origem !== "mesa_credito") {
+    return <Badge className="bg-secondary text-muted-foreground border-border/50">Aguardando análise</Badge>;
+  }
   if (order.credit_desk_proposal_id) return <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20">Proposta criada</Badge>;
   return <Badge className="bg-secondary text-muted-foreground border-border/50">Aguardando vínculo</Badge>;
 }

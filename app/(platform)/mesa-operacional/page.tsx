@@ -1,4 +1,5 @@
 import { MesaOpClient } from "@/components/mesa-operacional/mesa-op-client";
+import { semAnaliseDoSite } from "@/lib/analise-site";
 import { DEMO_TICKETS, DEMO_CREDIT_PROPOSALS } from "@/lib/demo-data";
 import { cookies } from "next/headers";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -73,7 +74,8 @@ export default async function MesaOperacionalPage() {
   if (!isAdmin) proposalsQuery = proposalsQuery.eq("partner_id", currentUser.id);
   const { data: proposalsData } = await proposalsQuery;
 
-  const proposals = (proposalsData ?? []).map((p: any) => ({
+  // Propostas técnicas de análise comprada no site não são crédito (lib/analise-site.ts).
+  const proposals = semAnaliseDoSite(proposalsData as { metadata?: unknown }[] | null).map((p: any) => ({
     ...p,
     // Normaliza nome do campo CPF/CNPJ (coluna real no BD é client_cpf_cnpj)
     cpf_cnpj: p.client_cpf_cnpj ?? p.cpf_cnpj,

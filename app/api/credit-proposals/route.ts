@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { semAnaliseDoSite } from "@/lib/analise-site";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -137,7 +138,8 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ proposals: data ?? [] });
+  // Propostas técnicas de análise comprada no site não são crédito (lib/analise-site.ts).
+  return NextResponse.json({ proposals: semAnaliseDoSite(data as { metadata?: unknown }[] | null) });
 }
 
 // POST — cria nova proposta de crédito
