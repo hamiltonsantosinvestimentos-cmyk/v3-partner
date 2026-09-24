@@ -3183,7 +3183,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       : registratoLinkCopied
                         ? <CheckCheck className="w-3 h-3" />
                         : <Link2 className="w-3 h-3" />}
-                    {registratoLinkLoading ? "Gerando..." : registratoLinkCopied ? "Link copiado!" : "Gerar Link Registrato"}
+                    {registratoLinkLoading ? "Gerando..." : registratoLinkCopied ? "Link copiado!" : "Gerar link de consentimento"}
                   </button>
                   </div>
                 </div>
