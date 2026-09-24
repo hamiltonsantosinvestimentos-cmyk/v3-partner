@@ -1,4 +1,4 @@
-import { createClient as sc } from "@supabase/supabase-js";
+import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 import { PLAN_COMMISSION_PCT, ROLE_LABELS, type UserRole } from "@/lib/constants";
 
 function svc() {
@@ -8,6 +8,42 @@ function svc() {
 const money = (n: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(n);
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Conta da comissão do licenciado de uma proposta de crédito — a MESMA usada na geração
+ * ao liberar o recurso e na previsão do relatório mensal (lib/relatorio-mensal-partners.ts).
+ * Base: valor do crédito × (mandato% + instituição%) − impostos (alíquota global) = líquida
+ * V3; licenciado = líquida × % do plano. ENTERPRISE (sem % fixo) → planoPerc null.
+ */
+export function calcularComissaoLicenciado(
+  proposal: {
+    valor_credito_atual?: number | string | null;
+    approved_value?: number | string | null;
+    requested_value?: number | string | null;
+    comissao_mandato_perc?: number | string | null;
+    comissao_instituicao_perc?: number | string | null;
+  },
+  role: string | null | undefined,
+  aliquota: number,
+) {
+  const valorCredito = Number(proposal.valor_credito_atual ?? proposal.approved_value ?? proposal.requested_value ?? 0);
+  const mandatoPerc = Number(proposal.comissao_mandato_perc ?? 6);
+  const instPerc = Number(proposal.comissao_instituicao_perc ?? 0);
+  const bruto = valorCredito * (mandatoPerc + instPerc) / 100;
+  const impostos = bruto * aliquota / 100;
+  const liquidaV3 = round2(bruto - impostos);
+  const planoPerc = PLAN_COMMISSION_PCT[(role ?? "") as UserRole] ?? null;
+  const licenciadoValue = round2(liquidaV3 * (planoPerc ?? 0) / 100);
+  return { valorCredito, mandatoPerc, instPerc, bruto, impostos, liquidaV3, planoPerc, licenciadoValue };
+}
+
+/** Alíquota global de imposto sobre comissões (Configurações → Comissões), 0–100. */
+export async function lerAliquotaComissao(db: SupabaseClient): Promise<number> {
+  const { data: taxRow } = await db
+    .from("platform_settings").select("value").eq("key", "commission_tax_percent").maybeSingle();
+  const aliqRaw = taxRow?.value != null ? Number(taxRow.value) : 0;
+  return Number.isFinite(aliqRaw) && aliqRaw >= 0 && aliqRaw <= 100 ? aliqRaw : 0;
+}
 
 export interface GerarComissoesResult {
   status: "created" | "skipped";
@@ -66,21 +102,11 @@ export async function gerarComissoesCreditoLiberado(
   }
 
   // Base de cálculo — mesma lógica do modal de proposta (proposta-detail-modal.tsx)
-  const valorCredito = Number(proposal.valor_credito_atual ?? proposal.approved_value ?? proposal.requested_value ?? 0);
-  const mandatoPerc = Number(proposal.comissao_mandato_perc ?? 6);
-  const instPerc = Number(proposal.comissao_instituicao_perc ?? 0);
-  const bruto = valorCredito * (mandatoPerc + instPerc) / 100;
-
-  // Alíquota global de imposto sobre comissões (Configurações → Comissões)
-  const { data: taxRow } = await db
-    .from("platform_settings").select("value").eq("key", "commission_tax_percent").maybeSingle();
-  const aliqRaw = taxRow?.value != null ? Number(taxRow.value) : 0;
-  const aliquota = Number.isFinite(aliqRaw) && aliqRaw >= 0 && aliqRaw <= 100 ? aliqRaw : 0;
-  const impostos = bruto * aliquota / 100;
-  const liquidaV3 = round2(bruto - impostos);
+  const aliquota = await lerAliquotaComissao(db);
+  const { valorCredito, mandatoPerc, instPerc, bruto, impostos, liquidaV3, planoPerc } =
+    calcularComissaoLicenciado(proposal, partner.role, aliquota);
 
   const role = (partner.role ?? "") as UserRole;
-  const planoPerc = PLAN_COMMISSION_PCT[role] ?? null;
   const planoLabel = ROLE_LABELS[role] ?? (partner.role || "plano não identificado");
   // commission_value é coluna GERADA (operation_value * commission_percent / 100).
   // Guardamos operation_value = comissão líquida da V3 e commission_percent = % do

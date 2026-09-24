@@ -67,6 +67,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/mesa-credito/nivel-1", label: "N1 — Crédito Varejo", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL"] },
           { href: "/mesa-credito/nivel-2", label: "N2 — Crédito Estruturado", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL"] },
           { href: "/mesa-credito/nivel-3", label: "N3 — High Ticket", roles: ["ADMIN", "GESTAO", "PARTNER_PRO", "ENTERPRISE"] },
+          { href: "/mesa-credito/relatorio-mensal", label: "Relatório Mensal", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"] },
           { href: "/mesa-credito/fontes", label: "Configuração de Fontes", roles: ["ADMIN", "MESA_OPERACIONAL"] },
         ],
       },
