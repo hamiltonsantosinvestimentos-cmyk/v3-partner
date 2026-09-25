@@ -1,4 +1,8 @@
 import { CRMClient } from "@/components/crm/crm-client";
+import { createClient as svcEnterpriseClient } from "@supabase/supabase-js";
+import { idsDaEquipe } from "@/lib/enterprise";
+
+const svcEnterprise = () => svcEnterpriseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
 const IS_DEMO = false;
 
@@ -26,8 +30,12 @@ export default async function CRMPage() {
   const userId    = profile?.id ?? user?.id ?? "";
   const isAdmin   = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(userRole);
 
-  let query = supabase.from("crm_leads").select("*").order("created_at", { ascending: false });
-  if (!isAdmin) query = query.eq("partner_id", userId);
+  // Master de Enterprise vê também as propostas/leads dos usuários dele (lib/enterprise.ts);
+  // RLS só libera as próprias linhas, então nesse caso a leitura vai pelo service client.
+  const equipeIds = isAdmin ? [] : await idsDaEquipe(svcEnterprise(), userId);
+  const leitor = (equipeIds.length > 1 ? svcEnterprise() : supabase) as unknown as typeof supabase;
+  let query = leitor.from("crm_leads").select("*").order("created_at", { ascending: false });
+  if (!isAdmin) query = query.in("partner_id", equipeIds);
   const { data: leadsData } = await query;
 
   // Normaliza campo snake_case → camelCase para o cliente

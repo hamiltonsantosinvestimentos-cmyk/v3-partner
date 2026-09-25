@@ -16,6 +16,13 @@ async function send(
 ): Promise<void> {
   if (!process.env.RESEND_API_KEY || !to) return;
   try {
+    // White label (lib/enterprise.ts): destinatário de um Enterprise recebe com o logo dele.
+    try {
+      const { createClient: sc } = await import("@supabase/supabase-js");
+      const { marcaPorEmail, aplicarMarca } = await import("@/lib/enterprise");
+      const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      html = aplicarMarca(html, await marcaPorEmail(db, to));
+    } catch { /* marca é cosmética: segue com a V3 */ }
     const subjectGate = auditText(subject);
     const htmlGate = auditHtml(html);
     if (htmlGate.blocking.length > 0) console.error("[lib/email] Brand Guardian bloqueou:", htmlGate.blocking);

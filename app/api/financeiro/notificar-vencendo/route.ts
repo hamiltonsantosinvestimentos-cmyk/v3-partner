@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
     .from("profiles")
     .select("id, full_name, trial_expires_at, is_active")
     .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
     .eq("is_active", true)
     .not("trial_expires_at", "is", null);
 

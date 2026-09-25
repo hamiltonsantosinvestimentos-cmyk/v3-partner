@@ -162,6 +162,8 @@ interface PartnerProfile {
 
 interface Props {
   profile: PartnerProfile;
+  /** White label do Enterprise (logo + nome no lugar da marca V3). */
+  marca?: { nome: string; logoUrl: string | null } | null;
   captacaoToken: string | null;
 }
 
@@ -325,7 +327,7 @@ function FormularioInteresse({ token, partnerName }: { token: string | null; par
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export function PartnerSiteClient({ profile, captacaoToken }: Props) {
+export function PartnerSiteClient({ profile, captacaoToken, marca = null }: Props) {
   const badge = roleBadge(profile.role);
   const whatsappUrl = profile.cobranding_whatsapp
     ? `https://wa.me/55${profile.cobranding_whatsapp.replace(/\D/g, "")}`
@@ -348,7 +350,12 @@ export function PartnerSiteClient({ profile, captacaoToken }: Props) {
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 36, height: 36, borderRadius: 8, overflow: "hidden", border: `1px solid rgba(201,168,76,0.25)` }}>
-              <Image src="/logo.jpg" alt="V3 Partners" width={36} height={36} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              {marca?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={marca.logoUrl} alt={marca.nome} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              ) : (
+                <Image src="/logo.jpg" alt="V3 Partners" width={36} height={36} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              )}
             </div>
             <div>
               <p style={{ fontSize: 11, fontWeight: 800, color: G, letterSpacing: "0.15em", lineHeight: 1 }}>V3 PARTNERS</p>
@@ -383,7 +390,12 @@ export function PartnerSiteClient({ profile, captacaoToken }: Props) {
           {/* Logos co-branding */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20, marginBottom: 32 }}>
             <div style={{ width: 72, height: 72, borderRadius: 16, overflow: "hidden", border: `1px solid rgba(201,168,76,0.25)`, boxShadow: "0 0 0 1px rgba(201,168,76,0.1), 0 8px 32px rgba(0,0,0,0.5)" }}>
-              <Image src="/logo.jpg" alt="V3 Partners" width={72} height={72} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              {marca?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={marca.logoUrl} alt={marca.nome} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              ) : (
+                <Image src="/logo.jpg" alt="V3 Partners" width={72} height={72} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              )}
             </div>
             {(profile.role === "PARTNER_PRO" || profile.role === "ENTERPRISE") && (
               <>
@@ -405,7 +417,7 @@ export function PartnerSiteClient({ profile, captacaoToken }: Props) {
           {/* Badge */}
           <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 16px", borderRadius: 999, background: badge.bg, border: `1px solid ${badge.border}`, marginBottom: 20 }}>
             <div style={{ width: 6, height: 6, borderRadius: "50%", background: badge.color }} />
-            <span style={{ fontSize: 11, fontWeight: 800, color: badge.color, letterSpacing: "0.12em", textTransform: "uppercase" }}>{badge.label} · V3 Partners</span>
+            <span style={{ fontSize: 11, fontWeight: 800, color: badge.color, letterSpacing: "0.12em", textTransform: "uppercase" }}>{badge.label} · {marca?.nome ?? "V3 Partners"}</span>
           </div>
 
           {/* Nome e bio */}
@@ -723,9 +735,14 @@ export function PartnerSiteClient({ profile, captacaoToken }: Props) {
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
                 <div style={{ width: 32, height: 32, borderRadius: 7, overflow: "hidden" }}>
-                  <Image src="/logo.jpg" alt="V3 Partners" width={32} height={32} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  {marca?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={marca.logoUrl} alt={marca.nome} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              ) : (
+                <Image src="/logo.jpg" alt="V3 Partners" width={32} height={32} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              )}
                 </div>
-                <span style={{ fontSize: 13, fontWeight: 800, color: G }}>V3 Partners</span>
+                <span style={{ fontSize: 13, fontWeight: 800, color: G }}>{marca?.nome ?? "V3 Partners"}</span>
               </div>
               <p style={{ fontSize: 12, color: MUTED, lineHeight: 1.7 }}>Boutique institucional multiproduto especializada em securitização e estruturação financeira.</p>
               {profile.cobranding_instagram && (

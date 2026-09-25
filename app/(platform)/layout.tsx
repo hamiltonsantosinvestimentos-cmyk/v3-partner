@@ -89,6 +89,51 @@ export default async function PlatformLayout({
       is_active: boolean | null;
     };
 
+    // Domínio próprio de Enterprise: só a equipe dele (e a equipe interna da V3, que dá o
+    // suporte) usa a plataforma por esse endereço; os demais vão para o domínio da V3.
+    try {
+      const { headers } = await import("next/headers");
+      const h = await headers();
+      const host = h.get("x-forwarded-host") ?? h.get("host");
+      const { ehHostV3, enterprisePorDominio } = await import("@/lib/enterprise");
+      if (!ehHostV3(host) && !isRoleInterno) {
+        const { createClient: sc } = await import("@supabase/supabase-js");
+        const svcDom = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+        const dono = await enterprisePorDominio(svcDom, host);
+        const minhaEquipe = (profileData as { enterprise_id?: string | null }).enterprise_id ?? profile.id;
+        if (dono && dono.masterId !== minhaEquipe) {
+          redirect(`${process.env.NEXT_PUBLIC_APP_URL || "https://app.v3partners.com.br"}/dashboard`);
+        }
+      }
+    } catch (e) {
+      const dg = (e as { digest?: string })?.digest;
+      if (dg?.startsWith("NEXT_REDIRECT")) throw e;
+    }
+
+    // Enterprise white label (lib/enterprise.ts): marca do master para ele e os usuários; o
+    // usuário não tem assinatura própria — o acesso segue a do master (trial/ativo).
+    let marca: { nome: string; logoUrl: string | null } | null = null;
+    let trialExpiresAt = profile.trial_expires_at ?? null;
+    let isActive = profile.is_active ?? null;
+    if (profile.role === "ENTERPRISE") {
+      try {
+        const { createClient: sc } = await import("@supabase/supabase-js");
+        const { contextoEnterprise } = await import("@/lib/enterprise");
+        const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+        const ctx = await contextoEnterprise(svc, {
+          id: profile.id, role: profile.role, enterprise_id: (profileData as { enterprise_id?: string | null }).enterprise_id ?? null,
+        });
+        marca = ctx?.marca ?? null;
+        if (ctx && !ctx.ehMaster) {
+          const { data: master } = await svc.from("profiles").select("trial_expires_at, is_active").eq("id", ctx.masterId).maybeSingle();
+          trialExpiresAt = (master?.trial_expires_at as string | null) ?? null;
+          isActive = profile.is_active === false ? false : ((master?.is_active as boolean | null) ?? null);
+        }
+      } catch {
+        // white label é cosmético: falha aqui nunca derruba a plataforma
+      }
+    }
+
     let notificationCount = 0;
     try {
       const { count } = await supabase
@@ -110,9 +155,10 @@ export default async function PlatformLayout({
             email: profile.email,
             role: profile.role,
             avatar_url: profile.avatar_url,
-            trial_expires_at: profile.trial_expires_at ?? null,
-            is_active: profile.is_active ?? null,
+            trial_expires_at: trialExpiresAt,
+            is_active: isActive,
           }}
+          marca={marca}
           notificationCount={notificationCount}
         >
           {children}

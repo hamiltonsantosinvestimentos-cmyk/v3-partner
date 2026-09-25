@@ -34,13 +34,16 @@ export async function POST(req: NextRequest) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, full_name, cpf, cnpj, email")
+    .select("role, full_name, cpf, cnpj, email, enterprise_id")
     .eq("id", user.id)
     .single();
 
-  const p = profile as { role: string; full_name: string; cpf?: string; cnpj?: string; email?: string } | null;
+  const p = profile as { role: string; full_name: string; cpf?: string; cnpj?: string; email?: string; enterprise_id?: string | null } | null;
   if (!p || !["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"].includes(p.role)) {
     return NextResponse.json({ error: "Apenas partners podem gerar cobranças de assinatura" }, { status: 403 });
+  }
+  if (p.enterprise_id) {
+    return NextResponse.json({ error: "Usuário de Enterprise não tem assinatura própria: a assinatura é do Enterprise." }, { status: 403 });
   }
 
   // Verifica se já tem cobrança pendente

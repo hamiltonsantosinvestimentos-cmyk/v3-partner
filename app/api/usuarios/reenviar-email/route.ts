@@ -13,7 +13,7 @@ async function enviarBoasVindas(email: string, nome: string, role: string) {
   if (!resendKey) return { ok: false, motivo: "RESEND_API_KEY não configurada" };
 
   const planoLabel = role === "ENTERPRISE" ? "V3 Enterprise" : role === "PARTNER_PRO" ? "V3 Partner PRO" : role === "STARTER" ? "V3 Starter" : "V3 Partner";
-  const comissao   = role === "ENTERPRISE" ? "negociável" : role === "PARTNER_PRO" ? "50%" : role === "STARTER" ? "20%" : "30%";
+  const comissao   = role === "ENTERPRISE" ? "55%" : role === "PARTNER_PRO" ? "50%" : role === "STARTER" ? "20%" : "30%";
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">

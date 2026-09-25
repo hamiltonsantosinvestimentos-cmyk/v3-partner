@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ehDaEquipe } from "@/lib/enterprise";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { logAudit } from "@/lib/audit";
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
   }
 
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
-  if (!isAdmin && proposal.partner_id !== user.id) {
+  if (!isAdmin && !(await ehDaEquipe(user.id, proposal.partner_id))) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
@@ -151,7 +152,7 @@ export async function GET(req: NextRequest) {
   if (!proposal) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
 
   const isReader = READ_ROLES.includes(profile?.role as typeof READ_ROLES[number]);
-  if (!isReader && proposal.partner_id !== user.id) {
+  if (!isReader && !(await ehDaEquipe(user.id, proposal.partner_id))) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
@@ -196,7 +197,7 @@ export async function DELETE(req: NextRequest) {
   if (!proposal) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
 
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
-  if (!isAdmin && proposal.partner_id !== user.id) {
+  if (!isAdmin && !(await ehDaEquipe(user.id, proposal.partner_id))) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
