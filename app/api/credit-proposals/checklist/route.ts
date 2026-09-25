@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ehDaEquipe } from "@/lib/enterprise";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
@@ -40,7 +41,7 @@ export async function PATCH(req: NextRequest) {
   if (!proposal) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
 
   const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile?.role ?? "");
-  if (!isAdmin && proposal.partner_id !== user.id) {
+  if (!isAdmin && !(await ehDaEquipe(user.id, proposal.partner_id))) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 

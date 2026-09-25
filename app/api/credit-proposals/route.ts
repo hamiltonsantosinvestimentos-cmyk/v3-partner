@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { idsDaEquipe } from "@/lib/enterprise";
+import { ehDaEquipe, idsDaEquipe } from "@/lib/enterprise";
 import { protegerMetadata } from "@/lib/credit-proposal-meta";
 import { semAnaliseDoSite } from "@/lib/analise-site";
 import { createClient } from "@/lib/supabase/server";
@@ -364,7 +364,7 @@ export async function PATCH(req: NextRequest) {
     // Verifica que a proposta pertence ao partner
     const { data: own } = await serviceClient()
       .from("credit_desk_proposals").select("partner_id").eq("id", id).single();
-    if (own?.partner_id !== user.id) {
+    if (!(await ehDaEquipe(user.id, own?.partner_id))) {
       return NextResponse.json({ error: "Sem permissão para editar esta proposta" }, { status: 403 });
     }
   }

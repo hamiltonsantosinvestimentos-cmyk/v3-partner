@@ -74,8 +74,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Falha ao vincular usuário: ${errPerfil.message}` }, { status: 500 });
   }
 
-  // Convite com a marca do Enterprise (o envio troca o logo pela marca do destinatário).
+  // Convite com a marca do Enterprise (o envio troca o logo pela marca do destinatário) e,
+  // se o domínio próprio já estiver ativo, com o link pelo domínio dele.
   const marca = auth.ctx.marca?.nome ?? "V3 Partners";
+  const { data: dom } = await auth.db.from("profiles").select("white_label_dominio, white_label_dominio_status").eq("id", auth.userId).single();
+  const baseUrl = dom?.white_label_dominio && dom.white_label_dominio_status === "ativo" ? `https://${dom.white_label_dominio}` : APP_URL;
   const quem = auth.nome ?? marca;
   const { enviarEmailHtml } = await import("@/lib/email");
   await enviarEmailHtml(
@@ -91,7 +94,7 @@ export async function POST(req: NextRequest) {
       `<p>${esc(quem)} criou seu acesso na plataforma <strong style="color:#E8C97A;">${esc(marca)}</strong>.</p>`,
       `<p style="margin:18px 0 6px;">E-mail: <strong style="color:#F0ECE4;">${esc(email)}</strong><br>Senha temporária: <strong style="color:#F0ECE4;">${senha}</strong></p>`,
       `<p>No primeiro acesso você vai criar a sua própria senha.</p>`,
-      `<p style="margin-top:24px;"><a href="${APP_URL}/login" style="display:inline-block;background:#C9A84C;color:#09081A;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:700;">Acessar a plataforma →</a></p>`,
+      `<p style="margin-top:24px;"><a href="${baseUrl}/login" style="display:inline-block;background:#C9A84C;color:#09081A;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:700;">Acessar a plataforma →</a></p>`,
       `</div></div></body></html>`,
     ].join(""),
   );

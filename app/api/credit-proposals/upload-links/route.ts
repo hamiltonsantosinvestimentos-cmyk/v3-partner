@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ehDaEquipe } from "@/lib/enterprise";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (!proposal) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
 
   const isMesa = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
-  const isOwner = proposal.partner_id === user.id;
+  const isOwner = await ehDaEquipe(user.id, proposal.partner_id);
   if (!isMesa && !isOwner) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
   if (!proposal) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
 
   const isMesa = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
-  const isOwner = proposal.partner_id === user.id;
+  const isOwner = await ehDaEquipe(user.id, proposal.partner_id);
   if (!isMesa && !isOwner) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }

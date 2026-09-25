@@ -86,3 +86,64 @@ export function aplicarMarca(html: string, marca: Marca | null): string {
   }
   return out;
 }
+
+/**
+ * A proposta/recurso de `partnerId` pode ser acessada por `userId`? Sim se for dele ou se
+ * `userId` é o master de Enterprise do dono (o master acompanha e age nas propostas da equipe).
+ */
+export async function ehDaEquipe(userId: string, partnerId: string | null | undefined): Promise<boolean> {
+  if (!partnerId) return false;
+  if (partnerId === userId) return true;
+  const { createClient: sc } = await import("@supabase/supabase-js");
+  const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const { data } = await db.from("profiles").select("enterprise_id").eq("id", partnerId).maybeSingle();
+  return data?.enterprise_id === userId;
+}
+
+/**
+ * Marca do Enterprise dono de uma análise de crédito (credit_profiles.id): segue a proposta que
+ * aponta para o perfil até o partner dela. null = marca V3 (inclui venda direta/site).
+ */
+export async function marcaDaAnaliseDeCredito(profileId: string): Promise<Marca | null> {
+  try {
+    const { createClient: sc } = await import("@supabase/supabase-js");
+    const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const { data: prop } = await db
+      .from("credit_desk_proposals")
+      .select("partner_id")
+      .eq("credit_profile_id", profileId)
+      .not("partner_id", "is", null)
+      .limit(1)
+      .maybeSingle();
+    return prop?.partner_id ? await marcaDoPerfil(db, prop.partner_id as string) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Hosts da própria V3 (nunca são domínio de Enterprise). */
+export function ehHostV3(host: string | null | undefined): boolean {
+  const h = (host ?? "").toLowerCase().split(":")[0];
+  return !h || h === "localhost" || h.endsWith("v3partners.com.br") || h.endsWith("vercel.app") || /^\d+\.\d+\.\d+\.\d+$/.test(h);
+}
+
+/**
+ * Enterprise dono de um domínio próprio (profiles.white_label_dominio, status ativo ou
+ * pendente — pendente já pode estar respondendo enquanto a Vercel termina o certificado).
+ */
+export async function enterprisePorDominio(db: SupabaseClient, host: string | null | undefined): Promise<{ masterId: string; marca: Marca | null } | null> {
+  if (ehHostV3(host)) return null;
+  const h = (host ?? "").toLowerCase().split(":")[0];
+  const { data } = await db
+    .from("profiles")
+    .select("id, role, full_name, white_label_nome, white_label_logo_url")
+    .ilike("white_label_dominio", h)
+    .eq("role", "ENTERPRISE")
+    .is("enterprise_id", null)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    masterId: data.id as string,
+    marca: { nome: (data.white_label_nome as string | null) ?? (data.full_name as string | null) ?? "Enterprise", logoUrl: (data.white_label_logo_url as string | null) ?? null },
+  };
+}

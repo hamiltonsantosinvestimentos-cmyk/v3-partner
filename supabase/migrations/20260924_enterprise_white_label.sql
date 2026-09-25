@@ -17,9 +17,18 @@ ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS enterprise_repasse_percent numeric(5,2)
     CHECK (enterprise_repasse_percent IS NULL OR (enterprise_repasse_percent >= 0 AND enterprise_repasse_percent <= 100)),
   ADD COLUMN IF NOT EXISTS white_label_nome text,
-  ADD COLUMN IF NOT EXISTS white_label_logo_url text;
+  ADD COLUMN IF NOT EXISTS white_label_logo_url text,
+  -- Domínio próprio do Enterprise (ex.: plataforma.cliente.com.br), cadastrado no projeto da
+  -- Vercel pelo painel /enterprise. status: pendente (aguardando DNS) | ativo | erro.
+  ADD COLUMN IF NOT EXISTS white_label_dominio text,
+  ADD COLUMN IF NOT EXISTS white_label_dominio_status text
+    CHECK (white_label_dominio_status IS NULL OR white_label_dominio_status IN ('pendente', 'ativo', 'erro')),
+  ADD COLUMN IF NOT EXISTS white_label_dominio_atualizado_em timestamptz;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_enterprise_id ON public.profiles(enterprise_id);
+-- Um domínio pertence a um único Enterprise.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_white_label_dominio
+  ON public.profiles (lower(white_label_dominio)) WHERE white_label_dominio IS NOT NULL;
 
 COMMENT ON COLUMN public.profiles.enterprise_id IS
   'Usuário de um Enterprise: id do perfil ENTERPRISE master. NULL = master (ou qualquer outro perfil).';

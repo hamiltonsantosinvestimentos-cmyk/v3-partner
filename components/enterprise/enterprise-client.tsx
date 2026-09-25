@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Users, Wallet, Palette, Loader2, Plus, FileDown, Check, X, Pencil, Upload } from "lucide-react";
+import { Users, Wallet, Palette, Loader2, Plus, FileDown, Check, X, Pencil, Upload, Globe, RefreshCw, Copy } from "lucide-react";
 import type { Marca } from "@/lib/enterprise";
 import type { RepasseLinha, ResumoUsuario } from "@/lib/enterprise-repasses";
 
@@ -12,7 +12,7 @@ type Usuario = {
   is_active: boolean | null; enterprise_repasse_percent: number | null; created_at: string;
 };
 
-type Aba = "usuarios" | "repasses" | "marca";
+type Aba = "usuarios" | "repasses" | "marca" | "dominio";
 
 function mesesOpcoes() {
   const out = [{ chave: "todos", label: "Todo o período" }];
@@ -320,10 +320,149 @@ function AbaMarca({ marcaInicial }: { marcaInicial: Marca | null }) {
   );
 }
 
+// ─── Domínio próprio ─────────────────────────────────────────────────────────
+type StatusDominio = {
+  dominio: string | null;
+  status?: "pendente" | "ativo" | "erro";
+  dns?: { tipo: string; nome: string; valor: string };
+  verificacao?: { type?: string; domain?: string; value?: string }[];
+  dnsOk?: boolean | null;
+  vercelConfigurada: boolean;
+};
+
+function CelulaCopiar({ v, copiado, onCopiar }: { v: string; copiado: string | null; onCopiar: (v: string) => void }) {
+  return (
+    <td className="px-3 py-2 font-mono text-xs text-foreground">
+      <button onClick={() => onCopiar(v)} className="inline-flex items-center gap-1.5 hover:text-[#E8C97A]" title="Copiar">
+        {v} {copiado === v ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 opacity-60" />}
+      </button>
+    </td>
+  );
+}
+
+function AbaDominio() {
+  const [st, setSt] = useState<StatusDominio | null>(null);
+  const [entrada, setEntrada] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState<string | null>(null);
+
+  const carregar = useCallback(async () => {
+    setErro(null);
+    const r = await fetch("/api/enterprise/dominio");
+    const j = await r.json();
+    if (!r.ok) { setErro(j.error ?? "Falha ao carregar"); return; }
+    setSt(j);
+  }, []);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  async function salvar() {
+    setBusy(true); setErro(null);
+    const r = await fetch("/api/enterprise/dominio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dominio: entrada }) });
+    const j = await r.json();
+    setBusy(false);
+    if (!r.ok) { setErro(j.error ?? "Falha ao salvar"); return; }
+    setSt(j); setEntrada("");
+  }
+
+  async function remover() {
+    if (!window.confirm("Remover o domínio próprio? Sua equipe volta a acessar só por app.v3partners.com.br.")) return;
+    setBusy(true);
+    await fetch("/api/enterprise/dominio", { method: "DELETE" });
+    setBusy(false);
+    carregar();
+  }
+
+  function copiar(v: string) {
+    navigator.clipboard.writeText(v).then(() => { setCopiado(v); setTimeout(() => setCopiado(null), 1500); });
+  }
+
+  if (!st) return erro ? <p className="text-xs text-red-400">{erro}</p> : <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />;
+
+  const cor = st.status === "ativo" ? "bg-emerald-500/10 text-emerald-400" : st.status === "erro" ? "bg-red-500/10 text-red-400" : "bg-amber-500/10 text-amber-400";
+  const rotulo = st.status === "ativo" ? "Ativo" : st.status === "erro" ? "Erro" : "Aguardando DNS";
+
+  return (
+    <div className="space-y-4 max-w-2xl">
+      {!st.vercelConfigurada && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-300">
+          A integração com a hospedagem ainda não foi configurada pela V3. Você já pode cadastrar o domínio; ele será ativado assim que a V3 concluir a configuração.
+        </div>
+      )}
+
+      {!st.dominio ? (
+        <div className="rounded-xl border border-border/50 bg-card p-5 space-y-3">
+          <p className="text-sm font-semibold text-white flex items-center gap-2"><Globe className="w-4 h-4 text-[#C9A84C]" /> Usar um domínio próprio</p>
+          <p className="text-xs text-muted-foreground">
+            Sua equipe passa a acessar a plataforma pelo seu endereço, com a sua marca desde o login. Recomendamos um subdomínio, ex.: <span className="font-mono text-foreground">plataforma.suaempresa.com.br</span>.
+          </p>
+          <div className="flex gap-2">
+            <input className={`${input} flex-1`} placeholder="plataforma.suaempresa.com.br" value={entrada} onChange={(e) => setEntrada(e.target.value.trim().toLowerCase())} />
+            <button onClick={salvar} disabled={busy || !entrada} className="h-9 px-4 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold disabled:opacity-40 flex items-center gap-1.5">
+              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Cadastrar
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border/50 bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-sm font-semibold text-white flex items-center gap-2">
+              <Globe className="w-4 h-4 text-[#C9A84C]" /> <span className="font-mono">{st.dominio}</span>
+              <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${cor}`}>{rotulo}</span>
+            </p>
+            <div className="flex gap-2">
+              <button onClick={carregar} disabled={busy} className="h-8 px-3 rounded-lg border border-border text-xs flex items-center gap-1.5 hover:bg-secondary"><RefreshCw className="w-3.5 h-3.5" /> Verificar agora</button>
+              <button onClick={remover} disabled={busy} className="h-8 px-3 rounded-lg border border-border text-xs text-muted-foreground hover:text-white">Remover</button>
+            </div>
+          </div>
+
+          {st.status === "ativo" ? (
+            <p className="text-xs text-emerald-400">
+              Tudo certo. Sua equipe já pode acessar por <a className="underline" href={`https://${st.dominio}`} target="_blank" rel="noreferrer">https://{st.dominio}</a>. Novos convites de usuário já saem com este endereço.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                No painel onde o domínio foi registrado (Registro.br, GoDaddy, Hostinger, Cloudflare…), crie o registro abaixo. A propagação costuma levar de alguns minutos a algumas horas; o certificado HTTPS é emitido automaticamente.
+              </p>
+              <table className="w-full text-sm rounded-lg border border-border/50">
+                <thead><tr className="border-b border-border/50">{["Tipo", "Nome", "Valor"].map((h) => <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase">{h}</th>)}</tr></thead>
+                <tbody>
+                  {st.dns && (
+                    <tr className="border-b border-border/30">
+                      <td className="px-3 py-2 text-xs font-bold">{st.dns.tipo}</td>
+                      <CelulaCopiar v={st.dns.nome} copiado={copiado} onCopiar={copiar} />
+                      <CelulaCopiar v={st.dns.valor} copiado={copiado} onCopiar={copiar} />
+                    </tr>
+                  )}
+                  {(st.verificacao ?? []).map((v, i) => (
+                    <tr key={i} className="border-b border-border/30">
+                      <td className="px-3 py-2 text-xs font-bold">{v.type ?? "TXT"}</td>
+                      <CelulaCopiar v={v.domain ?? ""} copiado={copiado} onCopiar={copiar} />
+                      <CelulaCopiar v={v.value ?? ""} copiado={copiado} onCopiar={copiar} />
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-[11px] text-muted-foreground">
+                {st.dnsOk === false ? "O DNS ainda não aponta para a plataforma. " : ""}Depois de criar o registro, clique em &quot;Verificar agora&quot;.
+              </p>
+            </>
+          )}
+        </div>
+      )}
+      {erro && <p className="text-xs text-red-400">{erro}</p>}
+      <p className="text-[11px] text-muted-foreground">
+        O domínio muda só o endereço e a marca. As operações continuam sendo tratadas pela V3 (Mesa de Crédito, Mesa Operacional, suporte e comissões).
+      </p>
+    </div>
+  );
+}
+
 export function EnterpriseClient({ ehMaster, marcaInicial, limite }: { ehMaster: boolean; marcaInicial: Marca | null; limite: number }) {
   const [aba, setAba] = useState<Aba>(ehMaster ? "usuarios" : "repasses");
   const abas: { id: Aba; label: string; icon: typeof Users }[] = ehMaster
-    ? [{ id: "usuarios", label: "Usuários", icon: Users }, { id: "repasses", label: "Repasses a pagar", icon: Wallet }, { id: "marca", label: "Marca", icon: Palette }]
+    ? [{ id: "usuarios", label: "Usuários", icon: Users }, { id: "repasses", label: "Repasses a pagar", icon: Wallet }, { id: "marca", label: "Marca", icon: Palette }, { id: "dominio", label: "Domínio", icon: Globe }]
     : [{ id: "repasses", label: "Meus repasses", icon: Wallet }];
 
   return (
@@ -339,6 +478,7 @@ export function EnterpriseClient({ ehMaster, marcaInicial, limite }: { ehMaster:
       {aba === "usuarios" && <AbaUsuarios limite={limite} />}
       {aba === "repasses" && <AbaRepasses ehMaster={ehMaster} />}
       {aba === "marca" && <AbaMarca marcaInicial={marcaInicial} />}
+      {aba === "dominio" && <AbaDominio />}
     </div>
   );
 }

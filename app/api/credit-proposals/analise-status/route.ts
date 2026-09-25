@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ehDaEquipe } from "@/lib/enterprise";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
   if (!proposal) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
 
   const isReader = READ_ROLES.includes(profile?.role as typeof READ_ROLES[number]);
-  if (!isReader && proposal.partner_id !== user.id) {
+  if (!isReader && !(await ehDaEquipe(user.id, proposal.partner_id))) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
