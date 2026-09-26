@@ -6,6 +6,7 @@ import { getProvider, type SendEnvelopeInput } from "@/lib/esignature";
 import { renderContractDocx } from "@/lib/contract-docx-render";
 import type { ContractParty } from "@/lib/contract-render";
 import { buildEnvelopeLabel } from "@/lib/contract-envelope-label";
+import { MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -16,7 +17,9 @@ async function requireRole(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
-  if (!profile || !["ADMIN", "GESTAO"].includes(profile.role as string)) return null;
+  // MESA_OPERACIONAL (analista, ex: Taisa Pedroso) passa a poder enviar (24/09/2026, urgência de João):
+  // ficava barrada aqui mesmo com acesso a gerar e listar. O escopo de vertical é conferido abaixo.
+  if (!profile || !["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role as string)) return null;
   return { userId: user.id, role: profile.role as string };
 }
 
@@ -60,6 +63,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .single();
 
   if (!contract) return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
+  // Analista só opera contrato das verticais dela, o mesmo escopo da lista (nunca Crédito, Institucional etc.).
+  if (caller.role === "MESA_OPERACIONAL" && !MESA_OPERACIONAL_VERTICALS.includes(contract.vertical as string)) {
+    return NextResponse.json({ error: "Este contrato não pertence às verticais da Mesa Operacional. Peça a um ADMIN ou GESTAO para enviá-lo." }, { status: 403 });
+  }
   if (!["rascunho", "aprovado"].includes(contract.status_signature)) {
     return NextResponse.json({ error: `Contrato em status "${contract.status_signature}" não pode ser (re)enviado por esta rota.` }, { status: 409 });
   }

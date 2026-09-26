@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -18,7 +19,6 @@ function svc() {
 // atua nas duas mesas como analista, não só M&A. Lista de verticais
 // pensada para crescer junto com quem realmente acumula mesas, nunca
 // hardcoded para uma pessoa específica.
-const MESA_OPERACIONAL_VERTICALS = ["ma", "capital_markets"];
 
 async function requireRole(req: NextRequest) {
   const supabase = await createClient();
