@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -13,6 +13,11 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Domínio próprio de Enterprise (white label): logo e nome dele no login.
+  const [marca, setMarca] = useState<{ nome: string; logoUrl: string | null } | null>(null);
+  useEffect(() => {
+    fetch("/api/public/white-label").then((r) => r.json()).then((j) => setMarca(j?.marca ?? null)).catch(() => {});
+  }, []);
 
   const IS_DEMO = false;
 
@@ -110,17 +115,22 @@ export default function LoginPage() {
               alignItems: "center",
               justifyContent: "center",
             }}>
-              <Image
-                src="/logo.jpg"
-                alt="V3 PARTNERS"
-                width={200}
-                height={200}
-                style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center" }}
-                priority
-              />
+              {marca?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={marca.logoUrl} alt={marca.nome} style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center" }} />
+              ) : (
+                <Image
+                  src="/logo.jpg"
+                  alt="V3 PARTNERS"
+                  width={200}
+                  height={200}
+                  style={{ width: "100%", height: "100%", objectFit: "contain", objectPosition: "center" }}
+                  priority
+                />
+              )}
             </div>
             <p style={{ fontSize: 10, color: "#7A8FA8", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 14 }}>
-              Plataforma Financeira
+              {marca ? marca.nome : "Plataforma Financeira"}
             </p>
           </div>
 
@@ -215,7 +225,7 @@ export default function LoginPage() {
         </div>
 
         <p style={{ textAlign: "center", fontSize: 10, color: "#3A5068", marginTop: 18, letterSpacing: "0.05em" }}>
-          © {new Date().getFullYear()} V3 Partners. Todos os direitos reservados.
+          {marca ? <>{marca.nome} · Powered by V3 Partners</> : <>© {new Date().getFullYear()} V3 Partners. Todos os direitos reservados.</>}
         </p>
       </div>
     </div>

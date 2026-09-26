@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus, Copy, Share2, CheckCircle2, FileText, Loader2, X, Trash2, Pencil, Save, Eye } from "lucide-react";
 import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
+import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
 import { isValidEmail } from "@/lib/utils";
 import { PartyQualificationCardModal } from "./party-qualification-card";
 
@@ -159,7 +160,7 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
                       className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <input value={editPartyForm.email} onChange={(e) => setEditPartyForm((f) => ({ ...f, email: e.target.value }))} placeholder="E-mail *" type="email"
                       className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
-                    <input value={editPartyForm.phone} onChange={(e) => setEditPartyForm((f) => ({ ...f, phone: e.target.value }))} placeholder="WhatsApp (opcional)" type="tel"
+                    <PhoneIntlInput value={editPartyForm.phone} onChange={(v) => setEditPartyForm((f) => ({ ...f, phone: v }))} placeholder="WhatsApp (opcional), fora do Brasil use +DDI"
                       className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <select value={editPartyForm.role_in_document} onChange={(e) => setEditPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
                       className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">

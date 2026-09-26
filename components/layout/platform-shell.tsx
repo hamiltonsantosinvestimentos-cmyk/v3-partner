@@ -25,10 +25,12 @@ interface PlatformShellProps {
     is_active?: boolean | null;
   };
   notificationCount: number;
+  /** White label do Enterprise (null = marca V3). */
+  marca?: { nome: string; logoUrl: string | null } | null;
   children: React.ReactNode;
 }
 
-export function PlatformShell({ user, notificationCount, children }: PlatformShellProps) {
+export function PlatformShell({ user, notificationCount, marca = null, children }: PlatformShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -45,7 +47,7 @@ export function PlatformShell({ user, notificationCount, children }: PlatformShe
       <LocationGate role={user.role} />
       {/* Desktop sidebar */}
       <div className="hidden lg:flex flex-shrink-0">
-        <Sidebar role={user.role} />
+        <Sidebar role={user.role} marca={marca} />
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -56,7 +58,7 @@ export function PlatformShell({ user, notificationCount, children }: PlatformShe
             onClick={() => setSidebarOpen(false)}
           />
           <div className="absolute left-0 top-0 bottom-0 z-50">
-            <Sidebar role={user.role} onClose={() => setSidebarOpen(false)} />
+            <Sidebar role={user.role} marca={marca} onClose={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}
@@ -75,6 +77,7 @@ export function PlatformShell({ user, notificationCount, children }: PlatformShe
           user={user}
           onMenuClick={() => setSidebarOpen(true)}
           notificationCount={notificationCount}
+          marca={marca}
         />
         <main className="flex-1 overflow-y-auto p-5 lg:p-6 relative"
           style={{

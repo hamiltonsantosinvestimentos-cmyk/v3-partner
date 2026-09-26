@@ -29,12 +29,14 @@ export type UserRole = keyof typeof USER_ROLES;
 
 // Comissionamento do licenciado por plano contratado — % sobre a comissão
 // LÍQUIDA da V3 (total bruto mandato + instituição, já descontados os impostos).
-// ENTERPRISE é negociável caso a caso, portanto não tem percentual fixo aqui.
+// ENTERPRISE: 55% (24/09/2026) — pago ao master do Enterprise, que repassa aos usuários dele.
 export const PLAN_COMMISSION_PCT: Partial<Record<UserRole, number>> = {
   STARTER: 20,
   PARTNER: 30,
   PARTNER_PRO: 50,
   PARTNER_HE: 50,
+  // Enterprise (24/09/2026): 55% sobre a líquida V3, pago ao master; ele repassa aos usuários.
+  ENTERPRISE: 55,
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {

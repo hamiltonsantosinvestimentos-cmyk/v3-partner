@@ -11,6 +11,7 @@ export async function sendWhatsApp(phone: string, text: string): Promise<boolean
 
 export function formatPhone(raw: string): string {
   const digits = raw.replace(/\D/g, "");
+  if (raw.trim().startsWith("+")) return digits;
   if (digits.length <= 11 && !digits.startsWith("55")) return `55${digits}`;
   return digits;
 }

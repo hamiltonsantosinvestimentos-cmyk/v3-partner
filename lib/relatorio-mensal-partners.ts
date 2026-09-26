@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { calcularComissaoLicenciado, lerAliquotaComissao } from "@/lib/credit-commissions";
-import { ROLE_LABELS, type UserRole } from "@/lib/constants";
+import { PLAN_COMMISSION_PCT, ROLE_LABELS, type UserRole } from "@/lib/constants";
 import { ehAnaliseDoSite } from "@/lib/analise-site";
 
 /**
@@ -99,7 +99,7 @@ export interface RelatorioPartner {
     doMesAReceber: number;
     previsaoAprovadas: number;
     propostasNaPrevisao: number;
-    previsaoSemPercentual: boolean; // ENTERPRISE: % negociável, previsão fica zerada
+    previsaoSemPercentual: boolean; // plano sem % fixo: previsão fica "a definir"
     /** Aprovadas (botão Aprovar) ainda sem % de mandato/instituição no modal: fora da previsão. */
     aprovadasSemPercentual: number;
     acumulada: number;
@@ -137,18 +137,35 @@ type PropostaRow = {
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Monta o relatório do mês. `partnerId` restringe a um partner (tela do próprio partner). */
-export async function montarRelatorioMensal(db: SupabaseClient, periodo: Periodo, partnerId?: string): Promise<RelatorioMensal> {
-  let partnersQ = db.from("profiles").select("id, full_name, email, role, is_active").in("role", [...PARTNER_ROLES]);
-  if (partnerId) partnersQ = partnersQ.eq("id", partnerId);
+/**
+ * Monta o relatório do mês. `partnerId` restringe a um ou mais partners (tela do partner, ou
+ * do master de Enterprise com a equipe dele). Enterprise: a comissão das vendas dos usuários é
+ * do master (lib/enterprise.ts), então previsão/comissão dos usuários contam na linha do master.
+ */
+export async function montarRelatorioMensal(db: SupabaseClient, periodo: Periodo, partnerId?: string | string[]): Promise<RelatorioMensal> {
+  const filtro = partnerId ? (Array.isArray(partnerId) ? partnerId : [partnerId]) : null;
+  let partnersQ = db.from("profiles").select("id, full_name, email, role, is_active, enterprise_id").in("role", [...PARTNER_ROLES]);
+  if (filtro) partnersQ = partnersQ.in("id", filtro);
   const { data: partnersData } = await partnersQ;
+
+  // Master filtrado sozinho ainda precisa das propostas dos usuários dele (previsão é dele).
+  let idsPropostas = filtro;
+  const donoComissao = new Map<string, string>(); // partner_id → quem recebe a comissão
+  {
+    let equipeQ = db.from("profiles").select("id, enterprise_id").not("enterprise_id", "is", null);
+    if (filtro) equipeQ = equipeQ.or(`enterprise_id.in.(${filtro.join(",")}),id.in.(${filtro.join(",")})`);
+    const { data: equipe } = await equipeQ;
+    for (const u of equipe ?? []) donoComissao.set(u.id as string, u.enterprise_id as string);
+    if (filtro) idsPropostas = [...new Set([...filtro, ...(equipe ?? []).map((u) => u.id as string)])];
+  }
+  const dono = (partnerIdProposta: string | null) => (partnerIdProposta ? donoComissao.get(partnerIdProposta) ?? partnerIdProposta : null);
 
   let propsQ = db
     .from("credit_desk_proposals")
     .select("id, code, client_name, title, credit_line, current_level, stage, status, requested_value, approved_value, valor_credito_atual, comissao_mandato_perc, comissao_instituicao_perc, credit_profile_id, partner_id, metadata, created_at")
     .is("deleted_at", null)
     .not("partner_id", "is", null);
-  if (partnerId) propsQ = propsQ.eq("partner_id", partnerId);
+  if (idsPropostas) propsQ = propsQ.in("partner_id", idsPropostas);
   const { data: propsData } = await propsQ;
   const propostas = ((propsData ?? []) as PropostaRow[]).filter((p) => !ehAnaliseDoSite(p));
 
@@ -156,7 +173,7 @@ export async function montarRelatorioMensal(db: SupabaseClient, periodo: Periodo
     .from("commissions")
     .select("partner_id, commission_value, status, created_at")
     .neq("status", "CANCELADA");
-  if (partnerId) comQ = comQ.eq("partner_id", partnerId);
+  if (filtro) comQ = comQ.in("partner_id", filtro);
   const { data: comData } = await comQ;
   const comissoes = (comData ?? []) as { partner_id: string; commission_value: number | null; status: string; created_at: string }[];
 
@@ -169,10 +186,12 @@ export async function montarRelatorioMensal(db: SupabaseClient, periodo: Periodo
   const relatorios: RelatorioPartner[] = [];
   for (const p of partnersData ?? []) {
     const minhas = propostas.filter((x) => x.partner_id === p.id);
+    // Propostas cuja comissão é deste partner (master de Enterprise: as dele + dos usuários).
+    const paraComissao = propostas.filter((x) => dono(x.partner_id) === p.id);
     const minhasCom = comissoes.filter((c) => c.partner_id === p.id);
     // Partner sem nenhuma proposta nem comissão na vida e inativo: não entra.
-    if (!partnerId && minhas.length === 0 && minhasCom.length === 0) continue;
-    if (!partnerId && p.is_active === false && minhas.length === 0) continue;
+    if (!filtro && minhas.length === 0 && paraComissao.length === 0 && minhasCom.length === 0) continue;
+    if (!filtro && p.is_active === false && minhas.length === 0) continue;
 
     const doMes = minhas.filter((x) => noMes(x.created_at)).sort((a, b) => a.created_at.localeCompare(b.created_at));
     const linhas: PropostaLinha[] = doMes.map((x) => {
@@ -208,7 +227,7 @@ export async function montarRelatorioMensal(db: SupabaseClient, periodo: Periodo
     // Previsão (regra do Hamilton, 23/09/2026): só crédito APROVADO pelo botão "Aprovar" e com
     // os % de comissão de mandato E instituição já preenchidos no modal; ainda não liberado
     // (no LIBERADO a comissão real é gerada e passa a contar em "do mês"/"acumulada").
-    const aprovadasALiberar = minhas.filter((x) =>
+    const aprovadasALiberar = paraComissao.filter((x) =>
       x.status === "APPROVED" &&
       !LIBERADA.has(x.stage ?? "") && !RECUSADA.has(x.stage ?? "") &&
       (x.metadata ?? {}).commissions_generated !== true,
@@ -216,12 +235,13 @@ export async function montarRelatorioMensal(db: SupabaseClient, periodo: Periodo
     const comPercentual = (x: PropostaRow) => x.comissao_mandato_perc != null && x.comissao_instituicao_perc != null;
     const naPrevisao = aprovadasALiberar.filter(comPercentual);
     const previsao = naPrevisao.reduce((s, x) => s + calcularComissaoLicenciado(x, p.role, aliquota).licenciadoValue, 0);
+    const ehUsuarioEnterprise = Boolean((p as { enterprise_id?: string | null }).enterprise_id);
 
     const comMes = minhasCom.filter((c) => noMes(c.created_at));
     const soma = (xs: typeof minhasCom) => round2(xs.reduce((s, c) => s + num(c.commission_value), 0));
 
     relatorios.push({
-      partner: { id: p.id, nome: p.full_name ?? p.email ?? "Partner", email: p.email, role: p.role, plano: ROLE_LABELS[p.role as UserRole] ?? p.role },
+      partner: { id: p.id, nome: p.full_name ?? p.email ?? "Partner", email: p.email, role: p.role, plano: ehUsuarioEnterprise ? "Usuário Enterprise" : ROLE_LABELS[p.role as UserRole] ?? p.role },
       propostasMes: linhas,
       mes: {
         enviadas,
@@ -244,7 +264,7 @@ export async function montarRelatorioMensal(db: SupabaseClient, periodo: Periodo
         doMesAReceber: soma(comMes.filter((c) => c.status !== "PAGA")),
         previsaoAprovadas: round2(previsao),
         propostasNaPrevisao: naPrevisao.length,
-        previsaoSemPercentual: naPrevisao.length > 0 && p.role === "ENTERPRISE",
+        previsaoSemPercentual: naPrevisao.length > 0 && PLAN_COMMISSION_PCT[p.role as UserRole] == null,
         aprovadasSemPercentual: aprovadasALiberar.length - naPrevisao.length,
         acumulada: soma(minhasCom),
         acumuladaPaga: soma(minhasCom.filter((c) => c.status === "PAGA")),

@@ -1,4 +1,5 @@
 import { createClient as sc } from "@supabase/supabase-js";
+import { aplicarMarca, marcaDaAnaliseDeCredito } from "@/lib/enterprise";
 import { buildCreditReportData, REPORT_VALIDITY_DAYS } from "@/lib/credit-report-data";
 import { buildExternalReportFullHtml, creditReportPdfOptions } from "@/lib/credit-report-template";
 
@@ -68,7 +69,8 @@ export async function generateAndStoreCreditReportPdf(profileId: string): Promis
   const reportData = await buildCreditReportData(profileId);
   if (!reportData) return { ok: false, error: "Perfil de crédito não encontrado" };
 
-  const html = buildExternalReportFullHtml(reportData);
+  // Proposta de partner Enterprise: dossiê com a marca dele (lib/enterprise.ts).
+  const html = aplicarMarca(buildExternalReportFullHtml(reportData), await marcaDaAnaliseDeCredito(profileId));
 
   let pdfBuffer: Buffer;
   let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;

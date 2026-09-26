@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { sendWhatsApp } from "@/lib/whatsapp/subscription-messages";
+import { normalizePhone } from "@/lib/phone";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 
 // GET /api/cron/qualification-reminder — Fast-Track de Contratos Simples
@@ -83,11 +84,15 @@ export async function GET(req: NextRequest) {
             html: htmlGate.corrected,
           });
         }
-        if (party.phone) {
+        // Telefone internacional (26/09/2026): só envia para número que normaliza (E.164).
+        // Legado inválido não recebe o prefixo 55 no chute: registra e segue.
+        const ph = party.phone ? normalizePhone(party.phone) : null;
+        if (ph && !ph.ok) errors.push(`${party.id}: telefone inválido, WhatsApp não enviado`);
+        if (ph?.ok && ph.e164) {
           const msg = auditText(
             `Ola ${firstName}, tudo bem? Notamos que sua qualificacao para a operacao ainda nao foi concluida. Complete seus dados aqui: ${link}`
           );
-          await sendWhatsApp(party.phone, msg.corrected);
+          await sendWhatsApp(ph.e164, msg.corrected);
         }
         notified.push(party.id);
       } catch (e) {

@@ -2,6 +2,7 @@ import { BarChart3 } from "lucide-react";
 import { createClient as sc } from "@supabase/supabase-js";
 import { montarRelatorioMensal, periodoDoMes, PARTNER_ROLES } from "@/lib/relatorio-mensal-partners";
 import { RelatorioMensalClient } from "@/components/mesa-credito/relatorio-mensal-client";
+import { idsDaEquipe } from "@/lib/enterprise";
 
 const EQUIPE = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
@@ -27,7 +28,10 @@ export async function RelatorioMensalView({ mes, basePath, somenteEquipe = false
 
   const periodo = periodoDoMes(mes);
   const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
-  const rel = await montarRelatorioMensal(db, periodo, equipe ? undefined : user.id);
+  // Master de Enterprise vê a equipe dele (ele + usuários); partner comum vê só o dele.
+  const ids = equipe ? undefined : await idsDaEquipe(db, user.id);
+  const rel = await montarRelatorioMensal(db, periodo, ids);
+  const visaoDeEquipe = equipe || (ids?.length ?? 0) > 1;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -42,7 +46,7 @@ export async function RelatorioMensalView({ mes, basePath, somenteEquipe = false
             : "Suas propostas, funil e comissões no mês. Você também recebe este relatório por e-mail todo dia 1."}
         </p>
       </div>
-      <RelatorioMensalClient rel={rel} equipe={equipe} podeReenviar={["ADMIN", "GESTAO"].includes(role)} basePath={basePath} />
+      <RelatorioMensalClient rel={rel} equipe={visaoDeEquipe} podeReenviar={["ADMIN", "GESTAO"].includes(role)} basePath={basePath} />
     </div>
   );
 }

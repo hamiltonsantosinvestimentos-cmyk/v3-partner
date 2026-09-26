@@ -68,10 +68,18 @@ function normalizeBrazilianPhone(digits: string): string {
   return digits;
 }
 
+// Número com "+" (E.164, ex: +15551234567) já traz o DDI e nunca recebe o 55 do Brasil
+// (26/09/2026: um +1 EUA de 11 dígitos virava DDD 15 de São Paulo e a mensagem ia para
+// um terceiro). Sem "+", a regra de sempre vale (10/11 dígitos = Brasil).
+function toDialDigits(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  return phone.trim().startsWith("+") ? digits : normalizeBrazilianPhone(digits);
+}
+
 // OpenWA chatId format: "<digits>@c.us" (individual) or "<digits>@g.us" (group).
 // Fallback ingênuo — usado só quando /contacts/check falha; ver resolveChatId abaixo.
 export function phoneToChatId(phone: string): string {
-  const digits = normalizeBrazilianPhone(phone.replace(/\D/g, ""));
+  const digits = toDialDigits(phone);
   return `${digits}@c.us`;
 }
 
@@ -81,7 +89,7 @@ export function phoneToChatId(phone: string): string {
 // sem nenhum erro visível. /contacts/check devolve o whatsappId canônico; se a checagem
 // falhar por qualquer motivo, cai no formato ingênuo de phoneToChatId como fallback.
 async function resolveChatId(phone: string, sessionId?: string): Promise<string> {
-  const digits = normalizeBrazilianPhone(phone.replace(/\D/g, ""));
+  const digits = toDialDigits(phone);
   try {
     const res = await fetch(`${BASE_URL}/api/sessions/${resolveSessionId(sessionId)}/contacts/check/${digits}`, {
       headers: headers(),

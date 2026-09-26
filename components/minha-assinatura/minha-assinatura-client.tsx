@@ -73,7 +73,7 @@ const COMISSAO_PCT: Record<string, string> = {
   PARTNER: "30%",
   PARTNER_HE: "50%",
   PARTNER_PRO: "50%",
-  ENTERPRISE: "Negociável",
+  ENTERPRISE: "55%",
 };
 
 export function MinhaAssinaturaClient({ profile, contract, commissions }: Props) {

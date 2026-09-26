@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { isValidEmail } from "@/lib/utils";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { normalizePhone } from "@/lib/phone";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -175,6 +176,8 @@ export async function POST(req: NextRequest) {
     if (!p.full_name?.trim() || !isValidEmail(p.email ?? "") || !ROLES_IN_DOCUMENT.includes(p.role_in_document)) {
       return NextResponse.json({ error: "Cada envolvido precisa de nome, e-mail válido e posição no documento" }, { status: 422 });
     }
+    const ph = normalizePhone(p.phone);
+    if (!ph.ok) return NextResponse.json({ error: `${p.full_name}: ${ph.error}` }, { status: 422 });
   }
 
   // Partner so pode indicar (nunca definir document_type, isso e exclusivo da Governanca), e
@@ -217,7 +220,7 @@ export async function POST(req: NextRequest) {
     batch_id: batch.id,
     full_name: p.full_name.trim(),
     email: p.email.trim(),
-    phone: p.phone?.trim() || null,
+    phone: normalizePhone(p.phone).e164,
     role_in_document: p.role_in_document,
     qualification_token: randomUUID().replace(/-/g, ""),
   }));

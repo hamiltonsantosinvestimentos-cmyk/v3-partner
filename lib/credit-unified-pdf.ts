@@ -1,4 +1,5 @@
 import { PDFDocument } from "pdf-lib";
+import { aplicarMarca, marcaDaAnaliseDeCredito } from "@/lib/enterprise";
 import { nomeOficialDoPerfil, mesmoNome, semRotulo } from "@/lib/credit-nome-oficial";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateAndStoreCreditReportPdf, launchBrowser } from "@/lib/credit-report-generate";
@@ -349,13 +350,18 @@ export async function gerarPdfUnificado(db: SupabaseClient, orderId: string): Pr
   let capaBytes: Uint8Array;
   let capaPaginas = 1;
   let partes = montarPartes(capaPaginas);
+  // Pedido de partner Enterprise: capa com a marca dele (lib/enterprise.ts), igual ao dossiê de cada parte.
+  const marcaCapa = await marcaDaAnaliseDeCredito(ordem[0].profileId);
   let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;
   try {
     browser = await launchBrowser();
     const renderCapa = async () => {
       const page = await browser!.newPage();
       await page.setContent(
-        capaHtml({ cliente: partes[0].nome || order.client_name || "—", documentoCliente: partes[0].documento || order.client_doc || "", solicitante: order.client_name, partes, emitidoEm, mostrarPagina: true, rotulo: "arquivo" }),
+        aplicarMarca(
+          capaHtml({ cliente: partes[0].nome || order.client_name || "—", documentoCliente: partes[0].documento || order.client_doc || "", solicitante: order.client_name, partes, emitidoEm, mostrarPagina: true, rotulo: "arquivo" }),
+          marcaCapa,
+        ),
         { waitUntil: "load", timeout: 60000 }
       );
       const buf = await page.pdf({ format: "A4", printBackground: true, margin: { top: "0", right: "0", bottom: "0", left: "0" } });

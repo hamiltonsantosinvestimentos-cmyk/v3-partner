@@ -1,4 +1,8 @@
 import { CreditDeskClient } from "@/components/mesa-credito/credit-desk-client";
+import { createClient as svcEnterpriseClient } from "@supabase/supabase-js";
+import { idsDaEquipe } from "@/lib/enterprise";
+
+const svcEnterprise = () => svcEnterpriseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 import { semAnaliseDoSite } from "@/lib/analise-site";
 import { DEMO_CREDIT_PROPOSALS } from "@/lib/demo-data";
 import { cookies } from "next/headers";
@@ -29,8 +33,12 @@ export default async function Nivel3Page() {
   const currentUser = { id: profile?.id ?? user?.id ?? "", full_name: profile?.full_name ?? "Partner", role: profile?.role ?? "PARTNER" };
   const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser.role);
 
-  let query = supabase.from("credit_desk_proposals").select("*").eq("current_level", "NIVEL_3").order("created_at", { ascending: false });
-  if (!isAdmin) query = query.eq("partner_id", currentUser.id);
+  // Master de Enterprise vê também as propostas/leads dos usuários dele (lib/enterprise.ts);
+  // RLS só libera as próprias linhas, então nesse caso a leitura vai pelo service client.
+  const equipeIds = isAdmin ? [] : await idsDaEquipe(svcEnterprise(), currentUser.id);
+  const leitor = (equipeIds.length > 1 ? svcEnterprise() : supabase) as unknown as typeof supabase;
+  let query = leitor.from("credit_desk_proposals").select("*").eq("current_level", "NIVEL_3").order("created_at", { ascending: false });
+  if (!isAdmin) query = query.in("partner_id", equipeIds);
 
   const { data } = await query;
   return <CreditDeskClient proposals={semAnaliseDoSite(data as { metadata?: unknown }[] | null) as unknown as Parameters<typeof CreditDeskClient>[0]["proposals"]} level="NIVEL_3" currentUser={currentUser} />;

@@ -139,6 +139,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/simulador-homecash", label: "HomeCash", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
         ],
       },
+      { href: "/enterprise", label: "Enterprise", icon: "Building2", roles: ["ENTERPRISE"] },
       { href: "/ma", label: "M&A", icon: "Building2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
       {
         href: "/consorcio", label: "Consórcio", icon: "Trophy",
@@ -220,9 +221,14 @@ const ROLE_LABELS: Record<string, string> = {
   CLOSER: "Closer",
 };
 
-interface SidebarProps { role: UserRole; onClose?: () => void; }
+interface SidebarProps {
+  role: UserRole;
+  onClose?: () => void;
+  /** White label do Enterprise (lib/enterprise.ts): logo e nome no lugar da marca V3. */
+  marca?: { nome: string; logoUrl: string | null } | null;
+}
 
-export function Sidebar({ role, onClose }: SidebarProps) {
+export function Sidebar({ role, onClose, marca = null }: SidebarProps) {
   const pathname = usePathname();
   const [expandedItems, setExpandedItems] = useState<string[]>(() => {
     const initial = ["/mesa-credito"];
@@ -288,8 +294,13 @@ export function Sidebar({ role, onClose }: SidebarProps) {
           {/* Logo container — proporção real de logo.jpg (652x778) para evitar corte/emenda dentro de um quadrado */}
           <div className="relative w-[84px] h-[100px] rounded-2xl overflow-hidden"
             style={{ boxShadow: "0 0 0 1px rgba(201,168,76,0.2), 0 8px 24px rgba(0,0,0,0.5), 0 0 40px rgba(201,168,76,0.08)" }}>
-            <Image src="/logo.jpg" alt="V3 PARTNERS" width={84} height={100}
-              className="w-full h-full object-contain" priority />
+            {marca?.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={marca.logoUrl} alt={marca.nome} className="w-full h-full object-contain bg-[#09081A]" />
+            ) : (
+              <Image src="/logo.jpg" alt="V3 PARTNERS" width={84} height={100}
+                className="w-full h-full object-contain" priority />
+            )}
           </div>
           {/* Status dot */}
           <div className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-[#09081A] flex items-center justify-center">
@@ -298,8 +309,8 @@ export function Sidebar({ role, onClose }: SidebarProps) {
         </div>
 
         <div className="mt-3 text-center">
-          <p className="text-[11px] font-bold tracking-[0.2em] text-[#C9A84C] uppercase">V3 Partners</p>
-          <p className="text-[9px] text-[#7A8FA8]/70 tracking-[0.15em] uppercase mt-0.5">Plataforma Institucional</p>
+          <p className="text-[11px] font-bold tracking-[0.2em] text-[#C9A84C] uppercase">{marca?.nome ?? "V3 Partners"}</p>
+          <p className="text-[9px] text-[#7A8FA8]/70 tracking-[0.15em] uppercase mt-0.5">{marca ? "Powered by V3 Partners" : "Plataforma Institucional"}</p>
         </div>
       </div>
 

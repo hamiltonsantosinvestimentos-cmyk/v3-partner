@@ -73,6 +73,7 @@ export async function GET(req: NextRequest) {
     .from("profiles")
     .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
     .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
     .order("created_at", { ascending: false });
 
   // Se trial_expires_at não existir ainda, tenta sem a coluna
@@ -82,6 +83,7 @@ export async function GET(req: NextRequest) {
       .from("profiles")
       .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
       .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
       .order("created_at", { ascending: false });
     finalPartners = partnersFallback;
   }

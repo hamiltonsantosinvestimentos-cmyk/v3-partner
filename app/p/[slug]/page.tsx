@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { marcaDoPerfil } from "@/lib/enterprise";
 import { createClient as sc } from "@supabase/supabase-js";
 import { Metadata } from "next";
 import { PartnerSiteClient } from "@/components/partner-site/partner-site-client";
@@ -60,9 +61,13 @@ export default async function PartnerSitePage({
     .limit(1)
     .single();
 
+  // White label: master de Enterprise ou usuário dele mostra a marca do Enterprise.
+  const marca = profile.role === "ENTERPRISE" ? await marcaDoPerfil(svc, profile.id) : null;
+
   return (
     <PartnerSiteClient
       profile={profile}
+      marca={marca}
       captacaoToken={link?.token ?? null}
     />
   );
