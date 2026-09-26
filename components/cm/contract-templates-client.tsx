@@ -9,6 +9,8 @@ import { formatDocumentNumber } from "@/lib/legal-qualification";
 import { VERTICAL_LABELS, CONCRETE_VERTICALS } from "@/lib/contract-verticals";
 import { extractPlainVariables } from "@/lib/contract-render";
 import { PartyQualificationCardModal } from "./party-qualification-card";
+import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
+import { whatsappDigits } from "@/lib/phone";
 
 interface RiscoLaudo {
   resumo?: string;
@@ -1028,16 +1030,10 @@ ${allParties.length > 0 ? `<div class="qualbox">
   // Athaydes): quando a Mesa digita o WhatsApp da parte na criação do lote,
   // o link já abre direto na conversa com essa pessoa, mesmo helper de
   // contracts-panel-client.tsx.
-  const sanitizePhoneForWhatsapp = (phone: string): string => {
-    const digits = phone.replace(/\D/g, "");
-    if (!digits) return "";
-    if (digits.length === 10 || digits.length === 11) return `55${digits}`;
-    return digits;
-  };
 
   const whatsappQualLink = (party: QualParty, templateName: string) => {
     const msg = `Olá ${party.full_name}, você foi cadastrado(a) como envolvido(a) na minuta "${templateName}" da V3 Partners. Complete seus dados de qualificação para prosseguirmos: ${qualificationLink(party.qualification_token)}`;
-    const targetPhone = party.phone ? sanitizePhoneForWhatsapp(party.phone) : "";
+    const targetPhone = whatsappDigits(party.phone);
     return `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`;
   };
 
@@ -1328,7 +1324,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                                 <input value={editPartyForm.email} onChange={(e) => setEditPartyForm((f) => ({ ...f, email: e.target.value }))} placeholder="E-mail *" type="email"
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
-                                <input value={editPartyForm.phone} onChange={(e) => setEditPartyForm((f) => ({ ...f, phone: e.target.value }))} placeholder="WhatsApp (opcional)" type="tel"
+                                <PhoneIntlInput value={editPartyForm.phone} onChange={(v) => setEditPartyForm((f) => ({ ...f, phone: v }))} placeholder="WhatsApp (opcional), fora do Brasil use +DDI"
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                                 <select value={editPartyForm.role_in_document} onChange={(e) => setEditPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
@@ -1447,7 +1443,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                                 <input value={addPartyForm.email} onChange={(e) => setAddPartyForm((f) => ({ ...f, email: e.target.value }))} placeholder="E-mail *" type="email"
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
-                                <input value={addPartyForm.phone} onChange={(e) => setAddPartyForm((f) => ({ ...f, phone: e.target.value }))} placeholder="WhatsApp (opcional)" type="tel"
+                                <PhoneIntlInput value={addPartyForm.phone} onChange={(v) => setAddPartyForm((f) => ({ ...f, phone: v }))} placeholder="WhatsApp (opcional), fora do Brasil use +DDI"
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                                 <select value={addPartyForm.role_in_document} onChange={(e) => setAddPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
@@ -2102,7 +2098,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <input value={row.email} onChange={(e) => updateQualPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
-                    <input value={row.phone} onChange={(e) => updateQualPartyRow(i, "phone", e.target.value)} placeholder="WhatsApp (opcional, ex: 21999998888)" type="tel"
+                    <PhoneIntlInput value={row.phone} onChange={(v) => updateQualPartyRow(i, "phone", v)} placeholder="WhatsApp (opcional), fora do Brasil use +DDI"
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">

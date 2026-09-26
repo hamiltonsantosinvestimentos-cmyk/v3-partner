@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
+import { normalizePhone, PHONE_ERROR_MSG } from "@/lib/phone";
 import { Loader2, AlertTriangle, CheckCircle2, Upload, ShieldCheck, X } from "lucide-react";
 import {
   type PartyNature, type RepresentativeType, type CompanyLegalNature,
@@ -265,7 +267,7 @@ function RepresentativeForm({ token, allowedTypes, depth, value, onChange }: {
             <div><label className={LABEL_CLS}>Nacionalidade *</label><input value={value.nationality} onChange={(e) => set("nationality", e.target.value)} className={INPUT_CLS} /></div>
             <div><label className={LABEL_CLS}>Estado Civil *</label><input value={value.marital_status} onChange={(e) => set("marital_status", e.target.value)} className={INPUT_CLS} /></div>
             <div><label className={LABEL_CLS}>Profissão *</label><input value={value.profession} onChange={(e) => set("profession", e.target.value)} className={INPUT_CLS} /></div>
-            <div><label className={LABEL_CLS}>Telefone com DDD *</label><input value={value.phone} onChange={(e) => set("phone", e.target.value)} className={INPUT_CLS} /></div>
+            <div><label className={LABEL_CLS}>Telefone (DDI + DDD) *</label><PhoneIntlInput value={value.phone} onChange={(v) => set("phone", v)} className={INPUT_CLS} /></div>
           </div>
           <EnderecoFields prefixLabel="Endereço Residencial" rua={value.endereco_rua} numero={value.endereco_numero} complemento={value.endereco_complemento} bairro={value.endereco_bairro} cidade={value.endereco_cidade} estado={value.endereco_estado} cep={value.endereco_cep}
             onChange={(f, v) => set(`endereco_${f}` as keyof RepresentativeState, v as any)} />
@@ -404,6 +406,10 @@ export default function QualificacaoIntakePage() {
   const submit = async () => {
     setFormError("");
 
+    if (phone.trim()) {
+      const ph = normalizePhone(phone);
+      if (!ph.ok) { setFormError(ph.error ?? PHONE_ERROR_MSG); return; }
+    }
     if (partyNature !== "PJ" && !cpfCnpj.trim()) { setFormError("CPF é obrigatório"); return; }
     if (["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO"].includes(partyNature)) {
       const enderecoOk = enderecoRua.trim() && enderecoNumero.trim() && enderecoBairro.trim() && enderecoCidade.trim() && enderecoEstado.trim() && enderecoCep.trim();
@@ -620,8 +626,8 @@ export default function QualificacaoIntakePage() {
                         <div><label className={LABEL_CLS}>Profissão *</label><input value={profession} onChange={(e) => setProfession(e.target.value)} className={INPUT_CLS} /></div>
                       </div>
                       <div>
-                        <label className={LABEL_CLS}>Telefone com DDD *</label>
-                        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(00) 00000-0000" className={INPUT_CLS} />
+                        <label className={LABEL_CLS}>Telefone (DDI + DDD; fora do Brasil, comece com + e o código do país) *</label>
+                        <PhoneIntlInput value={phone} onChange={setPhone} className={INPUT_CLS} />
                       </div>
                       <EnderecoFields prefixLabel="Endereço Residencial" rua={enderecoRua} numero={enderecoNumero} complemento={enderecoComplemento} bairro={enderecoBairro} cidade={enderecoCidade} estado={enderecoEstado} cep={enderecoCep}
                         onChange={(f, v) => {

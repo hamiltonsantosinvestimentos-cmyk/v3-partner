@@ -21,6 +21,7 @@ import {
   Upload,
 } from "lucide-react";
 import Link from "next/link";
+import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
 
 type DocType = "nda" | "mandato";
 type SignStatus = "IDLE" | "PENDING" | "SIGNED" | "EXPIRED";
@@ -475,11 +476,11 @@ export function ContratoPanel({ deal, dealCode, isDemo = false }: ContratoPanelP
                         onChange={(e) => setNcndaForm((p) => ({ ...p, email: e.target.value }))}
                         className="bg-[#111F35] border-[#243A66] text-[#F0ECE4] text-sm"
                       />
-                      <Input
-                        placeholder="Telefone (opcional)"
+                      <PhoneIntlInput
+                        placeholder="Telefone (opcional), fora do Brasil use +DDI"
                         value={ncndaForm.phone}
-                        onChange={(e) => setNcndaForm((p) => ({ ...p, phone: e.target.value }))}
-                        className="bg-[#111F35] border-[#243A66] text-[#F0ECE4] text-sm"
+                        onChange={(v) => setNcndaForm((p) => ({ ...p, phone: v }))}
+                        className="w-full rounded-md border bg-[#111F35] border-[#243A66] text-[#F0ECE4] text-sm px-3 py-2"
                       />
                     </div>
                     {ncndaError && <p className="text-red-400 text-xs">{ncndaError}</p>}

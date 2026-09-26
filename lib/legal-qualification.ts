@@ -13,6 +13,8 @@
  * é suprimido, nunca deixando vírgula dupla ou espaço sobrando. Ver frag().
  */
 
+import { normalizePhone, formatPhoneIntl } from "./phone";
+
 export type PartyNature = "PF" | "PF_PROCURACAO" | "INCAPAZ_RELATIVO" | "INCAPAZ_ABSOLUTO" | "ESPOLIO" | "PJ";
 export type RepresentativeType = "procurador" | "genitor" | "curador" | "tutor" | "inventariante" | "administrador" | "representante_legal";
 export type CompanyLegalNature = "privado" | "publico" | "misto";
@@ -98,6 +100,12 @@ const REPRESENTATIVE_ROLE_PHRASE: Record<RepresentativeType, string> = {
 export function formatPhoneBR(value: string | null | undefined): string | null {
   const raw = (value ?? "").trim();
   if (!raw) return null;
+  // Número internacional (DDI diferente de 55) nunca recebe a máscara
+  // brasileira: "+1 555 123 4567" tem 11 dígitos e viraria "(15) 55123-4567".
+  if (raw.startsWith("+") || raw.replace(/\D/g, "").startsWith("00")) {
+    const r = normalizePhone(raw);
+    if (r.ok && r.digits && !r.isBrazil) return formatPhoneIntl(raw);
+  }
   let d = raw.replace(/\D/g, "");
   let ddi = "";
   if ((d.length === 12 || d.length === 13) && d.startsWith("55")) {
