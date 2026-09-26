@@ -3,6 +3,7 @@ import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
 import { REQUIRED_REPRESENTATIVE_TYPES, type PartyNature, type RepresentativeType, type CompanyLegalNature, type LegalQualificationRepresentation } from "@/lib/legal-qualification";
 import { resolveClient } from "@/lib/v3-clients";
+import { normalizePhone } from "@/lib/phone";
 import { findValidKycDocument, KYC_DOCUMENT_KIND_LABELS, type KycDocumentKind } from "@/lib/kyc-documents";
 import { lookupCnpj, nameMatchesSocios } from "@/lib/cnpj-lookup";
 
@@ -208,7 +209,7 @@ async function assembleRepresentation(db: SupabaseClient, rep: any): Promise<Leg
     nationality: rep.nationality ?? null,
     marital_status: rep.marital_status ?? null,
     profession: rep.profession ?? null,
-    phone: rep.phone ?? null,
+    phone: normalizePhone(rep.phone).e164,
     endereco_completo: montarEndereco({ rua: rep.endereco_rua, numero: rep.endereco_numero, complemento: rep.endereco_complemento, bairro: rep.endereco_bairro, cidade: rep.endereco_cidade, estado: rep.endereco_estado, cep: rep.endereco_cep }),
     company_name: rep.company_name ?? null,
     company_cnpj: rep.company_cnpj ?? null,
@@ -316,6 +317,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // Campos próprios da natureza (01/09/2026, diretriz Dr. Athaydes) — cada
   // natureza exige um subconjunto diferente, ver missingBaseFields().
   const missing = missingBaseFields(nature, { cpf_cnpj, nationality, marital_status, profession, birth_date, phone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep, company_name, company_cnpj, company_rua, company_numero, company_bairro, company_cidade, company_estado, company_cep });
+  // Telefone internacional (26/09/2026): valida e guarda em E.164, inclusive o do(s) representante(s).
+  {
+    let phoneError: string | null = null;
+    const checkPhone = (v: unknown) => { if (!phoneError && typeof v === "string" && v.trim()) { const r = normalizePhone(v); if (!r.ok) phoneError = r.error ?? null; } };
+    checkPhone(phone);
+    for (let r: any = representation; r; r = r.representation) checkPhone(r.phone);
+    if (phoneError) return NextResponse.json({ error: phoneError }, { status: 422 });
+  }
+
   if (missing.length > 0) {
     return NextResponse.json({ error: `Campos obrigatórios ausentes: ${missing.join(", ")}` }, { status: 422 });
   }
@@ -390,7 +400,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       marital_status: marital_status?.trim() || null,
       profession: profession?.trim() || null,
       birth_date: birth_date?.trim() || null,
-      phone: phone?.trim() || null,
+      phone: normalizePhone(phone).e164,
       v3_client_id: v3ClientId,
       representation: requiredRepTypes ? await assembleRepresentation(db, representation) : null,
       status: "preenchido",

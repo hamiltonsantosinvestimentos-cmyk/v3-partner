@@ -7,6 +7,7 @@
 // sem esperar o contrato ser gerado). Card com toda a ficha civil coletada
 // + documentos de KYC + IP de quem preencheu/enviou (compliance, pedido de
 // Robson Lino, mesmo bloco).
+import { formatPhoneIntl } from "@/lib/phone";
 import { useState, useEffect } from "react";
 import { User, Loader2, FileText, Download, X } from "lucide-react";
 import { PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, formatDocumentNumber, type PartyNature } from "@/lib/legal-qualification";
@@ -64,7 +65,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
     <div className="space-y-4">
       <div>
         <p className="text-sm text-[#F5F1E8] font-semibold">{q.full_name}</p>
-        <p className="text-[11px] text-[#9BAFC5]">{q.email}{q.phone ? ` · ${q.phone}` : ""}</p>
+        <p className="text-[11px] text-[#9BAFC5]">{q.email}{q.phone ? ` · ${formatPhoneIntl(q.phone)}` : ""}</p>
         <span className="inline-block mt-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/30">
           {ROLE_LABELS[q.role_in_document] ?? q.role_in_document} · {natureLabel}
         </span>

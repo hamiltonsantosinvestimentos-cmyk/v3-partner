@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { normalizePhone } from "@/lib/phone";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -44,6 +45,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Nome, e-mail válido e posição no documento são obrigatórios" }, { status: 422 });
   }
 
+  const ph = normalizePhone(phone);
+  if (!ph.ok) return NextResponse.json({ error: ph.error }, { status: 422 });
+
   const db = svc();
   const { data: batch } = await db
     .from("cm_qualification_batches")
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       batch_id: batchId,
       full_name: full_name.trim(),
       email: email.trim(),
-      phone: phone?.trim() || null,
+      phone: ph.e164,
       role_in_document,
       qualification_token: randomUUID().replace(/-/g, ""),
     })

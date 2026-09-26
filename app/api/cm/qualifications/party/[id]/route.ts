@@ -5,6 +5,7 @@ import { findValidKycDocument, kycValidUntil, type KycDocumentKind } from "@/lib
 import type { LegalQualificationRepresentation } from "@/lib/legal-qualification";
 import { isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { normalizePhone } from "@/lib/phone";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -203,7 +204,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const db = svc();
   const { data: party, error: findError } = await db
     .from("cm_party_qualifications")
-    .select("id, batch_id, deleted_at")
+    .select("id, batch_id, deleted_at, phone")
     .eq("id", id)
     .single();
 
@@ -227,7 +228,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const updates: Record<string, any> = {};
   if (full_name !== undefined) updates.full_name = full_name.trim();
   if (email !== undefined) updates.email = email.trim();
-  if (phone !== undefined) updates.phone = phone.trim() || null;
+  // Telefone internacional (26/09/2026): só valida/normaliza se o valor mudou.
+  // O formulário abre pré-preenchido com o legado (pode ser inválido pelas
+  // regras novas); quem corrige só nome ou e-mail nunca leva 422 de telefone.
+  if (phone !== undefined && phone.trim() !== (party.phone ?? "").trim()) {
+    const ph = normalizePhone(phone);
+    if (!ph.ok) return NextResponse.json({ error: ph.error }, { status: 422 });
+    updates.phone = ph.e164;
+  }
   if (role_in_document !== undefined) updates.role_in_document = role_in_document;
 
   if (Object.keys(updates).length === 0) {

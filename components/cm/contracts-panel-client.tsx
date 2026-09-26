@@ -10,6 +10,8 @@ import {
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
 import { PartyQualificationCardModal } from "./party-qualification-card";
+import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
+import { whatsappDigits } from "@/lib/phone";
 
 interface Approval {
   id: string;
@@ -571,17 +573,10 @@ export function ContractsPanelClient({ role }: { role: string }) {
   // o link já abre direto na conversa com essa pessoa (wa.me/55<numero>),
   // em vez de exigir que o operador escolha o contato manualmente a cada
   // vez. Sem o número, cai de volta no picker manual de sempre.
-  const sanitizePhoneForWhatsapp = (phone: string): string => {
-    const digits = phone.replace(/\D/g, "");
-    if (!digits) return "";
-    // 10 ou 11 dígitos = DDD + número sem código do país, assume Brasil (55).
-    if (digits.length === 10 || digits.length === 11) return `55${digits}`;
-    return digits;
-  };
 
   const whatsappQualLink = (party: QualParty, contractTitle: string) => {
     const msg = `Olá ${party.full_name}, você foi cadastrado(a) como envolvido(a) no contrato "${contractTitle}" da V3 Partners. Complete seus dados de qualificação para prosseguirmos: ${qualificationLink(party.qualification_token)}`;
-    const targetPhone = party.phone ? sanitizePhoneForWhatsapp(party.phone) : "";
+    const targetPhone = whatsappDigits(party.phone);
     return `https://wa.me/${targetPhone}?text=${encodeURIComponent(msg)}`;
   };
 
@@ -1007,7 +1002,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                                 <input value={addPartyForm.email} onChange={(e) => setAddPartyForm((f) => ({ ...f, email: e.target.value }))} placeholder="E-mail *" type="email"
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
-                                <input value={addPartyForm.phone} onChange={(e) => setAddPartyForm((f) => ({ ...f, phone: e.target.value }))} placeholder="WhatsApp (opcional)" type="tel"
+                                <PhoneIntlInput value={addPartyForm.phone} onChange={(v) => setAddPartyForm((f) => ({ ...f, phone: v }))} placeholder="WhatsApp (opcional), fora do Brasil use +DDI"
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                                 <select value={addPartyForm.role_in_document} onChange={(e) => setAddPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
@@ -1220,7 +1215,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <input value={row.email} onChange={(e) => updateQualPartyRow(i, "email", e.target.value)} placeholder="E-mail *" type="email"
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
-                    <input value={row.phone} onChange={(e) => updateQualPartyRow(i, "phone", e.target.value)} placeholder="WhatsApp (opcional, ex: 21999998888)" type="tel"
+                    <PhoneIntlInput value={row.phone} onChange={(v) => updateQualPartyRow(i, "phone", v)} placeholder="WhatsApp (opcional), fora do Brasil use +DDI"
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
