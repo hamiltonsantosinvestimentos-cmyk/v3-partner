@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { DocumentosAssinatura } from "@/components/mesa-credito/documentos-assinatura";
 import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight, ArrowLeft,
   FileText, CreditCard, Calendar, Link2, Pencil, Check, Edit2,
@@ -4439,6 +4440,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 <ExternalLink className="w-3.5 h-3.5" /> Ver relatório
               </a>
             </div>
+          )}
+
+          {/* ── Documentos para assinatura do cliente (Mesa sobe, partner envia/recebe/confirma) ── */}
+          {modalTab === "documentos" && (
+            <DocumentosAssinatura proposalId={proposal.id} />
           )}
 
           {/* ── Upload livre de documentos (partner e admin) ── */}
