@@ -8,7 +8,8 @@ import { useParams } from "next/navigation";
 
 type Info = {
   titulo: string; orientacao: string | null; cliente: string | null; codigo: string | null;
-  original_nome: string; ja_enviado: boolean; assinado_nome: string | null; expira_em: string;
+  original_nome: string; originais?: string[]; assinados?: string[];
+  ja_enviado: boolean; assinado_nome: string | null; expira_em: string;
   marca: { nome: string; logoUrl: string | null } | null;
 };
 
@@ -18,7 +19,7 @@ export default function AssinaturaPage() {
   const { token } = useParams<{ token: string }>();
   const [info, setInfo] = useState<Info | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [arquivos, setArquivos] = useState<File[]>([]);
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,17 +35,19 @@ export default function AssinaturaPage() {
   }, [token]);
 
   async function enviar() {
-    if (!arquivo) return;
+    if (arquivos.length === 0) return;
     setEnviando(true);
     setErro(null);
     try {
       const fd = new FormData();
-      fd.append("file", arquivo);
+      for (const f of arquivos) fd.append("file", f);
       const r = await fetch(`/api/public/assinatura/${token}`, { method: "POST", body: fd });
       const j = await r.json();
       if (!r.ok) { setErro(j.error ?? "Falha ao enviar."); return; }
       setEnviado(true);
-      setArquivo(null);
+      setInfo((i) => (i ? { ...i, assinados: [...(i.assinados ?? []), ...arquivos.map((f) => f.name)] } : i));
+      setArquivos([]);
+      if (inputRef.current) inputRef.current.value = "";
     } catch {
       setErro("Falha de conexão. Tente novamente.");
     } finally {
@@ -91,27 +94,31 @@ export default function AssinaturaPage() {
               )}
 
               <div style={{ marginTop: 16 }}>
-                {passo(1, "Baixe o documento", (
-                  <a href={`/api/public/assinatura/${token}?baixar=1`} style={{ display: "inline-block", background: C.ouro, color: C.navy, fontWeight: 700, fontSize: 13, padding: "10px 18px", borderRadius: 8, textDecoration: "none" }}>
-                    Baixar {info.original_nome}
-                  </a>
+                {passo(1, (info.originais?.length ?? 1) > 1 ? `Baixe os ${info.originais!.length} documentos` : "Baixe o documento", (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-start" }}>
+                    {(info.originais?.length ? info.originais : [info.original_nome]).map((nome, i) => (
+                      <a key={i} href={`/api/public/assinatura/${token}?baixar=${i + 1}`} style={{ display: "inline-block", background: C.ouro, color: C.navy, fontWeight: 700, fontSize: 13, padding: "9px 16px", borderRadius: 8, textDecoration: "none" }}>
+                        Baixar {nome}
+                      </a>
+                    ))}
+                  </div>
                 ))}
                 {passo(2, "Assine", (
                   <p style={{ margin: 0, color: C.muted, fontSize: 13, lineHeight: 1.6 }}>
                     Pode ser assinatura digital (por exemplo, gov.br) ou impresso, assinado à mão e digitalizado/fotografado com boa qualidade, todas as páginas legíveis.
                   </p>
                 ))}
-                {passo(3, "Envie o arquivo assinado", enviado ? (
+                {passo(3, "Envie o(s) arquivo(s) assinado(s)", enviado ? (
                   <p style={{ margin: 0, color: "#34D399", fontSize: 13 }}>
-                    Recebemos o arquivo assinado{info.assinado_nome && !arquivo ? ` (${info.assinado_nome})` : ""}. Obrigado! Se precisar trocar o arquivo, envie de novo abaixo.
+                    Recebemos {(info.assinados?.length ?? 1) > 1 ? `${info.assinados!.length} arquivos` : "o arquivo"}: {(info.assinados?.length ? info.assinados : [info.assinado_nome ?? ""]).join(", ")}. Obrigado! Se faltou algo, envie mais abaixo.
                   </p>
                 ) : (
-                  <p style={{ margin: 0, color: C.muted, fontSize: 13 }}>PDF, JPG ou PNG, até 20MB.</p>
+                  <p style={{ margin: 0, color: C.muted, fontSize: 13 }}>PDF, JPG ou PNG, até 20MB cada. Pode escolher vários (ex.: uma foto por página).</p>
                 ), enviado)}
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginLeft: 42 }}>
-                  <input ref={inputRef} type="file" accept="application/pdf,image/jpeg,image/png" onChange={(e) => setArquivo(e.target.files?.[0] ?? null)} style={{ color: C.muted, fontSize: 12, maxWidth: "100%" }} />
-                  <button onClick={enviar} disabled={!arquivo || enviando} style={{ background: arquivo ? C.ouro : "#243A66", color: arquivo ? C.navy : C.muted, border: 0, borderRadius: 8, padding: "10px 18px", fontWeight: 700, fontSize: 13, cursor: arquivo ? "pointer" : "default" }}>
-                    {enviando ? "Enviando…" : enviado ? "Enviar novamente" : "Enviar assinado"}
+                  <input ref={inputRef} type="file" multiple accept="application/pdf,image/jpeg,image/png" onChange={(e) => setArquivos(Array.from(e.target.files ?? []))} style={{ color: C.muted, fontSize: 12, maxWidth: "100%" }} />
+                  <button onClick={enviar} disabled={arquivos.length === 0 || enviando} style={{ background: arquivos.length ? C.ouro : "#243A66", color: arquivos.length ? C.navy : C.muted, border: 0, borderRadius: 8, padding: "10px 18px", fontWeight: 700, fontSize: 13, cursor: arquivos.length ? "pointer" : "default" }}>
+                    {enviando ? "Enviando…" : arquivos.length > 1 ? `Enviar ${arquivos.length} arquivos` : enviado ? "Enviar mais" : "Enviar assinado"}
                   </button>
                 </div>
                 {erro && <p style={{ color: "#F59E0B", fontSize: 12, marginLeft: 42 }}>{erro}</p>}

@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  acessoProposta, APP_URL, COLUNAS, extensaoValida, MAX_BYTES, notificarAssinatura, salvarArquivo, urlArquivo, svcAssinatura, type DocAssinatura,
+  acessoProposta, APP_URL, arquivosDoForm, caminhoArquivo, COLUNAS, extensaoValida, listarArquivos, MAX_BYTES, notificarAssinatura, salvarArquivo, urlArquivo, svcAssinatura, type DocAssinatura,
 } from "@/lib/documentos-assinatura";
 import { aplicarMarca, marcaDoPerfil } from "@/lib/enterprise";
 
 export const maxDuration = 60;
 
-// GET  ?arquivo=original|assinado — baixar o arquivo (redireciona para URL temporária)
+// GET  ?path=<caminho> (ou ?arquivo=original|assinado) — baixar um arquivo do documento
 // POST JSON { acao: "enviar", email } — e-mail ao cliente com orientação + link para baixar/subir
 // POST JSON { acao: "confirmar" }     — confirma o envio do assinado → notifica a Mesa Operacional
 // POST JSON { acao: "cancelar" }      — Mesa descarta o documento
-// POST multipart { file }             — partner/Mesa sobe o arquivo assinado pela plataforma
+// POST multipart { file (um ou vários) } — partner/Mesa sobe o(s) arquivo(s) assinado(s) pela plataforma
 
 interface Params { params: Promise<{ id: string }> }
 
@@ -30,9 +30,23 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const c = await carregar(id);
   if (!c.ok) return c.res;
-  const qual = new URL(req.url).searchParams.get("arquivo") === "assinado" ? "assinado" : "original";
-  const path = qual === "assinado" ? c.doc.assinado_path : c.doc.original_path;
-  const nome = qual === "assinado" ? c.doc.assinado_nome : c.doc.original_nome;
+  const sp = new URL(req.url).searchParams;
+  let path: string | null;
+  let nome: string | null;
+  const pedido = sp.get("path");
+  if (pedido) {
+    // Só arquivos da pasta deste documento.
+    const arq = (await listarArquivos(c.a.db, c.doc)).find((x) => x.path === pedido);
+    if (!arq) {
+      return NextResponse.json({ error: "Arquivo não encontrado." }, { status: 404 });
+    }
+    path = arq.path;
+    nome = arq.nome;
+  } else {
+    const qual = sp.get("arquivo") === "assinado" ? "assinado" : "original";
+    path = qual === "assinado" ? c.doc.assinado_path : c.doc.original_path;
+    nome = qual === "assinado" ? c.doc.assinado_nome : c.doc.original_nome;
+  }
   if (!path) return NextResponse.json({ error: "Arquivo ainda não enviado." }, { status: 404 });
   const url = await urlArquivo(c.a.db, path, nome ?? undefined);
   if (!url) return NextResponse.json({ error: "Não foi possível gerar o link do arquivo." }, { status: 500 });
@@ -53,9 +67,9 @@ function htmlEmail(opts: { cliente: string; titulo: string; orientacao: string |
     orient,
     `<p style="margin:18px 0 6px;color:#F0ECE4;font-weight:700;">Como fazer:</p>`,
     `<ol style="margin:0 0 18px 18px;padding:0;">`,
-    `<li>Clique no botão abaixo e <strong>baixe o documento</strong>.</li>`,
+    `<li>Clique no botão abaixo e <strong>baixe o(s) documento(s)</strong>.</li>`,
     `<li><strong>Assine</strong> (assinatura digital, como gov.br, ou impresso, assinado e digitalizado/fotografado com boa qualidade).</li>`,
-    `<li>Volte à mesma página e <strong>envie o arquivo assinado</strong> (PDF, JPG ou PNG).</li>`,
+    `<li>Volte à mesma página e <strong>envie o(s) arquivo(s) assinado(s)</strong> (PDF, JPG ou PNG; pode enviar vários).</li>`,
     `</ol>`,
     `<p><a href="${opts.link}" style="display:inline-block;background:#C9A84C;color:#09081A;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:700;">Baixar e enviar o documento →</a></p>`,
     `<p style="font-size:12px;margin-top:18px;">O link vale até ${esc(opts.expira)}. Se tiver dúvida, fale com ${esc(opts.quem)}.</p>`,
@@ -73,17 +87,22 @@ export async function POST(req: NextRequest, { params }: Params) {
   // ── Arquivo assinado subido pela plataforma ──
   if ((req.headers.get("content-type") ?? "").includes("multipart/form-data")) {
     const form = await req.formData().catch(() => null);
-    const file = form?.get("file");
-    if (!(file instanceof File) || file.size === 0) return NextResponse.json({ error: "Selecione o arquivo assinado." }, { status: 400 });
-    if (file.size > MAX_BYTES) return NextResponse.json({ error: "Arquivo maior que 20MB." }, { status: 413 });
-    const ext = extensaoValida(file);
-    if (!ext) return NextResponse.json({ error: "Envie PDF, Word ou imagem (JPG/PNG)." }, { status: 415 });
-    const path = `assinaturas/${doc.proposal_id}/${doc.id}/assinado-${Date.now()}.${ext}`;
-    const erroUp = await salvarArquivo(a.db, path, file);
-    if (erroUp) return NextResponse.json({ error: `Falha ao salvar: ${erroUp}` }, { status: 500 });
+    const files = arquivosDoForm(form);
+    if (files.length === 0) return NextResponse.json({ error: "Selecione o(s) arquivo(s) assinado(s)." }, { status: 400 });
+    if (files.length > 15) return NextResponse.json({ error: "Envie no máximo 15 arquivos por vez." }, { status: 400 });
+    for (const f of files) {
+      if (f.size > MAX_BYTES) return NextResponse.json({ error: `"${f.name}" é maior que 20MB.` }, { status: 413 });
+      if (!extensaoValida(f)) return NextResponse.json({ error: `"${f.name}": envie PDF, Word ou imagem (JPG/PNG).` }, { status: 415 });
+    }
+    let ultimo = "";
+    for (const [i, f] of files.entries()) {
+      ultimo = caminhoArquivo(doc.proposal_id, doc.id, "assinado", i + 1, f, extensaoValida(f)!);
+      const erroUp = await salvarArquivo(a.db, ultimo, f);
+      if (erroUp) return NextResponse.json({ error: `Falha ao salvar "${f.name}": ${erroUp}` }, { status: 500 });
+    }
     const { data, error } = await a.db
       .from("credit_documentos_assinatura")
-      .update({ assinado_path: path, assinado_nome: file.name, assinado_origem: "plataforma", assinado_por: a.userId, assinado_em: new Date().toISOString(), status: "assinado_recebido", confirmado_em: null, confirmado_por: null })
+      .update({ assinado_path: ultimo, assinado_nome: files[files.length - 1].name, assinado_origem: "plataforma", assinado_por: a.userId, assinado_em: new Date().toISOString(), status: "assinado_recebido", confirmado_em: null, confirmado_por: null })
       .eq("id", doc.id)
       .select(COLUNAS)
       .single();
