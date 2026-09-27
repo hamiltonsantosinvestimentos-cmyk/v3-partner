@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { FileSignature, Loader2, Upload, Mail, Download, CheckCircle2, Copy, Check, X } from "lucide-react";
-import type { DocAssinatura } from "@/lib/documentos-assinatura";
+import type { Arquivo, DocAssinatura } from "@/lib/documentos-assinatura";
+
+type DocComArquivos = DocAssinatura & { arquivos?: Arquivo[] };
 
 // Documentos para assinatura do cliente (aba Documentos do modal da proposta):
 // Mesa sobe o arquivo → partner/Mesa envia por e-mail ao cliente (orientação + link para baixar e
@@ -18,7 +20,7 @@ const STATUS: Record<string, { label: string; cor: string }> = {
 const inp = "h-8 px-2.5 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "");
 
-function Item({ doc, emailPadrao, podeMesa, onAtualizado }: { doc: DocAssinatura; emailPadrao: string; podeMesa: boolean; onAtualizado: () => void }) {
+function Item({ doc, emailPadrao, podeMesa, onAtualizado }: { doc: DocComArquivos; emailPadrao: string; podeMesa: boolean; onAtualizado: () => void }) {
   const [email, setEmail] = useState(doc.email_cliente ?? emailPadrao);
   const [busy, setBusy] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -41,15 +43,16 @@ function Item({ doc, emailPadrao, podeMesa, onAtualizado }: { doc: DocAssinatura
     onAtualizado();
   }
 
-  async function subirAssinado(file: File) {
+  async function subirAssinado(files: File[]) {
+    if (files.length === 0) return;
     setBusy("assinado"); setErro(null); setMsg(null);
     const fd = new FormData();
-    fd.append("file", file);
+    for (const f of files) fd.append("file", f);
     const r = await fetch(`/api/credit-proposals/assinaturas/${doc.id}`, { method: "POST", body: fd });
     const j = await r.json().catch(() => ({}));
     setBusy(null);
     if (!r.ok) { setErro(j.error ?? "Falha ao enviar."); return; }
-    setMsg("Arquivo assinado recebido. Agora clique em Confirmar envio.");
+    setMsg(`${files.length > 1 ? `${files.length} arquivos assinados recebidos` : "Arquivo assinado recebido"}. Agora clique em Confirmar envio.`);
     onAtualizado();
   }
 
@@ -63,16 +66,33 @@ function Item({ doc, emailPadrao, podeMesa, onAtualizado }: { doc: DocAssinatura
         <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${st.cor}`}>{st.label}</span>
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px]">
-        <a href={`/api/credit-proposals/assinaturas/${doc.id}?arquivo=original`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[#C9A84C] hover:underline">
-          <Download className="w-3 h-3" /> Original ({doc.original_nome})
-        </a>
-        {doc.assinado_path && (
-          <a href={`/api/credit-proposals/assinaturas/${doc.id}?arquivo=assinado`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-400 hover:underline">
-            <Download className="w-3 h-3" /> Assinado ({doc.assinado_nome}) · {doc.assinado_origem === "cliente" ? "pelo cliente" : "pela plataforma"} {fmt(doc.assinado_em)}
+      {(() => {
+        const arqs = doc.arquivos ?? [{ nome: doc.original_nome, path: doc.original_path, tipo: "original" as const, em: null }];
+        const originais = arqs.filter((x) => x.tipo === "original");
+        const assinados = arqs.filter((x) => x.tipo === "assinado");
+        const link = (x: Arquivo, cor: string) => (
+          <a key={x.path} href={`/api/credit-proposals/assinaturas/${doc.id}?path=${encodeURIComponent(x.path)}`} target="_blank" rel="noreferrer"
+            className={`inline-flex items-center gap-1 ${cor} hover:underline`}>
+            <Download className="w-3 h-3" /> {x.nome}
           </a>
-        )}
-      </div>
+        );
+        return (
+          <div className="space-y-1 text-[11px]">
+            <div className="flex flex-wrap gap-x-3 gap-y-1">
+              <span className="text-muted-foreground">Para assinar ({originais.length}):</span>
+              {originais.map((x) => link(x, "text-[#C9A84C]"))}
+            </div>
+            {assinados.length > 0 && (
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                <span className="text-muted-foreground">
+                  Assinados ({assinados.length}) · último {doc.assinado_origem === "cliente" ? "pelo cliente" : "pela plataforma"} {fmt(doc.assinado_em)}:
+                </span>
+                {assinados.map((x) => link(x, "text-emerald-400"))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       <div className="text-[10px] text-muted-foreground flex flex-wrap gap-x-3">
         {doc.email_enviado_em && <span>E-mail enviado a {doc.email_cliente} em {fmt(doc.email_enviado_em)}</span>}
         {doc.cliente_baixou_em && <span>Cliente baixou em {fmt(doc.cliente_baixou_em)}</span>}
@@ -97,9 +117,9 @@ function Item({ doc, emailPadrao, podeMesa, onAtualizado }: { doc: DocAssinatura
           <div className="flex flex-wrap items-center gap-2">
             <label className="h-8 px-3 rounded-lg border border-border text-xs inline-flex items-center gap-1.5 cursor-pointer hover:bg-secondary">
               {busy === "assinado" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-              {doc.assinado_path ? "Trocar arquivo assinado" : "Subir arquivo assinado"}
-              <input type="file" className="hidden" accept="application/pdf,image/jpeg,image/png,.doc,.docx" disabled={busy !== null}
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) subirAssinado(f); e.target.value = ""; }} />
+              {doc.assinado_path ? "Adicionar arquivos assinados" : "Subir arquivo(s) assinado(s)"}
+              <input type="file" multiple className="hidden" accept="application/pdf,image/jpeg,image/png,.doc,.docx" disabled={busy !== null}
+                onChange={(e) => { subirAssinado(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
             </label>
             <button onClick={() => acao("confirmar")} disabled={busy !== null || !doc.assinado_path}
               title={doc.assinado_path ? "Confirma que o documento assinado foi enviado e avisa a Mesa Operacional" : "Aguardando o arquivo assinado (pelo cliente ou subido aqui)"}
@@ -121,11 +141,12 @@ function Item({ doc, emailPadrao, podeMesa, onAtualizado }: { doc: DocAssinatura
 }
 
 export function DocumentosAssinatura({ proposalId }: { proposalId: string }) {
-  const [docs, setDocs] = useState<DocAssinatura[] | null>(null);
+  const [docs, setDocs] = useState<DocComArquivos[] | null>(null);
   const [emailPadrao, setEmailPadrao] = useState("");
   const [podeMesa, setPodeMesa] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [novo, setNovo] = useState<{ titulo: string; orientacao: string; file: File | null }>({ titulo: "", orientacao: "", file: null });
+  const [novo, setNovo] = useState<{ titulo: string; orientacao: string; files: File[] }>({ titulo: "", orientacao: "", files: [] });
+  const [inputKey, setInputKey] = useState(0);
   const [subindo, setSubindo] = useState(false);
 
   const carregar = useCallback(async () => {
@@ -139,18 +160,19 @@ export function DocumentosAssinatura({ proposalId }: { proposalId: string }) {
   useEffect(() => { carregar(); }, [carregar]);
 
   async function subirOriginal() {
-    if (!novo.file || !novo.titulo.trim()) return;
+    if (novo.files.length === 0 || !novo.titulo.trim()) return;
     setSubindo(true); setErro(null);
     const fd = new FormData();
     fd.append("proposal_id", proposalId);
     fd.append("titulo", novo.titulo);
     fd.append("orientacao", novo.orientacao);
-    fd.append("file", novo.file);
+    for (const f of novo.files) fd.append("file", f);
     const r = await fetch("/api/credit-proposals/assinaturas", { method: "POST", body: fd });
     const j = await r.json().catch(() => ({}));
     setSubindo(false);
     if (!r.ok) { setErro(j.error ?? "Falha ao subir."); return; }
-    setNovo({ titulo: "", orientacao: "", file: null });
+    setNovo({ titulo: "", orientacao: "", files: [] });
+    setInputKey((k) => k + 1);
     carregar();
   }
 
@@ -169,14 +191,16 @@ export function DocumentosAssinatura({ proposalId }: { proposalId: string }) {
 
       {podeMesa && (
         <div className="rounded-lg border border-dashed border-border/60 p-3 space-y-2">
-          <p className="text-[11px] font-semibold text-foreground">Novo documento para o cliente assinar</p>
+          <p className="text-[11px] font-semibold text-foreground">Novo documento para o cliente assinar <span className="font-normal text-muted-foreground">(pode escolher vários arquivos: vão juntos no mesmo e-mail)</span></p>
           <input className={`${inp} w-full`} placeholder="Nome do documento (ex.: Contrato de mandato, Ficha cadastral)" value={novo.titulo} onChange={(e) => setNovo({ ...novo, titulo: e.target.value })} />
           <textarea className="w-full min-h-[60px] px-2.5 py-2 text-xs bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50"
             placeholder="Orientação que vai no e-mail (opcional). Ex.: rubricar todas as páginas e assinar na última, igual ao documento de identidade."
             value={novo.orientacao} onChange={(e) => setNovo({ ...novo, orientacao: e.target.value })} />
           <div className="flex flex-wrap items-center gap-2">
-            <input type="file" accept="application/pdf,image/jpeg,image/png,.doc,.docx" className="text-xs text-muted-foreground" onChange={(e) => setNovo({ ...novo, file: e.target.files?.[0] ?? null })} />
-            <button onClick={subirOriginal} disabled={subindo || !novo.file || !novo.titulo.trim()}
+            <input key={inputKey} type="file" multiple accept="application/pdf,image/jpeg,image/png,.doc,.docx" className="text-xs text-muted-foreground"
+              onChange={(e) => setNovo({ ...novo, files: Array.from(e.target.files ?? []) })} />
+            {novo.files.length > 1 && <span className="text-[11px] text-muted-foreground">{novo.files.length} arquivos</span>}
+            <button onClick={subirOriginal} disabled={subindo || novo.files.length === 0 || !novo.titulo.trim()}
               className="h-8 px-3 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold inline-flex items-center gap-1.5 disabled:opacity-40">
               {subindo ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Subir documento
             </button>

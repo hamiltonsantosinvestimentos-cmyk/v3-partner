@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  COLUNAS, extensaoValida, MAX_BYTES, notificarAssinatura, salvarArquivo, svcAssinatura, urlArquivo, type DocAssinatura,
+  arquivosDoForm, caminhoArquivo, COLUNAS, extensaoValida, listarArquivos, MAX_BYTES, notificarAssinatura, salvarArquivo, svcAssinatura, urlArquivo, type DocAssinatura,
 } from "@/lib/documentos-assinatura";
 import { marcaDoPerfil } from "@/lib/enterprise";
 
@@ -8,8 +8,8 @@ export const maxDuration = 60;
 
 // Rota pública (sem login), protegida pelo token do link enviado ao cliente.
 // GET               — dados do documento (título, orientação, situação) + marca
-// GET ?baixar=1     — baixa o arquivo original (registra que o cliente baixou)
-// POST multipart    — cliente sobe o arquivo assinado → notifica Mesa Operacional e partner
+// GET ?baixar=<n>   — baixa o n-ésimo arquivo original (1, 2, ...) e registra que o cliente baixou
+// POST multipart    — cliente sobe o(s) arquivo(s) assinado(s) → notifica Mesa Operacional e partner
 
 interface Params { params: Promise<{ token: string }> }
 
@@ -27,8 +27,12 @@ export async function GET(req: NextRequest, { params }: Params) {
   const { db, doc, erro } = await porToken(token);
   if (!doc) return NextResponse.json({ error: erro }, { status: 404 });
 
-  if (new URL(req.url).searchParams.get("baixar") === "1") {
-    const url = await urlArquivo(db, doc.original_path, doc.original_nome);
+  const arquivos = await listarArquivos(db, doc);
+  const originais = arquivos.filter((x) => x.tipo === "original");
+  const baixar = new URL(req.url).searchParams.get("baixar");
+  if (baixar) {
+    const alvo = originais[Math.max(0, (Number(baixar) || 1) - 1)] ?? originais[0];
+    const url = alvo ? await urlArquivo(db, alvo.path, alvo.nome) : null;
     if (!url) return NextResponse.json({ error: "Arquivo indisponível." }, { status: 500 });
     if (!doc.cliente_baixou_em) await db.from("credit_documentos_assinatura").update({ cliente_baixou_em: new Date().toISOString() }).eq("id", doc.id);
     return NextResponse.redirect(url);
@@ -42,6 +46,8 @@ export async function GET(req: NextRequest, { params }: Params) {
     cliente: prop?.client_name ?? null,
     codigo: prop?.code ?? null,
     original_nome: doc.original_nome,
+    originais: originais.map((x) => x.nome),
+    assinados: arquivos.filter((x) => x.tipo === "assinado").map((x) => x.nome),
     ja_enviado: Boolean(doc.assinado_path),
     assinado_nome: doc.assinado_nome,
     expira_em: doc.token_expira_em,
@@ -56,19 +62,24 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (doc.status === "confirmado") return NextResponse.json({ error: "Este documento já foi recebido e confirmado. Se precisar reenviar, fale com quem mandou." }, { status: 409 });
 
   const form = await req.formData().catch(() => null);
-  const file = form?.get("file");
-  if (!(file instanceof File) || file.size === 0) return NextResponse.json({ error: "Selecione o arquivo assinado." }, { status: 400 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ error: "Arquivo maior que 20MB." }, { status: 413 });
-  const ext = extensaoValida(file);
-  if (!ext) return NextResponse.json({ error: "Envie o arquivo em PDF, JPG ou PNG." }, { status: 415 });
+  const files = arquivosDoForm(form);
+  if (files.length === 0) return NextResponse.json({ error: "Selecione o(s) arquivo(s) assinado(s)." }, { status: 400 });
+  if (files.length > 15) return NextResponse.json({ error: "Envie no máximo 15 arquivos por vez." }, { status: 400 });
+  for (const f of files) {
+    if (f.size > MAX_BYTES) return NextResponse.json({ error: `"${f.name}" é maior que 20MB.` }, { status: 413 });
+    if (!extensaoValida(f)) return NextResponse.json({ error: `"${f.name}": envie em PDF, JPG ou PNG.` }, { status: 415 });
+  }
 
-  const path = `assinaturas/${doc.proposal_id}/${doc.id}/assinado-${Date.now()}.${ext}`;
-  const erroUp = await salvarArquivo(db, path, file);
-  if (erroUp) return NextResponse.json({ error: "Falha ao salvar o arquivo. Tente novamente." }, { status: 500 });
+  let path = "";
+  for (const [i, f] of files.entries()) {
+    path = caminhoArquivo(doc.proposal_id, doc.id, "assinado", i + 1, f, extensaoValida(f)!);
+    const erroUp = await salvarArquivo(db, path, f);
+    if (erroUp) return NextResponse.json({ error: `Falha ao salvar "${f.name}". Tente novamente.` }, { status: 500 });
+  }
 
   await db
     .from("credit_documentos_assinatura")
-    .update({ assinado_path: path, assinado_nome: file.name, assinado_origem: "cliente", assinado_por: null, assinado_em: new Date().toISOString(), status: "assinado_recebido" })
+    .update({ assinado_path: path, assinado_nome: files[files.length - 1].name, assinado_origem: "cliente", assinado_por: null, assinado_em: new Date().toISOString(), status: "assinado_recebido" })
     .eq("id", doc.id);
 
   const { data: prop } = await db.from("credit_desk_proposals").select("id, code, client_name, partner_id").eq("id", doc.proposal_id).single();

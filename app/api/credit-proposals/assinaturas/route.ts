@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import {
-  acessoProposta, COLUNAS, extensaoValida, MAX_BYTES, salvarArquivo, type DocAssinatura,
+  acessoProposta, arquivosDoForm, caminhoArquivo, COLUNAS, extensaoValida, listarArquivos, MAX_BYTES, salvarArquivo, type DocAssinatura,
 } from "@/lib/documentos-assinatura";
 
 export const maxDuration = 60;
 
 // GET  ?proposal_id= — documentos para assinatura da proposta (Mesa e partner da equipe)
-// POST multipart { proposal_id, titulo, orientacao?, file } — Mesa sobe o arquivo que o cliente vai assinar
+// POST multipart { proposal_id, titulo, orientacao?, file (um ou vários) } — Mesa sobe o(s) arquivo(s)
+//      que o cliente vai assinar; vários arquivos = um pacote só (um e-mail, um link, uma confirmação)
 
 export async function GET(req: NextRequest) {
   const proposalId = new URL(req.url).searchParams.get("proposal_id");
@@ -24,8 +25,10 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const meta = (a.proposal.metadata ?? {}) as { email?: string };
+  const docs = (data ?? []) as DocAssinatura[];
+  const comArquivos = await Promise.all(docs.map(async (d) => ({ ...d, arquivos: await listarArquivos(a.db, d) })));
   return NextResponse.json({
-    documentos: (data ?? []) as DocAssinatura[],
+    documentos: comArquivos,
     email_cliente_padrao: meta.email ?? null,
     pode_subir_original: a.mesa,
   });
@@ -45,25 +48,34 @@ export async function POST(req: NextRequest) {
 
   const titulo = String(form.get("titulo") ?? "").trim().slice(0, 160);
   const orientacao = String(form.get("orientacao") ?? "").trim().slice(0, 2000) || null;
-  const file = form.get("file");
+  const files = arquivosDoForm(form);
   if (!titulo) return NextResponse.json({ error: "Informe o nome do documento." }, { status: 400 });
-  if (!(file instanceof File) || file.size === 0) return NextResponse.json({ error: "Selecione o arquivo." }, { status: 400 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ error: "Arquivo maior que 20MB." }, { status: 413 });
-  const ext = extensaoValida(file);
-  if (!ext) return NextResponse.json({ error: "Envie PDF, Word (DOC/DOCX) ou imagem (JPG/PNG)." }, { status: 415 });
+  if (files.length === 0) return NextResponse.json({ error: "Selecione o(s) arquivo(s)." }, { status: 400 });
+  if (files.length > 15) return NextResponse.json({ error: "Envie no máximo 15 arquivos por vez." }, { status: 400 });
+  for (const f of files) {
+    if (f.size > MAX_BYTES) return NextResponse.json({ error: `"${f.name}" é maior que 20MB.` }, { status: 413 });
+    if (!extensaoValida(f)) return NextResponse.json({ error: `"${f.name}": envie PDF, Word (DOC/DOCX) ou imagem (JPG/PNG).` }, { status: 415 });
+  }
 
   const id = randomUUID();
-  const path = `assinaturas/${proposalId}/${id}/original.${ext}`;
-  const erroUp = await salvarArquivo(a.db, path, file);
-  if (erroUp) return NextResponse.json({ error: `Falha ao salvar o arquivo: ${erroUp}` }, { status: 500 });
+  const salvos: string[] = [];
+  for (const [i, f] of files.entries()) {
+    const path = caminhoArquivo(proposalId, id, "original", i + 1, f, extensaoValida(f)!);
+    const erroUp = await salvarArquivo(a.db, path, f);
+    if (erroUp) {
+      if (salvos.length) await a.db.storage.from("credit-documents").remove(salvos).catch(() => {});
+      return NextResponse.json({ error: `Falha ao salvar "${f.name}": ${erroUp}` }, { status: 500 });
+    }
+    salvos.push(path);
+  }
 
   const { data, error } = await a.db
     .from("credit_documentos_assinatura")
-    .insert({ id, proposal_id: proposalId, titulo, orientacao, original_path: path, original_nome: file.name, criado_por: a.userId })
+    .insert({ id, proposal_id: proposalId, titulo, orientacao, original_path: salvos[0], original_nome: files[0].name, criado_por: a.userId })
     .select(COLUNAS)
     .single();
   if (error) {
-    await a.db.storage.from("credit-documents").remove([path]).catch(() => {});
+    await a.db.storage.from("credit-documents").remove(salvos).catch(() => {});
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ ok: true, documento: data });

@@ -97,3 +97,47 @@ export async function notificarAssinatura(opts: {
     });
   }
 }
+
+// ── Vários arquivos por documento (27/09/2026) ────────────────────────────────
+// Um documento é uma pasta assinaturas/<proposta>/<id>/. Originais: "original-<n>__<nome>";
+// assinados: "assinado-<timestamp>-<n>__<nome>". original_path/assinado_path guardam o 1º/último
+// (compatível com o que já existe); a lista completa vem do storage.
+
+export type Arquivo = { nome: string; path: string; tipo: "original" | "assinado"; em: string | null };
+
+const seguro = (nome: string) =>
+  nome.normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-").slice(-80) || "arquivo";
+
+export const pastaDoc = (proposalId: string, id: string) => `assinaturas/${proposalId}/${id}`;
+
+export function caminhoArquivo(proposalId: string, id: string, tipo: "original" | "assinado", indice: number, file: File, ext: string) {
+  const base = seguro(file.name.replace(/\.[^.]+$/, ""));
+  const prefixo = tipo === "original" ? `original-${indice}` : `assinado-${Date.now()}-${indice}`;
+  return `${pastaDoc(proposalId, id)}/${prefixo}__${base}.${ext}`;
+}
+
+/** Todos os arquivos do documento (originais e assinados), na ordem de envio. */
+export async function listarArquivos(db: SupabaseClient, doc: Pick<DocAssinatura, "proposal_id" | "id" | "original_path" | "original_nome" | "assinado_path" | "assinado_nome">): Promise<Arquivo[]> {
+  const pasta = pastaDoc(doc.proposal_id, doc.id);
+  const { data } = await db.storage.from(BUCKET).list(pasta, { limit: 200, sortBy: { column: "name", order: "asc" } });
+  const itens = (data ?? []).filter((o) => o.name && !o.name.endsWith("/"));
+  const nomeDe = (n: string) => {
+    const i = n.indexOf("__");
+    return i >= 0 ? n.slice(i + 2) : n;
+  };
+  const arquivos: Arquivo[] = itens.map((o) => ({
+    nome: `${pasta}/${o.name}` === doc.original_path ? doc.original_nome : `${pasta}/${o.name}` === doc.assinado_path && doc.assinado_nome ? doc.assinado_nome : nomeDe(o.name),
+    path: `${pasta}/${o.name}`,
+    tipo: o.name.startsWith("assinado") ? "assinado" : "original",
+    em: (o.created_at as string | undefined) ?? null,
+  }));
+  // Documento antigo fora do padrão de pasta: garante ao menos os caminhos gravados.
+  if (!arquivos.some((a) => a.path === doc.original_path)) arquivos.unshift({ nome: doc.original_nome, path: doc.original_path, tipo: "original", em: null });
+  if (doc.assinado_path && !arquivos.some((a) => a.path === doc.assinado_path)) arquivos.push({ nome: doc.assinado_nome ?? "assinado", path: doc.assinado_path, tipo: "assinado", em: null });
+  return arquivos;
+}
+
+/** Arquivos enviados num formulário (campo "file", um ou vários). */
+export function arquivosDoForm(form: FormData | null): File[] {
+  return (form?.getAll("file") ?? []).filter((f): f is File => f instanceof File && f.size > 0);
+}
