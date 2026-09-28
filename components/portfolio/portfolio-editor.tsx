@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   Plus, Pencil, Trash2, ChevronDown, ChevronUp,
-  Save, X, Loader2, CheckCircle2, AlertCircle, Power, FileText,
+  Save, X, Loader2, CheckCircle2, AlertCircle, Power, FileText, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PortfolioLinha, Documento } from "./portfolio-viewer";
@@ -118,6 +118,17 @@ function DocumentosEditor({
   inputCls: string;
 }) {
   const [newNome, setNewNome] = useState("");
+  // Edição do nome de um documento já cadastrado. O id NÃO muda: é ele que liga os arquivos já
+  // enviados nas propostas ao item do checklist, então renomear não "solta" nenhum arquivo.
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState("");
+
+  function salvarEdicao() {
+    const nome = editNome.trim();
+    if (!editId || !nome) return;
+    onChange(documentos.map(d => d.id === editId ? { ...d, nome } : d));
+    setEditId(null);
+  }
 
   function addDoc() {
     const nome = newNome.trim();
@@ -160,14 +171,48 @@ function DocumentosEditor({
             >
               {doc.obrigatorio ? "OBRIG." : "OPCION."}
             </button>
-            <span className="text-xs text-[#F0ECE4] flex-1 truncate">{doc.nome}</span>
-            <button
-              type="button"
-              onClick={() => removeDoc(doc.id)}
-              className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            {editId === doc.id ? (
+              <>
+                <input
+                  value={editNome}
+                  autoFocus
+                  onChange={e => setEditNome(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") { e.preventDefault(); salvarEdicao(); }
+                    if (e.key === "Escape") { e.preventDefault(); setEditId(null); }
+                  }}
+                  className="flex-1 min-w-0 h-7 px-2 text-xs bg-[#0E1A2E] border border-[#C9A84C]/40 rounded text-[#F0ECE4] focus:outline-none"
+                />
+                <button type="button" onClick={salvarEdicao} disabled={!editNome.trim()} title="Salvar nome"
+                  className="text-emerald-400 hover:text-emerald-300 flex-shrink-0 disabled:opacity-40">
+                  <Check className="w-3.5 h-3.5" />
+                </button>
+                <button type="button" onClick={() => setEditId(null)} title="Cancelar"
+                  className="text-muted-foreground hover:text-white flex-shrink-0">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="text-xs text-[#F0ECE4] flex-1 truncate" title={doc.nome}>{doc.nome}</span>
+                <button
+                  type="button"
+                  onClick={() => { setEditId(doc.id); setEditNome(doc.nome); }}
+                  title="Editar nome do documento"
+                  className="text-muted-foreground hover:text-[#C9A84C] transition-colors flex-shrink-0"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeDoc(doc.id)}
+                  title="Remover documento"
+                  className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
           </div>
         ))}
       </div>
