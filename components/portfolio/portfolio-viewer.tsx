@@ -8,6 +8,8 @@ export interface Documento {
   id: string;
   nome: string;
   obrigatorio: boolean;
+  /** Quando o documento é pedido: sempre (padrão) · imovel · urbano · rural (lib/checklist-imovel.ts). */
+  aplica?: "sempre" | "imovel" | "urbano" | "rural";
 }
 
 export interface PortfolioLinha {

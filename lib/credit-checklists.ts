@@ -1,3 +1,5 @@
+import { filtrarChecklistPorImovel, imovelGarantiaDaProposta } from "@/lib/checklist-imovel";
+
 // Checklists de documentos por linha de crédito e tipo de pessoa.
 // Extraído de nova-proposta-modal.tsx para ser importável em rotas server-side
 // (route handlers) sem trazer dependências de UI/React junto.
@@ -529,11 +531,11 @@ export function normalizeChecklistStr(s: string) {
     .trim();
 }
 
-export type ChecklistItem = { id: string; label: string };
+export type ChecklistItem = { id: string; label: string; aplica?: string };
 export type PortfolioLinhaDocs = {
   nome: string;
-  documentos_pf?: { id: string; nome: string; obrigatorio: boolean }[];
-  documentos_pj?: { id: string; nome: string; obrigatorio: boolean }[];
+  documentos_pf?: { id: string; nome: string; obrigatorio: boolean; aplica?: string }[];
+  documentos_pj?: { id: string; nome: string; obrigatorio: boolean; aplica?: string }[];
 };
 
 /** Resolve a checklist de documentos da mesma forma que o PropostaDetailModal:
@@ -542,7 +544,10 @@ export function resolveChecklistForLine(
   creditLine: string,
   clientType: "PF" | "PJ",
   portfolioLinhas: PortfolioLinhaDocs[],
+  /** metadata da proposta: filtra documentos de imóvel conforme "possui imóvel em garantia" (lib/checklist-imovel.ts). */
+  proposalMeta?: unknown,
 ): ChecklistItem[] {
+  const garantia = imovelGarantiaDaProposta(proposalMeta);
   const cl = normalizeChecklistStr(creditLine || "");
 
   const linha = portfolioLinhas.find(l => {
@@ -551,7 +556,7 @@ export function resolveChecklistForLine(
   });
   if (linha) {
     const docs = clientType === "PJ" ? linha.documentos_pj : linha.documentos_pf;
-    if (docs && docs.length > 0) return docs.map(d => ({ id: d.id, label: d.nome }));
+    if (docs && docs.length > 0) return filtrarChecklistPorImovel(docs.map(d => ({ id: d.id, label: d.nome, aplica: d.aplica })), garantia);
   }
 
   const checklistKey = Object.keys(CHECKLISTS).find(key => {

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { filtrarChecklistPorImovel, garantiaPelasZonas, type ImovelGarantia } from "@/lib/checklist-imovel";
 import {
   X, User, Building2, FileText, Upload, CheckCircle2, Circle,
   ChevronRight, AlertCircle, Home, Shield, TrendingUp, Zap, Download, Loader2,
@@ -342,6 +343,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [prazo, setPrazo] = useState("");
   const [finalidade, setFinalidade] = useState("");
   const [imoveis, setImoveis] = useState<ImovelItem[]>([defaultImovel()]);
+  // "Possui imóvel em garantia?" — define os documentos de imóvel (urbano/rural) do checklist.
+  const [temImovel, setTemImovel] = useState<"" | "sim" | "nao">("");
   const [observacoes, setObservacoes] = useState("");
 
   // Documentos
@@ -358,11 +361,11 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       .then(r => r.json())
       .then(({ linhas }) => {
         if (!Array.isArray(linhas)) return;
-        const docsMap: Record<string, { PF: { id: string; label: string; required: boolean }[]; PJ: { id: string; label: string; required: boolean }[] }> = {};
+        const docsMap: Record<string, { PF: { id: string; label: string; required: boolean; aplica?: string }[]; PJ: { id: string; label: string; required: boolean; aplica?: string }[] }> = {};
         const nivelMap: Record<string, string[]> = {};
         for (const linha of linhas) {
-          const toItems = (arr: { id: string; nome: string; obrigatorio: boolean }[]) =>
-            arr.map(d => ({ id: d.id, label: d.nome, required: d.obrigatorio }));
+          const toItems = (arr: { id: string; nome: string; obrigatorio: boolean; aplica?: string }[]) =>
+            arr.map(d => ({ id: d.id, label: d.nome, required: d.obrigatorio, aplica: d.aplica }));
           const pf = Array.isArray(linha.documentos_pf) && linha.documentos_pf.length > 0 ? toItems(linha.documentos_pf) : null;
           const pj = Array.isArray(linha.documentos_pj) && linha.documentos_pj.length > 0 ? toItems(linha.documentos_pj) : null;
           if (pf || pj) {
@@ -402,7 +405,12 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     if (lines.length > 0 && !lines.includes(creditLine)) setCreditLine(lines[0]);
   }, [lines, creditLine]);
   // Usa checklist do portfólio se disponível, senão cai no hardcoded
-  const checklist = portfolioDocs[creditLine.toLowerCase()]?.[clientType] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType];
+  const garantiaImovel: ImovelGarantia | null =
+    temImovel === "nao" ? "nao" : temImovel === "sim" ? garantiaPelasZonas(imoveis.map((im) => im.zona)) : null;
+  const checklist = filtrarChecklistPorImovel(
+    (portfolioDocs[creditLine.toLowerCase()]?.[clientType] ?? (CHECKLISTS[creditLine]?.[clientType]) ?? DEFAULT_CHECKLIST[clientType]) as { id: string; label: string; required: boolean; aplica?: string }[],
+    garantiaImovel,
+  );
 
   const uploadedIds = [...new Set(uploadedFiles.filter((f) => f.status === "done" || f.status === "pending").map((f) => f.docId))];
   const requiredDocs = checklist.filter((d) => d.required);
@@ -517,7 +525,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       prazo: prazo || undefined,
       finalidade: finalidade || undefined,
       restricao_cliente: restricao || undefined,
-      imoveis: imoveisData,
+      imoveis: temImovel === "sim" ? imoveisData : [],
+      imovel_garantia: garantiaImovel ?? undefined,
       observacoes: observacoes || undefined,
       // Dados PF
       rg: rg || undefined,
@@ -631,6 +640,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     setValorSolicitado(""); setPrazo(""); setFinalidade("");
     setRestricao(""); setObservacoes("");
     setImoveis([defaultImovel()]);
+    setTemImovel("");
     setUploadedFiles([]);
     onClose();
   }
@@ -921,7 +931,27 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 />
               </div>
 
-              {(creditLine === "Home Equity" || creditLine === "Home Equity Distressed" || creditLine === "V3Equity" || creditLine === "CRI Cash Collateral" || creditLine === "HomeCash" || creditLine === "CGI — Grandes Empresas" || creditLine === "Fundo Construção — Moradia" || creditLine === "Fundo Construção — Reforma" || creditLine === "Fundo Construção — Unifamiliar" || creditLine === "Fundo Construção — Geminados" || creditLine === "Crédito Ponto / CRI Início de Obra" || creditLine === "Construtoras BTS — Build-to-Suit" || creditLine === "Fundo Incorporadoras" || creditLine === "Sale Leaseback Agro" || creditLine === "Op. Internacional — Garantia Imobiliária") && (
+              {/* ── Possui imóvel em garantia? (vale para todas as linhas) ── */}
+              <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-2">
+                <p className="text-xs font-semibold text-amber-400 flex items-center gap-1"><Home className="w-3.5 h-3.5" /> Possui imóvel em garantia? *</p>
+                <div className="flex gap-2">
+                  {[{ val: "nao", label: "Não, sem imóvel" }, { val: "sim", label: "Sim, possui imóvel" }].map(opt => (
+                    <button key={opt.val} type="button" onClick={() => setTemImovel(opt.val as "sim" | "nao")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${temImovel === opt.val ? "bg-amber-500/20 border-amber-500/60 text-amber-300" : "border-border text-muted-foreground hover:text-white"}`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {temImovel === "sim"
+                    ? "Informe abaixo o tipo (urbano ou rural): o checklist de documentos traz os documentos de imóvel dessa linha no Portfólio."
+                    : temImovel === "nao"
+                      ? "Segue sem imóvel: o checklist não pede documentos de imóvel."
+                      : "A resposta define os documentos de imóvel pedidos no checklist."}
+                </p>
+              </div>
+
+              {temImovel === "sim" && (
                 <div className="space-y-3">
                   {imoveis.map((im, idx) => (
                     <div key={idx} className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-3">
@@ -1122,6 +1152,11 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs text-muted-foreground">
                   Checklist para <span className="font-semibold text-white">{creditLine}</span> — {clientType === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}
+                  {garantiaImovel === "nao" && " · sem imóvel"}
+                  {garantiaImovel === "urbano" && " · imóvel urbano"}
+                  {garantiaImovel === "rural" && " · imóvel rural"}
+                  {garantiaImovel === "urbano_rural" && " · imóveis urbano e rural"}
+                  {garantiaImovel === null && <span className="text-amber-400"> · responda na aba Operação se possui imóvel em garantia</span>}
                 </p>
                 <Badge className={`text-xs ${completedRequired === requiredDocs.length && requiredDocs.length > 0 ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-amber-500/20 text-amber-400 border-amber-500/30"}`}>
                   {completedRequired}/{requiredDocs.length} obrigatórios
@@ -1237,7 +1272,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 <Button
                   size="sm"
                   onClick={handleSubmit}
-                  disabled={(!nome && !razaoSocial) || saving}
+                  disabled={(!nome && !razaoSocial) || saving || temImovel === "" || (temImovel === "sim" && imoveis.some((im) => !im.zona))}
+                  title={temImovel === "" ? "Responda na aba Operação se possui imóvel em garantia" : temImovel === "sim" && imoveis.some((im) => !im.zona) ? "Informe se o imóvel é urbano ou rural (aba Operação)" : undefined}
                   className="bg-emerald-600 hover:bg-emerald-500"
                 >
                   {saving ? (
