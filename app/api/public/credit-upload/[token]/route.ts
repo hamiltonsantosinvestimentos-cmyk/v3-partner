@@ -68,7 +68,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const clientType: "PF" | "PJ" = meta.client_type === "PJ" ? "PJ" : "PF";
 
   const { data: portfolioLinhas } = await svc().from("portfolio_linhas").select("nome, documentos_pf, documentos_pj").eq("ativo", true);
-  const checklist = resolveChecklistForLine(proposal.credit_line, clientType, (portfolioLinhas ?? []) as PortfolioLinhaDocs[]);
+  const checklist = resolveChecklistForLine(proposal.credit_line, clientType, (portfolioLinhas ?? []) as PortfolioLinhaDocs[], meta);
 
   const uploadedDocIds = new Set(
     Array.isArray(proposal.documents) ? (proposal.documents as { doc_id: string }[]).map(d => d.doc_id) : []
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const meta = (proposal.metadata as Record<string, unknown>) ?? {};
   const clientType: "PF" | "PJ" = meta.client_type === "PJ" ? "PJ" : "PF";
   const { data: portfolioLinhas } = await svc().from("portfolio_linhas").select("nome, documentos_pf, documentos_pj").eq("ativo", true);
-  const validChecklist = resolveChecklistForLine(proposal.credit_line, clientType, (portfolioLinhas ?? []) as PortfolioLinhaDocs[]);
+  const validChecklist = resolveChecklistForLine(proposal.credit_line, clientType, (portfolioLinhas ?? []) as PortfolioLinhaDocs[], meta);
   if (!validChecklist.some(c => c.id === docIdInput)) {
     return NextResponse.json({ error: "Documento do checklist inválido." }, { status: 400 });
   }

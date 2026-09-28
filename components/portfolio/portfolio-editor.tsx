@@ -7,6 +7,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PortfolioLinha, Documento } from "./portfolio-viewer";
+import { APLICA_LABEL, APLICA_ORDEM, type AplicaDoc } from "@/lib/checklist-imovel";
+
+// Cor da etiqueta "Vale para" de cada documento (imóvel em garantia urbano/rural).
+const APLICA_COR: Record<AplicaDoc, string> = {
+  sempre: "bg-[#243A66]/40 border-[#243A66] text-muted-foreground",
+  imovel: "bg-sky-500/10 border-sky-500/30 text-sky-300",
+  urbano: "bg-violet-500/10 border-violet-500/30 text-violet-300",
+  rural: "bg-lime-500/10 border-lime-500/30 text-lime-300",
+};
 
 const CATEGORIAS = ["Imobiliário", "Auto", "Capital de Giro", "Consórcio", "Construção", "Agro", "Internacional", "Seguros", "M&A", "Outros"];
 
@@ -145,8 +154,21 @@ function DocumentosEditor({
     onChange(documentos.map(d => d.id === id ? { ...d, obrigatorio: !d.obrigatorio } : d));
   }
 
+  // Sempre → Imóvel (urbano e rural) → Só urbano → Só rural → Sempre
+  function ciclarAplica(id: string) {
+    onChange(documentos.map(d => {
+      if (d.id !== id) return d;
+      const atual = (d.aplica ?? "sempre") as AplicaDoc;
+      const prox = APLICA_ORDEM[(APLICA_ORDEM.indexOf(atual) + 1) % APLICA_ORDEM.length];
+      return { ...d, aplica: prox };
+    }));
+  }
+
   return (
     <div className="space-y-2">
+      <p className="text-[10px] text-muted-foreground px-1">
+        Etiqueta de cada documento: <b>Sempre</b> (toda proposta) · <b>Imóvel</b> (quando tem imóvel em garantia, urbano ou rural) · <b>Só urbano</b> · <b>Só rural</b>. No cadastro da proposta, a resposta &quot;Possui imóvel em garantia?&quot; define quais entram.
+      </p>
       {documentos.length === 0 && (
         <p className="text-[11px] text-muted-foreground italic px-1">Nenhum documento cadastrado.</p>
       )}
@@ -170,6 +192,17 @@ function DocumentosEditor({
               )}
             >
               {doc.obrigatorio ? "OBRIG." : "OPCION."}
+            </button>
+            <button
+              type="button"
+              onClick={() => ciclarAplica(doc.id)}
+              title="Quando pedir este documento. Clique para alternar: Sempre → Imóvel (urbano e rural) → Só imóvel urbano → Só imóvel rural"
+              className={cn(
+                "text-[9px] font-bold px-2 py-0.5 rounded border transition-all flex-shrink-0 whitespace-nowrap",
+                APLICA_COR[(doc.aplica ?? "sempre") as AplicaDoc]
+              )}
+            >
+              {APLICA_LABEL[(doc.aplica ?? "sempre") as AplicaDoc].toUpperCase()}
             </button>
             {editId === doc.id ? (
               <>
