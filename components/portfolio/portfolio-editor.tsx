@@ -10,6 +10,8 @@ import type { PortfolioLinha, Documento } from "./portfolio-viewer";
 import { APLICA_LABEL, APLICA_ORDEM, type AplicaDoc } from "@/lib/checklist-imovel";
 
 // Cor da etiqueta "Vale para" de cada documento (imóvel em garantia urbano/rural).
+type Grupo = "gerais" | "urbano" | "rural";
+
 const APLICA_COR: Record<AplicaDoc, string> = {
   sempre: "bg-[#243A66]/40 border-[#243A66] text-muted-foreground",
   imovel: "bg-sky-500/10 border-sky-500/30 text-sky-300",
@@ -126,7 +128,6 @@ function DocumentosEditor({
   onChange: (docs: Documento[]) => void;
   inputCls: string;
 }) {
-  const [newNome, setNewNome] = useState("");
   // Edição do nome de um documento já cadastrado. O id NÃO muda: é ele que liga os arquivos já
   // enviados nas propostas ao item do checklist, então renomear não "solta" nenhum arquivo.
   const [editId, setEditId] = useState<string | null>(null);
@@ -139,11 +140,14 @@ function DocumentosEditor({
     setEditId(null);
   }
 
-  function addDoc() {
-    const nome = newNome.trim();
+  // Adicionar dentro de um bloco já define a etiqueta: Gerais → sempre · Urbano → urbano · Rural → rural.
+  const [novoPorGrupo, setNovoPorGrupo] = useState<Record<Grupo, string>>({ gerais: "", urbano: "", rural: "" });
+  function addDoc(grupo: Grupo) {
+    const nome = novoPorGrupo[grupo].trim();
     if (!nome) return;
-    onChange([...documentos, { id: crypto.randomUUID(), nome, obrigatorio: true }]);
-    setNewNome("");
+    const aplica: AplicaDoc = grupo === "gerais" ? "sempre" : grupo;
+    onChange([...documentos, { id: crypto.randomUUID(), nome, obrigatorio: true, aplica }]);
+    setNovoPorGrupo(g => ({ ...g, [grupo]: "" }));
   }
 
   function removeDoc(id: string) {
@@ -164,110 +168,129 @@ function DocumentosEditor({
     }));
   }
 
-  return (
-    <div className="space-y-2">
-      <p className="text-[10px] text-muted-foreground px-1">
-        Etiqueta de cada documento: <b>Sempre</b> (toda proposta) · <b>Imóvel</b> (quando tem imóvel em garantia, urbano ou rural) · <b>Só urbano</b> · <b>Só rural</b>. No cadastro da proposta, a resposta &quot;Possui imóvel em garantia?&quot; define quais entram.
-      </p>
-      {documentos.length === 0 && (
-        <p className="text-[11px] text-muted-foreground italic px-1">Nenhum documento cadastrado.</p>
-      )}
+  // Um documento "Imóvel" (urbano e rural) aparece nos dois blocos de imóvel: é o MESMO
+  // documento (mesmo id), editar ou remover num bloco vale para os dois.
+  const grupos: { id: Grupo; titulo: string; dica: string; filtro: (a: AplicaDoc) => boolean }[] = [
+    { id: "gerais", titulo: "Documentos gerais", dica: "Pedidos em toda proposta desta linha.", filtro: a => a === "sempre" },
+    { id: "urbano", titulo: "Imóvel urbano", dica: "Pedidos quando a proposta tem imóvel urbano em garantia.", filtro: a => a === "imovel" || a === "urbano" },
+    { id: "rural", titulo: "Imóvel rural", dica: "Pedidos quando a proposta tem imóvel rural em garantia.", filtro: a => a === "imovel" || a === "rural" },
+  ];
 
-      <div className="space-y-1.5">
-        {documentos.map((doc, idx) => (
-          <div
-            key={doc.id}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#080F1C] border border-[#1B3050]"
-          >
-            <span className="text-[9px] text-muted-foreground w-4 text-center flex-shrink-0">{idx + 1}</span>
-            <button
-              type="button"
-              onClick={() => toggleObrig(doc.id)}
-              title="Clique para alternar obrigatório/opcional"
-              className={cn(
-                "text-[9px] font-bold px-2 py-0.5 rounded border transition-all flex-shrink-0",
-                doc.obrigatorio
-                  ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
-                  : "bg-[#243A66]/40 border-[#243A66] text-muted-foreground"
-              )}
-            >
-              {doc.obrigatorio ? "OBRIG." : "OPCION."}
-            </button>
-            <button
-              type="button"
-              onClick={() => ciclarAplica(doc.id)}
-              title="Quando pedir este documento. Clique para alternar: Sempre → Imóvel (urbano e rural) → Só imóvel urbano → Só imóvel rural"
-              className={cn(
-                "text-[9px] font-bold px-2 py-0.5 rounded border transition-all flex-shrink-0 whitespace-nowrap",
-                APLICA_COR[(doc.aplica ?? "sempre") as AplicaDoc]
-              )}
-            >
-              {APLICA_LABEL[(doc.aplica ?? "sempre") as AplicaDoc].toUpperCase()}
-            </button>
-            {editId === doc.id ? (
-              <>
-                <input
-                  value={editNome}
-                  autoFocus
-                  onChange={e => setEditNome(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") { e.preventDefault(); salvarEdicao(); }
-                    if (e.key === "Escape") { e.preventDefault(); setEditId(null); }
-                  }}
-                  className="flex-1 min-w-0 h-7 px-2 text-xs bg-[#0E1A2E] border border-[#C9A84C]/40 rounded text-[#F0ECE4] focus:outline-none"
-                />
-                <button type="button" onClick={salvarEdicao} disabled={!editNome.trim()} title="Salvar nome"
-                  className="text-emerald-400 hover:text-emerald-300 flex-shrink-0 disabled:opacity-40">
-                  <Check className="w-3.5 h-3.5" />
-                </button>
-                <button type="button" onClick={() => setEditId(null)} title="Cancelar"
-                  className="text-muted-foreground hover:text-white flex-shrink-0">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </>
-            ) : (
-              <>
-                <span className="text-xs text-[#F0ECE4] flex-1 truncate" title={doc.nome}>{doc.nome}</span>
-                <button
-                  type="button"
-                  onClick={() => { setEditId(doc.id); setEditNome(doc.nome); }}
-                  title="Editar nome do documento"
-                  className="text-muted-foreground hover:text-[#C9A84C] transition-colors flex-shrink-0"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeDoc(doc.id)}
-                  title="Remover documento"
-                  className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Add new document */}
-      <div className="flex gap-2">
-        <input
-          value={newNome}
-          onChange={e => setNewNome(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addDoc(); } }}
-          placeholder="Nome do documento… (Enter para adicionar)"
-          className={inputCls}
-        />
+  function linhaDoc(doc: Documento, idx: number, grupo: Grupo) {
+    const aplica = (doc.aplica ?? "sempre") as AplicaDoc;
+    return (
+      <div
+        key={`${grupo}-${doc.id}`}
+        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#080F1C] border border-[#1B3050]"
+      >
+        <span className="text-[9px] text-muted-foreground w-4 text-center flex-shrink-0">{idx + 1}</span>
         <button
           type="button"
-          onClick={addDoc}
-          disabled={!newNome.trim()}
-          className="flex-shrink-0 px-3 py-2 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/25 transition-all disabled:opacity-40"
+          onClick={() => toggleObrig(doc.id)}
+          title="Clique para alternar obrigatório/opcional"
+          className={cn(
+            "text-[9px] font-bold px-2 py-0.5 rounded border transition-all flex-shrink-0",
+            doc.obrigatorio
+              ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
+              : "bg-[#243A66]/40 border-[#243A66] text-muted-foreground"
+          )}
         >
-          <Plus className="w-3.5 h-3.5" />
+          {doc.obrigatorio ? "OBRIG." : "OPCION."}
         </button>
+        <button
+          type="button"
+          onClick={() => ciclarAplica(doc.id)}
+          title="Mudar de bloco. Clique para alternar: Gerais → Imóvel urbano e rural → Só urbano → Só rural"
+          className={cn("text-[9px] font-bold px-2 py-0.5 rounded border transition-all flex-shrink-0 whitespace-nowrap", APLICA_COR[aplica])}
+        >
+          {aplica === "imovel" ? "URBANO E RURAL" : APLICA_LABEL[aplica].toUpperCase()}
+        </button>
+        {editId === doc.id ? (
+          <>
+            <input
+              value={editNome}
+              autoFocus
+              onChange={e => setEditNome(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter") { e.preventDefault(); salvarEdicao(); }
+                if (e.key === "Escape") { e.preventDefault(); setEditId(null); }
+              }}
+              className="flex-1 min-w-0 h-7 px-2 text-xs bg-[#0E1A2E] border border-[#C9A84C]/40 rounded text-[#F0ECE4] focus:outline-none"
+            />
+            <button type="button" onClick={salvarEdicao} disabled={!editNome.trim()} title="Salvar nome"
+              className="text-emerald-400 hover:text-emerald-300 flex-shrink-0 disabled:opacity-40">
+              <Check className="w-3.5 h-3.5" />
+            </button>
+            <button type="button" onClick={() => setEditId(null)} title="Cancelar"
+              className="text-muted-foreground hover:text-white flex-shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="text-xs text-[#F0ECE4] flex-1 truncate" title={doc.nome}>{doc.nome}</span>
+            <button
+              type="button"
+              onClick={() => { setEditId(doc.id); setEditNome(doc.nome); }}
+              title="Editar nome do documento"
+              className="text-muted-foreground hover:text-[#C9A84C] transition-colors flex-shrink-0"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => removeDoc(doc.id)}
+              title={aplica === "imovel" ? "Remover (sai dos dois blocos de imóvel)" : "Remover documento"}
+              className="text-muted-foreground hover:text-red-400 transition-colors flex-shrink-0"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {grupos.map(g => {
+        const docs = documentos.filter(d => g.filtro((d.aplica ?? "sempre") as AplicaDoc));
+        return (
+          <div key={g.id} className="space-y-1.5">
+            <div className="flex items-baseline justify-between gap-2 px-1">
+              <p className={cn("text-[10px] font-bold uppercase tracking-wider",
+                g.id === "gerais" ? "text-[#C9A84C]" : g.id === "urbano" ? "text-violet-300" : "text-lime-300")}>
+                {g.titulo} <span className="text-muted-foreground font-normal">({docs.length})</span>
+              </p>
+              <span className="text-[10px] text-muted-foreground">{g.dica}</span>
+            </div>
+            {docs.length === 0 && (
+              <p className="text-[11px] text-muted-foreground italic px-1">Nenhum documento neste bloco.</p>
+            )}
+            {docs.map((doc, idx) => linhaDoc(doc, idx, g.id))}
+            <div className="flex gap-2">
+              <input
+                value={novoPorGrupo[g.id]}
+                onChange={e => setNovoPorGrupo(v => ({ ...v, [g.id]: e.target.value }))}
+                onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addDoc(g.id); } }}
+                placeholder={`Adicionar em ${g.titulo.toLowerCase()}… (Enter)`}
+                className={inputCls}
+              />
+              <button
+                type="button"
+                onClick={() => addDoc(g.id)}
+                disabled={!novoPorGrupo[g.id].trim()}
+                className="flex-shrink-0 px-3 py-2 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/30 text-[#C9A84C] hover:bg-[#C9A84C]/25 transition-all disabled:opacity-40"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-muted-foreground px-1">
+        No cadastro da proposta, &quot;Possui imóvel em garantia?&quot; define o que entra: sem imóvel → só os gerais; imóvel urbano → gerais + urbano; imóvel rural → gerais + rural. Documento marcado &quot;urbano e rural&quot; aparece nos dois blocos e é um só.
+      </p>
     </div>
   );
 }
