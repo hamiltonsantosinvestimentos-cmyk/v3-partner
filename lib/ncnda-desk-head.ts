@@ -36,11 +36,14 @@ const DESK_CONFIG: Record<DeskOrigin, { roleLabel: string; fullName: string; loo
     lookupEmail: "joao.lemos@v3partners.com.br",
     notifyEmail: "joao.lemos@v3partners.com.br",
   },
+  // Atualizado em 29/09/2026: o jurídico interno (Dr. Luis Athaydes) saiu
+  // do time. Head reatribuído a Robson Lino (Compliance/Operações),
+  // mesmo padrão já usado em CONSORCIO/CREDITO_INTERNACIONAL/TRADE_FINANCE.
   BOLSA_ATIVOS: {
-    roleLabel: "DIREÇÃO DE COMPLIANCE / V3 PARTNERS",
-    fullName: "Luís Humberto Ferreira de Athaydes",
-    lookupEmail: "luis.athaydes@v3partners.com.br",
-    notifyEmail: "luis.athaydes@v3partners.com.br",
+    roleLabel: "SÓCIO RESPONSÁVEL, COMPLIANCE / V3 PARTNERS",
+    fullName: "Robson Lino",
+    lookupEmail: "robinholino16@gmail.com",
+    notifyEmail: "robson.lino@v3partners.com.br",
   },
   CREDITO_ESTRUTURADO: {
     roleLabel: "SÓCIO RESPONSÁVEL, MESA DE CRÉDITO / V3 PARTNERS",
@@ -122,8 +125,7 @@ export async function resolveDeskHead(origin: DeskOrigin): Promise<DeskHead> {
     fullName: config.fullName,
     email: config.notifyEmail,
     // formatCPF é idempotente (sempre extrai só dígitos antes de formatar),
-    // então cobre tanto CPF já digitado com pontuação quanto puro dígito
-    // (ex: Dr. Athaydes tem "78385172653" salvo sem pontuação em profiles).
+    // então cobre tanto CPF já digitado com pontuação quanto puro dígito.
     cpf: data?.document_cpf && data.document_cpf.trim() !== "" ? formatCPF(data.document_cpf) : null,
     qualificacao: joinQualificacao(data?.nationality ?? null, data?.marital_status ?? null, data?.profession ?? null),
   };

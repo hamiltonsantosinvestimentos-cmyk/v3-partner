@@ -25,9 +25,10 @@ function svc() {
 
 const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
+// Atualizado em 29/09/2026: remetente "athaydes" removido (saiu do time),
+// ver session-decisions.md.
 const SENDERS: Record<string, { email: string; label: string }> = {
   juridico: { email: "juridico@v3partners.com.br", label: "Jurídico V3" },
-  athaydes: { email: "luis.athaydes@v3partners.com.br", label: "Dr. Luís Athaydes | V3 Partners" },
 };
 
 async function getCaller(req: NextRequest) {

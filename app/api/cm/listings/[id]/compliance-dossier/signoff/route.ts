@@ -5,20 +5,18 @@ import { hasComplianceDashboardAccess } from "@/lib/cm/compliance-access";
 import { generateAndStoreComplianceDossierPdf } from "@/lib/compliance-dossier-generate";
 
 // Quórum de fechamento do Dossiê de Risco (Cockpit de Compliance, Fase 4,
-// 10/09/2026), regra confirmada por João em 22/08/2026: 1 Sócio ADMIN
-// (João, Hamilton ou Robson, qualquer um dos três) + Dr. Luis Athaydes
-// (jurídico). Mesmos IDs/mapas já usados em
+// 10/09/2026). Atualizado em 29/09/2026 (Dr. Luis Athaydes saiu do time,
+// decisão de João, ver session-decisions.md): a regra "1 Sócio ADMIN +
+// Jurídico" virou 2 dos 3 sócios diretores (João, Hamilton, Robson),
+// mesmo padrão de maioria já usado em
 // app/api/contracts/templates/[id]/review/route.ts (quórum de aprovação de
 // minuta) -- duplicado aqui de propósito (mesmo padrão já usado no resto do
-// projeto pra esses 2 mapas pequenos, nunca importado entre rotas).
+// projeto pra esse mapa pequeno, nunca importado entre rotas).
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const JURIDICO: Record<string, string> = {
-  "82171bc1-edbd-40f8-936b-1b26d412a121": "Dr. Luis Athaydes",
-};
 // Hamilton tem 2 contas (27a8a72e..., hamilton@, PARTNER_PRO, demonstração
 // pra prospects; 75c6cac4..., suporte@, ADMIN, conta real dele) -- usa a
 // real aqui, mesma correção já aplicada em outras 2 rotas de quórum.
@@ -30,7 +28,6 @@ const SOCIO_ADMIN: Record<string, string> = {
 
 async function getSigner(userId: string | undefined) {
   if (!userId) return null;
-  if (JURIDICO[userId]) return { userId, name: JURIDICO[userId], role: "juridico" as const };
   if (SOCIO_ADMIN[userId]) return { userId, name: SOCIO_ADMIN[userId], role: "socio_admin" as const };
   return null;
 }
@@ -71,7 +68,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const signer = await getSigner(user?.id);
   if (!signer) {
-    return NextResponse.json({ error: "Apenas Sócio ADMIN (João, Hamilton ou Robson) ou o Jurídico (Dr. Luis Athaydes) podem assinar o Dossiê de Risco" }, { status: 403 });
+    return NextResponse.json({ error: "Apenas sócio diretor (João, Hamilton ou Robson) pode assinar o Dossiê de Risco" }, { status: 403 });
   }
 
   const { id } = await params;
@@ -90,10 +87,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 });
 
   const { data: allSignoffs } = await db.from("cm_risk_dossier_signoffs").select("signer_role").eq("listing_id", id);
-  const hasSocio = (allSignoffs ?? []).some((s) => s.signer_role === "socio_admin");
-  const hasJuridico = (allSignoffs ?? []).some((s) => s.signer_role === "juridico");
+  const sociosAssinaram = (allSignoffs ?? []).filter((s) => s.signer_role === "socio_admin").length;
 
-  if (hasSocio && hasJuridico) {
+  if (sociosAssinaram >= 2) {
     const result = await generateAndStoreComplianceDossierPdf(id);
     if (!result.ok) {
       // Quórum fica registrado mesmo se o PDF falhar -- não perde as assinaturas

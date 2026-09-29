@@ -89,18 +89,29 @@ function intermediaryRow(p: ComplianceDossierData["intermediaries"][number]) {
   </div>`;
 }
 
+// Regra de quórum atualizada em 29/09/2026 (Dr. Luis Athaydes saiu do time,
+// decisão de João): de "1 Sócio ADMIN + 1 Jurídico" para 2 dos 3 sócios
+// diretores. Dossiês antigos fechados pela regra anterior (1 sócio + 1
+// jurídico, signer_role="juridico" legado) continuam mostrando "fechado" --
+// fato histórico, nunca reaberto retroativamente.
 function signoffBlock(data: ComplianceDossierData) {
-  const socio = data.signoffs.find((s) => s.signer_role === "socio_admin");
-  const juridico = data.signoffs.find((s) => s.signer_role === "juridico");
-  const closed = !!socio && !!juridico;
+  const socios = data.signoffs.filter((s) => s.signer_role === "socio_admin");
+  const juridicoLegado = data.signoffs.find((s) => s.signer_role === "juridico");
+  const closed = socios.length >= 2 || (socios.length >= 1 && !!juridicoLegado);
+  const socioRows = socios.map((s) =>
+    `<div class="kv-row"><span>Sócio ADMIN</span><span>${esc(s.signer_name)} · ${new Date(s.signed_at).toLocaleDateString("pt-BR")}</span></div>`
+  ).join("") || `<div class="kv-row"><span>Sócio ADMIN</span><span>Pendente (0/2)</span></div>`;
+  const juridicoRow = juridicoLegado
+    ? `<div class="kv-row"><span>Jurídico (regra anterior)</span><span>${esc(juridicoLegado.signer_name)} · ${new Date(juridicoLegado.signed_at).toLocaleDateString("pt-BR")}</span></div>`
+    : "";
   return `<h3 class="sec">Quórum de fechamento</h3>
   <div class="hl ${closed ? "hl-green" : "hl-gold"}">
     <strong>${closed ? "Quórum fechado." : "Aguardando quórum."}</strong>
-    Exige 1 assinatura de Sócio ADMIN + 1 do Jurídico (Dr. Luis Athaydes), regra confirmada em 22/08/2026.
+    Exige 2 assinaturas de Sócio ADMIN (João, Hamilton ou Robson), regra atualizada em 29/09/2026.
   </div>
   <div class="kv">
-    <div class="kv-row"><span>Sócio ADMIN</span><span>${socio ? `${esc(socio.signer_name)} · ${new Date(socio.signed_at).toLocaleDateString("pt-BR")}` : "Pendente"}</span></div>
-    <div class="kv-row"><span>Jurídico</span><span>${juridico ? `${esc(juridico.signer_name)} · ${new Date(juridico.signed_at).toLocaleDateString("pt-BR")}` : "Pendente"}</span></div>
+    ${socioRows}
+    ${juridicoRow}
   </div>`;
 }
 

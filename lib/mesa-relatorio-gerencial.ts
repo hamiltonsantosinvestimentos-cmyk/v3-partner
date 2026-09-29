@@ -53,7 +53,6 @@ const CONTRACT_SLA_HOURS = 48;
 const LISTING_NO_BID_DAYS = 15;
 const MA_DEAL_STUCK_DAYS = 15;
 
-const JURIDICO_EMAIL = "luis.athaydes@v3partners.com.br";
 // generated_reports.user_id é NOT NULL (relatório sempre precisa de um
 // "dono"). Relatório gerado pelo cron ou sob demanda pela diretoria, sem
 // usuário humano garantido por trás do INSERT no caso do cron — usa o
@@ -456,7 +455,7 @@ ${includeBolsa ? `<p style="margin:12px 0 0;font-size:11px;color:#9BAFC5;">Para 
 
   if (process.env.RESEND_API_KEY) {
     const { data: admins } = await db.from("profiles").select("email").eq("role", "ADMIN").eq("is_active", true);
-    const recipients = Array.from(new Set([...(admins ?? []).map((a: any) => a.email).filter(Boolean), JURIDICO_EMAIL]));
+    const recipients = Array.from(new Set((admins ?? []).map((a: any) => a.email).filter(Boolean)));
     try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);

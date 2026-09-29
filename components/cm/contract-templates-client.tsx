@@ -1944,7 +1944,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                   placeholder="Ex: 15000"
                   className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] focus:border-[#C9A84C]/50 focus:outline-none" />
                 <p className="text-[9px] text-[#9BAFC5] mt-1">
-                  Trava temporária: acima de R$50.000, o quórum exige o jurídico (Dr. Athaydes), não permite fechar só com 2/3 sócios.
+                  Trava temporária: acima de R$50.000, o quórum exige unanimidade dos 3 sócios, não permite fechar só com 2/3.
                 </p>
               </div>
 

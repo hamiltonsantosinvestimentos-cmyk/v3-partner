@@ -1,7 +1,8 @@
 // Gate de acesso ao Cockpit de Due Diligence e Compliance (Bolsa de Ativos).
 // Diferente do restante da Bolsa de Ativos (gate por role: ADMIN/GESTAO/MESA_OPERACIONAL),
-// este cockpit e restrito a uma lista fechada de 5 pessoas nomeadas por Joao (22/08/2026):
-// os 3 socios ADMIN (Joao, Hamilton, Robson) + Taisa Pedroso + Dr. Luis Athaydes.
+// este cockpit e restrito a uma lista fechada de pessoas nomeadas por Joao (22/08/2026):
+// os 3 socios ADMIN (Joao, Hamilton, Robson) + Taisa Pedroso. Dr. Luis Athaydes tinha
+// grant aqui tambem; removido em 29/09/2026 (saiu do time, ver session-decisions.md).
 // O gate e por user_id individual, via user_feature_access, para que uma conta ADMIN/GESTAO/
 // MESA_OPERACIONAL futura nao herde acesso automatico so por ter esse role.
 //
