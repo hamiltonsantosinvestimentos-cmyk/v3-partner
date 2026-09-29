@@ -10,8 +10,8 @@ import {
 } from "lucide-react";
 
 import {
-  OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE,
-  PRAZO_COMECO, PLANO_LABEL, type QuizOption,
+  OBJETIVO, OCUPACAO, RENDA_FAIXA, EXPERIENCIA_B2B, PRIORIDADE, INVESTIMENTO,
+  PLANO_LABEL, QUIZ_LEGACY_LABELS, type QuizOption,
 } from "@/lib/quiz-partner";
 
 const GOLD = "#C9A84C";
@@ -20,19 +20,24 @@ const NAVY_BASE = "#111F35";
 const MUTED = "#7A8FA8";
 
 // Mapa valor→label das perguntas do quiz "Seja Partner", pra render no detalhe.
+// Perguntas do quiz atual + as da versão anterior (leads antigos). Só aparecem
+// no detalhe as que o lead de fato respondeu.
 const QUIZ_LABELS: Record<string, { titulo: string; opts: QuizOption[] }> = {
-  objetivo: { titulo: "Objetivo", opts: OBJETIVO },
-  ocupacao: { titulo: "Ocupação atual", opts: OCUPACAO },
+  objetivo: { titulo: "Momento atual", opts: OBJETIVO },
+  ocupacao: { titulo: "Atuação profissional", opts: OCUPACAO },
+  renda_faixa: { titulo: "Renda mensal", opts: RENDA_FAIXA },
   experiencia_b2b: { titulo: "Experiência B2B", opts: EXPERIENCIA_B2B },
-  rede: { titulo: "Rede de decisores", opts: REDE },
-  porte_rede: { titulo: "Porte da rede", opts: PORTE_REDE },
-  disponibilidade: { titulo: "Disponibilidade", opts: DISPONIBILIDADE },
-  prazo_comeco: { titulo: "Quando quer começar", opts: PRAZO_COMECO },
+  prioridade: { titulo: "Prioridade", opts: PRIORIDADE },
+  investimento: { titulo: "Investimento", opts: INVESTIMENTO },
+  rede: { titulo: "Rede de decisores", opts: [] },
+  porte_rede: { titulo: "Porte da rede", opts: [] },
+  disponibilidade: { titulo: "Disponibilidade", opts: [] },
+  prazo_comeco: { titulo: "Quando quer começar", opts: [] },
 };
-function quizLabel(key: string, value: unknown): string {
-  const entry = QUIZ_LABELS[key];
-  if (!entry) return String(value ?? "—");
-  return entry.opts.find((o) => o.value === value)?.label ?? String(value ?? "—");
+function quizLabel(key: string, value: unknown, legado: boolean): string {
+  const atual = QUIZ_LABELS[key]?.opts.find((o) => o.value === value)?.label;
+  const antigo = QUIZ_LEGACY_LABELS[key]?.[String(value)];
+  return (legado ? antigo ?? atual : atual ?? antigo) ?? String(value ?? "—");
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -668,16 +673,16 @@ function DetalheModal({
                   <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>Plano sugerido</span>
                   <span className="text-[12px] font-bold" style={{ color: GOLD }}>{plano ?? "—"}</span>
                 </div>
-                <div className="px-4 py-2.5 border-b border-white/5 flex gap-3">
-                  <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>Renda mensal</span>
-                  <span className="text-[12px] text-white">
-                    {typeof m.renda_mensal === "number" ? `R$ ${m.renda_mensal.toLocaleString("pt-BR")}` : "—"}
-                  </span>
-                </div>
-                {Object.keys(QUIZ_LABELS).map((key, i, arr) => (
+                {!m.renda_faixa && typeof m.renda_mensal === "number" && (
+                  <div className="px-4 py-2.5 border-b border-white/5 flex gap-3">
+                    <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>Renda mensal</span>
+                    <span className="text-[12px] text-white">R$ {m.renda_mensal.toLocaleString("pt-BR")}</span>
+                  </div>
+                )}
+                {Object.keys(QUIZ_LABELS).filter((key) => m[key] != null && m[key] !== "").map((key, i, arr) => (
                   <div key={key} className={`flex gap-3 px-4 py-2.5 ${i < arr.length - 1 ? "border-b border-white/5" : ""}`}>
                     <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>{QUIZ_LABELS[key].titulo}</span>
-                    <span className="text-[12px] text-white break-words">{quizLabel(key, m[key])}</span>
+                    <span className="text-[12px] text-white break-words">{quizLabel(key, m[key], m.quiz_versao !== 2)}</span>
                   </div>
                 ))}
                 {(Boolean(m.instagram) || Boolean(m.linkedin)) && (
