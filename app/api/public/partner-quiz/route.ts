@@ -5,14 +5,9 @@ import { sendText } from "@/lib/whatsapp/openwa-client";
 import { notifyLeadQuizPartner, notifyQuizPartnerCandidato } from "@/lib/email";
 import {
   scoreQuizPartner, PLANO_LABEL,
-  OBJETIVO, OCUPACAO, EXPERIENCIA_B2B, REDE, PORTE_REDE, DISPONIBILIDADE, PRAZO_COMECO,
-  RENDA_FAIXA,
+  OBJETIVO, OCUPACAO, RENDA_FAIXA, RENDA_FAIXA_VALOR, EXPERIENCIA_B2B, PRIORIDADE, INVESTIMENTO,
   type QuizAnswers,
 } from "@/lib/quiz-partner";
-
-const RENDA_FAIXA_LABEL: Record<string, string> = Object.fromEntries(
-  RENDA_FAIXA.map((o) => [o.value, o.label]),
-);
 
 // Quiz público "Seja Partner" (/seja-partner). Grava um lead qualificado em
 // prospeccao_leads (mesma aba Prospecção Partners), com score calculado AQUI
@@ -31,22 +26,13 @@ const schema = z.object({
   ref: z.string().optional().nullable(),
   objetivo: z.enum(vals(OBJETIVO)),
   ocupacao: z.enum(vals(OCUPACAO)),
+  renda_faixa: z.enum(vals(RENDA_FAIXA)),
   experiencia_b2b: z.enum(vals(EXPERIENCIA_B2B)),
-  rede: z.enum(vals(REDE)),
-  porte_rede: z.enum(vals(PORTE_REDE)),
-  renda_mensal: z.number().nonnegative(),
-  renda_faixa: z.string().max(20).optional().nullable(),
-  disponibilidade: z.enum(vals(DISPONIBILIDADE)),
-  prazo_comeco: z.enum(vals(PRAZO_COMECO)),
-  // Passo de contato enxuto: só nome + telefone são obrigatórios; o resto é
-  // opcional para reduzir o atrito na hora de finalizar o quiz.
+  prioridade: z.enum(vals(PRIORIDADE)),
+  investimento: z.enum(vals(INVESTIMENTO)),
   nome: z.string().min(3),
-  email: z.string().email().optional().nullable().or(z.literal("")),
+  email: z.string().email(),
   telefone: z.string().min(8),
-  estado: z.string().max(2).optional().nullable(),
-  cidade: z.string().optional().nullable(),
-  instagram: z.string().optional().nullable(),
-  linkedin: z.string().optional().nullable(),
   tracking: z.record(z.string(), z.string().max(300)).nullable().optional(),
   consentimento: z.literal(true),
 });
@@ -56,11 +42,10 @@ const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "ADMIN
 const LABEL: Record<string, Record<string, string>> = {
   objetivo: Object.fromEntries(OBJETIVO.map((o) => [o.value, o.label])),
   ocupacao: Object.fromEntries(OCUPACAO.map((o) => [o.value, o.label])),
+  renda_faixa: Object.fromEntries(RENDA_FAIXA.map((o) => [o.value, o.label])),
   experiencia_b2b: Object.fromEntries(EXPERIENCIA_B2B.map((o) => [o.value, o.label])),
-  rede: Object.fromEntries(REDE.map((o) => [o.value, o.label])),
-  porte_rede: Object.fromEntries(PORTE_REDE.map((o) => [o.value, o.label])),
-  disponibilidade: Object.fromEntries(DISPONIBILIDADE.map((o) => [o.value, o.label])),
-  prazo_comeco: Object.fromEntries(PRAZO_COMECO.map((o) => [o.value, o.label])),
+  prioridade: Object.fromEntries(PRIORIDADE.map((o) => [o.value, o.label])),
+  investimento: Object.fromEntries(INVESTIMENTO.map((o) => [o.value, o.label])),
 };
 
 export async function POST(req: NextRequest) {
@@ -89,30 +74,20 @@ export async function POST(req: NextRequest) {
   const answers: QuizAnswers = {
     objetivo: d.objetivo,
     ocupacao: d.ocupacao,
+    renda_faixa: d.renda_faixa,
     experiencia_b2b: d.experiencia_b2b,
-    rede: d.rede,
-    porte_rede: d.porte_rede,
-    renda_mensal: d.renda_mensal,
-    disponibilidade: d.disponibilidade,
-    prazo_comeco: d.prazo_comeco,
+    prioridade: d.prioridade,
+    investimento: d.investimento,
   };
   const s = scoreQuizPartner(answers);
 
-  const email = d.email && d.email.length ? d.email : null;
-  const estado = d.estado && d.estado.length ? d.estado.toUpperCase() : null;
-  const cidade = d.cidade && d.cidade.trim().length ? d.cidade.trim() : null;
-  const rendaTxt = d.renda_faixa && RENDA_FAIXA_LABEL[d.renda_faixa]
-    ? RENDA_FAIXA_LABEL[d.renda_faixa]
-    : `R$ ${d.renda_mensal.toLocaleString("pt-BR")}`;
+  const email = d.email.trim();
 
   const resumo =
     `Quiz Seja Partner — faixa ${s.tier} (score ${s.total}), plano sugerido ${PLANO_LABEL[s.plano_sugerido]}. ` +
     `Objetivo: ${LABEL.objetivo[d.objetivo]}. Ocupação: ${LABEL.ocupacao[d.ocupacao]}. ` +
-    `Experiência B2B: ${LABEL.experiencia_b2b[d.experiencia_b2b]}. Rede: ${LABEL.rede[d.rede]} decisores, porte ${LABEL.porte_rede[d.porte_rede]}. ` +
-    `Renda mensal: ${rendaTxt}. Disponibilidade: ${LABEL.disponibilidade[d.disponibilidade]}. ` +
-    `Começar: ${LABEL.prazo_comeco[d.prazo_comeco]}.` +
-    (cidade || estado ? ` Local: ${[cidade, estado].filter(Boolean).join("/")}.` : "") +
-    (d.instagram ? ` Instagram: ${d.instagram}.` : "") + (d.linkedin ? ` LinkedIn: ${d.linkedin}.` : "") +
+    `Renda mensal: ${LABEL.renda_faixa[d.renda_faixa]}. Experiência B2B: ${LABEL.experiencia_b2b[d.experiencia_b2b]}. ` +
+    `Prioridade: ${LABEL.prioridade[d.prioridade]}. Investimento: ${LABEL.investimento[d.investimento]}.` +
     (d.tracking?.utm_source || d.tracking?.utm_campaign
       ? ` Origem: ${[d.tracking?.utm_source, d.tracking?.utm_medium, d.tracking?.utm_campaign].filter(Boolean).join(" / ")}.`
       : "");
@@ -121,8 +96,6 @@ export async function POST(req: NextRequest) {
     nome: d.nome.trim(),
     email,
     telefone: d.telefone,
-    cidade,
-    estado,
     origem: "quiz_partner",
     indicado_por_partner_id: partnerId,
     indicado_por_nome: partnerName,
@@ -135,10 +108,9 @@ export async function POST(req: NextRequest) {
     created_by: partnerId,
     metadata: {
       form_type: "quiz_partner",
+      quiz_versao: 2,
       ...answers,
-      renda_faixa: d.renda_faixa ?? null,
-      instagram: d.instagram ?? null,
-      linkedin: d.linkedin ?? null,
+      renda_mensal: RENDA_FAIXA_VALOR[d.renda_faixa] ?? 0,
       score_total: s.total,
       score_breakdown: s.breakdown,
       tier: s.tier,
@@ -170,12 +142,13 @@ export async function POST(req: NextRequest) {
     d.tracking?.utm_source || d.tracking?.utm_campaign
       ? `\nOrigem: ${[d.tracking?.utm_source, d.tracking?.utm_medium, d.tracking?.utm_campaign].filter(Boolean).join(" / ")}`
       : "";
-  const localTxt = cidade || estado ? `\n📍 ${[cidade, estado].filter(Boolean).join("/")}` : "";
   const msgAlerta =
     `🟢 Novo lead — Quiz Seja Partner\n\n` +
     `${d.nome.trim()}\n` +
     `📱 ${d.telefone}` +
-    localTxt +
+    `\n✉️ ${email}` +
+    `\nInvestimento: ${LABEL.investimento[d.investimento]}` +
+    `\nPrioridade: ${LABEL.prioridade[d.prioridade]}` +
     `\nFaixa ${s.tier} · score ${s.total} · plano ${PLANO_LABEL[s.plano_sugerido]}` +
     origemTxt +
     `\n\nVer: app.v3partners.com.br/prospeccao`;
@@ -185,19 +158,17 @@ export async function POST(req: NextRequest) {
   await Promise.allSettled([
     sendText(d.telefone, msgWhats).catch(() => false),
     ...alertNumbers.map((n) => sendText(n, msgAlerta).catch(() => false)),
-    email
-      ? notifyQuizPartnerCandidato({
-          candidatoEmail: email,
-          candidatoNome: d.nome.trim(),
-          planoSugerido: PLANO_LABEL[s.plano_sugerido],
-        }).catch(() => {})
-      : Promise.resolve(),
+    notifyQuizPartnerCandidato({
+      candidatoEmail: email,
+      candidatoNome: d.nome.trim(),
+      planoSugerido: PLANO_LABEL[s.plano_sugerido],
+    }).catch(() => {}),
     notifyLeadQuizPartner({
       nome: d.nome.trim(),
-      email: email ?? "—",
+      email,
       telefone: d.telefone,
-      cidade: cidade ?? "—",
-      estado: estado ?? "—",
+      cidade: "—",
+      estado: "—",
       tier: s.tier,
       score: s.total,
       planoSugerido: PLANO_LABEL[s.plano_sugerido],

@@ -99,15 +99,10 @@ export default async function ProspeccaoDashboardPage() {
   const QUIZ_STEPS: { key: string; label: string }[] = [
     { key: "intro", label: "Abriu a página" },
     { key: "objetivo", label: "Começou o quiz" },
-    { key: "ocupacao", label: "Ocupação" },
-    { key: "experiencia", label: "Experiência B2B" },
-    { key: "rede", label: "Rede" },
-    { key: "porte", label: "Porte da rede" },
-    { key: "renda", label: "Renda" },
-    { key: "disponibilidade", label: "Disponibilidade" },
-    { key: "prazo", label: "Quando começar" },
-    { key: "previa", label: "Viu a prévia" },
-    { key: "dados", label: "Dados de contato" },
+    { key: "ocupacao", label: "Atuação profissional" },
+    { key: "nome", label: "Nome" },
+    { key: "contato", label: "Contato e perfil" },
+    { key: "investimento", label: "Investimento" },
     { key: "concluido", label: "Concluiu ✓" },
   ];
   const { data: qpRows } = await db
