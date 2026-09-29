@@ -6,10 +6,6 @@ import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { PLANO_VALOR } from "@/lib/plano-valor";
 import { notifyNovoCadastroPartner } from "@/lib/socios-notify";
 
-// Único plano de pagamento hoje: valor anual (12x o mensal) com 10% de desconto,
-// pago à vista via Pix ou Boleto na aprovação. Fidelidade de 12 meses.
-const DESCONTO_ANUAL_PIX_BOLETO = 0.9;
-
 async function gerarCobrancaCora(params: {
   regId: string;
   plano: string;
@@ -102,7 +98,7 @@ export async function POST(req: NextRequest) {
     const telefone    = formData.get("telefone") as string;
     const planoRecorrenciaRaw = formData.get("plano_recorrencia") as string | null;
     // Partner HE é mensal (R$ 97/mês). Os outros planos são anuidade paga à vista
-    // (12x o mensal, 10% off no Pix/boleto) ou 12x no cartão.
+    // (12x o mensal, à vista no Pix/boleto) ou 12x no cartão.
     const isMensal = plano === "PARTNER_HE";
     const planoRecorrencia = isMensal
       ? "MENSAL"
@@ -225,9 +221,9 @@ export async function POST(req: NextRequest) {
       console.error("[cadastro-partner] falha ao notificar novo cadastro:", e);
     }
 
-    // Pix/Boleto: cobrança única dos 12 meses à vista, com 10% de desconto,
-    // gerada agora na Cora. Cartão: 12x sem juros do valor anual cheio (sem
-    // desconto), configurado manualmente pelo admin via InfinitePay na
+    // Pix/Boleto: cobrança única dos 12 meses à vista (valor cheio, sem
+    // desconto), gerada agora na Cora. Cartão: 12x sem juros do mesmo valor
+    // anual, configurado manualmente pelo admin via InfinitePay na
     // aprovação -- não gera cobrança Cora aqui, só guarda o valor de referência.
     //
     // Em ambos os casos esse valor é salvo em cora_amount_cents só como
@@ -238,9 +234,7 @@ export async function POST(req: NextRequest) {
     // recorrente.
     const valorFinal = isMensal
       ? Math.round(PLANO_VALOR[plano] ?? 9700)
-      : planoRecorrencia === "ANUAL_CARTAO"
-        ? Math.round((PLANO_VALOR[plano] ?? 29700) * 12)
-        : Math.round((PLANO_VALOR[plano] ?? 29700) * 12 * DESCONTO_ANUAL_PIX_BOLETO);
+      : Math.round((PLANO_VALOR[plano] ?? 29700) * 12);
 
     // Cartão recorrente (InfinitePay) é configurado manualmente pelo admin na
     // aprovação — não gera cobrança Cora nesse caso.
@@ -276,7 +270,7 @@ export async function POST(req: NextRequest) {
         : "V3 Partner";
       const vencimento = new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR");
 
-      const valorTituloEmail = isMensal ? "PRIMEIRA MENSALIDADE (R$ 97/mês)" : "VALOR DA ANUIDADE (12 MESES, 10% OFF)";
+      const valorTituloEmail = isMensal ? "PRIMEIRA MENSALIDADE (R$ 97/mês)" : "VALOR DA ANUIDADE (12 MESES)";
       const cadastroSubjectGate = auditText(`Bem-vindo à V3 Partners: conclua seu pagamento de ${valorFmt}`);
       const cadastroHtmlGate = auditHtml(`
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #09081A; color: #F0ECE4; padding: 32px; border-radius: 16px;">
