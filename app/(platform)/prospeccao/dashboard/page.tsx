@@ -101,7 +101,10 @@ export default async function ProspeccaoDashboardPage() {
     { key: "objetivo", label: "Começou o quiz" },
     { key: "ocupacao", label: "Atuação profissional" },
     { key: "nome", label: "Nome" },
-    { key: "contato", label: "Contato e perfil" },
+    { key: "contato", label: "WhatsApp e e-mail" },
+    { key: "renda", label: "Renda" },
+    { key: "experiencia", label: "Experiência B2B" },
+    { key: "prioridade", label: "Prioridade" },
     { key: "investimento", label: "Investimento" },
     { key: "concluido", label: "Concluiu ✓" },
   ];
