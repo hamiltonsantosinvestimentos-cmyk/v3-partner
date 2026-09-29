@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     : "não informado";
 
   const prompt = `Você é um analista jurídico sênior da V3 Partners, escrevendo um PARECER PRELIMINAR EXECUTIVO ` +
-    `interno sobre um ativo da Bolsa de Ativos, para uso exclusivo da Mesa e da Governança (Dr. Luís Athaydes). ` +
+    `interno sobre um ativo da Bolsa de Ativos, para uso exclusivo da Mesa e da Governança (quórum dos 3 sócios). ` +
     `Este texto NUNCA é anônimo e NUNCA vai para a vitrine pública de compradores — cite nomes e dados reais ` +
     `livremente. NUNCA invente dado que não esteja nas fontes abaixo — se uma informação não está disponível, ` +
     `escreva explicitamente "não disponível nas fontes analisadas", nunca preencha com suposição.\n\n` +

@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check, UserPlus, ClipboardCheck, History, Send, GitBranch } from "lucide-react";
 import { QuickIndicateModal } from "@/components/cm/quick-indicate-modal";
 import { QualificationBatchesPanel } from "@/components/cm/qualification-batches-panel";
+import { BuyerNcndaPanel } from "@/components/cm/buyer-ncnda-panel";
+import type { DemandNcndaState } from "@/lib/cm-ncnda";
 import {
   DEMAND_STATUS_LABELS,
   DEMAND_STATUS_STAGE,
@@ -186,6 +188,22 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
   const [actionReason, setActionReason] = useState("");
   const [actionCategory, setActionCategory] = useState("");
   const [movingStage, setMovingStage] = useState(false);
+  // NCNDA do comprador (20/09/2026): estado derivado do lote de qualificacao e do contrato.
+  // Abre ou fecha o botao "Registrar NCNDA assinado" da Etapa 3.
+  const [ncnda, setNcnda] = useState<DemandNcndaState | null>(null);
+  const [ncndaLoading, setNcndaLoading] = useState(false);
+
+  const loadNcnda = useCallback(async (demandId: string) => {
+    setNcndaLoading(true);
+    try {
+      const res = await fetch(`/api/cm/investor-demands/${demandId}/ncnda`);
+      setNcnda(res.ok ? await res.json() : null);
+    } catch {
+      setNcnda(null);
+    } finally {
+      setNcndaLoading(false);
+    }
+  }, []);
 
   const copyLink = (d: BuyDemand) => {
     const url = `${window.location.origin}/intake/buy/${d.intake_token}`;
@@ -216,6 +234,8 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
     setActionReason("");
     setActionCategory("");
     setMeetingLink(null);
+    setNcnda(null);
+    if (mode === "mesa") void loadNcnda(demand.id);
     setDocsLoading(true);
     setTimelineLoading(true);
     try {
@@ -572,14 +592,14 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                     <div className="flex flex-wrap gap-2">
                       {(DEMAND_NEXT_ACTIONS[detailDemand.status] ?? []).map((a) => {
                         const blockedKyc = DEMAND_KYC_REQUIRED_FOR.includes(a.to) && !detailDemand.kyc_approved_at;
-                        const blockedNda = a.to === "nda_assinado" && !detailDemand.nda_accepted_at;
+                        const blockedNda = a.to === "nda_assinado" && !ncnda?.signed;
                         const blocked = blockedKyc || blockedNda;
                         return (
                           <button
                             key={a.to}
                             onClick={() => startStageAction(a)}
                             disabled={movingStage || blocked}
-                            title={blockedKyc ? "Aprove o KYC do comprador antes" : blockedNda ? "NDA ainda não aceito pelo comprador" : undefined}
+                            title={blockedKyc ? "Aprove o KYC do comprador antes" : blockedNda ? "NCNDA ainda não assinado. Qualifique as partes e gere o NCNDA no bloco abaixo" : undefined}
                             className={`rounded-lg border px-3 py-1.5 text-[10px] font-bold transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${
                               a.danger
                                 ? "border-[#E8935A]/40 text-[#E8935A] hover:bg-[#E8935A]/10"
@@ -686,15 +706,29 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
                 </div>
               </div>
 
-              {/* NDA */}
+              {/* Aceite do intake: e so o aceite leve de LGPD/confidencialidade feito no
+                  formulario. Nao abre mais a Etapa 3, quem abre e o NCNDA assinado (bloco abaixo). */}
               <div className="flex items-center gap-2 text-xs">
                 <ShieldCheck size={14} className={detailDemand.nda_accepted ? "text-emerald-400" : "text-[#5A7490]"} />
                 <span className={detailDemand.nda_accepted ? "text-emerald-400 font-semibold" : "text-[#5A7490]"}>
                   {detailDemand.nda_accepted
-                    ? `NDA aceito${detailDemand.nda_accepted_at ? ` em ${new Date(detailDemand.nda_accepted_at).toLocaleString("pt-BR")}` : ""}`
-                    : "NDA ainda não aceito"}
+                    ? `Aceite no intake${detailDemand.nda_accepted_at ? ` em ${new Date(detailDemand.nda_accepted_at).toLocaleString("pt-BR")}` : ""}`
+                    : "Aceite no intake ainda não registrado"}
                 </span>
               </div>
+
+              {mode === "mesa" && (
+                <BuyerNcndaPanel
+                  key={detailDemand.id}
+                  demandId={detailDemand.id}
+                  demandStatus={detailDemand.status}
+                  defaultName={detailDemand.nome_contato !== "Pendente" ? detailDemand.nome_contato : ""}
+                  defaultEmail={detailDemand.email ?? ""}
+                  state={ncnda}
+                  loading={ncndaLoading}
+                  onChanged={() => void loadNcnda(detailDemand.id)}
+                />
+              )}
 
               {/* Documentos */}
               <div>

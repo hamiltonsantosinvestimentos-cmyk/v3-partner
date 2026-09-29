@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const valor = data.valorFace ? `R$ ${Number(data.valorFace).toLocaleString("pt-BR")}` : "não informado";
 
   const prompt = `Você é um analista de compliance sênior da V3 Partners, escrevendo o PARECER do DOSSIÊ DE RISCO ` +
-    `de um ativo da Bolsa de Ativos, para uso da Mesa e da Governança (Dr. Luís Athaydes). Uso interno, cite nomes ` +
+    `de um ativo da Bolsa de Ativos, para uso da Mesa e da Governança (quórum dos 3 sócios). Uso interno, cite nomes ` +
     `e dados reais livremente. NUNCA invente dado que não esteja nas fontes abaixo -- se uma informação não está ` +
     `disponível, escreva explicitamente "não disponível nas fontes analisadas", nunca preencha com suposição. ` +
     `Ausência de dado NUNCA significa ausência de risco -- reporte a ausência como tal.\n\n` +

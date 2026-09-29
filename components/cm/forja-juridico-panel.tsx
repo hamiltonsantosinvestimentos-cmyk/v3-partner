@@ -18,9 +18,10 @@ const TEMPLATE_LABELS: Record<string, string> = {
   convocacao_alinhamento: "Convocação de Alinhamento",
 };
 
+// Atualizado em 29/09/2026: opção "athaydes" removida (saiu do time), ver
+// session-decisions.md. Só o remetente institucional genérico continua.
 const SENDER_LABELS: Record<string, string> = {
   juridico: "Jurídico V3 <juridico@v3partners.com.br>",
-  athaydes: "Dr. Luís Athaydes | V3 Partners <luis.athaydes@v3partners.com.br>",
 };
 
 type LogEntry = {

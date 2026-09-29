@@ -12,13 +12,6 @@ const SOCIOS: { id: string; name: string; email: string; phone: string | null }[
   { id: "d5f26efd-8ed5-4d90-b3f4-9ce0004803c5", name: "Robson Lino", email: "robinholino16@gmail.com", phone: "51998556322" },
 ];
 
-// Jurídico (11/09/2026, Fluxograma de Notificações): achado real, o próprio
-// comentário desta rotina dizia "candidato a extensão futura, registrado
-// como pendente" -- o jurídico nunca foi notificado de nenhuma minuta
-// esperando o voto dele, mesmo sendo voto obrigatório na maioria dos casos
-// (regra de quórum em templates/[id]/review/route.ts). Fechado agora.
-const JURIDICO = { id: "82171bc1-edbd-40f8-936b-1b26d412a121", name: "Dr. Luis Athaydes", email: "luis.athaydes@v3partners.com.br", phone: null as string | null };
-
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
@@ -44,10 +37,9 @@ export async function notifySociosMinutaEmRevisao(params: {
     `Minuta aguardando aprovacao: ${templateName}. Origem: ${origemLabel}. Acesse: ${link}`
   );
 
-  // Jurídico entra na mesma rodada de e-mail/WhatsApp/sino que os sócios
-  // (11/09/2026) -- antes só os 3 ADMIN eram notificados, o próprio Dr.
-  // Athaydes nunca sabia que tinha minuta esperando o voto dele.
-  const recipients = [...SOCIOS, JURIDICO];
+  // Atualizado em 29/09/2026: o jurídico interno saiu do time (ver
+  // session-decisions.md). Só os 3 sócios são notificados agora.
+  const recipients = [...SOCIOS];
 
   if (process.env.RESEND_API_KEY) {
     const { Resend } = await import("resend");

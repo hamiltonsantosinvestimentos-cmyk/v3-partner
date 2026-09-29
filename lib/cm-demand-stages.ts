@@ -93,7 +93,7 @@ export const DEMAND_NEXT_ACTIONS: Record<string, DemandAction[]> = {
   // link do comprador. O gatilho automatico so roda com a chave meeting_autotrigger ligada.
   formulario_preenchido: [{ to: "reuniao_agendada", label: "Agendar reunião (envia o link)" }, REJECT, CANCEL],
   reuniao_agendada: [{ to: "em_qualificacao", label: "Reunião realizada: iniciar qualificação" }, REJECT, CANCEL],
-  em_qualificacao: [{ to: "nda_assinado", label: "Registrar NDA assinado" }, REJECT, CANCEL],
+  em_qualificacao: [{ to: "nda_assinado", label: "Registrar NCNDA assinado" }, REJECT, CANCEL],
   nda_assinado: [{ to: "em_analise", label: "Iniciar análise da Mesa" }, REJECT, CANCEL],
   em_analise: [
     { to: "aprovado_head", label: "Aprovar", headOnly: true },

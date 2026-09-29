@@ -296,7 +296,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [complianceIntermediaries, setComplianceIntermediaries] = useState<{ id: string; full_name: string; role_in_document: string; cpf_cnpj: string | null; checked: boolean }[]>([]);
   const [complianceIntermediariesLoading, setComplianceIntermediariesLoading] = useState(false);
   // Fase 4 do Cockpit de Compliance (10/09/2026): parecer sintetizado por IA
-  // + quórum de assinatura (1 Sócio ADMIN + Dr. Athaydes) + Dossiê de Risco PDF.
+  // + quórum de assinatura (2 dos 3 Sócios ADMIN, atualizado 29/09/2026) + Dossiê de Risco PDF.
   const [dossierText, setDossierText] = useState<string | null>(null);
   const [dossierGeneratedAt, setDossierGeneratedAt] = useState<string | null>(null);
   const [dossierSignoffs, setDossierSignoffs] = useState<{ signer_name: string; signer_role: string; signed_at: string }[]>([]);
@@ -1308,13 +1308,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const handleGenerateNcnda = async (listingId: string) => {
     setGeneratingNda(true);
     try {
-      const tplRes = await fetch("/api/contracts/templates?vertical=capital_markets");
+      // Minuta resolvida no servidor (lib/cm-ncnda.ts), a mesma do NCNDA do comprador. O
+      // .find() por serie que existia aqui escolhia entre 2 minutas aprovadas da Bolsa por
+      // acidente de ordem alfabetica (20/09/2026).
+      const tplRes = await fetch("/api/cm/ncnda-template");
       const tplJson = await tplRes.json();
-      const template = (tplJson.templates ?? []).find(
-        (t: any) => t.contract_series === "V3C-NDA" && t.approval_status === "aprovado"
-      );
-      if (!template) {
-        alert("Nenhuma minuta de NCNDA aprovada para Bolsa de Ativos. Verifique a Revisão Jurídica em Central de Contratos.");
+      const template = tplJson.template;
+      if (!tplRes.ok || !template) {
+        alert(tplJson.error ?? "Nenhuma minuta de NCNDA aprovada para Bolsa de Ativos. Verifique a Revisão Jurídica em Central de Contratos.");
         return;
       }
       const res = await fetch("/api/contracts/generate", {
@@ -4146,19 +4147,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                         <p className="text-[10px] text-[#9BAFC5]">Nenhum parecer compilado ainda.</p>
                       )}
 
-                      {/* Quórum de fechamento: 1 Sócio ADMIN + Dr. Luis Athaydes */}
+                      {/* Quórum de fechamento: 2 dos 3 Sócios ADMIN (atualizado 29/09/2026) */}
                       <div className="space-y-2 pt-2 border-t border-[#9BAFC5]/10">
-                        <div className="text-[9px] text-[#C9A84C] font-bold uppercase tracking-wider">Quórum de Fechamento</div>
-                        <div className="text-[9px] text-[#9BAFC5]">
-                          {dossierSignoffs.find((s) => s.signer_role === "socio_admin")
-                            ? `✓ Sócio: ${dossierSignoffs.find((s) => s.signer_role === "socio_admin")!.signer_name}`
-                            : "○ Sócio ADMIN: pendente"}
+                        <div className="text-[9px] text-[#C9A84C] font-bold uppercase tracking-wider">
+                          Quórum de Fechamento ({dossierSignoffs.filter((s) => s.signer_role === "socio_admin").length}/2)
                         </div>
-                        <div className="text-[9px] text-[#9BAFC5]">
-                          {dossierSignoffs.find((s) => s.signer_role === "juridico")
-                            ? `✓ Jurídico: ${dossierSignoffs.find((s) => s.signer_role === "juridico")!.signer_name}`
-                            : "○ Jurídico (Dr. Athaydes): pendente"}
-                        </div>
+                        {dossierSignoffs.filter((s) => s.signer_role === "socio_admin").length > 0 ? (
+                          dossierSignoffs.filter((s) => s.signer_role === "socio_admin").map((s) => (
+                            <div key={s.signer_name} className="text-[9px] text-[#9BAFC5]">{`✓ Sócio: ${s.signer_name}`}</div>
+                          ))
+                        ) : (
+                          <div className="text-[9px] text-[#9BAFC5]">○ Sócio ADMIN: pendente (0/2)</div>
+                        )}
                         {dossierFinalizedAt ? (
                           <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
                             <CheckCircle2 size={13} className="text-emerald-400 flex-shrink-0" />

@@ -1,6 +1,6 @@
 // Checklists de documentos obrigatorios por tipo de ativo — Bolsa de Ativos (Marketplace de Capitais).
 // Mesmo padrao de lib/checklists.ts (Mesa de Credito). Lista inicial baseada no manual tecnico
-// da Bolsa de Ativos v1.4 — sujeita a validacao/ajuste por Joao/Dr. Luis Athaydes Homem.
+// da Bolsa de Ativos v1.4 — sujeita a validacao/ajuste pelo quorum dos 3 socios.
 
 export interface CmChecklistItem {
   id: string;

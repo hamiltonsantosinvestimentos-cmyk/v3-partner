@@ -53,11 +53,6 @@ export async function notifyUser(params: {
   }
 }
 
-// Identidade do jurídico (Dr. Luis Athaydes) -- mesma pessoa referenciada em
-// app/api/contracts/templates/[id]/review/route.ts (JURIDICO) e
-// lib/ncnda-desk-head.ts (BOLSA_ATIVOS.lookupEmail).
-export const JURIDICO_ID = "82171bc1-edbd-40f8-936b-1b26d412a121";
-
 // Mesmo array de sócios usado em lib/socios-notify.ts e
 // app/api/contracts/approve/route.ts -- reproduzido aqui (não importado
 // daquele arquivo) porque tem forma diferente (userId simples, não
