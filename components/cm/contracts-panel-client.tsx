@@ -1435,9 +1435,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
                 O contrato <span className="font-bold">{selected.contract_code ?? selected.contract_title}</span> vai para a Lixeira por 30 dias e o número dele deixa de valer.
               </p>
               <p className="text-xs text-[#9BAFC5] leading-relaxed">
-                {qualBatches.length > 0
-                  ? `O lote de qualificação (${qualBatches.reduce((n, b) => n + (b.cm_party_qualifications?.length ?? 0), 0)} parte(s)) é preservado e liberado para gerar um novo contrato, inclusive em outra mesa. Os dados das partes não são alterados.`
-                  : "Não há lote de qualificação vinculado a este contrato."}
+                Se este contrato consumiu um lote de qualificação, o lote é preservado e liberado para gerar um novo contrato, inclusive em outra mesa. Os dados das partes não são alterados.
               </p>
               <div>
                 <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Motivo *</label>
