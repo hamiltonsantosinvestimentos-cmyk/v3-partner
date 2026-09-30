@@ -228,6 +228,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     .from("cm_party_qualifications")
     .select("id, full_name, email, role_in_document, status, batch_id, cm_qualification_batches(document_type, cm_asset_listings(anonymous_id))")
     .eq("qualification_token", token)
+    // Envolvido excluído/cancelado pela Mesa: o link deixa de valer (30/09/2026).
+    .is("deleted_at", null)
     .single();
 
   if (!qualification) return NextResponse.json({ error: "Link inválido ou expirado" }, { status: 404 });
@@ -260,6 +262,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .from("cm_party_qualifications")
     .select("id, batch_id, status, role_in_document, full_name")
     .eq("qualification_token", token)
+    .is("deleted_at", null)
     .single();
 
   if (!qualification) return NextResponse.json({ error: "Link inválido ou expirado" }, { status: 404 });
