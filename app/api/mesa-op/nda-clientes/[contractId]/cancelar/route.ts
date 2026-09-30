@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { getProvider } from "@/lib/esignature";
+import { getProvider, type EsignatureProviderName } from "@/lib/esignature";
 import { isNdaMesaContract, NDA_MESA_ROLES } from "@/lib/nda-mesa-operacoes";
 
 // POST /api/mesa-op/nda-clientes/[contractId]/cancelar { motivo } — cancela um
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
   if (contrato.external_envelope_id && contrato.external_document_id) {
     provedor.tentado = true;
     try {
-      const p = await getProvider({ contractId, provider: (contrato.esignature_provider as string | null) ?? undefined });
+      const p = await getProvider({ contractId, provider: (contrato.esignature_provider as EsignatureProviderName | null) ?? undefined });
       const r = await p.cancel(contrato.external_envelope_id as string, contrato.external_document_id as string);
       provedor = { tentado: true, ok: r.ok, ...(r.ok ? {} : { erro: r.error }) };
     } catch (e) {

@@ -247,7 +247,26 @@ export function extractPrintedTitle(fullHtml: string): string | null {
   return text || null;
 }
 
-export function wrapContractInV3Html(title: string, body: string, parties?: ContractParty[], contractCode?: string | null): string {
+// Bloco de identificação (30/09/2026, Entrega A; regra bloqueante do pré-voo desde o caso
+// V3C-NDA-2026-0036, enviado sem número impresso): contrato + Deal, à esquerda e ACIMA do
+// título. Só é impresso quando o código do contrato é conhecido; chamadores antigos que não
+// passam o código seguem idênticos. Deal ausente = operação avulsa (nunca vazio).
+function escapeHtmlText(v: string): string {
+  return v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export function renderDocIdBlock(contractCode?: string | null, dealLabel?: string | null): string {
+  if (!contractCode) return "";
+  const deal = dealLabel && dealLabel.trim() ? dealLabel.trim() : "OPERAÇÃO AVULSA";
+  return `<div class="doc-id">
+<div>CONTRATO Nº ${escapeHtmlText(contractCode.toUpperCase())}</div>
+<div>DEAL Nº ${escapeHtmlText(deal.toUpperCase())}</div>
+</div>`;
+}
+
+export const DOC_ID_CSS = ".doc-id{text-align:left;font-size:11px;font-weight:700;letter-spacing:.06em;color:#13223A;margin-bottom:18px;line-height:1.6;position:relative;z-index:1}";
+
+export function wrapContractInV3Html(title: string, body: string, parties?: ContractParty[], contractCode?: string | null, dealLabel?: string | null): string {
   const bodyTitle = extractBodyTitle(body);
   const printedTitle = bodyTitle ?? title;
   const headerTitle = bodyTitle ? "" : `\n<h1>${title}</h1>`;
@@ -301,6 +320,7 @@ p{margin-bottom:12px;text-align:justify}
 .clause-item-2{padding-left:1.52cm;text-indent:-1.52cm}
 .clause-num{display:inline-block}
 .header{text-align:center;margin-bottom:32px}
+${DOC_ID_CSS}
 .header p{font-size:11px;color:#5B6B82}
 /* Bloco de assinaturas: linha vertical de referência EXATAMENTE no meio da
    página (50%/50%, nunca 55/45), regra fixa independente da quantidade de
@@ -354,8 +374,8 @@ p{orphans:3;widows:3}
 <body>
 <img class="timbrado-logo" src="https://app.v3partners.com.br/contratos/timbrado-logo.jpg" alt="V3 Partners">
 <img class="timbrado-rodape" src="https://app.v3partners.com.br/contratos/timbrado-rodape.jpg" alt="V3 Partners Soluções Ltda">
+${renderDocIdBlock(contractCode, dealLabel)}
 <div class="header">${headerTitle}
-${contractCode ? `<p>${contractCode}</p>` : ""}
 </div>
 ${bodyWithIndent}
 ${renderPartiesBlock(parties)}

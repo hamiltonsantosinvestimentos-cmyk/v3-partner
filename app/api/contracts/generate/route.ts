@@ -680,8 +680,11 @@ export async function POST(req: NextRequest) {
 
   const renderedBody = resolveContractVariables(bodyAfterVerticalBlocks, variables);
   const contractTitle = resolveContractVariables(template.template_name, variables);
-  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody, resolvedParties);
 
+  // Entrega A (30/09/2026): o código do contrato é emitido ANTES de renderizar, para sair
+  // impresso no bloco de identificação (contrato e Deal) acima do título, em HTML, PDF e
+  // .docx. Tudo que pode recusar a geração (validações acima) já passou neste ponto, então
+  // nenhum número é queimado por erro de validação.
   // Governanca de Numeracao V3 (10/08/2026): corrige P0 achado ao vivo.
   // A migration 20260807b tornou operation_contracts.contract_code
   // obrigatorio e unico, emitido por next_v3_code(template.contract_series,
@@ -700,6 +703,15 @@ export async function POST(req: NextRequest) {
   if (codeError || !contractCode) {
     return NextResponse.json({ error: `Falha ao emitir número do contrato: ${codeError?.message ?? "resposta vazia"}` }, { status: 500 });
   }
+
+  // Deal impresso: código oficial do Deal/ativo/proposta quando existe; sem vínculo, o bloco
+  // imprime "OPERAÇÃO AVULSA". Nunca placeholder entre colchetes.
+  const dealLabelRaw = [variables.v3_code, variables.deal_id, variables.anonymous_id, variables.match_deal_id]
+    .find((v) => typeof v === "string" && v.trim() !== "" && !v.trim().startsWith("["));
+  const dealLabel = typeof dealLabelRaw === "string" ? dealLabelRaw : null;
+
+  const renderedHtml = wrapContractInV3Html(contractTitle, renderedBody, resolvedParties, contractCode as string, dealLabel);
+
 
   // Trava de LOI Casada (BRIEF 2, 30/08/2026, item 3): qualquer operação da
   // série V3C-LOI do lado "venda" só pode ser emitida sem risco de expor a
