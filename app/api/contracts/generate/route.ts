@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, resolveVerticalBlocks, wrapContractInV3Html } from "@/lib/contract-render";
 import type { V3Series } from "@/lib/v3-codes";
-import { resolveDeskHead, VERTICAL_TO_DESK_ORIGIN } from "@/lib/ncnda-desk-head";
+import { resolveDeskHead, VERTICAL_TO_DESK_ORIGIN, isHeadGatedVertical, headSignatureLabel } from "@/lib/ncnda-desk-head";
 import { formatDocumentNumber, cleanPartyText } from "@/lib/legal-qualification";
 import {
   renderPartyQualificationProse,
@@ -163,11 +163,23 @@ export async function POST(req: NextRequest) {
   const verticalDeskOrigin = VERTICAL_TO_DESK_ORIGIN[effectiveVertical];
   if (verticalDeskOrigin) {
     const head = await resolveDeskHead(verticalDeskOrigin);
+    const headGated = isHeadGatedVertical(effectiveVertical);
+    // M&A e Bolsa de Ativos (30/09/2026): o Head é obrigatório na minuta. CPF
+    // ausente ou inválido em /perfil vira 422 explícito em vez de gerar o
+    // contrato sem Head. Os demais campos ausentes imprimem
+    // [ INFORMAÇÃO PENDENTE ] e o envio é bloqueado até o Head completar /perfil.
+    if (headGated && !head.cpf) {
+      return NextResponse.json(
+        { error: `O Head da Mesa (${head.fullName}) está sem CPF válido em /perfil. Preencha antes de gerar o contrato.` },
+        { status: 422 }
+      );
+    }
     if (head.cpf) {
       Object.assign(variables, {
         head_role_label: head.roleLabel,
-        head_full_name: head.fullName,
-        head_qualificacao: head.qualificacao,
+        // Nome do Head em CAIXA ALTA só na renderização (constante do código, sem tocar dado de banco).
+        head_full_name: headGated ? head.fullName.toUpperCase() : head.fullName,
+        head_qualificacao: headGated ? head.qualificacaoComPendencias : head.qualificacao,
         head_cpf: head.cpf,
         head_email: head.email,
       });
@@ -464,11 +476,13 @@ export async function POST(req: NextRequest) {
       // qualificação presente. variables.head_* já foi setado acima
       // (bloco credit_proposal_id roda antes deste).
       if (willPushHeadMesa) {
+        const headLabel = headSignatureLabel(effectiveVertical, variables.head_email as string);
         qualificationParties.push({
           role: "head_mesa",
           name: variables.head_full_name,
           doc: typeof variables.head_cpf === "string" ? formatDocumentNumber(variables.head_cpf) : null,
           email: variables.head_email,
+          ...(headLabel ? { display_label: headLabel } : {}),
         });
       }
 
@@ -588,7 +602,7 @@ export async function POST(req: NextRequest) {
   // aparece em contracts-panel-client.tsx (exige ao menos 1 parte não-V3
   // com e-mail).
   const headParty = typeof variables.head_email === "string" && typeof variables.head_full_name === "string"
-    ? [{ role: "head_mesa", name: variables.head_full_name, doc: typeof variables.head_cpf === "string" ? formatDocumentNumber(variables.head_cpf) : null, email: variables.head_email }]
+    ? [{ role: "head_mesa", name: variables.head_full_name, doc: typeof variables.head_cpf === "string" ? formatDocumentNumber(variables.head_cpf) : null, email: variables.head_email, ...(headSignatureLabel(effectiveVertical, variables.head_email as string) ? { display_label: headSignatureLabel(effectiveVertical, variables.head_email as string) } : {}) }]
     : [];
 
   // E-mail é obrigatório pra cada parte poder assinar de verdade (gate de

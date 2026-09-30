@@ -289,6 +289,42 @@ export function ContractsPanelClient({ role }: { role: string }) {
     finally { setDeletingContract(false); }
   };
 
+  // Cancelar rascunho e requalificar (30/09/2026): contrato nunca enviado vai
+  // para a Lixeira (30 dias) e o lote de qualificação volta a ficar disponível
+  // para regerar o contrato (ex: em outra mesa). Modal V3 próprio, sem
+  // window.confirm, que só fecha por botão explícito.
+  const [showCancelDraft, setShowCancelDraft] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [cancellingDraft, setCancellingDraft] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [cancelDone, setCancelDone] = useState<string | null>(null);
+
+  const handleCancelDraft = async (contractId: string) => {
+    if (cancelReason.trim().length < 5) { setCancelError("Motivo obrigatório: mínimo 5 caracteres"); return; }
+    setCancellingDraft(true);
+    setCancelError(null);
+    try {
+      const res = await fetch(`/api/contracts/${contractId}/cancel-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: cancelReason.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setCancelDone(json.released_batch
+          ? `Contrato ${json.contract_code ?? ""} cancelado. O lote de qualificação (${json.released_batch.parties} parte(s)) foi liberado. Gere o contrato de novo em Minutas > Gerar Contrato e escolha a mesa.`
+          : json.batch_still_linked
+            ? `Contrato ${json.contract_code ?? ""} cancelado, mas o lote de qualificação continua vinculado a ele: a liberação do lote ainda não está ativa. Fale com o administrador antes de gerar o contrato de novo.`
+            : `Contrato ${json.contract_code ?? ""} cancelado. Nenhum lote de qualificação estava vinculado.`);
+        setContracts((prev) => prev.filter((c) => c.id !== contractId));
+        setSelected(null);
+      } else {
+        setCancelError(json.error ?? "Erro ao cancelar rascunho");
+      }
+    } catch { setCancelError("Erro de conexão"); }
+    finally { setCancellingDraft(false); }
+  };
+
   const loadLixeira = async () => {
     setLixeiraLoading(true);
     try {
@@ -924,6 +960,15 @@ export function ContractsPanelClient({ role }: { role: string }) {
                     </button>
                   )}
 
+                  {selected.status_signature === "rascunho" && (
+                    <button
+                      onClick={() => { setCancelReason(""); setCancelError(null); setShowCancelDraft(true); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-xs font-bold hover:bg-[#243A66] transition"
+                    >
+                      <XCircle size={13} /> Cancelar rascunho e requalificar
+                    </button>
+                  )}
+
                   {/* Excluir (10/09/2026): só em rascunho -- mesmo guard já
                       aplicado no backend, ver /api/contracts/[id]/delete.
                       Contrato enviado/assinado nunca aparece aqui. */}
@@ -1374,6 +1419,53 @@ export function ContractsPanelClient({ role }: { role: string }) {
                 {linking ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Vincular
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showCancelDraft && selected && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-md bg-[#09081A] border border-red-500/40 rounded-xl">
+            <div className="p-4 border-b border-red-500/30 flex items-center justify-between">
+              <div className="text-sm font-bold text-red-400 flex items-center gap-2"><XCircle size={14} /> Cancelar rascunho e requalificar</div>
+              <button onClick={() => setShowCancelDraft(false)} disabled={cancellingDraft} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-[#F5F1E8] leading-relaxed">
+                O contrato <span className="font-bold">{selected.contract_code ?? selected.contract_title}</span> vai para a Lixeira por 30 dias e o número dele deixa de valer.
+              </p>
+              <p className="text-xs text-[#9BAFC5] leading-relaxed">
+                {qualBatches.length > 0
+                  ? `O lote de qualificação (${qualBatches.reduce((n, b) => n + (b.cm_party_qualifications?.length ?? 0), 0)} parte(s)) é preservado e liberado para gerar um novo contrato, inclusive em outra mesa. Os dados das partes não são alterados.`
+                  : "Não há lote de qualificação vinculado a este contrato."}
+              </p>
+              <div>
+                <label className="block text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mb-1">Motivo *</label>
+                <textarea value={cancelReason} onChange={(e) => setCancelReason(e.target.value)}
+                  placeholder="Ex: gerado na mesa errada"
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] min-h-[60px] resize-y" />
+              </div>
+              {cancelError && <p className="text-[11px] text-red-400">{cancelError}</p>}
+              <div className="flex gap-2">
+                <button onClick={() => setShowCancelDraft(false)} disabled={cancellingDraft}
+                  className="flex-1 px-3 py-2 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs font-bold hover:bg-[#243A66] transition">Voltar</button>
+                <button onClick={() => handleCancelDraft(selected.id)} disabled={cancellingDraft}
+                  className="flex-1 px-3 py-2 bg-red-500/20 text-red-300 border border-red-500/40 rounded-lg text-xs font-bold hover:bg-red-500/30 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                  {cancellingDraft && <Loader2 size={13} className="animate-spin" />} Cancelar rascunho
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelDone && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-md bg-[#09081A] border border-[#C9A84C]/30 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 size={16} /> <span className="text-sm font-bold">Rascunho cancelado</span></div>
+            <p className="text-xs text-[#9BAFC5] leading-relaxed">{cancelDone}</p>
+            <button onClick={() => { setCancelDone(null); setShowCancelDraft(false); }}
+              className="w-full px-3 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition">Entendi</button>
           </div>
         </div>
       )}

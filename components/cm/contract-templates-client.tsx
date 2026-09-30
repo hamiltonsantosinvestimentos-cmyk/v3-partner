@@ -2170,8 +2170,8 @@ ${allParties.length > 0 ? `<div class="qualbox">
           com origem "avulso": não depende de listing/bid/deal/credit_proposal/
           ticket, cada indicador é digitado direto aqui. */}
       {showGenerateModal && selected && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={() => setShowGenerateModal(false)}>
-          <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
             <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
               <div>
                 <div className="text-sm font-bold text-[#F5F1E8] flex items-center gap-2"><Users size={14} className="text-[#C9A84C]" /> Gerar Contrato</div>
@@ -2197,7 +2197,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                       <select value={genVertical} onChange={(e) => setGenVertical(e.target.value)}
                         className="w-full bg-[#162744] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]">
                         <option value="">Selecione...</option>
-                        {CONCRETE_VERTICALS.map((v) => (
+                        {[...CONCRETE_VERTICALS].sort((a, b) => VERTICAL_LABELS[a].localeCompare(VERTICAL_LABELS[b], "pt-BR")).map((v) => (
                           <option key={v} value={v}>{VERTICAL_LABELS[v]}</option>
                         ))}
                       </select>
