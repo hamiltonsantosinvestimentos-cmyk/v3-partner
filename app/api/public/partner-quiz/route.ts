@@ -115,7 +115,8 @@ export async function POST(req: NextRequest) {
   // Lead parcial desta sessão (criado quando o candidato deixou o contato): completa
   // o mesmo registro em vez de duplicar. Só tira de "incompleto" se o time ainda não
   // tiver movido o card.
-  let existente: { id: string; etapa: string; metadata: Record<string, unknown> | null } | null = null;
+  type LeadParcial = { id: string; etapa: string; metadata: Record<string, unknown> | null };
+  let existente: LeadParcial | null = null;
   if (d.session_id) {
     const { data } = await db.from("prospeccao_leads")
       .select("id, etapa, metadata")
@@ -123,7 +124,7 @@ export async function POST(req: NextRequest) {
       .eq("metadata->>quiz_session_id", d.session_id)
       .limit(1)
       .maybeSingle();
-    existente = data as typeof existente;
+    existente = (data as LeadParcial | null) ?? null;
   }
 
   const campos = {
