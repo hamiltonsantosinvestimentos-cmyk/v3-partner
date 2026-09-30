@@ -56,6 +56,15 @@ export const INVESTIMENTO: QuizOption[] = [
   { value: "em_breve", label: "Não tenho investimento agora, mas terei em breve" },
 ];
 
+// Lead parcial: passo em que o candidato estava quando o lead incompleto foi
+// gravado/atualizado (a partir daqui ele já deixou nome + WhatsApp + e-mail).
+export const QUIZ_PARCIAL_PAROU_EM: Record<string, string> = {
+  renda: "Renda",
+  experiencia: "Experiência B2B",
+  prioridade: "Prioridade",
+  investimento: "Investimento",
+};
+
 // Rótulos de respostas da versão anterior do quiz (até set/2026), só para
 // exibir leads antigos na Prospecção. Não são mais perguntados.
 export const QUIZ_LEGACY_LABELS: Record<string, Record<string, string>> = {

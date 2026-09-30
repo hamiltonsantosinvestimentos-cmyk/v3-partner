@@ -11,7 +11,7 @@ import {
 
 import {
   OBJETIVO, OCUPACAO, RENDA_FAIXA, EXPERIENCIA_B2B, PRIORIDADE, INVESTIMENTO,
-  PLANO_LABEL, QUIZ_LEGACY_LABELS, type QuizOption,
+  PLANO_LABEL, QUIZ_LEGACY_LABELS, QUIZ_PARCIAL_PAROU_EM, type QuizOption,
 } from "@/lib/quiz-partner";
 
 const GOLD = "#C9A84C";
@@ -74,9 +74,11 @@ interface Prospect {
 interface Equipe { id: string; full_name: string; role: string; }
 interface Partner { id: string; full_name: string; email: string; }
 
-type Etapa = "prospect" | "contatado" | "interessado" | "agenda_reuniao" | "proposta_retorno" | "trial" | "convertido" | "perdido";
+type Etapa = "incompleto" | "prospect" | "contatado" | "interessado" | "agenda_reuniao" | "proposta_retorno" | "trial" | "convertido" | "perdido";
 
 const ETAPAS: { id: Etapa; label: string; color: string; bg: string }[] = [
+  // Quiz Seja Partner: deixou nome + WhatsApp + e-mail, mas não concluiu (ver /api/public/partner-quiz/parcial).
+  { id: "incompleto",  label: "Lead incompleto", color: "#E07878", bg: "#E0787820" },
   { id: "prospect",    label: "Prospect",    color: "#7A8FA8", bg: "#7A8FA820" },
   { id: "contatado",   label: "Contatado",   color: "#60A5FA", bg: "#60A5FA20" },
   { id: "interessado", label: "Interessado", color: "#F59E0B", bg: "#F59E0B20" },
@@ -655,9 +657,12 @@ function DetalheModal({
 
           {prospect.metadata?.form_type === "quiz_partner" && (() => {
             const m = prospect.metadata as Record<string, unknown>;
+            const incompleto = m.quiz_incompleto === true;
             const tier = String(m.tier ?? "");
-            const tierColor = tier === "A" ? "#34D399" : tier === "B" ? "#F59E0B" : "#7A8FA8";
-            const tierLabel = tier === "A" ? "Faixa A — quente" : tier === "B" ? "Faixa B — morno" : "Faixa C — frio";
+            const tierColor = incompleto ? "#E07878" : tier === "A" ? "#34D399" : tier === "B" ? "#F59E0B" : "#7A8FA8";
+            const tierLabel = incompleto
+              ? `Incompleto — parou em ${QUIZ_PARCIAL_PAROU_EM[String(m.quiz_parou_em ?? "")] ?? "—"}`
+              : tier === "A" ? "Faixa A — quente" : tier === "B" ? "Faixa B — morno" : "Faixa C — frio";
             const plano = prospect.plano_sugerido ? (PLANO_LABEL[prospect.plano_sugerido] ?? prospect.plano_sugerido) : null;
             return (
               <div className="rounded-xl border overflow-hidden" style={{ background: NAVY_CARD, borderColor: `${tierColor}40` }}>
@@ -940,6 +945,11 @@ function ProspectCard({
         {prospect.link_token && (
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
             Link ativo
+          </span>
+        )}
+        {prospect.metadata?.quiz_incompleto === true && (
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#E0787820", color: "#E07878" }}>
+            Parou em: {QUIZ_PARCIAL_PAROU_EM[String(prospect.metadata?.quiz_parou_em ?? "")] ?? "—"}
           </span>
         )}
         {prospect.crm_lead_id && (

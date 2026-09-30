@@ -8,7 +8,7 @@ import { ArrowRight, ArrowLeft, Clock3, Check, MessageCircle, ShieldCheck } from
 import { maskPhone } from "./wizard-ui";
 import { trackPixel } from "./meta-pixel";
 import {
-  OBJETIVO, OCUPACAO, RENDA_FAIXA, EXPERIENCIA_B2B, PRIORIDADE, INVESTIMENTO,
+  OBJETIVO, OCUPACAO, RENDA_FAIXA, EXPERIENCIA_B2B, PRIORIDADE, INVESTIMENTO, QUIZ_PARCIAL_PAROU_EM,
   type QuizOption,
 } from "@/lib/quiz-partner";
 
@@ -350,6 +350,31 @@ export function PartnerQuizClient() {
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // ── Lead parcial: depois que o candidato deixa o contato, cada passo alcançado
+  // grava/atualiza um lead "incompleto" na Prospecção (quem desistir no meio
+  // ainda pode ser chamado no WhatsApp). A conclusão completa o mesmo lead.
+  const formRef = useRef(form);
+  useEffect(() => { formRef.current = form; });
+  useEffect(() => {
+    if (!(step in QUIZ_PARCIAL_PAROU_EM)) return;
+    const f = formRef.current;
+    const sid = sessionIdRef.current;
+    if (!sid || !f.consentimento || f.nome.trim().length < 3 || !f.email.trim() || !f.telefone) return;
+    try {
+      fetch("/api/public/partner-quiz/parcial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          session_id: sid, parou_em: step, ref: ref || null, tracking,
+          objetivo: f.objetivo || null, ocupacao: f.ocupacao || null,
+          renda_faixa: f.renda_faixa || null, experiencia_b2b: f.experiencia_b2b || null, prioridade: f.prioridade || null,
+          nome: f.nome.trim(), email: f.email.trim(), telefone: f.telefone, consentimento: true,
+        }),
+      }).catch(() => {});
+    } catch { /* ignora */ }
+  }, [step, ref, tracking]);
+
   // Troca de tela com animação de saída antes de montar a próxima.
   const trocar = useCallback((next: Step, empilhar: boolean) => {
     if (trocandoRef.current) return;
@@ -409,6 +434,7 @@ export function PartnerQuizClient() {
           nome: form.nome.trim(), email: form.email.trim(), telefone: form.telefone,
           tracking,
           consentimento: true,
+          session_id: sessionIdRef.current || null,
         }),
       });
       const json = await res.json();

@@ -20,7 +20,8 @@ export type SdrLead = {
 type Profile = { id: string; full_name: string; role: string };
 
 export const PROSPECCAO_ETAPA_LABELS: Record<string, { label: string; text: string; bg: string; border: string }> = {
-  prospect:    { label: "Prospect",    text: "text-[#7A8FA8]",   bg: "bg-[#7A8FA8]/10",   border: "border-[#7A8FA8]/30" },
+  incompleto:  { label: "Lead incompleto", text: "text-[#E07878]", bg: "bg-[#E07878]/10", border: "border-[#E07878]/30" },
+  prospect:   { label: "Prospect",    text: "text-[#7A8FA8]",   bg: "bg-[#7A8FA8]/10",   border: "border-[#7A8FA8]/30" },
   contatado:   { label: "Contatado",   text: "text-blue-400",    bg: "bg-blue-400/10",    border: "border-blue-400/30" },
   interessado: { label: "Interessado", text: "text-amber-400",   bg: "bg-amber-400/10",   border: "border-amber-400/30" },
   agenda_reuniao:   { label: "Agenda de Reunião",   text: "text-teal-400",   bg: "bg-teal-400/10",   border: "border-teal-400/30" },

@@ -38,7 +38,7 @@ export default async function ProspeccaoDashboardPage() {
   }>;
 
   const isPersonal = p.role === "SDR" || p.role === "CLOSER";
-  const etapas = ["prospect", "contatado", "interessado", "agenda_reuniao", "proposta_retorno", "trial", "convertido"];
+  const etapas = ["incompleto", "prospect", "contatado", "interessado", "agenda_reuniao", "proposta_retorno", "trial", "convertido"];
 
   // ── Funil global ─────────────────────────────────────────────────────────────
   const funil = etapas.map(etapa => ({
