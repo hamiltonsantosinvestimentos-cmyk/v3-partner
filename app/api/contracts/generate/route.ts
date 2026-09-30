@@ -402,7 +402,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!effectiveQualificationBatchId) {
+  // 30/09/2026: sem busca automática de lote quando o contrato nasce de um ticket
+  // ou de uma proposta (botões "Enviar NDA" do ticket e do modal da proposta).
+  // Esses fluxos já trazem os dados da parte em extra_data; com o painel "NDA
+  // para clientes" gerando vários lotes do MESMO template (um por cliente), a
+  // busca automática poderia puxar a qualificação de outro cliente (LGPD).
+  if (!effectiveQualificationBatchId && !ticket_id && !credit_proposal_id) {
     const { data: earlyBatch } = await svc()
       .from("cm_qualification_batches")
       .select("id")
