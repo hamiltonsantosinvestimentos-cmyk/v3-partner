@@ -16,6 +16,7 @@ export const OCUPACAO: QuizOption[] = [
   { value: "corretor", label: "Corretor", hint: "Seguros, crédito ou mercado imobiliário" },
   { value: "empresario", label: "Empresário / Sócio", hint: "Dono de empresa com carteira ativa de clientes PJ" },
   { value: "executivo_clt", label: "Executivo CLT", hint: "Profissional corporativo/comercial" },
+  { value: "bancario", label: "Ex-bancário / Bancário autônomo / Personal banker" },
   { value: "outro", label: "Outro" },
 ];
 
@@ -70,7 +71,7 @@ export const QUIZ_LEGACY_LABELS: Record<string, Record<string, string>> = {
 
 // ─── Score (0–100) ─────────────────────────────────────────────────────────
 const W = {
-  ocupacao:        { consultor_financeiro: 10, empresario: 10, corretor: 8, executivo_clt: 5, outro: 0 } as Record<string, number>,
+  ocupacao:        { consultor_financeiro: 10, empresario: 10, corretor: 8, executivo_clt: 5, bancario: 10, outro: 0 } as Record<string, number>,
   renda_faixa:     { ate_5k: 0, "5_15k": 8, "15_30k": 14, "30k_mais": 20 } as Record<string, number>,
   experiencia_b2b: { atua_pj: 25, relacionamento: 12, nenhuma: 0 } as Record<string, number>,
   prioridade:      { alta: 20, media: 14, planejamento: 6, pesquisa: 0 } as Record<string, number>,
