@@ -22,15 +22,17 @@ const STATUS_TO_ETAPA: Record<string, string> = {
 // agenda_reuniao / proposta_retorno (Kanban de Prospecção) ficam entre interessado e trial.
 // Sem estar aqui, a sincronização do SDR trataria esses leads como rank 0 e os regrediria.
 const ETAPA_RANK: Record<string, number> = {
-  prospect: 0, contatado: 1, interessado: 2, agenda_reuniao: 3, proposta_retorno: 4, trial: 5, convertido: 6,
+  incompleto: -1, prospect: 0, contatado: 1, interessado: 2, agenda_reuniao: 3, proposta_retorno: 4, trial: 5, convertido: 6,
 };
 
 /** O Kanban do SDR (WhatsApp) tem só 5 colunas: as etapas novas aparecem em "Interessado" nele. */
 export function etapaParaKanbanSdr(etapa: string): string {
+  if (etapa === "incompleto") return "prospect";
   return etapa === "agenda_reuniao" || etapa === "proposta_retorno" ? "interessado" : etapa;
 }
 
 export const ETAPA_LABELS: Record<string, { label: string; color: string }> = {
+  incompleto:  { label: "Lead incompleto", color: "#E07878" },
   prospect:    { label: "Prospect",    color: "#7A8FA8" },
   contatado:   { label: "Contatado",   color: "#60A5FA" },
   interessado: { label: "Interessado", color: "#F59E0B" },

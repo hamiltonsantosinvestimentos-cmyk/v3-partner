@@ -16,7 +16,7 @@ async function getUser() {
   return profile as { id: string; role: string; full_name: string } | null;
 }
 
-const ETAPAS = ["prospect", "contatado", "interessado", "agenda_reuniao", "proposta_retorno", "trial", "convertido", "perdido"];
+const ETAPAS = ["incompleto", "prospect", "contatado", "interessado", "agenda_reuniao", "proposta_retorno", "trial", "convertido", "perdido"];
 
 // Agenda de reunião e proposta/retorno ficam em prospeccao_leads.metadata (jsonb, já existente),
 // sem coluna nova. Só estas chaves podem ser gravadas por aqui: o resto do metadata (respostas

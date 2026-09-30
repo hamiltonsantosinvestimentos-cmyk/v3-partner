@@ -35,6 +35,8 @@ const schema = z.object({
   telefone: z.string().min(8),
   tracking: z.record(z.string(), z.string().max(300)).nullable().optional(),
   consentimento: z.literal(true),
+  // Sessão do quiz: se o lead parcial já foi criado (ver ./parcial), ele é completado.
+  session_id: z.string().max(80).optional().nullable(),
 });
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "ADMIN", "GESTAO", "MESA_OPERACIONAL"];
@@ -92,35 +94,80 @@ export async function POST(req: NextRequest) {
       ? ` Origem: ${[d.tracking?.utm_source, d.tracking?.utm_medium, d.tracking?.utm_campaign].filter(Boolean).join(" / ")}.`
       : "");
 
-  const { data: lead, error } = await db.from("prospeccao_leads").insert({
+  const metadata = {
+    form_type: "quiz_partner",
+    quiz_versao: 2,
+    ...answers,
+    renda_mensal: RENDA_FAIXA_VALOR[d.renda_faixa] ?? 0,
+    score_total: s.total,
+    score_breakdown: s.breakdown,
+    tier: s.tier,
+    plano_sugerido: s.plano_sugerido,
+    ref_partner_id: d.ref ?? null,
+    tracking: d.tracking ?? null,
+    consentimento: true,
+    quiz_session_id: d.session_id ?? null,
+    quiz_incompleto: false,
+    quiz_parou_em: null,
+    submitted_at: new Date().toISOString(),
+  };
+
+  // Lead parcial desta sessão (criado quando o candidato deixou o contato): completa
+  // o mesmo registro em vez de duplicar. Só tira de "incompleto" se o time ainda não
+  // tiver movido o card.
+  let existente: { id: string; etapa: string; metadata: Record<string, unknown> | null } | null = null;
+  if (d.session_id) {
+    const { data } = await db.from("prospeccao_leads")
+      .select("id, etapa, metadata")
+      .eq("origem", "quiz_partner")
+      .eq("metadata->>quiz_session_id", d.session_id)
+      .limit(1)
+      .maybeSingle();
+    existente = data as typeof existente;
+  }
+
+  const campos = {
     nome: d.nome.trim(),
     email,
     telefone: d.telefone,
-    origem: "quiz_partner",
     indicado_por_partner_id: partnerId,
     indicado_por_nome: partnerName,
-    responsavel_id: null,
-    responsavel_nome: null,
-    etapa: s.etapa,
     notas: resumo,
     score: s.total,
     plano_sugerido: s.plano_sugerido,
-    created_by: partnerId,
-    metadata: {
-      form_type: "quiz_partner",
-      quiz_versao: 2,
-      ...answers,
-      renda_mensal: RENDA_FAIXA_VALOR[d.renda_faixa] ?? 0,
-      score_total: s.total,
-      score_breakdown: s.breakdown,
-      tier: s.tier,
-      plano_sugerido: s.plano_sugerido,
-      ref_partner_id: d.ref ?? null,
-      tracking: d.tracking ?? null,
-      consentimento: true,
-      submitted_at: new Date().toISOString(),
-    },
-  }).select("id").single();
+  };
+
+  let lead: { id: string } | null = null;
+  let error: { message: string } | null = null;
+  if (existente) {
+    const novaEtapa = existente.etapa === "incompleto" ? s.etapa : existente.etapa;
+    const r = await db.from("prospeccao_leads").update({
+      ...campos,
+      etapa: novaEtapa,
+      metadata: { ...(existente.metadata ?? {}), ...metadata },
+      updated_at: new Date().toISOString(),
+    }).eq("id", existente.id).select("id").single();
+    lead = r.data; error = r.error;
+    if (!error && existente.etapa === "incompleto") {
+      await db.from("prospeccao_historico").insert({
+        lead_id: existente.id,
+        etapa_anterior: "incompleto",
+        etapa_nova: novaEtapa,
+        nota: "Quiz Seja Partner concluído — lead completo",
+      });
+    }
+  } else {
+    const r = await db.from("prospeccao_leads").insert({
+      ...campos,
+      origem: "quiz_partner",
+      responsavel_id: null,
+      responsavel_nome: null,
+      etapa: s.etapa,
+      created_by: partnerId,
+      metadata,
+    }).select("id").single();
+    lead = r.data; error = r.error;
+  }
 
   if (error || !lead) {
     return NextResponse.json({ error: error?.message ?? "Falha ao registrar o quiz" }, { status: 500 });
