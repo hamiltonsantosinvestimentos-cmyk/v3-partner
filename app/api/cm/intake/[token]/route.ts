@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getCmFlag, FLAG_MEETING_AUTOTRIGGER } from "@/lib/cm-flags";
 import { notifyMeetingLink } from "@/lib/cm-meeting";
 import { createClient as sc } from "@supabase/supabase-js";
 import { isValidCpfCnpj } from "@/lib/utils";
 import { issueV3Code, resolveSectorCode, resolveEsferaCode } from "@/lib/v3-codes";
+import { dispatchMovementEmails } from "@/lib/movement-email";
+
+export const maxDuration = 60;
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -63,7 +66,7 @@ export async function POST(
 
   const { data: listing } = await svc()
     .from("cm_asset_listings")
-    .select("id, intake_locked, created_by")
+    .select("id, intake_locked, created_by, listing_status")
     .eq("cm_intake_token", token)
     .single();
 
@@ -191,6 +194,19 @@ export async function POST(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // Entrega 2 (30/09/2026): o UPDATE acima muda o ativo para "formulario_preenchido" direto,
+  // sem passar por transition_cm_listing_status, então a mudança de etapa nunca ficava
+  // registrada em cm_status_transitions (lacuna de auditoria) e o e-mail de movimentação não
+  // tinha o que enfileirar. Registra a transição aqui; o gatilho do banco enfileira os e-mails.
+  const { error: transitionError } = await svc().from("cm_status_transitions").insert({
+    listing_id: listing.id,
+    from_status: listing.listing_status,
+    to_status: "formulario_preenchido",
+    reason: "Formulário de intake enviado pelo cedente.",
+    changed_by: listing.created_by ?? null,
+  });
+  if (transitionError) console.error("[cm/intake] falha ao registrar a transição formulario_preenchido:", transitionError.message);
+
   // Fase 5 (19/09/2026, pedido de Joao): Etapa 2 (Reuniao) passa a disparar
   // automaticamente assim que o intake fecha, nao mais so depois da
   // qualificacao terminar (movido de app/api/cm/qualificacao/[token]/route.ts).
@@ -230,6 +246,9 @@ export async function POST(
     p_user_id: listing.created_by,
   });
   if (folderError) console.error("[cm/intake/[token] POST] falha ao criar pasta MPS", folderError.message);
+
+  // E-mail de movimentação (Entrega 2): envia depois da resposta ao cedente.
+  after(() => dispatchMovementEmails({ listingId: listing.id }));
 
   return NextResponse.json({
     success: true,

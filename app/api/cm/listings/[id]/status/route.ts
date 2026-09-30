@@ -1,9 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notify";
 import { CM_MEETING_URL, notifyMeetingLink } from "@/lib/cm-meeting";
 import { ASSET_DECLINE_REASON_VALUES } from "@/lib/cm-decline-reasons";
+import { dispatchMovementEmails } from "@/lib/movement-email";
+
+// O envio do e-mail de movimentação roda depois da resposta (after), com folga para o cold start do n8n.
+export const maxDuration = 60;
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -123,6 +127,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { data: listing } = await svc().from("cm_asset_listings")
     .select("id, anonymous_id, listing_status, nda_signed_at, head_approved_at, originator_profile_id, created_by")
     .eq("id", id).single();
+
+  // E-mail de movimentação (30/09/2026, Entrega 2): o gatilho do banco já enfileirou os
+  // destinatários desta transição; o envio é feito depois da resposta, pelo n8n.
+  after(() => dispatchMovementEmails({ listingId: id }));
 
   // Botao manual "Agendar Reuniao" (20/09/2026, pedido de Joao): alem de mover a etapa,
   // entrega o link da agenda do Head (na resposta e por notificacao). O gatilho automatico
