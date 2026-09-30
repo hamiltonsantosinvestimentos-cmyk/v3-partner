@@ -32,7 +32,8 @@ export type UserRole = keyof typeof USER_ROLES;
 // ENTERPRISE: 55% (24/09/2026) — pago ao master do Enterprise, que repassa aos usuários dele.
 export const PLAN_COMMISSION_PCT: Partial<Record<UserRole, number>> = {
   STARTER: 20,
-  PARTNER: 30,
+  // Partner: 35% a partir de 29/09/2026 (antes 30%).
+  PARTNER: 35,
   PARTNER_PRO: 50,
   PARTNER_HE: 50,
   // Enterprise (24/09/2026): 55% sobre a líquida V3, pago ao master; ele repassa aos usuários.

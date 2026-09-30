@@ -106,7 +106,7 @@ export function AdminDashboardClient({
         <KpiCard
           label="Partner Base"
           value={totalPartnerBase}
-          sub="30% comissão"
+          sub="35% comissão"
           icon={<Shield className="w-5 h-5 text-blue-400" />}
           color="bg-blue-500/15"
         />

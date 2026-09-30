@@ -100,7 +100,7 @@ export function UpgradeNudge() {
                 <span className="text-[#C9A84C] font-semibold">
                   {formatBRL(data.extraEarned)} a mais
                 </span>{" "}
-                em comissões (50% vs 30% atual).
+                em comissões (50% vs 35% atual).
               </p>
             )}
           </div>

@@ -70,7 +70,7 @@ const PLANO_LABEL: Record<string, string> = {
 
 const COMISSAO_PCT: Record<string, string> = {
   STARTER: "20%",
-  PARTNER: "30%",
+  PARTNER: "35%",
   PARTNER_HE: "50%",
   PARTNER_PRO: "50%",
   ENTERPRISE: "55%",
@@ -78,7 +78,7 @@ const COMISSAO_PCT: Record<string, string> = {
 
 export function MinhaAssinaturaClient({ profile, contract, commissions }: Props) {
   const planoLabel = PLANO_LABEL[profile.role] ?? "Partner";
-  const comissaoPct = COMISSAO_PCT[profile.role] ?? "30%";
+  const comissaoPct = COMISSAO_PCT[profile.role] ?? "35%";
   const partnerValor = moeda(getPlanoValor("PARTNER") / 100);
   const partnerProValor = moeda(getPlanoValor("PARTNER_PRO") / 100);
   const trialStatus = getTrialStatus(profile);
@@ -424,7 +424,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
               </div>
               <p className="text-xl font-bold text-blue-400">{partnerValor}<span className="text-xs font-normal text-[#7A8FA8]">/mês</span></p>
               <ul className="space-y-1.5 text-xs text-[#7A8FA8]">
-                {["30% de comissão", "Acesso a crédito N1 e N2", "CRM completo", "M&A pipeline", "Split Fiscal", "Academy básico"].map(b => (
+                {["35% de comissão", "Acesso a crédito N1 e N2", "CRM completo", "M&A pipeline", "Split Fiscal", "Academy básico"].map(b => (
                   <li key={b} className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-blue-400 flex-shrink-0" />{b}</li>
                 ))}
               </ul>
