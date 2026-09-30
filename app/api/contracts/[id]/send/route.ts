@@ -8,6 +8,7 @@ import { renderContractDocx } from "@/lib/contract-docx-render";
 import type { ContractParty } from "@/lib/contract-render";
 import { buildEnvelopeLabel } from "@/lib/contract-envelope-label";
 import { MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
+import { isNdaMesaContract } from "@/lib/nda-mesa-operacoes";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -59,13 +60,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification, rendered_html")
+    .select("id, template_id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification, rendered_html")
     .eq("id", id)
     .single();
 
   if (!contract) return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
   // Analista só opera contrato das verticais dela, o mesmo escopo da lista (nunca Crédito, Institucional etc.).
-  if (caller.role === "MESA_OPERACIONAL" && !MESA_OPERACIONAL_VERTICALS.includes(contract.vertical as string)) {
+  // Exceção (30/09/2026): o NDA (Mesa de operações) enviado ao cliente pelo painel
+  // "NDA para clientes" da Mesa Operacional, que é da vertical Crédito.
+  if (caller.role === "MESA_OPERACIONAL" && !MESA_OPERACIONAL_VERTICALS.includes(contract.vertical as string)
+      && !(await isNdaMesaContract(db, contract.template_id as string | null))) {
     return NextResponse.json({ error: "Este contrato não pertence às verticais da Mesa Operacional. Peça a um ADMIN ou GESTAO para enviá-lo." }, { status: 403 });
   }
   if (!["rascunho", "aprovado"].includes(contract.status_signature)) {

@@ -18,6 +18,7 @@ import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
 import { RecomendacaoLinha } from "./recomendacao-linha";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
+import { NdaVinculoProposta } from "@/components/mesa-credito/nda-vinculo-proposta";
 
 export type MesaComment = {
   id: string;
@@ -4452,6 +4453,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           {modalTab === "documentos" && (
             <PartnerDocUpload proposalId={proposal.id} />
           )}
+
+          {/* ── NDA do cliente (30/09/2026): vínculo com NDA enviado pela Mesa Operacional ── */}
+          {modalTab === "documentos" && canGenerateContract && <NdaVinculoProposta proposalId={proposal.id} />}
 
           {/* ── Gerar NDA / Vínculo pela Introdução (14/08/2026) ── */}
           {modalTab === "documentos" && canGenerateContract && (

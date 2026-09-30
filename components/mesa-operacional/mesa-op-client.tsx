@@ -21,6 +21,7 @@ import {
 } from "@/lib/constants";
 import { PropostaDetailModal, PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO, type ProposalFull, type MesaComment } from "@/components/mesa-credito/proposta-detail-modal";
 import { InstituicoesPanel } from "@/components/mesa-operacional/instituicoes-panel";
+import { NdaClientesPanel } from "@/components/mesa-operacional/nda-clientes-panel";
 import {
   SLA_STAGES, SLA_STAGE_LABELS, DEFAULT_SLA, getSlaStatus, getTicketSlaStatus, parseLocalDate,
   type SlaStage, type SlaConfig,
@@ -988,7 +989,8 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
   // Central de Contratos (geração/envio de NDA) é restrita a ADMIN/GESTAO no
   // backend (mesmo gate de /api/contracts/*) — mais estrito que o isAdmin
   // geral do ticket, que também libera MESA_OPERACIONAL pras ações de status.
-  const canSendNda = ["ADMIN", "GESTAO"].includes(currentUser?.role ?? "");
+  // 30/09/2026: MESA_OPERACIONAL liberado (o envio desse NDA tem exceção própria em /api/contracts/[id]/send).
+  const canSendNda = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "");
 
   useEffect(() => {
     if (!open || !ticket) return;
@@ -2872,6 +2874,10 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       {/* ── VIEW: CONTRATOS ── */}
       {view === "contratos" && (
         <div className="space-y-4">
+          {/* NDA para clientes (30/09/2026): link de qualificação → revisão → NDA para assinatura */}
+          {["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "") && (
+            <NdaClientesPanel propostas={proposals.map((p) => ({ id: p.id, code: p.code, client_name: p.client_name }))} />
+          )}
           {/* Filtros */}
           <div className="flex gap-2 flex-wrap items-center">
             <div className="relative flex-1 min-w-52">
