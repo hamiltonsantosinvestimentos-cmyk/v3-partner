@@ -1,3 +1,4 @@
+import { checkHeadInContract } from "@/lib/contract-head-gate";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -110,6 +111,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       error: `Contrato não pode ser enviado: ${incomplete.length} parte(s) sem e-mail cadastrado (${incomplete.map((p) => p.name).join(", ")}). Corrija antes de enviar.`,
     }, { status: 422 });
   }
+
+  // Gate do Head da Mesa (30/09/2026): M&A e Bolsa de Ativos só saem para
+  // assinatura com o Head atual presente (assinante, nome, CPF impresso).
+  const headError = await checkHeadInContract({
+    vertical: contract.vertical as string,
+    parties: parties as Array<{ role: string; name: string | null; email?: string | null; doc?: string | null }>,
+    rendered_html: (contract as { rendered_html?: string | null }).rendered_html ?? null,
+  });
+  if (headError) return NextResponse.json({ error: headError }, { status: 422 });
 
   // Gate de signatário duplicado (21/09/2026, BRIEF NCNDA, problema 4): o
   // NCNDA V3C-NDA-2026-0036 saiu do gerador com o Head da Mesa duas vezes, mesmo

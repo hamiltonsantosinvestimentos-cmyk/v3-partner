@@ -1,5 +1,5 @@
 import { createClient as sc } from "@supabase/supabase-js";
-import { formatCPF } from "@/lib/validators/cpf-cnpj";
+import { formatCPF, isValidCPF } from "@/lib/validators/cpf-cnpj";
 
 // Instrumento NCNDA Mestre (14/08/2026): o signatário "Head" da mesa que
 // envia para assinatura varia por origem, regra dada por João em texto,
@@ -25,6 +25,32 @@ export interface DeskHead {
   qualificacao: string; // nacionalidade, estado civil, profissão — mesmo formato do texto original
   cpf: string | null; // null = pendente, generate() bloqueia até ser informado
   email: string;
+  // 30/09/2026: qualificação do Head com marcador explícito no lugar de cada
+  // campo ausente de /perfil (nunca omissão silenciosa) e a lista do que falta.
+  qualificacaoComPendencias: string;
+  pendencias: string[];
+}
+
+export const PENDING_PLACEHOLDER = "[ INFORMAÇÃO PENDENTE ]";
+
+// Verticais em que o Head da Mesa é obrigatório e verificado (30/09/2026,
+// pedido de João: o pré-voo precisa ter certeza de que o Head está na minuta).
+// Crédito segue com a tolerância deliberada de antes.
+export const HEAD_GATED_VERTICALS = ["ma", "capital_markets"] as const;
+export function isHeadGatedVertical(vertical: string | null | undefined): boolean {
+  return !!vertical && (HEAD_GATED_VERTICALS as readonly string[]).includes(vertical);
+}
+
+const STRUCTURER_EMAIL = "joao.lemos@v3partners.com.br";
+const HEAD_DESK_LABEL: Record<string, string> = { ma: "Mesa de M&A", capital_markets: "Mesa de Bolsa de Ativos" };
+
+// Quando quem é Head da mesa é também o Estruturador (João, mesmo e-mail), o
+// contrato leva uma assinatura só, com o título duplo (decisão de João, 30/09/2026).
+export function headSignatureLabel(vertical: string | null | undefined, headEmail: string | null | undefined): string | undefined {
+  if (!vertical || !headEmail) return undefined;
+  if (headEmail.trim().toLowerCase() !== STRUCTURER_EMAIL) return undefined;
+  const desk = HEAD_DESK_LABEL[vertical];
+  return desk ? `Estruturador e Head da ${desk}` : undefined;
 }
 
 // Config estável (identidade + a conta real que cada Head usa pra logar,
@@ -36,14 +62,15 @@ const DESK_CONFIG: Record<DeskOrigin, { roleLabel: string; fullName: string; loo
     lookupEmail: "joao.lemos@v3partners.com.br",
     notifyEmail: "joao.lemos@v3partners.com.br",
   },
-  // Atualizado em 29/09/2026: o jurídico interno (Dr. Luis Athaydes) saiu
-  // do time. Head reatribuído a Robson Lino (Compliance/Operações),
-  // mesmo padrão já usado em CONSORCIO/CREDITO_INTERNACIONAL/TRADE_FINANCE.
+  // 29/09/2026: o jurídico interno (Dr. Luis Athaydes) saiu do time e o Head
+  // foi reatribuído a Robson Lino. Reatribuído de novo em 30/09/2026 por
+  // decisão de João: a partir de hoje o Head da Mesa de M&A e da Bolsa de
+  // Ativos é João Lemos Netto (mesma identidade de MESA_MA).
   BOLSA_ATIVOS: {
-    roleLabel: "SÓCIO RESPONSÁVEL, COMPLIANCE / V3 PARTNERS",
-    fullName: "Robson Lino",
-    lookupEmail: "robinholino16@gmail.com",
-    notifyEmail: "robson.lino@v3partners.com.br",
+    roleLabel: "SÓCIO ADMINISTRADOR / V3 PARTNERS",
+    fullName: "João Lemos Netto",
+    lookupEmail: "joao.lemos@v3partners.com.br",
+    notifyEmail: "joao.lemos@v3partners.com.br",
   },
   CREDITO_ESTRUTURADO: {
     roleLabel: "SÓCIO RESPONSÁVEL, MESA DE CRÉDITO / V3 PARTNERS",
@@ -120,13 +147,28 @@ export async function resolveDeskHead(origin: DeskOrigin): Promise<DeskHead> {
     .eq("email", config.lookupEmail)
     .maybeSingle();
 
+  const missing: string[] = [];
+  if (!data?.nationality?.trim()) missing.push("nacionalidade");
+  if (!data?.marital_status?.trim()) missing.push("estado civil");
+  if (!data?.profession?.trim()) missing.push("profissão");
+  const cpfDigits = (data?.document_cpf ?? "").replace(/\D/g, "");
+  if (!cpfDigits || !isValidCPF(cpfDigits)) missing.push("CPF");
+  const qualificacaoComPendencias = [
+    data?.nationality?.trim() || PENDING_PLACEHOLDER,
+    data?.marital_status?.trim() || PENDING_PLACEHOLDER,
+    data?.profession?.trim() || PENDING_PLACEHOLDER,
+  ].join(", ");
+
   return {
+    qualificacaoComPendencias,
+    pendencias: missing,
     roleLabel: config.roleLabel,
     fullName: config.fullName,
     email: config.notifyEmail,
     // formatCPF é idempotente (sempre extrai só dígitos antes de formatar),
     // então cobre tanto CPF já digitado com pontuação quanto puro dígito.
-    cpf: data?.document_cpf && data.document_cpf.trim() !== "" ? formatCPF(data.document_cpf) : null,
+    // CPF inválido (dígito verificador ou sequência repetida) conta como ausente.
+    cpf: cpfDigits && isValidCPF(cpfDigits) ? formatCPF(cpfDigits) : null,
     qualificacao: joinQualificacao(data?.nationality ?? null, data?.marital_status ?? null, data?.profession ?? null),
   };
 }
