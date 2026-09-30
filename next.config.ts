@@ -13,7 +13,8 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://fonts.googleapis.com https://cdn.jsdelivr.net https://connect.facebook.net",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
+      // data: — a apresentação pública /apresentacaov3 traz a DM Sans embutida em base64.
+      "font-src 'self' data: https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://avatars.githubusercontent.com https://lh3.googleusercontent.com https://img.youtube.com https://i.ytimg.com https://sbmuashewklfhdyyuezr.supabase.co https://feosfhqlofkfuwdsyeaq.supabase.co https://*.fbcdn.net https://www.facebook.com https://*.cdninstagram.com",
       "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com",
       "connect-src 'self' https://sbmuashewklfhdyyuezr.supabase.co wss://sbmuashewklfhdyyuezr.supabase.co https://feosfhqlofkfuwdsyeaq.supabase.co wss://feosfhqlofkfuwdsyeaq.supabase.co https://api.anthropic.com https://brasilapi.com.br https://receitaws.com.br https://publica.cnj.jus.br https://viacep.com.br https://n8n-514n.onrender.com https://www.facebook.com https://connect.facebook.net",
@@ -58,6 +59,19 @@ const nextConfig: NextConfig = {
         destination: "https://app.v3partners.com.br/:path*",
         permanent: true,
       },
+      // Apresentação pública "Estrutura V3": aceita o link digitado com acento.
+      {
+        source: "/apresenta%C3%A7%C3%A3ov3",
+        destination: "/apresentacaov3",
+        permanent: false,
+      },
+    ];
+  },
+
+  async rewrites() {
+    return [
+      // Apresentação pública "Estrutura V3" (HTML estático em public/).
+      { source: "/apresentacaov3", destination: "/apresentacaov3.html" },
     ];
   },
 
