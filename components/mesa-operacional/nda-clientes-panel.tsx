@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { FileText, Send, Copy, Check, MessageCircle, X, RefreshCw, Link2, Eye, Plus } from "lucide-react";
+import { FileText, Send, Copy, Check, MessageCircle, X, RefreshCw, Link2, Eye, Plus, Ban } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PartyQualificationCardModal } from "@/components/cm/party-qualification-card";
 
@@ -40,6 +40,7 @@ function waLink(cliente: Cliente) {
 function statusDo(item: Item): { label: string; color: string } {
   if (item.contrato) {
     if (item.contrato.status_signature === "assinado") return { label: "NDA assinado", color: "#34D399" };
+    if (item.contrato.status_signature === "cancelado") return { label: "NDA cancelado", color: "#9BAFC5" };
     if (item.contrato.status_signature === "enviado_assinatura") return { label: "NDA enviado — aguardando assinatura", color: "#60A5FA" };
     return { label: "NDA gerado — não enviado", color: "#F59E0B" };
   }
@@ -95,6 +96,8 @@ export function NdaClientesPanel({ propostas }: { propostas: PropostaOpcao[] }) 
   const [gerando, setGerando] = useState<Item | null>(null);
   const [vinculando, setVinculando] = useState<Item | null>(null);
   const [vendoId, setVendoId] = useState<string | null>(null);
+  const [cancelandoQualif, setCancelandoQualif] = useState<Item | null>(null);
+  const [cancelandoNda, setCancelandoNda] = useState<Item | null>(null);
 
   const carregar = useCallback(async () => {
     setLoading(true); setErro(null);
@@ -183,7 +186,19 @@ export function NdaClientesPanel({ propostas }: { propostas: PropostaOpcao[] }) 
                       <Send className="w-3 h-3" /> Gerar e enviar NDA
                     </Button>
                   )}
-                  {it.contrato && !it.proposta && (
+                  {c && !it.contrato && (
+                    <button type="button" onClick={() => setCancelandoQualif(it)} title="Cancelar a qualificação deste cliente (o link deixa de valer)"
+                      className="h-7 px-2 rounded-md border border-border text-[11px] flex items-center gap-1 text-muted-foreground hover:text-[#FF6B6B] hover:border-[#FF6B6B]/40">
+                      <Ban className="w-3 h-3" /> Cancelar qualificação
+                    </button>
+                  )}
+                  {it.contrato && ["rascunho", "enviado_assinatura"].includes(it.contrato.status_signature) && (
+                    <button type="button" onClick={() => setCancelandoNda(it)} title="Cancelar este NDA"
+                      className="h-7 px-2 rounded-md border border-border text-[11px] flex items-center gap-1 text-muted-foreground hover:text-[#FF6B6B] hover:border-[#FF6B6B]/40">
+                      <Ban className="w-3 h-3" /> Cancelar NDA
+                    </button>
+                  )}
+                  {it.contrato && !it.proposta && it.contrato.status_signature !== "cancelado" && (
                     <button type="button" onClick={() => setVinculando(it)}
                       className="h-7 px-2 rounded-md border border-[#C9A84C]/40 text-[11px] flex items-center gap-1 text-[#E8C97A] hover:bg-[#C9A84C]/10">
                       <Link2 className="w-3 h-3" /> Vincular proposta
@@ -208,6 +223,14 @@ export function NdaClientesPanel({ propostas }: { propostas: PropostaOpcao[] }) 
           onClose={() => setVinculando(null)} onFeito={() => { setVinculando(null); carregar(); }} />
       )}
       <PartyQualificationCardModal qualificationId={vendoId} onClose={() => setVendoId(null)} />
+      {cancelandoQualif?.cliente && (
+        <CancelarQualificacaoModal cliente={cancelandoQualif.cliente}
+          onClose={() => setCancelandoQualif(null)} onFeito={() => { setCancelandoQualif(null); carregar(); }} />
+      )}
+      {cancelandoNda?.contrato && (
+        <CancelarNdaModal contrato={cancelandoNda.contrato}
+          onClose={() => setCancelandoNda(null)} onFeito={() => { setCancelandoNda(null); carregar(); }} />
+      )}
     </div>
   );
 }
@@ -414,6 +437,78 @@ function VincularModal({ contractId, codigo, propostas, onClose, onFeito }: {
         </Button>
       </>}>
       <PropostaSelect propostas={propostas} value={propostaId} onChange={setPropostaId} />
+      {erro && <p className="text-[11px] text-[#FF6B6B]">{erro}</p>}
+    </ModalShell>
+  );
+}
+
+function CancelarQualificacaoModal({ cliente, onClose, onFeito }: { cliente: Cliente; onClose: () => void; onFeito: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [erro, setErro] = useState("");
+  async function cancelar() {
+    setBusy(true); setErro("");
+    try {
+      const r = await fetch(`/api/cm/qualifications/party/${cliente.id}`, { method: "DELETE" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error ?? "Falha ao cancelar a qualificação");
+      onFeito();
+    } catch (e) { setErro((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  return (
+    <ModalShell titulo="Cancelar qualificação" onClose={onClose}
+      rodape={<>
+        <Button variant="outline" size="sm" onClick={onClose}>Voltar</Button>
+        <Button size="sm" onClick={cancelar} disabled={busy} className="gap-1.5 bg-[#FF6B6B] hover:bg-[#FF6B6B]/90 text-white">
+          <Ban className="w-3.5 h-3.5" /> {busy ? "Cancelando..." : "Cancelar qualificação"}
+        </Button>
+      </>}>
+      <p className="text-xs text-muted-foreground">
+        A qualificação de <strong className="text-white">{nomeDoc(cliente).nome}</strong> ({cliente.email}) será cancelada:
+        o link enviado deixa de funcionar e o cliente sai do painel. Para mandar de novo, use &quot;Enviar NDA para cliente&quot;.
+      </p>
+      {erro && <p className="text-[11px] text-[#FF6B6B]">{erro}</p>}
+    </ModalShell>
+  );
+}
+
+function CancelarNdaModal({ contrato, onClose, onFeito }: {
+  contrato: NonNullable<Item["contrato"]>; onClose: () => void; onFeito: () => void;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [erro, setErro] = useState("");
+  const enviado = contrato.status_signature === "enviado_assinatura";
+  async function cancelar() {
+    setBusy(true); setErro("");
+    try {
+      const r = await fetch(`/api/mesa-op/nda-clientes/${contrato.id}/cancelar`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo: motivo.trim() }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error ?? "Falha ao cancelar o NDA");
+      onFeito();
+    } catch (e) { setErro((e as Error).message); }
+    finally { setBusy(false); }
+  }
+  return (
+    <ModalShell titulo={`Cancelar ${contrato.contract_code ?? "NDA"}`} onClose={onClose}
+      rodape={<>
+        <Button variant="outline" size="sm" onClick={onClose}>Voltar</Button>
+        <Button size="sm" onClick={cancelar} disabled={busy || motivo.trim().length < 5} className="gap-1.5 bg-[#FF6B6B] hover:bg-[#FF6B6B]/90 text-white">
+          <Ban className="w-3.5 h-3.5" /> {busy ? "Cancelando..." : "Cancelar NDA"}
+        </Button>
+      </>}>
+      <p className="text-xs text-muted-foreground">
+        {enviado
+          ? "O NDA já foi enviado para assinatura: ele será cancelado no ClickSign/CertOne e o cliente não poderá mais assinar."
+          : "O NDA ainda não foi enviado: ele vai para a Lixeira e o cliente volta a \"Qualificado\", para você gerar de novo se precisar."}
+      </p>
+      <div>
+        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Motivo do cancelamento *</label>
+        <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)} rows={3} autoFocus
+          className="w-full px-3 py-2 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+      </div>
       {erro && <p className="text-[11px] text-[#FF6B6B]">{erro}</p>}
     </ModalShell>
   );

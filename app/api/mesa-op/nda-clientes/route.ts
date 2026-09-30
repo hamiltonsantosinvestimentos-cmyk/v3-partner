@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
     : { data: [] as { id: string; code: string; client_name: string | null }[] };
   const propMap = new Map((propostas ?? []).map((p) => [p.id, p]));
 
+  // Qualificação cancelada (cliente excluído do lote) não aparece mais no painel.
   const itens = (batches ?? []).map((b) => {
     const parties = ((b.cm_party_qualifications ?? []) as Party[]).filter((p) => !p.deleted_at);
     const cliente = parties[0] ?? null;
@@ -92,5 +93,5 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ template: tpl, itens });
+  return NextResponse.json({ template: tpl, itens: itens.filter((i) => i.cliente) });
 }
