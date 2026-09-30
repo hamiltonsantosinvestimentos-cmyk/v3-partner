@@ -48,12 +48,25 @@ export async function recordSignatureNote(
 ): Promise<RecordResult> {
   const nome = (ev.name ?? "").trim() || ev.email;
 
-  const { data: existentes, error: readError } = await db
+  // Escopo do envelope atual: notas anteriores ao último envio pertencem a um envelope
+  // cancelado (o texto do contrato foi regenerado) e não podem contar como assinatura
+  // já registrada nem entrar na contagem "n de N". Caso real de 23/09/2026, NCNDA
+  // V3C-NDA-2026-0036: 2 assinaturas do envelope novo foram descartadas por nome.
+  const { data: envio } = await db
+    .from("operation_contracts")
+    .select("sent_to_signature_at")
+    .eq("id", contract.id)
+    .maybeSingle();
+  const desde = (envio?.sent_to_signature_at as string | null) ?? null;
+
+  let consulta = db
     .from("contract_notes")
     .select("content")
     .eq("contract_id", contract.id)
     .eq("note_type", "sistema")
     .eq("author_name", SIGNATURE_AUTHOR_NAME);
+  if (desde) consulta = consulta.gte("created_at", desde);
+  const { data: existentes, error: readError } = await consulta;
   if (readError) {
     console.error(`[contract-signature-timeline] falha ao ler notas do contrato ${contract.id}:`, readError.message);
     return "erro";
