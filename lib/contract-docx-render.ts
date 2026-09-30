@@ -447,14 +447,29 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
     if (node.nodeType !== NodeType.ELEMENT_NODE) continue;
     const el = node as HTMLElement;
     const cls = el.getAttribute("class") ?? "";
-    if (cls.includes("header") || cls.includes("parties") || cls.includes("footer")) continue;
+    if (cls.includes("header") || cls.includes("parties") || cls.includes("footer") || cls.includes("doc-id")) continue;
     contentBlocks.push(el);
   }
   // Wrapper temporário só pra reaproveitar blocksFromRoot() com os blocos
   // de conteúdo real já filtrados (sem header/parties/footer).
   const contentRoot = parse(`<div>${contentBlocks.map((b) => b.toString()).join("")}</div>`).querySelector("div")!;
 
+  // Bloco de identificação (30/09/2026, Entrega A): mesmas duas linhas do HTML, à esquerda e
+  // acima do título, em negrito e corpo pequeno. O .docx é o que vai para a ClickSign.
+  const docIdLines = (body.querySelector(".doc-id")?.querySelectorAll("div") ?? [])
+    .map((d) => d.text.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const docIdParagraphs = docIdLines.map(
+    (text, i) =>
+      new Paragraph({
+        children: [new TextRun({ text, bold: true, color: CREAM, font: BODY_FONT, size: 20 })],
+        alignment: AlignmentType.LEFT,
+        spacing: { before: i === 0 ? 0 : 0, after: i === docIdLines.length - 1 ? 200 : 40 },
+      })
+  );
+
   const children: (Paragraph | Table)[] = [
+    ...docIdParagraphs,
     // Espaçamento antes do título (achado real 23/09/2026, pedido de João:
     // título saía colado no timbre na página 1). A margem superior da seção
     // (2020 twips = 3,56cm) só garante o mínimo pra não sobrepor a logo
