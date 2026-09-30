@@ -17,7 +17,7 @@ type Historico = {
 const FILTROS: { value: Filtro; label: string; icon: React.ReactNode; desc: string }[] = [
   { value: "TODOS", label: "Todos os Partners", icon: <Users className="w-4 h-4" />, desc: "Partner + PRO" },
   { value: "PRO", label: "Apenas PRO", icon: <Crown className="w-4 h-4 text-[#C9A84C]" />, desc: "50% comissão · co-branding" },
-  { value: "BASE", label: "Apenas Base", icon: <Shield className="w-4 h-4 text-blue-400" />, desc: "30% comissão" },
+  { value: "BASE", label: "Apenas Base", icon: <Shield className="w-4 h-4 text-blue-400" />, desc: "35% comissão" },
 ];
 
 export function ComunicadosPanel() {

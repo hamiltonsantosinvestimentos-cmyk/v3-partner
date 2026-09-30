@@ -166,7 +166,7 @@ export function WelcomeWizard({ userName, role }: WelcomeWizardProps) {
                     color: "bg-emerald-500/10 border-emerald-500/20",
                     step: "03",
                     title: "Receba sua comissão",
-                    desc: `Operação fechada = ${role === "PARTNER_PRO" ? "50%" : "30%"} de comissão creditada automaticamente.`,
+                    desc: `Operação fechada = ${role === "PARTNER_PRO" ? "50%" : "35%"} de comissão creditada automaticamente.`,
                   },
                 ].map((item) => (
                   <div key={item.step} className={`flex items-start gap-4 p-4 rounded-xl border ${item.color}`}>

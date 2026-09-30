@@ -651,7 +651,7 @@ export function LandingPageClient() {
                   A V3 Partners está em expansão nacional. Licenciamos um único Partner por praça — com acesso exclusivo à nossa plataforma institucional de crédito estruturado, M&A e soluções financeiras high ticket.
                 </p>
                 <p style={{ fontSize: "clamp(15px, 1.4vw, 17px)", color: `${CR}80`, lineHeight: 1.75, maxWidth: 540, marginBottom: 44, fontStyle: "italic" }}>
-                  Você origina. A V3 estrutura, opera e paga comissões de 30% a 50% por operação.
+                  Você origina. A V3 estrutura, opera e paga comissões de 35% a 55% por operação.
                 </p>
               </Reveal>
 
@@ -668,7 +668,7 @@ export function LandingPageClient() {
                   {[
                     [Shield, "Boutique institucional"],
                     [Award, "Exclusividade por praça"],
-                    [TrendingUp, "30% a 50% de comissão"],
+                    [TrendingUp, "35% a 55% de comissão"],
                   ].map(([Icon, text]) => (
                     <div key={text as string} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <Icon size={13} color={G} />
@@ -983,7 +983,7 @@ export function LandingPageClient() {
               { n: "01", title: "Licencie-se", body: "Escolha seu plano, assine digitalmente e acesse a plataforma em até 24h. Onboarding guiado pela equipe V3." },
               { n: "02", title: "Capacite-se", body: "Complete o Academy V3. Materiais, treinamentos semanais com a mesa, suporte operacional desde o primeiro dia." },
               { n: "03", title: "Origine negócios", body: "Você identifica oportunidades na sua rede. A V3 analisa, estrutura, conduz compliance e fecha institucionalmente." },
-              { n: "04", title: "Receba a comissão", body: "30% ou 50% do resultado líquido, rastreado em tempo real na plataforma e pago após liquidação da operação." },
+              { n: "04", title: "Receba a comissão", body: "35% a 55% do resultado líquido, rastreado em tempo real na plataforma e pago após liquidação da operação." },
             ].map(({ n, title, body }, i) => (
               <Reveal key={n} delay={i * 90}>
                 <div style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 12, padding: "28px 24px", height: "100%" }}>
@@ -1012,7 +1012,7 @@ export function LandingPageClient() {
                 ["Qualifica e coleta documentos iniciais", "Negocia com fundos e instituições financeiras"],
                 ["Acompanha o relacionamento com o cliente", "Garante qualidade e padrão institucional"],
                 ["Participa das reuniões estratégicas", "Opera como mandatária e emite documentos"],
-                ["Recebe 30% a 50% do resultado", "Fecha, liquida e paga a comissão"],
+                ["Recebe 35% a 55% do resultado", "Fecha, liquida e paga a comissão"],
               ].map(([voce, v3], i) => (
                 <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderBottom: i < 5 ? `1px solid ${N4}` : "none" }}>
                   <div style={{ background: N3, borderRight: `1px solid ${N4}`, padding: "14px 24px" }}>
@@ -1154,7 +1154,7 @@ export function LandingPageClient() {
               ]}
             />
             <PlanCard
-              delay={100} titulo="V3 Partner" comissao="30%" tag="Mais escolhido" featured={true}
+              delay={100} titulo="V3 Partner" comissao="35%" tag="Mais escolhido" featured={true}
               onClick={() => go("form")}
               items={[
                 "Crédito N1, N2 e N3 (acima de R$5M)",
@@ -1162,7 +1162,7 @@ export function LandingPageClient() {
                 "Consórcio corporativo",
                 "Relatórios e KPIs avançados",
                 "Academy V3 — trilha completa",
-                "30% de comissão por operação",
+                "35% de comissão por operação",
               ]}
             />
             <PlanCard
@@ -1261,7 +1261,7 @@ export function LandingPageClient() {
                   { q: "Qual o potencial real de ganho como Partner?", a: "Depende do volume e dos produtos que você origina. Em crédito estruturado, um Partner ativo pode gerar R$30K a R$120K mensais. Em M&A, uma única operação acima de R$10M pode gerar de R$200K a R$400K em comissão única." },
                   { q: "Quanto tempo até a primeira comissão?", a: "Em crédito estruturado, o ciclo médio é de 30 a 90 dias. Em M&A, de 3 a 12 meses. A plataforma rastreia o status de cada operação em tempo real, com transparência total." },
                   { q: "Posso manter minha profissão atual?", a: "Sim. A parceria V3 é não exclusiva. Você pode manter todas as suas atividades profissionais. A plataforma foi projetada para uso assíncrono — você opera no seu ritmo, no seu horário, sem exigência de dedicação exclusiva." },
-                  { q: "Qual a diferença entre Partner e Partner PRO?", a: "O Partner PRO tem comissão de 50% (vs 30%), acesso à Mesa M&A com IA FORJA, Deal Rooms com VDR, co-branding V3 Partners e Academy M&A avançado. Também opera em crédito N3 (acima de R$5M) com mais suporte dedicado." },
+                  { q: "Qual a diferença entre Partner e Partner PRO?", a: "O Partner PRO tem comissão de 50% (vs 35%), acesso à Mesa M&A com IA FORJA, Deal Rooms com VDR, co-branding V3 Partners e Academy M&A avançado. Também opera em crédito N3 (acima de R$5M) com mais suporte dedicado." },
                   { q: "Como é o suporte da V3 nas operações?", a: "A mesa operacional da V3 acompanha cada operação. Você origina o cliente, participa das reuniões estratégicas e conta com o respaldo institucional da V3 — da análise à liquidação. Você nunca opera sozinho." },
                   { q: "Como são pagas as comissões?", a: "Sua comissão é rastreada em tempo real na plataforma, por operação e por status. O pagamento acontece após a liquidação da operação, de forma transparente e auditável diretamente no seu painel." },
                 ].map(({ q, a }, i) => <FAQItem key={q} n={i + 1} q={q} a={a} />)}
@@ -1364,7 +1364,7 @@ export function LandingPageClient() {
                     <div className="grid sm:grid-cols-3 gap-3">
                       {[
                         ["PARTNER_ENTRY", "V3 Partner Entry", "30% · Entrada"],
-                        ["PARTNER",       "V3 Partner",       "30% · Completo"],
+                        ["PARTNER",       "V3 Partner",       "35% · Completo"],
                         ["PARTNER_PRO",   "V3 Partner PRO",   "50% · Máximo"],
                       ].map(([val, label, sub]) => (
                         <button key={val} type="button" onClick={() => setFormData(f => ({ ...f, plano: val }))}

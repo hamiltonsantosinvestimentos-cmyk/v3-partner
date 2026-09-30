@@ -508,7 +508,7 @@ export function MetricasClient() {
           <div className="space-y-4">
             {[
               { label: "Starter — R$297/mês (20%)", count: data.ativosStarter, color: "#7A8FA8", pct: data.totalAtivos ? Math.round(data.ativosStarter / data.totalAtivos * 100) : 0 },
-              { label: "Partner — R$497/mês (30%)", count: data.ativosPartner, color: "#60A5FA", pct: data.totalAtivos ? Math.round(data.ativosPartner / data.totalAtivos * 100) : 0 },
+              { label: "Partner — R$497/mês (35%)", count: data.ativosPartner, color: "#60A5FA", pct: data.totalAtivos ? Math.round(data.ativosPartner / data.totalAtivos * 100) : 0 },
               { label: "Partner PRO — R$897/mês (50%)", count: data.ativosPro, color: GOLD, pct: data.totalAtivos ? Math.round(data.ativosPro / data.totalAtivos * 100) : 0 },
               { label: "Enterprise — R$2.500/mês", count: data.ativosEnterprise, color: "#E8C97A", pct: data.totalAtivos ? Math.round(data.ativosEnterprise / data.totalAtivos * 100) : 0 },
               { label: "Total cadastros", count: data.totalPartners, color: "#A78BFA", pct: 100 },

@@ -659,7 +659,7 @@ export async function sendWelcomePartner(opts: {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey || !opts.partnerEmail) return;
 
-  const comissao = opts.plano === "Partner PRO" ? "50%" : "30%";
+  const comissao = opts.plano === "Partner PRO" ? "50%" : "35%";
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -868,7 +868,7 @@ export async function notifyBoasVindasPartner(opts: {
   plano: string;
 }): Promise<void> {
   const planoLabel = opts.plano === "PARTNER_PRO" ? "Partner PRO" : "Partner";
-  const comissao  = opts.plano === "PARTNER_PRO" ? "50%" : "30%";
+  const comissao  = opts.plano === "PARTNER_PRO" ? "50%" : "35%";
   const body = `
     <p style="color:#F5F1E8;font-size:15px;margin:0 0 8px;font-weight:700;">
       Bem-vindo à V3 Partners, ${opts.partnerName}! 🎉

@@ -1561,7 +1561,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercen
                   <option value="">Selecione um partner...</option>
                   {partners.map(p => (
                     <option key={p.id} value={p.id}>
-                      {p.full_name || p.email} ({p.role === "PARTNER_PRO" ? "PRO · 50%" : "30%"})
+                      {p.full_name || p.email} ({p.role === "PARTNER_PRO" ? "PRO · 50%" : "35%"})
                     </option>
                   ))}
                 </select>
@@ -1604,7 +1604,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercen
                       <option value="">Selecione o segundo partner...</option>
                       {partners.filter(p => p.id !== form.partner_id).map(p => (
                         <option key={p.id} value={p.id}>
-                          {p.full_name || p.email} ({p.role === "PARTNER_PRO" ? "PRO · 50%" : "30%"})
+                          {p.full_name || p.email} ({p.role === "PARTNER_PRO" ? "PRO · 50%" : "35%"})
                         </option>
                       ))}
                     </select>

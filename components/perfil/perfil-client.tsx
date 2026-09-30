@@ -698,7 +698,7 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
             {(profile.role === "PARTNER") && (
               <div className="mt-4 p-4 rounded-xl bg-[#C9A84C]/5 border border-[#C9A84C]/20">
                 <p className="text-xs font-semibold text-[#E8C97A]">Faça upgrade para V3 Partner PRO</p>
-                <p className="text-[10px] text-[#7A8FA8] mt-1">Aumento de 30% → 50% de comissão + acesso ao High Ticket + co-branding. R$ 397/mês.</p>
+                <p className="text-[10px] text-[#7A8FA8] mt-1">Aumento de 35% → 50% de comissão + acesso ao High Ticket + co-branding. R$ 397/mês.</p>
                 <button onClick={() => showToast("Entre em contato com a V3 Partners para upgrade.", "success")}
                   className="mt-3 flex items-center gap-1.5 text-xs font-semibold text-[#E8C97A] hover:underline">
                   Solicitar upgrade <ChevronRight className="w-3 h-3" />

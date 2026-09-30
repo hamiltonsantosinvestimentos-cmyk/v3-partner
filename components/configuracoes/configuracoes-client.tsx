@@ -922,7 +922,7 @@ export function ConfiguracoesClient({ profile, initialLinks, systemStats }: Prop
               <Settings className="w-4 h-4 text-[#C9A84C]" /> Parâmetros do Sistema
             </h2>
             {[
-              { label: "Comissão Partner",        value: "30%",          note: "Padrão para role PARTNER" },
+              { label: "Comissão Partner",        value: "35%",          note: "Padrão para role PARTNER" },
               { label: "Comissão Partner PRO",    value: "50%",          note: "Padrão para role PARTNER_PRO" },
               { label: "Mínimo High Ticket (N3)", value: "R$ 5.000.000", note: "Crédito Estruturado — mesa N3" },
               { label: "Trial period",            value: "30 dias",      note: "Período padrão após cadastro" },

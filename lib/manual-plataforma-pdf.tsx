@@ -684,7 +684,7 @@ export function ManualPlataformaPDF() {
         </View>
         <InfoBox title="💳 ASSINATURA — PARTNER vs PARTNER PRO">
           <Text style={styles.infoBoxText}>
-            Partner: R$197/mês → 30% de comissionamento nas operações{"\n"}
+            Partner: R$197/mês → 35% de comissionamento nas operações{"\n"}
             Partner PRO: R$397/mês → 50% de comissionamento + co-branding + acesso a N3 e Academy M&A{"\n"}
             {"\n"}
             Pagamento via Pix ou boleto. Acesse 'Minha Assinatura' para renovar ou fazer upgrade.

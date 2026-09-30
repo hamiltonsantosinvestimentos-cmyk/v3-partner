@@ -39,8 +39,8 @@ export async function GET() {
   const totalDeals = commissions?.length ?? 0;
   const totalAmount = commissions?.reduce((acc, c) => acc + (c.amount ?? 0), 0) ?? 0;
 
-  // Ganho extra que teria se fosse PRO (50% vs 30%)
-  const extraEarned = totalAmount * (50 / 30 - 1);
+  // Ganho extra que teria se fosse PRO (50% vs 35%)
+  const extraEarned = totalAmount * (50 / 35 - 1);
 
   const eligible = totalDeals >= 3 || totalAmount >= 5000;
 
