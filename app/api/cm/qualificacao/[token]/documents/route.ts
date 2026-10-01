@@ -1,17 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
-import { resolveClient } from "@/lib/v3-clients";
+import { resolveClient, resolvePassportClient } from "@/lib/v3-clients";
 import {
-  KYC_ALLOWED_MIME_TYPES, KYC_MAX_FILE_SIZE_BYTES,
+  KYC_ALLOWED_MIME_TYPES, KYC_MAX_FILE_SIZE_BYTES, KYC_INSTRUMENT_KINDS_ENABLED,
   type KycDocumentKind,
 } from "@/lib/kyc-documents";
+import { isIsoCountryCode, isValidPassportNumber } from "@/lib/qualification-schema";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const VALID_KINDS: KycDocumentKind[] = ["identificacao_foto", "contrato_social"];
+const VALID_KINDS: KycDocumentKind[] = ["identificacao_foto", "contrato_social", ...KYC_INSTRUMENT_KINDS_ENABLED];
 
 async function loadOpenQualification(token: string) {
   const { data: qualification } = await svc()
@@ -62,9 +63,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const documentKind = formData.get("document_kind") as string | null;
   const ownerLabel = (formData.get("owner_label") as string | null)?.trim() || null;
   const documentNumber = (formData.get("document_number") as string | null)?.trim() || "";
+  // Estrangeiro sem CPF (só adulto, BRIEF 5.5): a identificação é ancorada no passaporte.
+  const passportCountry = (formData.get("passport_country") as string | null)?.trim().toUpperCase() || "";
+  const passportNumber = (formData.get("passport_number") as string | null)?.trim() || "";
 
   if (!file || !documentKind || !VALID_KINDS.includes(documentKind as KycDocumentKind)) {
-    return NextResponse.json({ error: "file e document_kind (identificacao_foto ou contrato_social) são obrigatórios" }, { status: 422 });
+    return NextResponse.json({ error: "file e document_kind são obrigatórios, e o tipo precisa ser identificacao_foto, contrato_social, mandato ou termo_inventariante" }, { status: 422 });
   }
   if (!KYC_ALLOWED_MIME_TYPES.includes(file.type)) {
     return NextResponse.json({ error: "Formato não aceito. Envie JPG, PNG ou PDF." }, { status: 422 });
@@ -74,15 +78,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   }
 
   const kind = documentKind as KycDocumentKind;
-  if (kind === "identificacao_foto" && !isValidCPF(documentNumber)) {
+  const usePassport = kind === "identificacao_foto" && !!passportNumber;
+  if (usePassport) {
+    if (!isIsoCountryCode(passportCountry) || !isValidPassportNumber(passportNumber)) {
+      return NextResponse.json({ error: "Passaporte inválido para vincular o documento de identificação." }, { status: 422 });
+    }
+  } else if (kind === "identificacao_foto" && !isValidCPF(documentNumber)) {
     return NextResponse.json({ error: "CPF inválido para vincular o documento de identificação." }, { status: 422 });
-  }
-  if (kind === "contrato_social" && !isValidCNPJ(documentNumber)) {
+  } else if (kind === "contrato_social" && !isValidCNPJ(documentNumber)) {
     return NextResponse.json({ error: "CNPJ inválido para vincular o contrato social." }, { status: 422 });
+  } else if ((kind === "mandato" || kind === "termo_inventariante") && !isValidCPF(documentNumber) && !isValidCNPJ(documentNumber)) {
+    // O instrumento é ancorado no CPF ou CNPJ de quem é REPRESENTADO (a parte principal).
+    return NextResponse.json({ error: "CPF ou CNPJ inválido para vincular o instrumento de representação." }, { status: 422 });
   }
 
   const db = svc();
-  const v3ClientId = await resolveClient(documentNumber, { vertical: "central_contratos", db });
+  const v3ClientId = usePassport
+    ? await resolvePassportClient(passportCountry, passportNumber, { vertical: "central_contratos", db })
+    : await resolveClient(documentNumber, { vertical: "central_contratos", db });
   if (!v3ClientId) return NextResponse.json({ error: "Não foi possível vincular o documento ao CPF/CNPJ informado." }, { status: 500 });
 
   const safeFilename = file.name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9._-]/g, "_");

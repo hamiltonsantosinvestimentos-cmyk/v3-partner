@@ -12,14 +12,41 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { INSTRUMENT_DOCUMENT_LABELS } from "./qualification-schema";
 
-export type KycDocumentKind = "identificacao_foto" | "contrato_social";
+export type KycDocumentKind =
+  | "identificacao_foto"
+  | "contrato_social"
+  | "mandato"
+  | "certidao_nascimento"
+  | "termo_curatela"
+  | "termo_tutela"
+  | "termo_inventariante";
+
+/**
+ * Só a identificação com foto e o contrato social podem ser reaproveitados de uma operação
+ * anterior (12 meses). O anexo do instrumento de representação é próprio de cada relação
+ * (BRIEF 5.11): nunca reaproveitado.
+ */
+export const KYC_REUSABLE_KINDS: readonly KycDocumentKind[] = ["identificacao_foto", "contrato_social"];
+
+/**
+ * Tipos de anexo de instrumento que a Fase 1B aceita (B1 mandato, C1 termo de inventariante).
+ * certidao_nascimento, termo_curatela e termo_tutela (B2 e B3) ficam reservados para a
+ * sub-entrega 1D, junto com a declaração do representante legal de menor.
+ */
+export const KYC_INSTRUMENT_KINDS_ENABLED: readonly KycDocumentKind[] = ["mandato", "termo_inventariante"];
 
 export const KYC_VALIDITY_MONTHS = 12;
 
 export const KYC_DOCUMENT_KIND_LABELS: Record<KycDocumentKind, string> = {
   identificacao_foto: "Documento de Identificação com Foto",
   contrato_social: "Contrato Social / Estatuto",
+  mandato: INSTRUMENT_DOCUMENT_LABELS.mandato,
+  certidao_nascimento: INSTRUMENT_DOCUMENT_LABELS.certidao_nascimento,
+  termo_curatela: INSTRUMENT_DOCUMENT_LABELS.termo_curatela,
+  termo_tutela: INSTRUMENT_DOCUMENT_LABELS.termo_tutela,
+  termo_inventariante: INSTRUMENT_DOCUMENT_LABELS.termo_inventariante,
 };
 
 // Tipos de arquivo aceitos e tamanho máximo -- validado no client e no server.

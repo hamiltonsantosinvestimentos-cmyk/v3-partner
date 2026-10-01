@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
-import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
-import { REQUIRED_REPRESENTATIVE_TYPES, type PartyNature, type RepresentativeType, type CompanyLegalNature, type LegalQualificationRepresentation } from "@/lib/legal-qualification";
-import { resolveClient } from "@/lib/v3-clients";
-import { normalizePhone } from "@/lib/phone";
-import { findValidKycDocument, KYC_DOCUMENT_KIND_LABELS, type KycDocumentKind } from "@/lib/kyc-documents";
+import { resolveClient, resolvePassportClient } from "@/lib/v3-clients";
+import { findValidKycDocument, KYC_DOCUMENT_KIND_LABELS, KYC_REUSABLE_KINDS, type KycDocumentKind } from "@/lib/kyc-documents";
 import { lookupCnpj, nameMatchesSocios } from "@/lib/cnpj-lookup";
+import { fetchCep } from "@/lib/viacep";
+import {
+  normalizeSubmission,
+  toRepresentationJson,
+  type NormalizedParty,
+  type NormalizedRepresentation,
+  type RepresentationInput,
+  type SubmissionInput,
+} from "@/lib/qualification-submit";
+import { INSTRUMENT_DOCUMENT_KIND } from "@/lib/qualification-schema";
+import type { LegalQualificationRepresentation, PartyNature } from "@/lib/legal-qualification";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -17,12 +25,18 @@ function svc() {
 // de representação, nunca no topo).
 const NATURES_REQUIRE_OWN_ID_DOC: PartyNature[] = ["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO"];
 
+// Naturezas que exigem o anexo do instrumento de representação nesta entrega (BRIEF 5.11):
+// B1 (mandato) e C1 (termo de inventariante). B2 e B3 ficam para a sub-entrega 1D.
+const NATURES_REQUIRE_INSTRUMENT: PartyNature[] = ["PF_PROCURACAO", "ESPOLIO"];
+
 type DocRef = { reuse: true } | { document_id: string } | null | undefined;
+type RepInputWithDocs = RepresentationInput & { documents?: { identificacao_foto?: DocRef; contrato_social?: DocRef } };
 
 /** Confirma que o documento (reaproveitado ou recém-enviado nesta própria qualificação)
  *  é válido para o v3_client_id/kind exigidos. Nunca confia no client sem reconferir no
  *  banco -- um document_id só é aceito se pertencer a ESTA qualificação e a este mesmo
- *  v3_client_id, e um "reuse" só é aceito se o banco confirmar validade (< 12 meses) agora. */
+ *  v3_client_id, e um "reuse" só é aceito se o banco confirmar validade (< 12 meses) agora.
+ *  O instrumento de representação nunca é reaproveitado (allowReuse false por tipo). */
 async function resolveDocumentSlot(
   db: SupabaseClient,
   qualificationId: string,
@@ -31,12 +45,13 @@ async function resolveDocumentSlot(
   ref: DocRef
 ): Promise<string | null> {
   const label = KYC_DOCUMENT_KIND_LABELS[kind];
-  if (!v3ClientId) return `Não foi possível validar o CPF/CNPJ para conferir o(a) ${label}.`;
+  if (!v3ClientId) return `Não foi possível validar o documento de identificação para conferir o(a) ${label}.`;
   if (!ref) return `${label} é obrigatório.`;
 
   if ("reuse" in ref && ref.reuse) {
+    if (!KYC_REUSABLE_KINDS.includes(kind)) return `${label} não pode ser reaproveitado: envie o arquivo.`;
     const existing = await findValidKycDocument(db, v3ClientId, kind);
-    return existing ? null : `Não há ${label} válido (menos de 12 meses) em nome deste CPF/CNPJ para reaproveitar -- envie um novo.`;
+    return existing ? null : `Não há ${label} válido (menos de 12 meses) em nome deste documento para reaproveitar -- envie um novo.`;
   }
   if ("document_id" in ref && ref.document_id) {
     const { data: doc } = await db
@@ -61,163 +76,64 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
 };
 
 // Papéis que recebem repasse de comissão precisam ADICIONALMENTE de dados
-// bancários/PIX (mesmo padrão desde 28/07, Bolsa de Ativos) — isso é dado
-// financeiro pro repasse, não faz parte da qualificação civil em si.
+// bancários/PIX (mesmo padrão desde 28/07, Bolsa de Ativos) — isso é dado financeiro
+// pro repasse, não faz parte da qualificação civil em si.
 const ROLES_QUE_RECEBEM_REPASSE = ["mandatario", "intermediario_finder_venda", "intermediario_finder_compra"];
 
-const VALID_NATURES: PartyNature[] = ["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO", "INCAPAZ_ABSOLUTO", "ESPOLIO", "PJ"];
-const VALID_REPRESENTATIVE_TYPES: RepresentativeType[] = ["procurador", "genitor", "curador", "tutor", "inventariante", "administrador", "representante_legal"];
-
-interface EnderecoParts {
-  rua?: string; numero?: string; complemento?: string; bairro?: string; cidade?: string; estado?: string; cep?: string;
-}
-
-// Monta o endereço em prosa a partir das partes estruturadas, no mesmo
-// formato da cláusula de qualificação real de contrato (31/08/2026, pedido
-// explícito de João). Nunca deixa a Mesa/o indicado digitar o texto livre —
-// isso evita CEP colado errado, cidade sem estado, etc. Reaproveitada
-// (01/09/2026) para montar também o endereço de qualquer representante na
-// cadeia, sem duplicar a lógica. Complemento (04/09/2026, achado real ao
-// revisar um preenchimento): opcional, nunca bloqueia o endereço se ausente.
-function montarEndereco(parts: EnderecoParts): string | null {
-  const { rua, numero, complemento, bairro, cidade, estado, cep } = parts;
-  if (!rua?.trim() || !numero?.trim() || !bairro?.trim() || !cidade?.trim() || !estado?.trim() || !cep?.trim()) return null;
-  const complementoTrim = complemento?.trim();
-  return `${rua.trim()}, ${numero.trim()}${complementoTrim ? `, ${complementoTrim}` : ""}, Bairro ${bairro.trim()}, ${cidade.trim()}, ${estado.trim()}, CEP ${cep.trim()}`;
-}
-
-function req(missing: string[], value: unknown, field: string) {
-  if (!value || String(value).trim() === "") missing.push(field);
-}
-
-// Campos próprios exigidos por natureza (01/09/2026, diretriz Dr. Athaydes:
-// cada template A1/B1/B2/B3/C1/D1 pede um subconjunto diferente, nunca o
-// conjunto uniforme de ontem). RG passa a ser "(se houver)" em todos os
-// templates que o citam -- opcional, revoga a obrigatoriedade de 31/08.
-function missingBaseFields(nature: PartyNature, b: Record<string, unknown>): string[] {
-  const missing: string[] = [];
-  switch (nature) {
-    case "PF":
-    case "PF_PROCURACAO":
-    case "INCAPAZ_RELATIVO":
-      req(missing, b.cpf_cnpj, "cpf_cnpj");
-      req(missing, b.nationality, "nationality");
-      req(missing, b.marital_status, "marital_status");
-      req(missing, b.profession, "profession");
-      req(missing, b.birth_date, "birth_date");
-      req(missing, b.phone, "phone");
-      req(missing, b.endereco_rua, "endereco_rua"); req(missing, b.endereco_numero, "endereco_numero");
-      req(missing, b.endereco_bairro, "endereco_bairro"); req(missing, b.endereco_cidade, "endereco_cidade");
-      req(missing, b.endereco_estado, "endereco_estado"); req(missing, b.endereco_cep, "endereco_cep");
-      break;
-    case "INCAPAZ_ABSOLUTO":
-      // Menor impúbere: template B3 só cita nome, nacionalidade, CPF e RG
-      // (se houver). Sem profissão/estado civil/endereço, por desenho.
-      req(missing, b.cpf_cnpj, "cpf_cnpj");
-      req(missing, b.nationality, "nationality");
-      req(missing, b.birth_date, "birth_date");
-      break;
-    case "ESPOLIO":
-      // full_name/cpf_cnpj aqui são os dados do FALECIDO (já vêm de
-      // qualification.full_name, cadastrado pela Mesa; cpf_cnpj é digitado).
-      req(missing, b.cpf_cnpj, "cpf_cnpj");
-      break;
-    case "PJ":
-      req(missing, b.company_name, "company_name");
-      req(missing, b.company_cnpj, "company_cnpj");
-      req(missing, b.company_rua, "company_rua"); req(missing, b.company_numero, "company_numero");
-      req(missing, b.company_bairro, "company_bairro"); req(missing, b.company_cidade, "company_cidade");
-      req(missing, b.company_estado, "company_estado"); req(missing, b.company_cep, "company_cep");
-      break;
-  }
-  return missing;
-}
-
-// Valida um representante (recursivo, se ele também for PJ e precisar de
-// representante próprio). Máximo 5 níveis de encadeamento -- suficiente
-// pra qualquer estrutura societária real, evita abuso/loop.
-// Reaproveitamento de KYC (04/09/2026): cada nível PF exige identificacao_foto
-// (reaproveitada ou nova), cada nível PJ exige contrato_social -- validado
-// contra o banco (nunca confia no client), db async por isso.
-async function validateRepresentative(db: SupabaseClient, qualificationId: string, rep: any, allowedTypes: RepresentativeType[], depth = 0): Promise<string | null> {
-  if (depth > 5) return "Cadeia de representação excede o limite permitido (5 níveis).";
-  if (!rep || typeof rep !== "object") return "Representante é obrigatório para esta natureza de parte.";
-  if (!VALID_REPRESENTATIVE_TYPES.includes(rep.representative_type)) {
-    return "Tipo de representante inválido.";
-  }
-  if (!allowedTypes.includes(rep.representative_type)) {
-    return `Para esta natureza de parte, o representante precisa ser: ${allowedTypes.join(" ou ")}.`;
-  }
-
-  const repNature: "PF" | "PJ" = rep.party_nature === "PJ" ? "PJ" : "PF";
-  if (repNature === "PF") {
-    const missing: string[] = [];
-    req(missing, rep.full_name, "full_name");
-    req(missing, rep.cpf_cnpj, "cpf_cnpj");
-    req(missing, rep.nationality, "nationality");
-    req(missing, rep.marital_status, "marital_status");
-    req(missing, rep.profession, "profession");
-    req(missing, rep.phone, "phone");
-    req(missing, rep.endereco_rua, "endereco_rua"); req(missing, rep.endereco_numero, "endereco_numero");
-    req(missing, rep.endereco_bairro, "endereco_bairro"); req(missing, rep.endereco_cidade, "endereco_cidade");
-    req(missing, rep.endereco_estado, "endereco_estado"); req(missing, rep.endereco_cep, "endereco_cep");
-    if (missing.length > 0) return `Campos obrigatórios ausentes no representante: ${missing.join(", ")}`;
-    if (!isValidCPF(rep.cpf_cnpj)) return "CPF do representante inválido.";
-
-    const repClientId = await resolveClient(rep.cpf_cnpj, { vertical: "central_contratos", db });
-    const docError = await resolveDocumentSlot(db, qualificationId, repClientId, "identificacao_foto", rep.documents?.identificacao_foto);
-    if (docError) return `Representante: ${docError}`;
-  } else {
-    const missing: string[] = [];
-    req(missing, rep.company_name, "company_name");
-    req(missing, rep.company_cnpj, "company_cnpj");
-    req(missing, rep.company_rua, "company_rua"); req(missing, rep.company_numero, "company_numero");
-    req(missing, rep.company_bairro, "company_bairro"); req(missing, rep.company_cidade, "company_cidade");
-    req(missing, rep.company_estado, "company_estado"); req(missing, rep.company_cep, "company_cep");
-    if (missing.length > 0) return `Campos obrigatórios ausentes no representante (PJ): ${missing.join(", ")}`;
-    if (!isValidCNPJ(rep.company_cnpj)) return "CNPJ do representante inválido.";
-
-    const repClientId = await resolveClient(rep.company_cnpj, { vertical: "central_contratos", db });
-    const docError = await resolveDocumentSlot(db, qualificationId, repClientId, "contrato_social", rep.documents?.contrato_social);
-    if (docError) return `Representante (empresa): ${docError}`;
-
-    // Encadeamento: uma PJ representante também precisa do próprio
-    // administrador/representante legal (nota de arquitetura do BRIEF:
-    // o representante final é sempre uma Pessoa Física).
-    const nestedError = await validateRepresentative(db, qualificationId, rep.representation, ["administrador", "representante_legal"], depth + 1);
-    if (nestedError) return nestedError;
+/**
+ * Resolve a identidade da pessoa no Client 360: CNPJ da empresa, CPF, ou, para estrangeiro
+ * adulto que declarou não possuir CPF, o passaporte (chave PP:ISO2:NUMERO).
+ */
+async function resolveIdentityClient(db: SupabaseClient, v: NormalizedParty, legalName?: string | null): Promise<string | null> {
+  if (v.company_cnpj) return resolveClient(v.company_cnpj, { vertical: "central_contratos", db });
+  if (v.cpf_cnpj) return resolveClient(v.cpf_cnpj, { vertical: "central_contratos", db });
+  if (v.cpf_waived && v.id_type === "passaporte") {
+    return resolvePassportClient(v.id_country, v.id_number, { vertical: "central_contratos", db, legalName: legalName ?? v.full_name });
   }
   return null;
 }
 
-// Monta endereco_completo/company_address de um representante antes de
-// gravar (mesma regra do topo, aplicada recursivamente na cadeia).
-// Reaproveitamento de KYC (04/09/2026): resolve e grava v3_client_id de CADA
-// nível da cadeia (cada representante tem identidade/estoque de documentos
-// próprio, independente da parte principal no topo) -- já validado contra o
-// mesmo v3_client_id em validateRepresentative(), aqui só persiste.
-async function assembleRepresentation(db: SupabaseClient, rep: any): Promise<LegalQualificationRepresentation> {
-  const repNature: "PF" | "PJ" = rep.party_nature === "PJ" ? "PJ" : "PF";
-  const v3ClientId = await resolveClient(repNature === "PJ" ? rep.company_cnpj : rep.cpf_cnpj, { vertical: "central_contratos", db });
-  return {
-    representative_type: rep.representative_type,
-    party_nature: repNature,
-    full_name: rep.full_name ?? null,
-    cpf_cnpj: rep.cpf_cnpj ?? null,
-    rg: rep.rg?.trim() || null,
-    email: rep.email ?? null,
-    nationality: rep.nationality ?? null,
-    marital_status: rep.marital_status ?? null,
-    profession: rep.profession ?? null,
-    phone: normalizePhone(rep.phone).e164,
-    endereco_completo: montarEndereco({ rua: rep.endereco_rua, numero: rep.endereco_numero, complemento: rep.endereco_complemento, bairro: rep.endereco_bairro, cidade: rep.endereco_cidade, estado: rep.endereco_estado, cep: rep.endereco_cep }),
-    company_name: rep.company_name ?? null,
-    company_cnpj: rep.company_cnpj ?? null,
-    company_address: montarEndereco({ rua: rep.company_rua, numero: rep.company_numero, complemento: rep.company_complemento, bairro: rep.company_bairro, cidade: rep.company_cidade, estado: rep.company_estado, cep: rep.company_cep }),
-    company_legal_nature: (rep.company_legal_nature as CompanyLegalNature) ?? null,
-    v3_client_id: v3ClientId,
-    representation: rep.representation ? await assembleRepresentation(db, rep.representation) : null,
-  };
+const semAcento = (s: string | null | undefined) =>
+  (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
+
+interface AddressCheck { path: string; origin: "viacep" | "manual" | null; error?: string }
+
+/**
+ * Checa o CEP no ViaCEP (BRIEF 5.8). Encontrado: a cidade e a UF informadas precisam
+ * conferir. Não encontrado (ou ViaCEP fora do ar) e sem o aceite de endereço manual: recusa.
+ * Com o aceite manual, grava origem "manual" e a Mesa confere depois. Nunca trava a parte
+ * por uma queda do serviço externo, desde que ela use o caminho manual.
+ */
+async function checkAddress(path: string, v: NormalizedParty): Promise<AddressCheck> {
+  const isPj = v.profile === "PJ" || v.profile === "REP_PJ";
+  const cep = isPj ? v.company_cep : v.endereco_cep;
+  if (!cep) return { path, origin: null };
+  const manual = isPj ? v.company_manual : v.endereco_manual;
+  if (manual) return { path, origin: "manual" };
+  const found = await fetchCep(cep);
+  if (!found) {
+    return { path, origin: null, error: "CEP não localizado. Confira o número ou escolha preencher o endereço manualmente." };
+  }
+  const cidade = isPj ? v.company_cidade : v.endereco_cidade;
+  const uf = isPj ? v.company_estado : v.endereco_estado;
+  if (semAcento(found.localidade) !== semAcento(cidade) || (found.uf ?? "").toUpperCase() !== (uf ?? "").toUpperCase()) {
+    return { path, origin: null, error: "A cidade e a UF não conferem com o CEP informado." };
+  }
+  return { path, origin: "viacep" };
+}
+
+/** Monta o JSON gravado em `representation`, com o v3_client_id e a origem do endereço de cada nível. */
+async function buildRepresentationJson(
+  db: SupabaseClient,
+  rep: NormalizedRepresentation,
+  originByPath: Record<string, "viacep" | "manual" | null>,
+  depth = 1
+): Promise<LegalQualificationRepresentation> {
+  const base = toRepresentationJson(rep);
+  base.v3_client_id = await resolveIdentityClient(db, rep);
+  base.endereco_origem = originByPath[`representante.${depth}`] ?? null;
+  base.representation = rep.representation ? await buildRepresentationJson(db, rep.representation, originByPath, depth + 1) : null;
+  return base;
 }
 
 // GET /api/cm/qualificacao/[token] — contexto público para o envolvido preencher.
@@ -250,17 +166,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   });
 }
 
-// POST /api/cm/qualificacao/[token] — envolvido envia a qualificação civil
-// completa (01/09/2026, diretriz Dr. Athaydes: 6 naturezas de parte, com
-// representação recursiva quando aplicável) e dados bancários/PIX quando
-// recebe repasse. Ao completar 100% do lote, marca o batch como "completo"
-// e notifica a Mesa.
+// POST /api/cm/qualificacao/[token] — envolvido envia a qualificação civil completa.
+// Fase 1B (BRIEF 30/09/2026): validação e normalização pelo registro único de campos
+// (lib/qualification-submit.ts), listas fechadas, CEP checado, identidade em partes, passaporte
+// para estrangeiro adulto sem CPF, e-mail do representante e e-mail editável da parte principal.
+// Ao completar 100% do lote, marca o batch como "completo" e notifica a Mesa.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  const db = svc();
 
-  const { data: qualification } = await svc()
+  const { data: qualification } = await db
     .from("cm_party_qualifications")
-    .select("id, batch_id, status, role_in_document, full_name")
+    .select("id, batch_id, status, role_in_document, full_name, email, email_convite")
     .eq("qualification_token", token)
     .is("deleted_at", null)
     .single();
@@ -272,140 +189,149 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const recebeRepasse = ROLES_QUE_RECEBEM_REPASSE.includes(qualification.role_in_document);
 
-  const body = await req.json().catch(() => ({}));
-  const {
-    party_nature, cpf_cnpj, rg, dados_bancarios, pix_key,
-    company_name, company_cnpj, company_legal_nature,
-    nationality, marital_status, profession, birth_date, phone,
-    endereco_rua, endereco_numero, endereco_complemento, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
-    company_rua, company_numero, company_complemento, company_bairro, company_cidade, company_estado, company_cep,
-    representation, documents, lgpd_accepted,
-  } = body as {
-    party_nature?: PartyNature;
-    cpf_cnpj?: string;
-    rg?: string;
+  const body = (await req.json().catch(() => ({}))) as SubmissionInput & {
     dados_bancarios?: { banco?: string; agencia?: string; conta?: string; tipo_conta?: string };
     pix_key?: string;
-    company_name?: string;
-    company_cnpj?: string;
-    company_legal_nature?: CompanyLegalNature;
-    nationality?: string;
-    marital_status?: string;
-    profession?: string;
-    birth_date?: string;
-    phone?: string;
-    endereco_rua?: string; endereco_numero?: string; endereco_complemento?: string; endereco_bairro?: string;
-    endereco_cidade?: string; endereco_estado?: string; endereco_cep?: string;
-    company_rua?: string; company_numero?: string; company_complemento?: string; company_bairro?: string;
-    company_cidade?: string; company_estado?: string; company_cep?: string;
-    representation?: any;
-    // Reaproveitamento de KYC (04/09/2026): { identificacao_foto?: DocRef, contrato_social?: DocRef }
-    documents?: { identificacao_foto?: DocRef; contrato_social?: DocRef };
-    // Sprint 1, Fase 4.2 (19/09/2026): aceite do termo LGPD, obrigatorio antes
-    // de qualquer outro dado ser gravado -- gate no servidor, nunca so no client.
+    documents?: { identificacao_foto?: DocRef; contrato_social?: DocRef; instrumento?: DocRef };
     lgpd_accepted?: boolean;
+    nationality?: unknown;
+    marital_status?: unknown;
   };
+  const { dados_bancarios, pix_key, documents, lgpd_accepted } = body;
 
   if (lgpd_accepted !== true) {
     return NextResponse.json({ error: "É necessário aceitar o termo de consentimento LGPD para continuar." }, { status: 422 });
   }
 
-  const nature: PartyNature = VALID_NATURES.includes(party_nature as PartyNature) ? (party_nature as PartyNature) : "PF";
-  const personType: "PF" | "PJ" = nature === "PJ" ? "PJ" : "PF";
-  const db = svc();
-
-  const endereco_completo = montarEndereco({ rua: endereco_rua, numero: endereco_numero, complemento: endereco_complemento, bairro: endereco_bairro, cidade: endereco_cidade, estado: endereco_estado, cep: endereco_cep });
-  const company_address = montarEndereco({ rua: company_rua, numero: company_numero, complemento: company_complemento, bairro: company_bairro, cidade: company_cidade, estado: company_estado, cep: company_cep });
-
-  // Campos próprios da natureza (01/09/2026, diretriz Dr. Athaydes) — cada
-  // natureza exige um subconjunto diferente, ver missingBaseFields().
-  const missing = missingBaseFields(nature, { cpf_cnpj, nationality, marital_status, profession, birth_date, phone, endereco_rua, endereco_numero, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep, company_name, company_cnpj, company_rua, company_numero, company_bairro, company_cidade, company_estado, company_cep });
-  // Telefone internacional (26/09/2026): valida e guarda em E.164, inclusive o do(s) representante(s).
-  {
-    let phoneError: string | null = null;
-    const checkPhone = (v: unknown) => { if (!phoneError && typeof v === "string" && v.trim()) { const r = normalizePhone(v); if (!r.ok) phoneError = r.error ?? null; } };
-    checkPhone(phone);
-    for (let r: any = representation; r; r = r.representation) checkPhone(r.phone);
-    if (phoneError) return NextResponse.json({ error: phoneError }, { status: 422 });
+  // Página aberta antes do deploy da Fase 1B manda estado civil e nacionalidade em texto livre.
+  if (body.nationality !== undefined || body.marital_status !== undefined) {
+    return NextResponse.json({ error: "Esta página está desatualizada. Recarregue o formulário e preencha novamente." }, { status: 422 });
   }
 
-  if (missing.length > 0) {
-    return NextResponse.json({ error: `Campos obrigatórios ausentes: ${missing.join(", ")}` }, { status: 422 });
+  // 1. Validação e normalização pelo registro único de campos.
+  const result = normalizeSubmission(body, { inviteName: qualification.full_name, inviteEmail: qualification.email });
+  if (!result.ok || !result.principal || !result.nature) {
+    const msg = result.errors.map((e) => (e.path === "principal" ? e.message : `Representante: ${e.message}`)).join(" ");
+    return NextResponse.json({ error: msg, errors: result.errors }, { status: 422 });
   }
-
-  // Validação de documento por natureza. cpf_cnpj não se aplica a PJ (o
-  // documento pessoal de quem assina mora dentro de `representation`,
-  // nunca no topo — o template D1 nunca cita CPF da própria empresa).
-  if (nature !== "PJ") {
-    if (!isValidCPF(cpf_cnpj!)) {
-      return NextResponse.json({ error: "CPF inválido, confira o número informado." }, { status: 422 });
-    }
-  } else {
-    if (!isValidCNPJ(company_cnpj!)) {
-      return NextResponse.json({ error: "CNPJ da empresa inválido, confira o número informado." }, { status: 422 });
-    }
-  }
-
-  // Reaproveitamento de KYC (04/09/2026): resolve a identidade Client 360 da
-  // PARTE PRINCIPAL (CPF se não-PJ, CNPJ da empresa se PJ) e exige o
-  // documento correspondente -- reaproveitado de operação anterior (< 12
-  // meses) ou recém-enviado nesta própria qualificação. INCAPAZ_ABSOLUTO e
-  // ESPOLIO não fornecem documento próprio aqui (quem assina de fato é o
-  // representante, validado abaixo).
-  const topDocumentNumber = nature === "PJ" ? company_cnpj : cpf_cnpj;
-  const v3ClientId = await resolveClient(topDocumentNumber, { vertical: "central_contratos", db });
-
-  if (NATURES_REQUIRE_OWN_ID_DOC.includes(nature)) {
-    const docError = await resolveDocumentSlot(db, qualification.id, v3ClientId, "identificacao_foto", documents?.identificacao_foto);
-    if (docError) return NextResponse.json({ error: docError }, { status: 422 });
-  }
-  if (nature === "PJ") {
-    const docError = await resolveDocumentSlot(db, qualification.id, v3ClientId, "contrato_social", documents?.contrato_social);
-    if (docError) return NextResponse.json({ error: docError }, { status: 422 });
-  }
-
-  // Representação obrigatória para toda natureza exceto PF simples,
-  // recursiva quando o representante também é PJ (encadeamento até chegar
-  // numa Pessoa Física, nota de arquitetura do BRIEF de 01/09/2026).
-  const requiredRepTypes = REQUIRED_REPRESENTATIVE_TYPES[nature];
-  if (requiredRepTypes) {
-    const repError = await validateRepresentative(db, qualification.id, representation, requiredRepTypes);
-    if (repError) return NextResponse.json({ error: repError }, { status: 422 });
-  }
+  const nature = result.nature;
+  const p = result.principal;
+  const isPj = nature === "PJ";
 
   if (recebeRepasse && !pix_key && !dados_bancarios?.banco) {
     return NextResponse.json({ error: "Informe ao menos dados bancários ou chave PIX para eventual repasse." }, { status: 422 });
   }
 
+  // Nós da cadeia (principal + representantes), alinhando o que foi normalizado com o que veio no corpo.
+  const repNodes: Array<{ norm: NormalizedRepresentation; input: RepInputWithDocs | null | undefined; depth: number }> = [];
+  {
+    let n = result.representation;
+    let i: RepInputWithDocs | null | undefined = body.representation;
+    let d = 1;
+    while (n) {
+      repNodes.push({ norm: n, input: i, depth: d });
+      n = n.representation;
+      i = i?.representation;
+      d += 1;
+    }
+  }
+
+  // 2. CEP checado no servidor (em paralelo), principal e cada representante.
+  const addressNodes: Array<{ path: string; v: NormalizedParty }> = [
+    { path: "principal", v: p },
+    ...repNodes.map((r) => ({ path: `representante.${r.depth}`, v: r.norm as NormalizedParty })),
+  ];
+  const checks = await Promise.all(addressNodes.map((a) => checkAddress(a.path, a.v)));
+  const addressErrors = checks.filter((c) => c.error);
+  if (addressErrors.length) {
+    const msg = addressErrors.map((c) => (c.path === "principal" ? c.error : `Representante: ${c.error}`)).join(" ");
+    return NextResponse.json({ error: msg, errors: addressErrors.map((c) => ({ path: c.path, field: "address", message: c.error })) }, { status: 422 });
+  }
+  const originByPath: Record<string, "viacep" | "manual" | null> = {};
+  checks.forEach((c) => { originByPath[c.path] = c.origin; });
+
+  // 3. Client 360 da parte principal e conferência dos anexos (nunca confia no client).
+  const v3ClientId = await resolveIdentityClient(db, p, qualification.full_name);
+
+  const docErrors: string[] = [];
+  if (NATURES_REQUIRE_OWN_ID_DOC.includes(nature)) {
+    const e = await resolveDocumentSlot(db, qualification.id, v3ClientId, "identificacao_foto", documents?.identificacao_foto);
+    if (e) docErrors.push(e);
+  }
+  if (isPj) {
+    const e = await resolveDocumentSlot(db, qualification.id, v3ClientId, "contrato_social", documents?.contrato_social);
+    if (e) docErrors.push(e);
+  }
+  if (NATURES_REQUIRE_INSTRUMENT.includes(nature) && repNodes[0]) {
+    const kind = INSTRUMENT_DOCUMENT_KIND[repNodes[0].norm.representative_type] as KycDocumentKind | null;
+    if (kind) {
+      const e = await resolveDocumentSlot(db, qualification.id, v3ClientId, kind, documents?.instrumento);
+      if (e) docErrors.push(e);
+    }
+  }
+  for (const r of repNodes) {
+    const repClientId = await resolveIdentityClient(db, r.norm);
+    const repDocs = r.input?.documents;
+    const kind: KycDocumentKind = r.norm.party_nature === "PJ" ? "contrato_social" : "identificacao_foto";
+    const e = await resolveDocumentSlot(db, qualification.id, repClientId, kind, repDocs?.[kind as "identificacao_foto" | "contrato_social"]);
+    if (e) docErrors.push(`Representante: ${e}`);
+  }
+  if (docErrors.length) {
+    return NextResponse.json({ error: docErrors.join(" ") }, { status: 422 });
+  }
+
+  // 4. E-mail da parte principal: editável, é o destinatário do link de assinatura.
+  const inviteEmail = (qualification.email ?? "").trim().toLowerCase();
+  const finalEmail = p.email ?? qualification.email;
+  const emailChanged = !!p.email && p.email !== inviteEmail;
+
   const { error: updateError } = await db
     .from("cm_party_qualifications")
     .update({
       party_nature: nature,
-      person_type: personType,
-      cpf_cnpj: nature === "PJ" ? null : cpf_cnpj,
-      rg: rg?.trim() || null,
-      endereco_completo,
-      endereco_rua, endereco_numero, endereco_complemento: endereco_complemento?.trim() || null, endereco_bairro, endereco_cidade, endereco_estado, endereco_cep,
+      person_type: isPj ? "PJ" : "PF",
+      cpf_cnpj: isPj ? null : p.cpf_cnpj,
+      rg: p.rg,
+      id_type: p.id_type,
+      id_number: p.id_number,
+      id_issuer: p.id_issuer,
+      id_issuer_uf: p.id_issuer_uf,
+      id_country: p.id_country,
+      endereco_completo: p.endereco_completo,
+      endereco_rua: p.endereco_rua,
+      endereco_numero: p.endereco_numero,
+      endereco_complemento: p.endereco_complemento,
+      endereco_bairro: p.endereco_bairro,
+      endereco_cidade: p.endereco_cidade,
+      endereco_estado: p.endereco_estado,
+      endereco_cep: p.endereco_cep,
+      endereco_origem: isPj ? null : originByPath["principal"],
       dados_bancarios: dados_bancarios ?? null,
       pix_key: pix_key ?? null,
-      company_name: nature === "PJ" ? company_name!.trim() : null,
-      company_cnpj: nature === "PJ" ? company_cnpj!.trim() : null,
-      company_address: nature === "PJ" ? company_address : null,
-      company_legal_nature: nature === "PJ" ? (company_legal_nature ?? "privado") : null,
-      company_rua: nature === "PJ" ? company_rua : null,
-      company_numero: nature === "PJ" ? company_numero : null,
-      company_complemento: nature === "PJ" ? (company_complemento?.trim() || null) : null,
-      company_bairro: nature === "PJ" ? company_bairro : null,
-      company_cidade: nature === "PJ" ? company_cidade : null,
-      company_estado: nature === "PJ" ? company_estado : null,
-      company_cep: nature === "PJ" ? company_cep : null,
-      nationality: nationality?.trim() || null,
-      marital_status: marital_status?.trim() || null,
-      profession: profession?.trim() || null,
-      birth_date: birth_date?.trim() || null,
-      phone: normalizePhone(phone).e164,
+      company_name: isPj ? p.company_name : null,
+      company_cnpj: isPj ? p.company_cnpj : null,
+      company_address: isPj ? p.company_address : null,
+      company_legal_nature: isPj ? (p.company_legal_nature ?? "privado") : null,
+      company_rua: isPj ? p.company_rua : null,
+      company_numero: isPj ? p.company_numero : null,
+      company_complemento: isPj ? p.company_complemento : null,
+      company_bairro: isPj ? p.company_bairro : null,
+      company_cidade: isPj ? p.company_cidade : null,
+      company_estado: isPj ? p.company_estado : null,
+      company_cep: isPj ? p.company_cep : null,
+      company_endereco_origem: isPj ? originByPath["principal"] : null,
+      nationality: p.nationality,
+      nationality_code: p.nationality_code,
+      marital_status: p.marital_status,
+      marital_status_code: p.marital_status_code,
+      profession: p.profession,
+      birth_date: p.birth_date,
+      phone: p.phone,
+      email: finalEmail,
+      email_convite: qualification.email_convite ?? qualification.email,
+      email_alterado_em: emailChanged ? new Date().toISOString() : null,
       v3_client_id: v3ClientId,
-      representation: requiredRepTypes ? await assembleRepresentation(db, representation) : null,
+      representation: result.representation ? await buildRepresentationJson(db, result.representation, originByPath) : null,
       status: "preenchido",
       filled_at: new Date().toISOString(),
       // Compliance (11/09/2026, pedido de Robson Lino): IP de quem
@@ -421,27 +347,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
   // Checagem automática de CNPJ + quadro societário (14/09/2026, pedido de
-  // João): "verificar se o CNPJ está ativo, se o sócio informado é o
-  // diretor ou se foi trocado" antes de aprovar/enviar pra assinatura.
-  // Best-effort -- nunca desfaz o preenchimento já salvo acima se a
+  // João). Best-effort -- nunca desfaz o preenchimento já salvo acima se a
   // consulta à Receita Federal falhar ou demorar; o revisor sempre vê
   // "não verificado" nesse caso, nunca um resultado inventado.
-  if (nature === "PJ" && company_cnpj) {
-    const lookup = await lookupCnpj(company_cnpj);
-    if (lookup.ok) {
+  // CNPJ alfanumérico: a consulta automática ainda não aceita o formato novo (BrasilAPI e
+  // ReceitaWS não confirmadas), então não é tentada e o motivo fica registrado com clareza.
+  if (isPj && p.company_cnpj) {
+    if (/[A-Z]/.test(p.company_cnpj)) {
       await db.from("cm_party_qualifications").update({
-        cnpj_situacao_cadastral: lookup.data.situacao_cadastral,
-        cnpj_razao_social: lookup.data.razao_social,
-        cnpj_socios: lookup.data.socios,
-        cnpj_socio_informado_confere: qualification.full_name ? nameMatchesSocios(qualification.full_name, lookup.data.socios) : null,
+        cnpj_check_error: "CNPJ alfanumérico: consulta automática à Receita ainda não disponível",
         cnpj_checado_em: new Date().toISOString(),
-        cnpj_check_error: null,
       }).eq("id", qualification.id);
     } else {
-      await db.from("cm_party_qualifications").update({
-        cnpj_check_error: lookup.error,
-        cnpj_checado_em: new Date().toISOString(),
-      }).eq("id", qualification.id);
+      const lookup = await lookupCnpj(p.company_cnpj);
+      if (lookup.ok) {
+        await db.from("cm_party_qualifications").update({
+          cnpj_situacao_cadastral: lookup.data.situacao_cadastral,
+          cnpj_razao_social: lookup.data.razao_social,
+          cnpj_socios: lookup.data.socios,
+          cnpj_socio_informado_confere: qualification.full_name ? nameMatchesSocios(qualification.full_name, lookup.data.socios) : null,
+          cnpj_checado_em: new Date().toISOString(),
+          cnpj_check_error: null,
+        }).eq("id", qualification.id);
+      } else {
+        await db.from("cm_party_qualifications").update({
+          cnpj_check_error: lookup.error,
+          cnpj_checado_em: new Date().toISOString(),
+        }).eq("id", qualification.id);
+      }
     }
   }
 
@@ -455,6 +388,26 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     .is("deleted_at", null);
 
   const allFilled = (siblings ?? []).length > 0 && (siblings ?? []).every((s) => s.status === "preenchido");
+
+  // Notificação ao criador do lote: e-mail de assinatura alterado pela parte (BRIEF 5.10).
+  // O e-mail novo passa a receber o link do ClickSign; a Mesa vê o aviso antes de gerar o contrato.
+  const { data: batchInfo } = await db
+    .from("cm_qualification_batches")
+    .select("created_by, document_type, listing_id")
+    .eq("id", qualification.batch_id)
+    .single();
+
+  if (emailChanged && batchInfo?.created_by) {
+    const { error: notifError } = await db.from("notifications").insert({
+      user_id: batchInfo.created_by,
+      title: "E-mail de assinatura alterado pela parte",
+      message: `${qualification.full_name} alterou o e-mail de assinatura de ${inviteEmail} para ${finalEmail}. Confira antes de gerar e enviar o contrato.`,
+      type: "qualificacao_email_alterado",
+      action_url: batchInfo.listing_id ? `/bolsa/mesa` : "/juridico/contratos",
+      read: false,
+    });
+    if (notifError) console.error("[qualificacao/token] falha ao notificar e-mail alterado:", notifError.message);
+  }
 
   if (allFilled) {
     const { data: batch } = await db
@@ -502,15 +455,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       // lote + v3_partners, apagando silenciosamente qualquer outra parte
       // já existente no contrato (ex: a contraparte principal, cadastrada
       // na criação do contrato, nunca parte de nenhum lote de
-      // qualificação). Isso derrubou a contraparte de 2 contratos reais
-      // (Iris no Closer, Daniel+Diogo no Home Cash) do array de
-      // signatários sem ninguém perceber, porque o "Enviar para
-      // Assinatura" nunca avisa quem ficou de fora. Corrigido para
-      // MESCLAR: preserva toda parte existente cujo e-mail não é de
-      // ninguém deste lote, e só então acrescenta/atualiza as deste lote.
+      // qualificação). Corrigido para MESCLAR: preserva toda parte
+      // existente cujo e-mail não é de ninguém deste lote, e só então
+      // acrescenta/atualiza as deste lote.
       const existingParties = (contract?.parties as Array<{ role: string; name: string; doc?: string | null; email?: string; qualification_id?: string | null }> | null) ?? [];
       const batchEmails = new Set((allQualifications ?? []).map((q) => q.email.toLowerCase()));
-      const preservedParties = existingParties.filter((p) => !p.email || !batchEmails.has(p.email.toLowerCase()));
+      const preservedParties = existingParties.filter((pt) => !pt.email || !batchEmails.has(pt.email.toLowerCase()));
       // qualification_id (04/09/2026): aditivo -- permite ao painel "clicar no nome
       // para ver a ficha completa" (GET /api/cm/qualifications/party/[id]) buscar
       // os dados civis + documentos KYC a partir da lista final de partes do contrato.
@@ -536,10 +486,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
         for (const q of allQualifications ?? []) {
           if (q.role_in_document === "v3_partners" || !q.cpf_cnpj) continue;
           try {
-            const v3ClientId = await resolveClient(q.cpf_cnpj, { legalName: q.full_name, vertical: "ma", db });
-            if (v3ClientId) {
+            const clientId = await resolveClient(q.cpf_cnpj, { legalName: q.full_name, vertical: "ma", db });
+            if (clientId) {
               await db.from("ma_deal_clients").upsert(
-                { deal_id: contract.deal_id, v3_client_id: v3ClientId, role: null, status: "prospecto", created_by: batch.created_by ?? null },
+                { deal_id: contract.deal_id, v3_client_id: clientId, role: null, status: "prospecto", created_by: batch.created_by ?? null },
                 { onConflict: "deal_id,v3_client_id", ignoreDuplicates: true }
               );
             }
