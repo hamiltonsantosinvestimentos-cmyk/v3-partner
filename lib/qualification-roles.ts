@@ -69,6 +69,7 @@ export interface QualificationPartyForProse {
   profession?: string | null;
   birth_date?: string | null;
   phone?: string | null;
+  id_type?: string | null;
   representation?: import("./legal-qualification").LegalQualificationRepresentation | null;
 }
 

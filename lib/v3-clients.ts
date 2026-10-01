@@ -23,8 +23,9 @@
  */
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { passportDocumentKey } from "./qualification-schema";
 
-export type V3DocumentType = "CPF" | "CNPJ";
+export type V3DocumentType = "CPF" | "CNPJ" | "PASSAPORTE";
 
 function serviceClient(): SupabaseClient {
   return createClient(
@@ -46,7 +47,7 @@ export function normalizeDocument(raw: string | null | undefined): string {
 }
 
 /** CPF tem 11 caracteres (sempre dígitos), CNPJ tem 14 (dígitos, ou alfanumérico desde 31/07/2026). Qualquer outro tamanho não é documento válido. */
-export function detectDocumentType(normalized: string): V3DocumentType | null {
+export function detectDocumentType(normalized: string): "CPF" | "CNPJ" | null {
   if (normalized.length === 11) return "CPF";
   if (normalized.length === 14) return "CNPJ";
   return null;
@@ -95,6 +96,53 @@ export async function resolveClient(
 
   if (error) {
     console.warn(`[v3-clients] falha ao resolver ${docType} ${digits}: ${error.message}`);
+    return null;
+  }
+  return (created?.id as string) ?? null;
+}
+
+/**
+ * Resolve o v3_client_id de um estrangeiro identificado só por passaporte (decisão de
+ * João, 30/09/2026). A chave é `PP:<ISO2>:<NÚMERO>` (ver passportDocumentKey) e vive
+ * num espaço de chaves separado do de CPF/CNPJ: não passa por normalizeDocument nem por
+ * detectDocumentType, e os dois-pontos nunca existem em CPF ou CNPJ, então nada colide.
+ * Devolve null quando o país não é ISO ou o número não é plausível, nunca cria registro
+ * trivial como "00000".
+ */
+export async function resolvePassportClient(
+  iso2: string | null | undefined,
+  passportNumber: string | null | undefined,
+  opts: { legalName?: string | null; vertical?: string; db?: SupabaseClient } = {}
+): Promise<string | null> {
+  const key = passportDocumentKey(iso2, passportNumber);
+  if (!key) return null;
+
+  const svc = opts.db ?? serviceClient();
+
+  const { data: existing } = await svc
+    .from("v3_clients")
+    .select("id")
+    .eq("document_number", key)
+    .eq("document_type", "PASSAPORTE")
+    .maybeSingle();
+  if (existing?.id) return existing.id as string;
+
+  const { data: created, error } = await svc
+    .from("v3_clients")
+    .upsert(
+      {
+        document_number: key,
+        document_type: "PASSAPORTE",
+        legal_name: opts.legalName ?? null,
+        first_seen_vertical: opts.vertical ?? null,
+      },
+      { onConflict: "document_number", ignoreDuplicates: false }
+    )
+    .select("id")
+    .single();
+
+  if (error) {
+    console.warn(`[v3-clients] falha ao resolver passaporte ${key}: ${error.message}`);
     return null;
   }
   return (created?.id as string) ?? null;
