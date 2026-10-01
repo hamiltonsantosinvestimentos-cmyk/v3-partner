@@ -111,7 +111,8 @@ export async function PATCH(
     "responsavel_id", "responsavel_nome", "notas", "motivo_perda",
   ];
   for (const c of campos) {
-    if (c in body) updates[c] = body[c] ?? null;
+    // Select vazio do formulário chega como "" — em coluna uuid o Postgres rejeita
+    if (c in body) updates[c] = c.endsWith("_id") ? body[c] || null : body[c] ?? null;
   }
 
   // Agenda de reunião / proposta e retorno → metadata (merge só das chaves permitidas)
