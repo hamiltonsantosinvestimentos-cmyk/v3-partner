@@ -48,6 +48,21 @@ const PASSO_TITULO: Record<number, string> = {
 
 // WhatsApp do time comercial V3 — botão da tela final quando o link não veio de
 // um partner (?ref=). Pode ser trocado pela env NEXT_PUBLIC_QUIZ_WHATSAPP.
+// Código do país do WhatsApp: Brasil por padrão + os países de onde mais vêm candidatos.
+const DDI_PAISES = [
+  { sigla: "BR", ddi: "+55" }, { sigla: "PT", ddi: "+351" }, { sigla: "US", ddi: "+1" },
+  { sigla: "QA", ddi: "+974" }, { sigla: "AE", ddi: "+971" }, { sigla: "SA", ddi: "+966" },
+  { sigla: "GB", ddi: "+44" }, { sigla: "ES", ddi: "+34" }, { sigla: "IT", ddi: "+39" },
+  { sigla: "FR", ddi: "+33" }, { sigla: "DE", ddi: "+49" }, { sigla: "CH", ddi: "+41" },
+  { sigla: "AR", ddi: "+54" }, { sigla: "UY", ddi: "+598" }, { sigla: "PY", ddi: "+595" },
+  { sigla: "CL", ddi: "+56" }, { sigla: "MX", ddi: "+52" }, { sigla: "JP", ddi: "+81" },
+  { sigla: "CN", ddi: "+86" }, { sigla: "AO", ddi: "+244" }, { sigla: "MZ", ddi: "+258" },
+];
+// Brasil segue sem DDI (o envio põe o 55); fora do Brasil vai com "+" para o 55 nunca ser somado.
+function telefoneCompleto(f: { ddi: string; telefone: string }): string {
+  return f.ddi === "+55" ? f.telefone : `${f.ddi} ${f.telefone.trim()}`;
+}
+
 const WHATSAPP_V3 = (process.env.NEXT_PUBLIC_QUIZ_WHATSAPP || "5511937639475").replace(/\D/g, "");
 
 const LETRAS = "ABCDEFGH";
@@ -55,12 +70,12 @@ const SAIDA_MS = 320;
 
 interface FormState {
   objetivo: string; ocupacao: string; nome: string;
-  telefone: string; email: string; renda_faixa: string; experiencia_b2b: string; prioridade: string;
+  telefone: string; ddi: string; email: string; renda_faixa: string; experiencia_b2b: string; prioridade: string;
   investimento: string; consentimento: boolean;
 }
 const INITIAL: FormState = {
   objetivo: "", ocupacao: "", nome: "",
-  telefone: "", email: "", renda_faixa: "", experiencia_b2b: "", prioridade: "",
+  telefone: "", ddi: "+55", email: "", renda_faixa: "", experiencia_b2b: "", prioridade: "",
   investimento: "", consentimento: false,
 };
 
@@ -369,7 +384,7 @@ export function PartnerQuizClient() {
           session_id: sid, parou_em: step, ref: ref || null, tracking,
           objetivo: f.objetivo || null, ocupacao: f.ocupacao || null,
           renda_faixa: f.renda_faixa || null, experiencia_b2b: f.experiencia_b2b || null, prioridade: f.prioridade || null,
-          nome: f.nome.trim(), email: f.email.trim(), telefone: f.telefone, consentimento: true,
+          nome: f.nome.trim(), email: f.email.trim(), telefone: telefoneCompleto(f), consentimento: true,
         }),
       }).catch(() => {});
     } catch { /* ignora */ }
@@ -413,7 +428,7 @@ export function PartnerQuizClient() {
   )}`;
 
   const nomeValid = form.nome.trim().length >= 3;
-  const contatoValid = form.telefone.replace(/\D/g, "").length >= 10 &&
+  const contatoValid = form.telefone.replace(/\D/g, "").length >= (form.ddi === "+55" ? 10 : 6) &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) && form.consentimento;
 
   const finalizar = useCallback(async (investimento: string) => {
@@ -431,7 +446,7 @@ export function PartnerQuizClient() {
           objetivo: form.objetivo, ocupacao: form.ocupacao,
           renda_faixa: form.renda_faixa, experiencia_b2b: form.experiencia_b2b,
           prioridade: form.prioridade, investimento,
-          nome: form.nome.trim(), email: form.email.trim(), telefone: form.telefone,
+          nome: form.nome.trim(), email: form.email.trim(), telefone: telefoneCompleto(form),
           tracking,
           consentimento: true,
           session_id: sessionIdRef.current || null,
@@ -622,8 +637,17 @@ export function PartnerQuizClient() {
               <div className="space-y-8">
                 <Campo label="WhatsApp (com DDD e código do país)" delay={450}>
                   <div className="flex items-end gap-3">
-                    <span className="pb-3 text-xl sm:text-2xl font-semibold" style={{ color: C.muted }}>+55</span>
-                    <input value={form.telefone} onChange={(e) => set("telefone", maskPhone(e.target.value))} placeholder="(11) 99999-9999"
+                    <select value={form.ddi} aria-label="Código do país"
+                      onChange={(e) => setForm((f) => ({ ...f, ddi: e.target.value, telefone: "" }))}
+                      className="pb-3 text-xl sm:text-2xl font-semibold bg-transparent outline-none cursor-pointer shrink-0"
+                      style={{ color: C.muted }}>
+                      {DDI_PAISES.map((p) => (
+                        <option key={p.sigla} value={p.ddi} style={{ background: C.bg, color: C.cream }}>{p.sigla} {p.ddi}</option>
+                      ))}
+                    </select>
+                    <input value={form.telefone}
+                      onChange={(e) => set("telefone", form.ddi === "+55" ? maskPhone(e.target.value) : e.target.value.replace(/[^\d ]/g, "").slice(0, 18))}
+                      placeholder={form.ddi === "+55" ? "(11) 99999-9999" : "Número com código de área"}
                       inputMode="tel" autoComplete="tel-national" autoFocus className={inputPremium} style={inputPremiumStyle} />
                   </div>
                 </Campo>

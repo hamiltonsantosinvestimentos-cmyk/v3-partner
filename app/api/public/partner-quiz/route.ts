@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
     `\nFaixa ${s.tier} · score ${s.total} · plano ${PLANO_LABEL[s.plano_sugerido]}` +
     origemTxt +
     `\n\nVer: app.v3partners.com.br/prospeccao`;
-  const alertNumbers = (process.env.QUIZ_LEAD_ALERT_WHATSAPP || "51997466001")
+  const alertNumbers = (process.env.QUIZ_LEAD_ALERT_WHATSAPP || "51997466001,+97433006127")
     .split(",").map((n) => n.trim()).filter(Boolean);
 
   await Promise.allSettled([
