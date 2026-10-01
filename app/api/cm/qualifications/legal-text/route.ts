@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
     .from("cm_party_qualifications")
     .select(`
       id, full_name, email, role_in_document, status, filled_at,
-      cpf_cnpj, rg, endereco_completo,
+      cpf_cnpj, rg, id_type, endereco_completo,
       person_type, party_nature, company_name, company_cnpj, company_address, company_legal_nature, representation,
       nationality, marital_status, profession, birth_date, phone,
       cm_qualification_batches(id, side, document_type)

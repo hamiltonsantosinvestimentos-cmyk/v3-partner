@@ -429,7 +429,7 @@ export async function POST(req: NextRequest) {
     // da exclusão.
     const { data: qualificationsRaw } = await svc()
       .from("cm_party_qualifications")
-      .select("full_name, email, phone, role_in_document, cpf_cnpj, rg, endereco_completo, person_type, party_nature, company_name, company_cnpj, company_address, company_legal_nature, representation, nationality, marital_status, profession, birth_date, created_at")
+      .select("full_name, email, phone, role_in_document, cpf_cnpj, rg, endereco_completo, person_type, party_nature, company_name, company_cnpj, company_address, company_legal_nature, representation, nationality, marital_status, profession, birth_date, id_type, created_at")
       .eq("batch_id", effectiveQualificationBatchId)
       .is("deleted_at", null);
 

@@ -42,6 +42,9 @@ export interface LegalQualificationRepresentation {
   // cada representante tem sua própria identidade/estoque de documentos,
   // independente do v3_client_id da parte principal no topo.
   v3_client_id?: string | null;
+  // Tipo da identidade (rg, cnh, oab, passaporte, outro). Estrangeiro com passaporte
+  // que declara não possuir CPF não imprime o termo "CPF" (Fase 1, BRIEF 30/09/2026).
+  id_type?: string | null;
   // Recursivo: presente quando este representante também é PJ e precisa
   // do próprio representante (encadeamento PJ → PJ → ... → PF).
   representation?: LegalQualificationRepresentation | null;
@@ -60,6 +63,7 @@ export interface LegalQualificationParty {
   birth_date?: string | null;
   phone?: string | null;
   endereco_completo?: string | null;
+  id_type?: string | null;
   company_name?: string | null;
   company_cnpj?: string | null;
   company_address?: string | null;
@@ -180,18 +184,30 @@ export function formatDocumentNumber(value: string | null | undefined): string |
   return raw;
 }
 
-function pfBase(p: { full_name?: string | null; nationality?: string | null; profession?: string | null; marital_status?: string | null; cpf_cnpj?: string | null; rg?: string | null; email?: string | null; phone?: string | null; endereco_completo?: string | null }): string {
-  return `${partyNameUpper(p.full_name)}, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, residente e domiciliado(a) na ${formatAddressCodes(p.endereco_completo) ?? NAO_INFORMADO}`;
+/**
+ * Termo do CPF na qualificação. Estrangeiro com passaporte que declara não possuir
+ * CPF (cpf_cnpj vazio e id_type "passaporte") não imprime o termo: a identidade, que
+ * é obrigatória, já carrega o passaporte. Qualquer outro CPF ausente continua saindo
+ * como [NÃO INFORMADO], para ficar visível como pendência.
+ */
+function cpfTerm(p: { cpf_cnpj?: string | null; id_type?: string | null }): string {
+  const formatted = formatDocumentNumber(p.cpf_cnpj);
+  if (!formatted && p.id_type === "passaporte") return "";
+  return `, CPF ${formatted ?? NAO_INFORMADO}`;
+}
+
+function pfBase(p: { full_name?: string | null; nationality?: string | null; profession?: string | null; marital_status?: string | null; cpf_cnpj?: string | null; rg?: string | null; email?: string | null; phone?: string | null; endereco_completo?: string | null; id_type?: string | null }): string {
+  return `${partyNameUpper(p.full_name)}, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}${cpfTerm(p)}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, residente e domiciliado(a) na ${formatAddressCodes(p.endereco_completo) ?? NAO_INFORMADO}`;
 }
 
 /** B2: Pessoa Relativamente Incapaz -- mesma base de A1, com a cláusula de incapacidade logo após o nome. */
 function incapazRelativoBase(p: LegalQualificationParty): string {
-  return `${partyNameUpper(p.full_name)}, relativamente incapaz, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, residente e domiciliado(a) na ${formatAddressCodes(p.endereco_completo) ?? NAO_INFORMADO}`;
+  return `${partyNameUpper(p.full_name)}, relativamente incapaz, ${p.nationality ?? NAO_INFORMADO}, ${p.profession ?? NAO_INFORMADO}, ${p.marital_status ?? NAO_INFORMADO}${cpfTerm(p)}${frag(", Identidade ", p.rg)}${frag(", e-mail ", p.email)}${frag(", ", formatPhoneBR(p.phone))}, residente e domiciliado(a) na ${formatAddressCodes(p.endereco_completo) ?? NAO_INFORMADO}`;
 }
 
 /** B3: Pessoa Totalmente Incapaz (menor impúbere) -- só nome, nacionalidade, CPF e RG se houver. Sem profissão/estado civil/endereço, por desenho (menor). */
 function incapazAbsolutoBase(p: LegalQualificationParty): string {
-  return `${partyNameUpper(p.full_name)}, menor impúbere, totalmente incapaz, ${p.nationality ?? NAO_INFORMADO}, CPF ${formatDocumentNumber(p.cpf_cnpj) ?? NAO_INFORMADO}${frag(", Identidade ", p.rg)}`;
+  return `${partyNameUpper(p.full_name)}, menor impúbere, totalmente incapaz, ${p.nationality ?? NAO_INFORMADO}${cpfTerm(p)}${frag(", Identidade ", p.rg)}`;
 }
 
 /** C1: Espólio -- full_name/cpf_cnpj aqui são os dados do FALECIDO. */
