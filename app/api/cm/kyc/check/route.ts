@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { normalizeDocument, detectDocumentType } from "@/lib/v3-clients";
 import { findValidKycDocument, kycValidUntil, type KycDocumentKind } from "@/lib/kyc-documents";
+import { passportDocumentKey } from "@/lib/qualification-schema";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -34,9 +35,11 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const token = searchParams.get("token");
   const rawDocument = searchParams.get("document");
+  // Estrangeiro sem CPF: a consulta de reaproveitamento usa a chave do passaporte (PP:ISO2:NUMERO).
+  const passportKey = passportDocumentKey(searchParams.get("passport_country"), searchParams.get("passport_number"));
 
-  if (!token || !rawDocument) {
-    return NextResponse.json({ error: "token e document são obrigatórios" }, { status: 422 });
+  if (!token || (!rawDocument && !passportKey)) {
+    return NextResponse.json({ error: "token e document (ou passport_country e passport_number) são obrigatórios" }, { status: 422 });
   }
 
   const db = svc();
@@ -52,19 +55,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Este link já foi preenchido." }, { status: 409 });
   }
 
-  const digits = normalizeDocument(rawDocument);
-  const docType = detectDocumentType(digits);
-  if (!docType) return NextResponse.json({ valid: false });
+  let lookupKey: string;
+  let kind: KycDocumentKind;
+  if (passportKey) {
+    lookupKey = passportKey;
+    kind = "identificacao_foto";
+  } else {
+    const digits = normalizeDocument(rawDocument);
+    const docType = detectDocumentType(digits);
+    if (!docType) return NextResponse.json({ valid: false });
+    lookupKey = digits;
+    kind = KIND_BY_DOC_TYPE[docType];
+  }
 
   const { data: client } = await db
     .from("v3_clients")
     .select("id")
-    .eq("document_number", digits)
+    .eq("document_number", lookupKey)
     .maybeSingle();
 
   if (!client) return NextResponse.json({ valid: false });
 
-  const kind = KIND_BY_DOC_TYPE[docType];
   const doc = await findValidKycDocument(db, client.id, kind);
   if (!doc) return NextResponse.json({ valid: false });
 

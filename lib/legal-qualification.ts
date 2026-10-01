@@ -45,6 +45,8 @@ export interface LegalQualificationRepresentation {
   // Tipo da identidade (rg, cnh, oab, passaporte, outro). Estrangeiro com passaporte
   // que declara não possuir CPF não imprime o termo "CPF" (Fase 1, BRIEF 30/09/2026).
   id_type?: string | null;
+  // Origem do endereço (viacep ou manual), gravada pela Fase 1B para a Mesa conferir.
+  endereco_origem?: "viacep" | "manual" | null;
   // Recursivo: presente quando este representante também é PJ e precisa
   // do próprio representante (encadeamento PJ → PJ → ... → PF).
   representation?: LegalQualificationRepresentation | null;

@@ -90,7 +90,11 @@ export function formatPhoneIntl(phone: string | null | undefined): string {
  * como brasileiro (compatível com quem cola só DDD + número).
  */
 export function maskPhoneIntlInput(value: string): string {
-  const raw = value.trim();
+  // Colar um número completo ("+1 555...") num campo que já veio com "+55" deixa dois "+" no texto:
+  // vale só o que vem depois do último, que é o número que a pessoa colou.
+  const trimmed = value.trim();
+  const lastPlus = trimmed.lastIndexOf("+");
+  const raw = lastPlus > 0 ? trimmed.slice(lastPlus) : trimmed;
   let d = raw.replace(/\D/g, "");
   if (!d) return raw.startsWith("+") ? "+" : "";
   if (!raw.startsWith("+")) {
