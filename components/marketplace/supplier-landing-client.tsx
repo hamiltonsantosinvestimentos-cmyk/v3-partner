@@ -258,13 +258,16 @@ export function SupplierLandingClient() {
     });
   }
 
+  // CNPJ alfanumérico (letra nas 12 primeiras posições, emissão pela Receita/Serpro
+  // desde 31/07/2026): nunca usar \D aqui, que apagaria a letra e corromperia o
+  // CNPJ novo em andamento (achado real 21/09/2026, v3-governance-qa).
   function formatCNPJ(v: string) {
-    const n = v.replace(/\D/g, "").slice(0, 14);
-    return n.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
-            .replace(/(\d{2})(\d{3})(\d{3})(\d{4})$/, "$1.$2.$3/$4")
-            .replace(/(\d{2})(\d{3})(\d{3})$/, "$1.$2.$3")
-            .replace(/(\d{2})(\d{3})$/, "$1.$2")
-            .replace(/(\d{2})$/, "$1");
+    const n = v.replace(/[^0-9A-Za-z]/g, "").toUpperCase().slice(0, 14);
+    if (n.length <= 2) return n;
+    if (n.length <= 5) return `${n.slice(0, 2)}.${n.slice(2)}`;
+    if (n.length <= 8) return `${n.slice(0, 2)}.${n.slice(2, 5)}.${n.slice(5)}`;
+    if (n.length <= 12) return `${n.slice(0, 2)}.${n.slice(2, 5)}.${n.slice(5, 8)}/${n.slice(8)}`;
+    return `${n.slice(0, 2)}.${n.slice(2, 5)}.${n.slice(5, 8)}/${n.slice(8, 12)}-${n.slice(12)}`;
   }
 
   function formatPhone(v: string) {
