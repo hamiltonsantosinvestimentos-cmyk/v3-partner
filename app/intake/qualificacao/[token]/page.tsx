@@ -45,7 +45,8 @@ function KycDocSlot({ token, kind, documentNumber, value, onChange }: {
   onChange: (v: DocSlotState) => void;
 }) {
   useEffect(() => {
-    const digits = documentNumber.replace(/\D/g, "");
+    // CNPJ alfanumerico (desde 31/07/2026): preserva letra, nunca \D.
+    const digits = documentNumber.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
     const expectedLen = kind === "identificacao_foto" ? 11 : 14;
     if (digits.length !== expectedLen) {
       if (value.status !== "idle" && value.status !== "uploading" && value.status !== "uploaded") onChange(emptyDocSlot());
@@ -74,7 +75,7 @@ function KycDocSlot({ token, kind, documentNumber, value, onChange }: {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("document_kind", kind);
-    fd.append("document_number", documentNumber.replace(/\D/g, ""));
+    fd.append("document_number", documentNumber.replace(/[^0-9A-Za-z]/g, "").toUpperCase());
     try {
       const res = await fetch(`/api/cm/qualificacao/${token}/documents`, { method: "POST", body: fd });
       const json = await res.json();
@@ -101,7 +102,7 @@ function KycDocSlot({ token, kind, documentNumber, value, onChange }: {
   // arquivo" mesmo com o campo vazio, e o erro devolvido ("CPF inválido")
   // parece dizer que o CPF do usuário está errado, quando na verdade ele só
   // ainda não foi digitado (o campo fica bem acima na tela, longe do upload).
-  const digitsNow = documentNumber.replace(/\D/g, "");
+  const digitsNow = documentNumber.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
   const expectedLenNow = kind === "identificacao_foto" ? 11 : 14;
   const documentNumberReady = digitsNow.length === expectedLenNow;
 

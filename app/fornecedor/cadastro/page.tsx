@@ -43,13 +43,16 @@ export default function FornecedorCadastroPage() {
     }));
   }
 
+  // CNPJ alfanumérico (letra nas 12 primeiras posições, emissão pela Receita/Serpro
+  // desde 31/07/2026): nunca usar \D aqui, que apagaria a letra e corromperia o
+  // CNPJ novo em andamento (achado real 21/09/2026, v3-governance-qa).
   function formatCNPJ(v: string) {
-    const digits = v.replace(/\D/g, "").slice(0, 14);
-    return digits.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")
-      .replace(/^(\d{2})(\d{3})(\d{3})(\d{4})$/, "$1.$2.$3/$4")
-      .replace(/^(\d{2})(\d{3})(\d{3})$/, "$1.$2.$3")
-      .replace(/^(\d{2})(\d{3})$/, "$1.$2")
-      .replace(/^(\d{2})$/, "$1");
+    const digits = v.replace(/[^0-9A-Za-z]/g, "").toUpperCase().slice(0, 14);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 5) return `${digits.slice(0, 2)}.${digits.slice(2)}`;
+    if (digits.length <= 8) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5)}`;
+    if (digits.length <= 12) return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8)}`;
+    return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
   }
 
   async function handleSubmit(e: React.FormEvent) {

@@ -33,15 +33,22 @@ function serviceClient(): SupabaseClient {
   );
 }
 
-/** Remove tudo que não é dígito. É a chave de identidade — nunca comparar com máscara. */
+/**
+ * Remove tudo que não é [0-9A-Za-z] e força maiúsculas. É a chave de
+ * identidade — nunca comparar com máscara. CNPJ alfanumérico (emissão pela
+ * Receita/Serpro desde 31/07/2026) tem letras nas 12 primeiras posições;
+ * \D apagaria essas letras e corromperia o CNPJ novo, impedindo dedup/KYC
+ * reuse de qualquer empresa com o formato novo (achado real 21/09/2026,
+ * v3-governance-qa).
+ */
 export function normalizeDocument(raw: string | null | undefined): string {
-  return (raw ?? "").replace(/\D/g, "");
+  return (raw ?? "").replace(/[^0-9A-Za-z]/g, "").toUpperCase();
 }
 
-/** CPF tem 11 dígitos, CNPJ tem 14. Qualquer outro tamanho não é documento válido. */
-export function detectDocumentType(digits: string): V3DocumentType | null {
-  if (digits.length === 11) return "CPF";
-  if (digits.length === 14) return "CNPJ";
+/** CPF tem 11 caracteres (sempre dígitos), CNPJ tem 14 (dígitos, ou alfanumérico desde 31/07/2026). Qualquer outro tamanho não é documento válido. */
+export function detectDocumentType(normalized: string): V3DocumentType | null {
+  if (normalized.length === 11) return "CPF";
+  if (normalized.length === 14) return "CNPJ";
   return null;
 }
 
