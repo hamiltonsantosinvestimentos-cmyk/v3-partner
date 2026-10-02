@@ -6,6 +6,7 @@ import type { LegalQualificationRepresentation } from "@/lib/legal-qualification
 import { isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { normalizePhone } from "@/lib/phone";
+import { maskCpfCnpj, maskIdentity, maskTail, maskBankData, maskNode, PRINCIPAL_REVEAL_FIELDS, NODE_REVEAL_FIELDS } from "@/lib/qualification-mask";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -37,11 +38,23 @@ interface DocumentCard {
 // Para um v3_client_id, resolve os documentos válidos (0-2, um por kind) com URL
 // assinada (1h) e registra o acesso na trilha de auditoria — mesmo padrão de
 // cm_deal_room_document_views (compliance exige log de toda visualização de KYC).
-async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, viewedBy: string, ip: string): Promise<DocumentCard[]> {
+async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, viewedBy: string, ip: string, qualificationId: string): Promise<DocumentCard[]> {
   const cards: DocumentCard[] = [];
   for (const kind of DOC_KINDS) {
     const doc = await findValidKycDocument(db, v3ClientId, kind);
     if (!doc) continue;
+    // Log ANTES do documento: se a gravação falhar, o documento não é exibido (BRIEF 5.12, regra 3.2).
+    const { error: logError } = await db.from("cm_party_qualification_document_views").insert({
+      document_id: doc.id,
+      viewed_by: viewedBy,
+      ip_address: ip,
+      // Âncora do titular (migration 20261002a): a qualificação da ficha aberta.
+      qualification_id: qualificationId,
+    });
+    if (logError) {
+      console.error("[qualificacao ficha] falha ao gravar log de abertura de documento", { qualification_id: qualificationId, code: logError.code });
+      continue;
+    }
     const { data: signed } = await db.storage.from("documents").createSignedUrl(doc.storage_path, 3600);
     cards.push({
       document_kind: kind,
@@ -52,11 +65,6 @@ async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, vi
       download_url: signed?.signedUrl ?? null,
       uploaded_ip: doc.uploaded_ip ?? null,
     });
-    await db.from("cm_party_qualification_document_views").insert({
-      document_id: doc.id,
-      viewed_by: viewedBy,
-      ip_address: ip,
-    });
   }
   return cards;
 }
@@ -64,17 +72,60 @@ async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, vi
 // Achata a cadeia recursiva de representação (representante, representante do
 // representante, ...) em uma lista plana com profundidade, para o card exibir em
 // sequência sem o front precisar entender a recursão.
-async function loadRepresentationChain(db: SupabaseClient, rep: LegalQualificationRepresentation | null | undefined, viewedBy: string, ip: string, depth = 0): Promise<any[]> {
+async function loadRepresentationChain(db: SupabaseClient, rep: LegalQualificationRepresentation | null | undefined, viewedBy: string, ip: string, qualificationId: string, depth = 0): Promise<any[]> {
   if (!rep || depth > 5) return [];
-  const documents = rep.v3_client_id ? await loadDocumentsForClient(db, rep.v3_client_id, viewedBy, ip) : [];
-  const nested = await loadRepresentationChain(db, rep.representation, viewedBy, ip, depth + 1);
-  return [{ depth, ...rep, documents }, ...nested];
+  const documents = rep.v3_client_id ? await loadDocumentsForClient(db, rep.v3_client_id, viewedBy, ip, qualificationId) : [];
+  const nested = await loadRepresentationChain(db, rep.representation, viewedBy, ip, qualificationId, depth + 1);
+  const nodeId = rep.v3_client_id ? String(rep.v3_client_id).toLowerCase() : "sem-id";
+  const cpfIsCnpj = typeof rep.cpf_cnpj === "string" && rep.cpf_cnpj.replace(/[^0-9A-Za-z]/g, "").length === 14;
+  const revealable = NODE_REVEAL_FIELDS
+    .filter((f) => {
+      const v = (rep as unknown as Record<string, unknown>)[f];
+      return typeof v === "string" && v.trim() !== "" && !(f === "cpf_cnpj" && cpfIsCnpj);
+    })
+    .map((f) => `representacao[${depth + 1}:${nodeId}].${f}`);
+  // maskNode remove o valor original e a cadeia aninhada: o navegador só recebe a versão mascarada.
+  return [{ depth, ...maskNode(rep as any), revealable, documents }, ...nested];
+}
+
+// Colunas lidas da qualificação. Lista explícita (nunca select "*"): o valor real dos campos
+// sensíveis só sai pela rota de revelação, com log (BRIEF 5.12 A).
+const FICHA_COLUMNS =
+  "id, full_name, email, phone, role_in_document, status, filled_at, filled_ip, person_type, party_nature, company_name, company_cnpj, company_address, nationality, marital_status, profession, birth_date, endereco_completo, dados_bancarios, pix_key, cpf_cnpj, rg, id_type, id_number, id_issuer, id_country, email_convite, email_alterado_em, v3_client_id, representation, deleted_at";
+
+const FICHA_PLAIN_FIELDS = [
+  "id", "full_name", "email", "phone", "role_in_document", "status", "filled_at", "filled_ip", "person_type",
+  "party_nature", "company_name", "company_cnpj", "company_address", "nationality", "marital_status", "profession",
+  "birth_date", "endereco_completo", "id_type", "id_issuer", "id_country", "email_convite", "email_alterado_em",
+] as const;
+
+function hasValue(v: unknown): boolean {
+  if (v == null) return false;
+  if (typeof v === "string") return v.trim() !== "";
+  if (typeof v === "object") return Object.values(v as Record<string, unknown>).some((x) => x != null && String(x).trim() !== "");
+  return true;
+}
+
+/** Monta a ficha enviada ao navegador: campos sensíveis só mascarados, original nunca copiado. */
+function buildFicha(row: Record<string, any>) {
+  const ficha: Record<string, unknown> = {};
+  for (const f of FICHA_PLAIN_FIELDS) ficha[f] = row[f] ?? null;
+  ficha.cpf_cnpj_masked = maskCpfCnpj(row.cpf_cnpj);
+  ficha.rg_masked = maskIdentity(row.rg);
+  ficha.id_number_masked = maskIdentity(row.id_number);
+  ficha.pix_key_masked = maskTail(row.pix_key);
+  ficha.dados_bancarios = maskBankData(row.dados_bancarios);
+  // Campos que têm valor e, portanto, podem ser revelados pelo olho (cpf_cnpj só quando for CPF).
+  const cpfIsCnpj = typeof row.cpf_cnpj === "string" && row.cpf_cnpj.replace(/[^0-9A-Za-z]/g, "").length === 14;
+  ficha.revealable = PRINCIPAL_REVEAL_FIELDS.filter((f) => hasValue(row[f]) && !(f === "cpf_cnpj" && cpfIsCnpj));
+  return ficha;
 }
 
 /** GET /api/cm/qualifications/party/[id] — ficha civil completa de uma parte já
  *  qualificada, com os documentos de KYC válidos (reaproveitados ou próprios desta
  *  operação) e a cadeia de representação recursiva. Toda abertura registra log de
- *  acesso por documento efetivamente exibido (compliance). */
+ *  acesso por documento efetivamente exibido (compliance). CPF, identidade, PIX e
+ *  conta chegam MASCARADOS; o valor real só sai por POST .../reveal, com log antes. */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const caller = await getCaller();
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -82,27 +133,31 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const db = svc();
 
-  const { data: qualification, error } = await db
+  const { data: row, error } = await db
     .from("cm_party_qualifications")
-    .select("*")
+    .select(FICHA_COLUMNS)
     .eq("id", id)
     .single();
 
-  if (error || !qualification) return NextResponse.json({ error: "Qualificação não encontrada" }, { status: 404 });
+  if (error || !row) return NextResponse.json({ error: "Qualificação não encontrada" }, { status: 404 });
+  const qualification = row as unknown as Record<string, any>;
+  const ficha = buildFicha(qualification);
+
+  const noStore = { headers: { "Cache-Control": "no-store" } };
 
   if (qualification.status !== "preenchido") {
-    return NextResponse.json({ qualification, documents: [], representation_chain: [], filled: false });
+    return NextResponse.json({ qualification: ficha, documents: [], representation_chain: [], filled: false }, noStore);
   }
 
   const ip = _req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? _req.headers.get("x-real-ip") ?? "unknown";
 
   const documents = qualification.v3_client_id
-    ? await loadDocumentsForClient(db, qualification.v3_client_id, caller.userId, ip)
+    ? await loadDocumentsForClient(db, qualification.v3_client_id, caller.userId, ip, id)
     : [];
 
-  const representationChain = await loadRepresentationChain(db, qualification.representation, caller.userId, ip);
+  const representationChain = await loadRepresentationChain(db, qualification.representation, caller.userId, ip, id);
 
-  return NextResponse.json({ qualification, documents, representation_chain: representationChain, filled: true });
+  return NextResponse.json({ qualification: ficha, documents, representation_chain: representationChain, filled: true }, noStore);
 }
 
 /** DELETE /api/cm/qualifications/party/[id] — exclusão individual de um
