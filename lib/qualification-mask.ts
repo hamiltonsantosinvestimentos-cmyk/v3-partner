@@ -173,3 +173,8 @@ export function maskBankData(bank: unknown): Record<string, unknown> | null {
     conta: b.conta == null ? null : maskTail(String(b.conta)),
   };
 }
+
+/** Timestamp do Postgres com deslocamento curto ("+00", "-03") vira ISO que o JavaScript aceita ("+00:00"). */
+export function normalizePgTimestamp(value: string): string {
+  return value.replace(/([+-]\d{2})$/, "$1:00");
+}
