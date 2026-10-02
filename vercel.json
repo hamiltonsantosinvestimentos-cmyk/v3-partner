@@ -9,6 +9,7 @@
     { "path": "/api/cron/n8n-uptime-check",      "schedule": "0 7 * * *" },
     { "path": "/api/cron/clicksign-archive",     "schedule": "0 10 * * *" },
     { "path": "/api/cm/matches/run",             "schedule": "0 11 * * *" },
-    { "path": "/api/cron/relatorio-mensal-partners", "schedule": "0 11 1 * *" }
+    { "path": "/api/cron/relatorio-mensal-partners", "schedule": "0 11 1 * *" },
+    { "path": "/api/cron/purge-access-logs",      "schedule": "0 6 * * *" }
   ]
 }

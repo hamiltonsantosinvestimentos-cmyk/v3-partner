@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { maskCpfCnpj } from "@/lib/qualification-mask";
 import Fuse from "fuse.js";
 import {
   BarChart3, Users, Gavel, DollarSign, Play,
@@ -4038,7 +4039,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                               <div className="flex items-center justify-between gap-2">
                                 <div className="min-w-0">
                                   <div className="text-[10px] text-[#F5F1E8] font-bold truncate">{p.full_name}</div>
-                                  <div className="text-[8px] text-[#9BAFC5]">{p.role_in_document} {p.cpf_cnpj ? `· ${formatDocumentNumber(p.cpf_cnpj) ?? p.cpf_cnpj}` : "(sem CPF/CNPJ)"}</div>
+                                  <div className="text-[8px] text-[#9BAFC5]">{p.role_in_document} {p.cpf_cnpj ? `· ${maskCpfCnpj(formatDocumentNumber(p.cpf_cnpj) ?? p.cpf_cnpj)}` : "(sem CPF/CNPJ)"}</div>
                                 </div>
                                 <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded flex-shrink-0 ${p.checked ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>
                                   {p.checked ? "Checado" : "Pendente"}

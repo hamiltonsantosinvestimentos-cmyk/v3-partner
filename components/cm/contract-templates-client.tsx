@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { maskCpfCnpj } from "@/lib/qualification-mask";
 import { useSearchParams } from "next/navigation";
 import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil, Maximize2 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
@@ -1349,7 +1350,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                             ) : (
                             <div key={p.id} className="flex items-center justify-between gap-2 bg-[#162744] rounded px-2.5 py-1.5">
                               <div className="min-w-0">
-                                <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}{p.cpf_cnpj ? ` · CPF/CNPJ ${formatDocumentNumber(p.cpf_cnpj) ?? p.cpf_cnpj}` : ""}</span></p>
+                                <p className="text-xs text-[#F5F1E8] truncate">{p.full_name} <span className="text-[9px] text-[#9BAFC5]">· {ROLE_LABELS[p.role_in_document] ?? p.role_in_document}{p.cpf_cnpj ? ` · CPF/CNPJ ${maskCpfCnpj(formatDocumentNumber(p.cpf_cnpj) ?? p.cpf_cnpj)}` : ""}</span></p>
                                 {p.party_nature === "PJ" && (
                                   <p className="text-[9px] mt-0.5">
                                     {p.cnpj_situacao_cadastral ? (

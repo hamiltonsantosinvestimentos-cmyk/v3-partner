@@ -98,11 +98,19 @@ function SensitiveValue({ qualificationId, field, masked, label, format, onRevea
 const formatBankData = (b: any) => `${b?.banco ?? ""} · Ag. ${b?.agencia ?? ""} · Conta ${b?.conta ?? ""}${b?.tipo_conta ? ` (${b.tipo_conta})` : ""}`;
 
 // Lista de acessos a dados sensíveis (BRIEF 5.12 C): quem revelou, qual campo, quando. IP mascarado.
+// Só o ADMIN vê as caixas de seleção e o botão de apagar (eliminação a pedido do titular, 5.12 D):
+// modal vermelho V3 com motivo obrigatório, que nunca fecha ao clicar fora.
 function AccessLog({ qualificationId, refreshKey }: { qualificationId: string; refreshKey: number }) {
   const [items, setItems] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(false);
+  const [canErase, setCanErase] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Record<string, { source: string; id: string }>>({});
+  const [confirming, setConfirming] = useState(false);
+  const [reason, setReason] = useState("");
+  const [erasing, setErasing] = useState(false);
+  const [eraseError, setEraseError] = useState<string | null>(null);
 
   async function load(offset: number) {
     setLoading(true);
@@ -113,6 +121,7 @@ function AccessLog({ qualificationId, refreshKey }: { qualificationId: string; r
       if (!res.ok) { setError(json.error ?? "Não foi possível carregar os acessos"); return; }
       setItems((prev) => (offset === 0 ? json.items : [...prev, ...json.items]));
       setHasMore(!!json.has_more);
+      setCanErase(!!json.can_erase);
     } catch {
       setError("Não foi possível carregar os acessos");
     } finally {
@@ -125,6 +134,43 @@ function AccessLog({ qualificationId, refreshKey }: { qualificationId: string; r
   const fmt = (iso: string) =>
     new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
+  const selectedList = Object.values(selected);
+
+  function toggle(it: any) {
+    const key = `${it.source}:${it.id}`;
+    setSelected((prev) => {
+      const next = { ...prev };
+      if (next[key]) delete next[key]; else next[key] = { source: it.source, id: it.id };
+      return next;
+    });
+  }
+
+  async function confirmErase() {
+    setErasing(true);
+    setEraseError(null);
+    try {
+      for (const source of ["field_views", "document_views"]) {
+        const ids = selectedList.filter((s) => s.source === source).map((s) => s.id);
+        if (!ids.length) continue;
+        const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/access-log/erase`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source, ids, reason }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) { setEraseError(json.error ?? "Não foi possível apagar os registros"); return; }
+      }
+      setConfirming(false);
+      setReason("");
+      setSelected({});
+      await load(0);
+    } catch {
+      setEraseError("Não foi possível apagar os registros");
+    } finally {
+      setErasing(false);
+    }
+  }
+
   return (
     <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
       <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Acessos a dados sensíveis</p>
@@ -134,15 +180,62 @@ function AccessLog({ qualificationId, refreshKey }: { qualificationId: string; r
         <p className="text-[12px] text-[#9BAFC5]">Nenhum dado sensível foi revelado ainda.</p>
       )}
       {items.map((it) => (
-        <p key={it.id} className="text-[12px] text-[#9BAFC5]">
-          <span className="text-[#F5F1E8]">{it.field_label}</span> · {it.viewed_by_name} · {fmt(it.viewed_at)} · IP {it.ip_masked}
-        </p>
+        <label key={`${it.source}:${it.id}`} className="flex items-start gap-2 text-[12px] text-[#9BAFC5]">
+          {canErase && (
+            <input type="checkbox" className="mt-0.5" checked={!!selected[`${it.source}:${it.id}`]} onChange={() => toggle(it)}
+              aria-label={`Selecionar acesso: ${it.field_label}`} />
+          )}
+          <span>
+            <span className="text-[#F5F1E8]">{it.field_label}</span> · {it.viewed_by_name} · {fmt(it.viewed_at)} · IP {it.ip_masked}
+          </span>
+        </label>
       ))}
       {hasMore && (
         <button type="button" onClick={() => load(items.length)} disabled={loading}
           className="text-[12px] font-semibold text-[#E8C97A] hover:text-[#F5F1E8] disabled:opacity-50">
           Ver mais
         </button>
+      )}
+      {canErase && (
+        <div className="pt-1">
+          <button type="button" disabled={selectedList.length === 0} onClick={() => { setEraseError(null); setConfirming(true); }}
+            title={selectedList.length === 0 ? "Nenhum registro para apagar" : undefined}
+            className="text-[12px] font-semibold text-[#E24B4A] border border-[#E24B4A]/50 rounded px-2 py-1 disabled:opacity-40 disabled:cursor-not-allowed">
+            Apagar registros selecionados{selectedList.length ? ` (${selectedList.length})` : ""}
+          </button>
+          {selectedList.length === 0 && items.length > 0 && (
+            <span className="ml-2 text-[12px] text-[#9BAFC5]">Marque os registros que deseja apagar.</span>
+          )}
+        </div>
+      )}
+
+      {confirming && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/75 p-4">
+          <div role="dialog" aria-modal="true" aria-labelledby="erase-title"
+            className="w-full max-w-md bg-[#09081A] border border-[#E24B4A]/60 rounded-xl p-4 space-y-3">
+            <p id="erase-title" className="text-sm font-bold text-[#E24B4A]">Apagar registros de acesso</p>
+            <p className="text-[12px] text-[#F5F1E8]">
+              Esta ação apaga definitivamente {selectedList.length} registro(s) de acesso e não pode ser desfeita.
+              O apagamento fica registrado com quem o fez, quando e o motivo, sem nenhum dado do titular.
+            </p>
+            <label className="block text-[12px] text-[#9BAFC5]">
+              Motivo (obrigatório, mínimo de 10 caracteres)
+              <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3}
+                className="mt-1 w-full bg-[#12112A] border border-[#9BAFC5]/20 rounded p-2 text-[12px] text-[#F5F1E8]" />
+            </label>
+            {eraseError && <p className="text-[12px] text-[#E24B4A]">{eraseError}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirming(false)} disabled={erasing}
+                className="text-[12px] font-semibold text-[#F5F1E8] border border-[#9BAFC5]/30 rounded px-3 py-1.5 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button type="button" onClick={confirmErase} disabled={erasing || reason.trim().length < 10}
+                className="text-[12px] font-semibold text-[#F5F1E8] bg-[#E24B4A] rounded px-3 py-1.5 disabled:opacity-50">
+                {erasing ? "Apagando..." : "Apagar registros"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

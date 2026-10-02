@@ -38,7 +38,7 @@ interface DocumentCard {
 // Para um v3_client_id, resolve os documentos válidos (0-2, um por kind) com URL
 // assinada (1h) e registra o acesso na trilha de auditoria — mesmo padrão de
 // cm_deal_room_document_views (compliance exige log de toda visualização de KYC).
-async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, viewedBy: string, ip: string): Promise<DocumentCard[]> {
+async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, viewedBy: string, ip: string, qualificationId: string): Promise<DocumentCard[]> {
   const cards: DocumentCard[] = [];
   for (const kind of DOC_KINDS) {
     const doc = await findValidKycDocument(db, v3ClientId, kind);
@@ -57,6 +57,8 @@ async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, vi
       document_id: doc.id,
       viewed_by: viewedBy,
       ip_address: ip,
+      // Âncora do titular (migration 20261002a): a qualificação da ficha aberta.
+      qualification_id: qualificationId,
     });
   }
   return cards;
@@ -65,10 +67,10 @@ async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, vi
 // Achata a cadeia recursiva de representação (representante, representante do
 // representante, ...) em uma lista plana com profundidade, para o card exibir em
 // sequência sem o front precisar entender a recursão.
-async function loadRepresentationChain(db: SupabaseClient, rep: LegalQualificationRepresentation | null | undefined, viewedBy: string, ip: string, depth = 0): Promise<any[]> {
+async function loadRepresentationChain(db: SupabaseClient, rep: LegalQualificationRepresentation | null | undefined, viewedBy: string, ip: string, qualificationId: string, depth = 0): Promise<any[]> {
   if (!rep || depth > 5) return [];
-  const documents = rep.v3_client_id ? await loadDocumentsForClient(db, rep.v3_client_id, viewedBy, ip) : [];
-  const nested = await loadRepresentationChain(db, rep.representation, viewedBy, ip, depth + 1);
+  const documents = rep.v3_client_id ? await loadDocumentsForClient(db, rep.v3_client_id, viewedBy, ip, qualificationId) : [];
+  const nested = await loadRepresentationChain(db, rep.representation, viewedBy, ip, qualificationId, depth + 1);
   const nodeId = rep.v3_client_id ? String(rep.v3_client_id).toLowerCase() : "sem-id";
   const cpfIsCnpj = typeof rep.cpf_cnpj === "string" && rep.cpf_cnpj.replace(/[^0-9A-Za-z]/g, "").length === 14;
   const revealable = NODE_REVEAL_FIELDS
@@ -142,10 +144,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const ip = _req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? _req.headers.get("x-real-ip") ?? "unknown";
 
   const documents = qualification.v3_client_id
-    ? await loadDocumentsForClient(db, qualification.v3_client_id, caller.userId, ip)
+    ? await loadDocumentsForClient(db, qualification.v3_client_id, caller.userId, ip, id)
     : [];
 
-  const representationChain = await loadRepresentationChain(db, qualification.representation, caller.userId, ip);
+  const representationChain = await loadRepresentationChain(db, qualification.representation, caller.userId, ip, id);
 
   return NextResponse.json({ qualification: ficha, documents, representation_chain: representationChain, filled: true }, noStore);
 }
