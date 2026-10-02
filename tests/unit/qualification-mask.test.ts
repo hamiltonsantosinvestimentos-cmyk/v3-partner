@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   maskCpfCnpj, maskIdentity, maskTail, maskIp, maskNode, maskBankData,
-  parseRevealField, labelRevealField, flattenChain, resolveNodeValue,
+  parseRevealField, labelRevealField, flattenChain, resolveNodeValue, normalizePgTimestamp,
 } from "../../lib/qualification-mask";
 
 test("CPF com e sem pontuação: ***.123.456-**", () => {
@@ -126,4 +126,12 @@ test("maskNode só repassa a lista permitida de campos", () => {
   assert.equal(out.full_name, "ZZTEST");
   assert.ok(!("campo_novo_sensivel" in out));
   assert.ok(!JSON.stringify(out).includes("segredo"));
+});
+
+test("timestamp do Postgres com fuso curto vira data valida (regra das 24 horas)", () => {
+  const iso = normalizePgTimestamp("2026-10-03T14:05:00+00");
+  assert.equal(iso, "2026-10-03T14:05:00+00:00");
+  assert.ok(!Number.isNaN(new Date(iso).getTime()));
+  assert.equal(normalizePgTimestamp("2026-10-03T11:05:00-03"), "2026-10-03T11:05:00-03:00");
+  assert.equal(normalizePgTimestamp("2026-10-03T14:05:00+05:30"), "2026-10-03T14:05:00+05:30");
 });

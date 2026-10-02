@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { normalizePgTimestamp } from "@/lib/qualification-mask";
 
 // Eliminação de registros específicos do log de acesso a pedido do titular (BRIEF 5.12 D, migration
 // 20261002c). SÓ ADMIN. A função SQL cm_erase_access_logs apaga e grava a auditoria no mesmo comando;
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const m = error.message.match(/ELEGIVEL_A_PARTIR_DE:(\S+)/);
     if (m) {
       return NextResponse.json(
-        { error: `Registro com menos de 24 horas. Poderá ser eliminado a partir de ${formatBr(m[1])}.` },
+        { error: `Registro com menos de 24 horas. Poderá ser eliminado a partir de ${formatBr(normalizePgTimestamp(m[1]))}.` },
         { status: 422, headers: NO_STORE },
       );
     }
