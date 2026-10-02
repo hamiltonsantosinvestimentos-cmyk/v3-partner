@@ -43,6 +43,18 @@ async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, vi
   for (const kind of DOC_KINDS) {
     const doc = await findValidKycDocument(db, v3ClientId, kind);
     if (!doc) continue;
+    // Log ANTES do documento: se a gravação falhar, o documento não é exibido (BRIEF 5.12, regra 3.2).
+    const { error: logError } = await db.from("cm_party_qualification_document_views").insert({
+      document_id: doc.id,
+      viewed_by: viewedBy,
+      ip_address: ip,
+      // Âncora do titular (migration 20261002a): a qualificação da ficha aberta.
+      qualification_id: qualificationId,
+    });
+    if (logError) {
+      console.error("[qualificacao ficha] falha ao gravar log de abertura de documento", { qualification_id: qualificationId, code: logError.code });
+      continue;
+    }
     const { data: signed } = await db.storage.from("documents").createSignedUrl(doc.storage_path, 3600);
     cards.push({
       document_kind: kind,
@@ -52,13 +64,6 @@ async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, vi
       valid_until: kycValidUntil(doc.uploaded_at),
       download_url: signed?.signedUrl ?? null,
       uploaded_ip: doc.uploaded_ip ?? null,
-    });
-    await db.from("cm_party_qualification_document_views").insert({
-      document_id: doc.id,
-      viewed_by: viewedBy,
-      ip_address: ip,
-      // Âncora do titular (migration 20261002a): a qualificação da ficha aberta.
-      qualification_id: qualificationId,
     });
   }
   return cards;

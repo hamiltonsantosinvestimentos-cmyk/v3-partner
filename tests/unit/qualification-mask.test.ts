@@ -112,3 +112,18 @@ test("dados bancários: agência e conta mascaradas, banco e tipo intactos", () 
   assert.equal(out.conta, "*****4-3");
   assert.equal(maskBankData(null), null);
 });
+
+test("dados bancários: agência e conta numéricas também são mascaradas e chaves fora da lista não passam", () => {
+  const out = maskBankData({ banco: "Banco X", agencia: 1234567, conta: 98765432, titular_documento: "529.982.247-25", tipo_conta: "corrente" }) as Record<string, unknown>;
+  assert.equal(out.agencia, "****567");
+  assert.equal(out.conta, "*****432");
+  assert.ok(!("titular_documento" in out));
+  assert.ok(!JSON.stringify(out).includes("529.982.247-25"));
+});
+
+test("maskNode só repassa a lista permitida de campos", () => {
+  const out = maskNode({ full_name: "ZZTEST", cpf_cnpj: "52998224725", campo_novo_sensivel: "segredo" } as any) as Record<string, unknown>;
+  assert.equal(out.full_name, "ZZTEST");
+  assert.ok(!("campo_novo_sensivel" in out));
+  assert.ok(!JSON.stringify(out).includes("segredo"));
+});

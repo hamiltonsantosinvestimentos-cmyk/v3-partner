@@ -138,29 +138,38 @@ export function resolveNodeValue(
   return typeof value === "string" && value.trim() ? value : null;
 }
 
-/** Campos mascarados do nó. Nunca copia o valor original. */
-export function maskNode<T extends ChainNode>(node: T): Omit<T, "cpf_cnpj" | "rg" | "id_number" | "representation"> & {
+// Campos do nó que NÃO são sensíveis e podem seguir em claro (lista permitida: qualquer chave nova
+// do JSON da cadeia fica de fora até ser decidida, nunca passa em claro por omissão).
+const NODE_PLAIN_FIELDS = [
+  "representative_type", "party_nature", "full_name", "email", "nationality", "marital_status", "profession",
+  "phone", "endereco_completo", "company_name", "company_cnpj", "company_address", "company_legal_nature",
+  "v3_client_id", "id_type", "endereco_origem",
+] as const;
+
+/** Campos do nó para a ficha: só a lista permitida, mais os sensíveis mascarados. Nunca copia o valor original. */
+export function maskNode(node: ChainNode): Record<string, unknown> & {
   cpf_cnpj_masked: string | null;
   rg_masked: string | null;
   id_number_masked: string | null;
 } {
-  const { cpf_cnpj, rg, id_number, representation: _rep, ...rest } = node;
-  void _rep;
+  const out: Record<string, unknown> = {};
+  for (const f of NODE_PLAIN_FIELDS) out[f] = node[f] ?? null;
   return {
-    ...rest,
-    cpf_cnpj_masked: maskCpfCnpj(cpf_cnpj ?? null),
-    rg_masked: maskIdentity(rg ?? null),
-    id_number_masked: maskIdentity(id_number ?? null),
+    ...out,
+    cpf_cnpj_masked: maskCpfCnpj(node.cpf_cnpj ?? null),
+    rg_masked: maskIdentity(node.rg ?? null),
+    id_number_masked: maskIdentity(node.id_number ?? null),
   };
 }
 
-/** Dados bancários com agência e conta mascaradas (só os 3 últimos caracteres). */
+/** Dados bancários: lista permitida de chaves; agência e conta sempre mascaradas, mesmo se vierem como número. */
 export function maskBankData(bank: unknown): Record<string, unknown> | null {
   if (!bank || typeof bank !== "object") return null;
   const b = bank as Record<string, unknown>;
   return {
-    ...b,
-    agencia: typeof b.agencia === "string" ? maskTail(b.agencia) : b.agencia ?? null,
-    conta: typeof b.conta === "string" ? maskTail(b.conta) : b.conta ?? null,
+    banco: b.banco ?? null,
+    tipo_conta: b.tipo_conta ?? null,
+    agencia: b.agencia == null ? null : maskTail(String(b.agencia)),
+    conta: b.conta == null ? null : maskTail(String(b.conta)),
   };
 }

@@ -38,7 +38,7 @@ function DocumentRow({ doc, onPreview }: { doc: KycDocument; onPreview: (url: st
       </div>
       {doc.download_url ? (
         <a href={doc.download_url} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-1 text-[9px] font-semibold text-[#C9A84C] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors flex-shrink-0">
+          className="flex items-center gap-1 text-[12px] font-semibold text-[#E8C97A] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors flex-shrink-0">
           <Download size={10} /> Baixar
         </a>
       ) : null}
@@ -264,13 +264,13 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
       <div>
         <p className="text-sm text-[#F5F1E8] font-semibold">{q.full_name}</p>
         <p className="text-[11px] text-[#9BAFC5]">{q.email}{q.phone ? ` · ${formatPhoneIntl(q.phone)}` : ""}</p>
-        <span className="inline-block mt-1 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/30">
+        <span className="inline-block mt-1 text-[12px] font-bold uppercase px-1.5 py-0.5 rounded bg-[#C9A84C]/15 text-[#E8C97A] border border-[#C9A84C]/30">
           {ROLE_LABELS[q.role_in_document] ?? q.role_in_document} · {natureLabel}
         </span>
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-[11px]">
-        {q.cpf_cnpj_masked && <div><span className="text-[#9BAFC5]">CPF</span><p className="text-[#F5F1E8]">
+        {q.cpf_cnpj_masked && <div><span className="text-[#9BAFC5]">{canReveal("cpf_cnpj") ? "CPF" : "CPF/CNPJ"}</span><p className="text-[#F5F1E8]">
           {canReveal("cpf_cnpj")
             ? <SensitiveValue qualificationId={q.id} field="cpf_cnpj" masked={q.cpf_cnpj_masked} label="CPF" format={(v) => formatDocumentNumber(v) ?? v} onRevealed={onRevealed} />
             : q.cpf_cnpj_masked}
