@@ -79,7 +79,10 @@ async function loadRepresentationChain(db: SupabaseClient, rep: LegalQualificati
   const nodeId = rep.v3_client_id ? String(rep.v3_client_id).toLowerCase() : "sem-id";
   const cpfIsCnpj = typeof rep.cpf_cnpj === "string" && rep.cpf_cnpj.replace(/[^0-9A-Za-z]/g, "").length === 14;
   const revealable = NODE_REVEAL_FIELDS
-    .filter((f) => typeof rep[f] === "string" && (rep[f] as string).trim() !== "" && !(f === "cpf_cnpj" && cpfIsCnpj))
+    .filter((f) => {
+      const v = (rep as unknown as Record<string, unknown>)[f];
+      return typeof v === "string" && v.trim() !== "" && !(f === "cpf_cnpj" && cpfIsCnpj);
+    })
     .map((f) => `representacao[${depth + 1}:${nodeId}].${f}`);
   // maskNode remove o valor original e a cadeia aninhada: o navegador só recebe a versão mascarada.
   return [{ depth, ...maskNode(rep as any), revealable, documents }, ...nested];
