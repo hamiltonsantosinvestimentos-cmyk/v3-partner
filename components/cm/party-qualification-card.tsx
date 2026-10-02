@@ -9,7 +9,7 @@
 // Robson Lino, mesmo bloco).
 import { formatPhoneIntl } from "@/lib/phone";
 import { useState, useEffect } from "react";
-import { User, Loader2, FileText, Download, X } from "lucide-react";
+import { User, Loader2, FileText, Download, X, Eye, EyeOff } from "lucide-react";
 import { PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, formatDocumentNumber, type PartyNature } from "@/lib/legal-qualification";
 import { KYC_DOCUMENT_KIND_LABELS } from "@/lib/kyc-documents";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
@@ -30,7 +30,7 @@ function DocumentRow({ doc, onPreview }: { doc: KycDocument; onPreview: (url: st
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] text-[#C9A84C] font-bold uppercase">{KYC_DOCUMENT_KIND_LABELS[doc.document_kind as keyof typeof KYC_DOCUMENT_KIND_LABELS] ?? doc.document_kind}</p>
+        <p className="text-[12px] text-[#E8C97A] font-bold uppercase">{KYC_DOCUMENT_KIND_LABELS[doc.document_kind as keyof typeof KYC_DOCUMENT_KIND_LABELS] ?? doc.document_kind}</p>
         <p className="text-[10px] text-[#9BAFC5] truncate">
           {doc.original_filename ?? "arquivo"} · enviado {new Date(doc.uploaded_at).toLocaleDateString("pt-BR")} · válido até {new Date(doc.valid_until).toLocaleDateString("pt-BR")}
         </p>
@@ -46,8 +46,113 @@ function DocumentRow({ doc, onPreview }: { doc: KycDocument; onPreview: (url: st
   );
 }
 
+// Revelação de dado sensível (BRIEF 5.12): o valor real só sai por POST .../reveal, que grava o log
+// antes de devolver o dado. O valor em claro vive só neste estado; ocultar, fechar a ficha ou trocar
+// de qualificação volta a mascarar (o componente é remontado por key).
+function SensitiveValue({ qualificationId, field, masked, label, format, onRevealed }: {
+  qualificationId: string; field: string; masked: string; label: string;
+  format?: (v: any) => string; onRevealed: () => void;
+}) {
+  const [value, setValue] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function reveal() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/reveal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ field }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(json.error ?? "Não foi possível registrar o acesso, tente novamente"); return; }
+      setValue(format ? format(json.value) : String(json.value));
+      onRevealed();
+    } catch {
+      setError("Não foi possível registrar o acesso, tente novamente");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span>{value ?? masked}</span>
+      <button
+        type="button"
+        onClick={() => (value ? setValue(null) : reveal())}
+        disabled={loading}
+        aria-label={value ? `Ocultar ${label}` : `Revelar ${label} (será registrado)`}
+        title={value ? "Ocultar" : "Revelar (será registrado)"}
+        className="text-[#E8C97A] hover:text-[#F5F1E8] transition-colors disabled:opacity-50"
+      >
+        {loading ? <Loader2 size={12} className="animate-spin" /> : value ? <EyeOff size={12} /> : <Eye size={12} />}
+      </button>
+      {error && <span className="basis-full text-[12px] text-[#E24B4A]">{error}</span>}
+    </span>
+  );
+}
+
+const formatBankData = (b: any) => `${b?.banco ?? ""} · Ag. ${b?.agencia ?? ""} · Conta ${b?.conta ?? ""}${b?.tipo_conta ? ` (${b.tipo_conta})` : ""}`;
+
+// Lista de acessos a dados sensíveis (BRIEF 5.12 C): quem revelou, qual campo, quando. IP mascarado.
+function AccessLog({ qualificationId, refreshKey }: { qualificationId: string; refreshKey: number }) {
+  const [items, setItems] = useState<any[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function load(offset: number) {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/access-log?offset=${offset}`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(json.error ?? "Não foi possível carregar os acessos"); return; }
+      setItems((prev) => (offset === 0 ? json.items : [...prev, ...json.items]));
+      setHasMore(!!json.has_more);
+    } catch {
+      setError("Não foi possível carregar os acessos");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(0); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [qualificationId, refreshKey]);
+
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
+      <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Acessos a dados sensíveis</p>
+      {loading && items.length === 0 && <Loader2 size={14} className="animate-spin text-[#C9A84C]" />}
+      {error && <p className="text-[12px] text-[#E24B4A]">{error}</p>}
+      {!loading && !error && items.length === 0 && (
+        <p className="text-[12px] text-[#9BAFC5]">Nenhum dado sensível foi revelado ainda.</p>
+      )}
+      {items.map((it) => (
+        <p key={it.id} className="text-[12px] text-[#9BAFC5]">
+          <span className="text-[#F5F1E8]">{it.field_label}</span> · {it.viewed_by_name} · {fmt(it.viewed_at)} · IP {it.ip_masked}
+        </p>
+      ))}
+      {hasMore && (
+        <button type="button" onClick={() => load(items.length)} disabled={loading}
+          className="text-[12px] font-semibold text-[#E8C97A] hover:text-[#F5F1E8] disabled:opacity-50">
+          Ver mais
+        </button>
+      )}
+    </div>
+  );
+}
+
 function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string) => void }) {
   const q = data.qualification;
+  const [accessBump, setAccessBump] = useState(0);
+  const onRevealed = () => setAccessBump((n) => n + 1);
+  const canReveal = (f: string) => Array.isArray(q.revealable) && q.revealable.includes(f);
 
   if (!data.filled) {
     return (
@@ -72,8 +177,21 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-[11px]">
-        {q.cpf_cnpj && <div><span className="text-[#9BAFC5]">CPF</span><p className="text-[#F5F1E8]">{formatDocumentNumber(q.cpf_cnpj) ?? q.cpf_cnpj}</p></div>}
-        {q.rg && <div><span className="text-[#9BAFC5]">RG</span><p className="text-[#F5F1E8]">{q.rg}</p></div>}
+        {q.cpf_cnpj_masked && <div><span className="text-[#9BAFC5]">CPF</span><p className="text-[#F5F1E8]">
+          {canReveal("cpf_cnpj")
+            ? <SensitiveValue qualificationId={q.id} field="cpf_cnpj" masked={q.cpf_cnpj_masked} label="CPF" format={(v) => formatDocumentNumber(v) ?? v} onRevealed={onRevealed} />
+            : q.cpf_cnpj_masked}
+        </p></div>}
+        {q.rg_masked && <div><span className="text-[#9BAFC5]">RG</span><p className="text-[#F5F1E8]">
+          {canReveal("rg")
+            ? <SensitiveValue qualificationId={q.id} field="rg" masked={q.rg_masked} label="identidade" onRevealed={onRevealed} />
+            : q.rg_masked}
+        </p></div>}
+        {q.id_number_masked && <div><span className="text-[#9BAFC5]">Nº da identidade</span><p className="text-[#F5F1E8]">
+          {canReveal("id_number")
+            ? <SensitiveValue qualificationId={q.id} field="id_number" masked={q.id_number_masked} label="número da identidade" onRevealed={onRevealed} />
+            : q.id_number_masked}
+        </p></div>}
         {q.nationality && <div><span className="text-[#9BAFC5]">Nacionalidade</span><p className="text-[#F5F1E8]">{q.nationality}</p></div>}
         {q.marital_status && <div><span className="text-[#9BAFC5]">Estado Civil</span><p className="text-[#F5F1E8]">{q.marital_status}</p></div>}
         {q.profession && <div><span className="text-[#9BAFC5]">Profissão</span><p className="text-[#F5F1E8]">{q.profession}</p></div>}
@@ -86,7 +204,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
 
       {q.person_type === "PJ" && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
-          <p className="text-[9px] font-bold text-[#C9A84C] uppercase">Empresa</p>
+          <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Empresa</p>
           <div className="text-[11px]"><span className="text-[#9BAFC5]">Razão Social</span><p className="text-[#F5F1E8]">{q.company_name}</p></div>
           <div className="text-[11px]"><span className="text-[#9BAFC5]">CNPJ</span><p className="text-[#F5F1E8]">{formatDocumentNumber(q.company_cnpj) ?? q.company_cnpj}</p></div>
           {q.company_address && <div className="text-[11px]"><span className="text-[#9BAFC5]">Endereço da Sede</span><p className="text-[#F5F1E8]">{q.company_address}</p></div>}
@@ -95,29 +213,66 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
 
       {(q.dados_bancarios || q.pix_key) && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
-          <p className="text-[9px] font-bold text-[#C9A84C] uppercase">Dados para Repasse</p>
-          {q.pix_key && <div className="text-[11px]"><span className="text-[#9BAFC5]">Chave PIX</span><p className="text-[#F5F1E8]">{q.pix_key}</p></div>}
+          <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Dados para Repasse</p>
+          {q.pix_key_masked && <div className="text-[11px]"><span className="text-[#9BAFC5]">Chave PIX</span><p className="text-[#F5F1E8]">
+            {canReveal("pix_key")
+              ? <SensitiveValue qualificationId={q.id} field="pix_key" masked={q.pix_key_masked} label="chave PIX" onRevealed={onRevealed} />
+              : q.pix_key_masked}
+          </p></div>}
           {q.dados_bancarios?.banco && (
-            <p className="text-[11px] text-[#F5F1E8]">{q.dados_bancarios.banco} · Ag. {q.dados_bancarios.agencia} · Conta {q.dados_bancarios.conta} ({q.dados_bancarios.tipo_conta})</p>
+            <p className="text-[11px] text-[#F5F1E8]">
+              {canReveal("dados_bancarios")
+                ? <SensitiveValue qualificationId={q.id} field="dados_bancarios" masked={formatBankData(q.dados_bancarios)} label="dados bancários" format={formatBankData} onRevealed={onRevealed} />
+                : formatBankData(q.dados_bancarios)}
+            </p>
           )}
         </div>
       )}
 
       {data.documents?.length > 0 && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
-          <p className="text-[9px] font-bold text-[#C9A84C] uppercase">Documentos KYC</p>
+          <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Documentos KYC</p>
           {data.documents.map((doc: any, i: number) => <DocumentRow key={i} doc={doc} onPreview={onPreview} />)}
         </div>
       )}
 
       {data.representation_chain?.length > 0 && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-2">
-          <p className="text-[9px] font-bold text-[#C9A84C] uppercase">Cadeia de Representação</p>
+          <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Cadeia de Representação</p>
           {data.representation_chain.map((rep: any, i: number) => (
             <div key={i} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2.5 space-y-1" style={{ marginLeft: rep.depth * 12 }}>
-              <p className="text-[10px] text-[#C9A84C] font-bold uppercase">{REPRESENTATIVE_TYPE_LABELS[rep.representative_type as keyof typeof REPRESENTATIVE_TYPE_LABELS] ?? rep.representative_type}</p>
+              <p className="text-[12px] text-[#E8C97A] font-bold uppercase">{REPRESENTATIVE_TYPE_LABELS[rep.representative_type as keyof typeof REPRESENTATIVE_TYPE_LABELS] ?? rep.representative_type}</p>
               <p className="text-xs text-[#F5F1E8] font-medium">{rep.party_nature === "PJ" ? rep.company_name : rep.full_name}</p>
-              <p className="text-[10px] text-[#9BAFC5]">{formatDocumentNumber(rep.party_nature === "PJ" ? rep.company_cnpj : rep.cpf_cnpj) ?? (rep.party_nature === "PJ" ? rep.company_cnpj : rep.cpf_cnpj)}</p>
+              {rep.party_nature === "PJ" ? (
+                <p className="text-[12px] text-[#9BAFC5]">{formatDocumentNumber(rep.company_cnpj) ?? rep.company_cnpj}</p>
+              ) : (
+                <>
+                  {rep.cpf_cnpj_masked && (() => {
+                    const f = (rep.revealable ?? []).find((x: string) => x.endsWith(".cpf_cnpj"));
+                    return (
+                      <p className="text-[12px] text-[#9BAFC5]">CPF{" "}
+                        {f ? <SensitiveValue qualificationId={q.id} field={f} masked={rep.cpf_cnpj_masked} label="CPF do representante" format={(v) => formatDocumentNumber(v) ?? v} onRevealed={onRevealed} /> : rep.cpf_cnpj_masked}
+                      </p>
+                    );
+                  })()}
+                  {rep.rg_masked && (() => {
+                    const f = (rep.revealable ?? []).find((x: string) => x.endsWith(".rg"));
+                    return (
+                      <p className="text-[12px] text-[#9BAFC5]">Identidade{" "}
+                        {f ? <SensitiveValue qualificationId={q.id} field={f} masked={rep.rg_masked} label="identidade do representante" onRevealed={onRevealed} /> : rep.rg_masked}
+                      </p>
+                    );
+                  })()}
+                  {rep.id_number_masked && (() => {
+                    const f = (rep.revealable ?? []).find((x: string) => x.endsWith(".id_number"));
+                    return (
+                      <p className="text-[12px] text-[#9BAFC5]">Nº da identidade{" "}
+                        {f ? <SensitiveValue qualificationId={q.id} field={f} masked={rep.id_number_masked} label="número da identidade do representante" onRevealed={onRevealed} /> : rep.id_number_masked}
+                      </p>
+                    );
+                  })()}
+                </>
+              )}
               {rep.documents?.length > 0 && (
                 <div className="pt-1 space-y-1">
                   {rep.documents.map((doc: any, j: number) => <DocumentRow key={j} doc={doc} onPreview={onPreview} />)}
@@ -128,9 +283,12 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
         </div>
       )}
 
-      <p className="text-[9px] text-[#9BAFC5]/60 pt-2 border-t border-[#9BAFC5]/10 space-y-0.5">
+      <AccessLog qualificationId={q.id} refreshKey={accessBump} />
+
+      <p className="text-[12px] text-[#9BAFC5]/70 pt-2 border-t border-[#9BAFC5]/10 space-y-0.5">
         <span className="block">Preenchido em {q.filled_at ? new Date(q.filled_at).toLocaleString("pt-BR") : "-"}{q.filled_ip ? ` a partir do IP ${q.filled_ip}` : ""}.</span>
-        <span className="block">Abertura desta ficha e download de documentos ficam registrados na trilha de auditoria de KYC.</span>
+        <span className="block">Abertura desta ficha e download de documentos ficam registrados na trilha de auditoria de KYC. Cada revelação de CPF, identidade e dados de repasse é registrada com quem acessou, o campo e a data.</span>
+        <span className="block">Por regra de compliance, seu IP é armazenado por 36 meses como prova de que você teve acesso a dados sensíveis das partes.</span>
       </p>
     </div>
   );
@@ -171,7 +329,7 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
               <p className="text-xs text-[#9BAFC5] bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">{state.error}</p>
             )}
             {!state.loading && state.data && (
-              <PartyCardBody data={state.data} onPreview={setLightboxUrl} />
+              <PartyCardBody key={qualificationId} data={state.data} onPreview={setLightboxUrl} />
             )}
           </div>
         </div>
