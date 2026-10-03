@@ -1,7 +1,7 @@
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification, notifyByRoles } from "@/lib/notify";
 import { notifyNovaComissao } from "@/lib/email";
-import { UNIT_PRICE_CENTS } from "@/lib/credit-analysis-pricing";
+import { UNIT_PRICE_CENTS, ACCESS_PARTNER_PAYOUT_CENTS, isAccessPackage } from "@/lib/credit-analysis-pricing";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -128,7 +128,10 @@ export async function gerarComissaoConsultaEntregue(
   const beneficiaryId = order.partner_id ?? order.ref_partner_id ?? null;
   if (!beneficiaryId) return { status: "skipped", reason: "no_partner" };
 
-  const payoutCents = await getConsultaPartnerPayoutCents(db);
+  // V3 Access: pacote fechado de R$ 1.500 paga R$ 500 fixos ao partner, UMA vez
+  // por pedido (não por documento). Demais pedidos seguem a config global.
+  const pacoteAccess = isAccessPackage(order.amount_cents);
+  const payoutCents = pacoteAccess ? ACCESS_PARTNER_PAYOUT_CENTS : await getConsultaPartnerPayoutCents(db);
   if (payoutCents <= 0) return { status: "skipped", reason: "no_payout_configured" };
   const payout = Math.round(payoutCents) / 100;
   // Custo de UMA análise (R$197 por CNPJ/CPF), gravado em commissions.reference_cost só para
@@ -237,13 +240,15 @@ export async function gerarComissaoConsultaEntregue(
   // ── 1) Documento principal do pedido (a empresa, ou o titular) ──
   if (!order.partner_commission_id) {
     const referencia = order.client_name ?? order.client_doc ?? "cliente";
-    const nota =
-      `Comissão da consulta gerada na entrega do relatório ao cliente (Pedidos de Partners). ` +
-      `Custo por análise ${money(custoAnalise)} · comissão fixa ${money(payout)} (configurada em Pedidos de Partners). ` +
-      `Pedido pago ${pedidoPago}.` + vendaDireta;
+    const nota = pacoteAccess
+      ? `Comissão da Análise Estruturada V3 (pacote V3 Access de ${pedidoPago}, empresa + sócios), gerada na entrega ` +
+        `do relatório ao cliente. Valor fixo de ${money(payout)} por pedido.` + vendaDireta
+      : `Comissão da consulta gerada na entrega do relatório ao cliente (Pedidos de Partners). ` +
+        `Custo por análise ${money(custoAnalise)} · comissão fixa ${money(payout)} (configurada em Pedidos de Partners). ` +
+        `Pedido pago ${pedidoPago}.` + vendaDireta;
     const c = await criarComissao({
       operationId: orderId,
-      descricao: `Consulta / Análise de Crédito — ${referencia}`,
+      descricao: pacoteAccess ? `Análise Estruturada V3 — ${referencia}` : `Consulta / Análise de Crédito — ${referencia}`,
       nota,
       referencia,
     });
@@ -254,7 +259,8 @@ export async function gerarComissaoConsultaEntregue(
   }
 
   // ── 2) Documentos adicionais já analisados (sócios/garantidores, CNPJs do grupo) ──
-  const adicionais = await documentosAdicionaisAnalisados(db, orderId);
+  // Pacote Access: os sócios já estão no preço fechado e na comissão única acima.
+  const adicionais = pacoteAccess ? [] : await documentosAdicionaisAnalisados(db, orderId);
   if (adicionais.length) {
     const { data: jaGeradas } = await db
       .from("commissions")

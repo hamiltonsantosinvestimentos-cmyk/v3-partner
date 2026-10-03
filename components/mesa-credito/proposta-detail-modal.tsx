@@ -348,12 +348,17 @@ type AnaliseOrderStatus = { status: string; amount_cents: number | null; paid_at
 function AnaliseCreditoLinkButton({ proposalId, proposalCode, partnerId, hideBadge }: { proposalId: string; proposalCode: string; partnerId?: string; hideBadge?: boolean }) {
   const [copied, setCopied] = React.useState(false);
   const [order, setOrder] = React.useState<AnaliseOrderStatus | "loading">("loading");
+  const [partnerRole, setPartnerRole] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
     fetch(`/api/credit-proposals/analise-status?proposal_id=${proposalId}`)
       .then((r) => r.json())
-      .then((d) => { if (!cancelled) setOrder((d.order as AnaliseOrderStatus) ?? null); })
+      .then((d) => {
+        if (cancelled) return;
+        setOrder((d.order as AnaliseOrderStatus) ?? null);
+        setPartnerRole((d.partner_role as string | null) ?? null);
+      })
       .catch(() => { if (!cancelled) setOrder(null); });
     return () => { cancelled = true; };
   }, [proposalId]);
@@ -361,7 +366,10 @@ function AnaliseCreditoLinkButton({ proposalId, proposalCode, partnerId, hideBad
   function handleCopy() {
     const params = new URLSearchParams({ prop: proposalCode });
     if (partnerId) params.set("ref", partnerId);
-    const url = `https://app.v3partners.com.br/analise-v2?${params.toString()}#configurador`;
+    // Proposta de partner V3 Access (papel STARTER): pacote fechado de R$ 1.500.
+    const url = partnerRole === "STARTER"
+      ? `https://app.v3partners.com.br/analise/checkout?pacote=access&${params.toString()}`
+      : `https://app.v3partners.com.br/analise-v2?${params.toString()}#configurador`;
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

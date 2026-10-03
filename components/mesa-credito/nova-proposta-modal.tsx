@@ -591,16 +591,23 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       // já foi salva — o partner ainda consegue pegar o link depois no detalhe
       // da proposta (AnaliseCreditoLinkButton, em proposta-detail-modal.tsx).
       try {
-        const [propRes, payoutRes] = await Promise.all([
+        const [propRes, payoutRes, meRes] = await Promise.all([
           fetch(`/api/credit-proposals?id=${proposalId}`).then(r => r.json()).catch(() => null),
           fetch("/api/settings/consulta-partner-payout").then(r => r.json()).catch(() => null),
+          fetch("/api/profile").then(r => r.json()).catch(() => null),
         ]);
         const code = propRes?.proposal?.code as string | undefined;
-        const payoutReais = typeof payoutRes?.payout_reais === "number" ? payoutRes.payout_reais : 60;
+        // V3 Access (papel STARTER): link do pacote fechado "Análise Estruturada V3",
+        // R$ 1.500 pagos pelo cliente, R$ 500 de comissão ao partner.
+        const isAccess = meRes?.profile?.role === "STARTER";
+        const payoutReais = isAccess ? 500 : typeof payoutRes?.payout_reais === "number" ? payoutRes.payout_reais : 60;
         if (code) {
           const params = new URLSearchParams({ prop: code });
           if (partnerId) params.set("ref", partnerId);
-          setAnalysisLink({ url: `https://app.v3partners.com.br/analise-v2?${params.toString()}#configurador`, payoutReais });
+          const url = isAccess
+            ? `https://app.v3partners.com.br/analise/checkout?pacote=access&${params.toString()}`
+            : `https://app.v3partners.com.br/analise-v2?${params.toString()}#configurador`;
+          setAnalysisLink({ url, payoutReais });
         }
       } catch { /* link é complementar, não bloqueia a confirmação da proposta */ }
 
@@ -691,7 +698,9 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                 )}
               </button>
               <p className="text-[11px] text-emerald-400 font-semibold">
-                Cada análise entregue gera {formatCurrency(analysisLink.payoutReais)} de comissão para você.
+                {analysisLink.url.includes("pacote=access")
+                  ? <>Envie ao cliente: a Análise Estruturada V3 custa R$ 1.500,00 (CPF, ou CNPJ com todos os sócios) e gera {formatCurrency(analysisLink.payoutReais)} de comissão para você quando o relatório for entregue.</>
+                  : <>Cada análise entregue gera {formatCurrency(analysisLink.payoutReais)} de comissão para você.</>}
               </p>
             </div>
           )}
