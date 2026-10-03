@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
-import { clampSelection, calcTotalCents, buildModularTitle, getMinCounts, fmtBRL, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
+import { clampSelection, calcTotalCents, buildModularTitle, getMinCounts, fmtBRL, ACCESS_PACKAGE_CENTS, ACCESS_PACKAGE_TITLE, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 import { notifyPartnerAnaliseTentativa } from "@/lib/email";
 import { notificarMesaNovoPedidoTentativa } from "@/lib/cora-order-reconcile";
 
@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     deal_type?: "credit" | "ma" | null;
     profile_type?: string | null;
     company_structure?: string | null;
+    pacote?: string | null;
   };
 
   // Mínimos de negócio (ver PATCH 26/08/2026) resolvidos e aplicados no
@@ -46,11 +47,16 @@ export async function POST(req: NextRequest) {
     cpfCount: Number(body.cpf_count ?? min.minCpf),
     hasConsultancy: Boolean(body.has_consultancy),
   }, min);
-  const priceCents = calcTotalCents(selection);
+  // V3 Access: pacote fechado de R$ 1.500 (empresa + sócios, ou só o CPF),
+  // sempre com a devolutiva da Mesa. As contagens continuam valendo para o
+  // intake pedir os sócios; só o preço e o título não seguem a tabela modular.
+  const isAccess = body.pacote === "access";
+  if (isAccess) selection.hasConsultancy = true;
+  const priceCents = isAccess ? ACCESS_PACKAGE_CENTS : calcTotalCents(selection);
   // Produto vendido é sempre "Análise de Crédito", inclusive quando o link
   // está vinculado a um Deal de M&A (ver correção 14/09/2026 em
   // credit-analysis-pricing.ts) -- nunca varia por dealType.
-  const title = buildModularTitle(selection);
+  const title = isAccess ? ACCESS_PACKAGE_TITLE : buildModularTitle(selection);
 
   if (!body.client_name?.trim()) return NextResponse.json({ error: "Nome obrigatório" }, { status: 400 });
   if (!body.client_email?.trim()) return NextResponse.json({ error: "Email obrigatório" }, { status: 400 });
@@ -106,6 +112,18 @@ export async function POST(req: NextRequest) {
     if (refProfile) refPartnerId = refProfile.id;
   }
   if (!refPartnerId && proposalPartnerId) refPartnerId = proposalPartnerId;
+
+  // Pacote fechado do V3 Access só vale no link de um partner Access (papel
+  // STARTER): sem isso, qualquer um editaria a URL pra pagar R$ 1.500 numa
+  // análise que no modular sairia mais cara (empresa + muitos sócios).
+  if (isAccess) {
+    const { data: refRole } = refPartnerId
+      ? await db.from("profiles").select("role").eq("id", refPartnerId).maybeSingle()
+      : { data: null };
+    if (refRole?.role !== "STARTER") {
+      return NextResponse.json({ error: "Este link de Análise Estruturada não é válido. Peça um novo link ao seu consultor V3." }, { status: 400 });
+    }
+  }
 
   const docDigits = body.client_doc.replace(/\D/g, "");
   const docType = docDigits.length === 11 ? "CPF" : "CNPJ";

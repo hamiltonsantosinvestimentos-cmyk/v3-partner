@@ -14,7 +14,7 @@
 // o cron de polling) reconcilia da mesma forma, sempre.
 import { randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildModularTitle, LEGACY_DIRECT_TITLES } from "@/lib/credit-analysis-pricing";
+import { buildModularTitle, LEGACY_DIRECT_TITLES, isAccessPackage, ACCESS_PACKAGE_TITLE } from "@/lib/credit-analysis-pricing";
 import {
   notifyPagamentoAnaliseConfirmado,
   notifyMesaPedidoPago,
@@ -290,7 +290,9 @@ export async function reconcileDirectOrderPaid(
 ) {
   const intakeToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
   const dealType: "credit" | "ma" = directOrder.ma_deal_id ? "ma" : "credit";
-  const title = directOrder.cnpj_count != null
+  const title = isAccessPackage(directOrder.amount_cents)
+    ? ACCESS_PACKAGE_TITLE
+    : directOrder.cnpj_count != null
     ? buildModularTitle({
         cnpjCount: directOrder.cnpj_count,
         cpfCount: directOrder.cpf_count ?? 0,

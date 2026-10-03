@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Copy, Check, AlertCircle, AlertTriangle, Loader2, CreditCard, QrCode, FileText, Minus, Plus } from "lucide-react";
 import { getStoredRefPartnerId, getStoredPropCode, getStoredPropDealType } from "@/lib/ref-tracking";
 import { trackEvent } from "@/lib/analytics";
-import { UNIT_PRICE_CENTS, clampSelection, calcTotalCents, buildModularTitle, legacyPlanoToSelection, getMinCounts, fmtBRL, type ModularSelection, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
+import { UNIT_PRICE_CENTS, clampSelection, calcTotalCents, buildModularTitle, legacyPlanoToSelection, getMinCounts, fmtBRL, ACCESS_PACKAGE_CENTS, ACCESS_PACKAGE_TITLE, type ModularSelection, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
@@ -63,6 +63,12 @@ export function DirectCheckoutClient() {
   const initialSelection = useMemo(() => selectionFromParams(searchParams, min), [searchParams, min]);
 
   const [selection, setSelection] = useState<ModularSelection>(initialSelection);
+  // V3 Access (?pacote=access, link do partner Access): pacote fechado de
+  // R$ 1.500. O cliente só diz se é CPF ou CNPJ e, no CNPJ, quantos sócios;
+  // o nome/CPF de cada sócio (com autorização) é pedido no intake pós-pagamento.
+  const isAccess = searchParams.get("pacote") === "access";
+  const [accessPerfil, setAccessPerfil] = useState<ProfileType>("PJ");
+  const [accessSocios, setAccessSocios] = useState(1);
   const [step, setStep] = useState<Step>("form");
   const [payMethod, setPayMethod] = useState<PayMethod>("pix");
   const [form, setForm] = useState({ client_name: "", client_email: "", client_doc: "" });
@@ -72,8 +78,16 @@ export function DirectCheckoutClient() {
   const [copied, setCopied] = useState(false);
   const [polling, setPolling] = useState(false);
 
-  const totalCents = calcTotalCents(selection);
-  const title = buildModularTitle(selection);
+  const accessSelection: ModularSelection = accessPerfil === "PF"
+    ? { cnpjCount: 0, cpfCount: 1, hasConsultancy: true }
+    : { cnpjCount: 1, cpfCount: accessSocios, hasConsultancy: true };
+  const effSelection = isAccess ? accessSelection : selection;
+  const effProfileType = isAccess ? accessPerfil : profileType;
+  const effCompanyStructure: CompanyStructure | null = isAccess
+    ? (accessPerfil === "PJ" ? (accessSocios > 1 ? "MULTIPLOS_SOCIOS" : "UNIPESSOAL") : null)
+    : companyStructure;
+  const totalCents = isAccess ? ACCESS_PACKAGE_CENTS : calcTotalCents(selection);
+  const title = isAccess ? ACCESS_PACKAGE_TITLE : buildModularTitle(selection);
   const totalAnalyses = selection.cnpjCount + selection.cpfCount;
 
   function setCnpjCount(n: number) {
@@ -130,10 +144,16 @@ export function DirectCheckoutClient() {
     if (!form.client_name.trim()) { setFormError("Nome obrigatório"); return; }
     if (!form.client_email.trim()) { setFormError("Email obrigatório"); return; }
     if (!form.client_doc.replace(/\D/g, "")) { setFormError("CPF ou CNPJ obrigatório"); return; }
+    if (isAccess) {
+      const d = form.client_doc.replace(/\D/g, "");
+      if (accessPerfil === "PF" && d.length !== 11) { setFormError("Informe um CPF válido (11 dígitos)"); return; }
+      if (accessPerfil === "PJ" && d.length !== 14) { setFormError("Informe o CNPJ da empresa (14 dígitos)"); return; }
+    }
 
     setSubmitting(true);
     try {
-      const refPartnerId = getStoredRefPartnerId();
+      // Link do partner Access aponta direto pro checkout (sem passar pela landing que grava o ?ref=).
+      const refPartnerId = searchParams.get("ref") ?? getStoredRefPartnerId();
       const propCode = searchParams.get("prop") ?? getStoredPropCode();
       const dealType = searchParams.get("deal_type") === "ma" ? "ma" : getStoredPropDealType();
       const r = await fetch("/api/checkout/direct", {
@@ -141,14 +161,15 @@ export function DirectCheckoutClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          cnpj_count: selection.cnpjCount,
-          cpf_count: selection.cpfCount,
-          has_consultancy: selection.hasConsultancy,
+          cnpj_count: effSelection.cnpjCount,
+          cpf_count: effSelection.cpfCount,
+          has_consultancy: effSelection.hasConsultancy,
+          pacote: isAccess ? "access" : null,
           ref_partner_id: refPartnerId,
           prop_code: propCode,
           deal_type: dealType,
-          profile_type: profileType,
-          company_structure: companyStructure,
+          profile_type: effProfileType,
+          company_structure: effCompanyStructure,
         }),
       });
       const d = await r.json() as OrderResult & { error?: string };
@@ -178,12 +199,46 @@ export function DirectCheckoutClient() {
 
         <div style={{ background: N2, border: `1px solid ${N4}`, borderRadius: 14, padding: 32 }}>
           <div style={{ display: "inline-block", background: "rgba(201,168,76,0.1)", border: `1px solid ${GO}`, color: GL, fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", padding: "4px 10px", borderRadius: 4, marginBottom: 14 }}>
-            Análise de Crédito Empresarial · R$ 197,00 por análise
+            {isAccess ? "Análise Estruturada V3 · valor fechado" : "Análise de Crédito Empresarial · R$ 197,00 por análise"}
           </div>
           <div style={{ color: CR, fontSize: 15, fontWeight: 700, marginBottom: 4, lineHeight: 1.3 }}>{title}</div>
           <div style={{ color: GO, fontSize: 28, fontWeight: 800, marginTop: 12 }}>{fmt(totalCents)}</div>
 
-          {step === "form" && (
+          {step === "form" && isAccess && (
+            <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontSize: 12, color: MU, lineHeight: 1.6 }}>
+                Consulta de mercado, relatório de rating, classificação de risco, parecer técnico,
+                due diligence e preparação técnica para tomada de crédito, com devolutiva da Mesa V3.
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                {(["PF", "PJ"] as const).map((p) => (
+                  <button key={p} type="button" onClick={() => setAccessPerfil(p)}
+                    style={{ flex: 1, background: accessPerfil === p ? "rgba(201,168,76,0.08)" : N3, border: `1px solid ${accessPerfil === p ? GO : N4}`, borderRadius: 8, padding: "12px 0", color: CR, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                    {p === "PF" ? "Pessoa física (CPF)" : "Empresa (CNPJ)"}
+                  </button>
+                ))}
+              </div>
+              {accessPerfil === "PJ" && (
+                <>
+                  <CounterRow
+                    label="Sócios da empresa (CPF)"
+                    hint="Todos os sócios entram na análise, sem custo adicional"
+                    value={accessSocios}
+                    min={1}
+                    onChange={(n) => setAccessSocios(Math.max(1, Math.min(10, n)))}
+                  />
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start", background: "rgba(201,168,76,0.08)", border: "1px solid rgba(201,168,76,0.35)", borderRadius: 8, padding: 12 }}>
+                    <AlertTriangle size={14} color={GO} style={{ flexShrink: 0, marginTop: 1 }} />
+                    <span style={{ fontSize: 11, color: MU, lineHeight: 1.5 }}>
+                      Depois do pagamento, você informa o nome e o CPF de cada sócio e confirma a autorização deles para a consulta.
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {step === "form" && !isAccess && (
             <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
               {profileType !== "PF" && (
                 <CounterRow
@@ -256,11 +311,11 @@ export function DirectCheckoutClient() {
                 />
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: GL, marginBottom: 5, display: "block" }}>CPF ou CNPJ</label>
+                <label style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: GL, marginBottom: 5, display: "block" }}>{isAccess ? (accessPerfil === "PF" ? "CPF" : "CNPJ da empresa") : "CPF ou CNPJ"}</label>
                 <input
                   value={form.client_doc}
                   onChange={(e) => setForm((p) => ({ ...p, client_doc: e.target.value }))}
-                  placeholder="000.000.000-00 ou 00.000.000/0001-00"
+                  placeholder={isAccess ? (accessPerfil === "PF" ? "000.000.000-00" : "00.000.000/0001-00") : "000.000.000-00 ou 00.000.000/0001-00"}
                   style={{ width: "100%", background: N3, border: `1px solid ${N4}`, borderRadius: 8, padding: "10px 12px", color: CR, fontSize: 13, outline: "none" }}
                 />
               </div>

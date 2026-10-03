@@ -5,6 +5,18 @@
 // a fórmula em outro lugar.
 
 export const UNIT_PRICE_CENTS = 19700; // R$ 197,00 por CNPJ ou CPF analisado
+
+// V3 Access (03/10/2026): pacote fechado "Análise Estruturada V3", vendido pelo
+// partner Access (papel STARTER) ao cadastrar uma proposta. Preço FIXO, não
+// depende de quantos CPFs/CNPJs entram (empresa + todos os sócios). R$ 1.500
+// nunca coincide com o preço modular (sempre múltiplo de R$ 197), por isso o
+// próprio valor do pedido identifica o pacote, sem coluna nova no banco.
+export const ACCESS_PACKAGE_CENTS = 150000; // R$ 1.500,00
+export const ACCESS_PARTNER_PAYOUT_CENTS = 50000; // R$ 500,00 ao partner, uma vez por pedido
+export const ACCESS_PACKAGE_TITLE = "Análise Estruturada V3";
+export function isAccessPackage(amountCents: number | null | undefined): boolean {
+  return amountCents === ACCESS_PACKAGE_CENTS;
+}
 // Fallback legado (sem perfil definido): usado por legacyPlanoToSelection
 // (/analise Variante A, congelada) e por qualquer clampSelection() chamado
 // sem mínimos explícitos. Nunca usado no fluxo novo de /analise-v2.

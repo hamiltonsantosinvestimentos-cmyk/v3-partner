@@ -44,5 +44,11 @@ export async function GET(req: NextRequest) {
     .limit(1)
     .maybeSingle();
 
-  return NextResponse.json({ order: order ?? null });
+  // Partner Access (papel STARTER) vende o pacote fechado de R$ 1.500: o botão
+  // "Link Análise" usa isso para montar o link certo.
+  const { data: partner } = proposal.partner_id
+    ? await svc.from("profiles").select("role").eq("id", proposal.partner_id).maybeSingle()
+    : { data: null };
+
+  return NextResponse.json({ order: order ?? null, partner_role: partner?.role ?? null });
 }
