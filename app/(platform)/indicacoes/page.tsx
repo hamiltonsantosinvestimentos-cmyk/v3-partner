@@ -19,7 +19,7 @@ export default async function IndicacoesPage() {
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"].includes(profile.role)) {
+  if (!profile || !["ADMIN", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"].includes(profile.role)) {
     redirect("/unauthorized");
   }
 

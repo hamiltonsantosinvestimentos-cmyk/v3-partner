@@ -51,10 +51,10 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { href: "/minhas-operacoes", label: "Minhas Operações", icon: "ClipboardList", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"] },
       { href: "/meus-links", label: "Links de Serviço", icon: "Link2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "MESA_OPERACIONAL"] },
-      { href: "/meus-compradores", label: "Meus Compradores", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"] },
-      { href: "/meus-ativos", label: "Meus Ativos", icon: "Package", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"] },
+      { href: "/meus-compradores", label: "Meus Compradores", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
+      { href: "/meus-ativos", label: "Meus Ativos", icon: "Package", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
       { href: "/ranking", label: "Ranking", icon: "Medal", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"] },
-      { href: "/indicacoes", label: "Indicações", icon: "UserPlus2", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"] },
+      { href: "/indicacoes", label: "Indicações", icon: "UserPlus2", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"] },
     ],
   },
   {
@@ -98,9 +98,9 @@ const NAV_SECTIONS: NavSection[] = [
         // o filho "Vitrine" ja tinha roles de partner, mas nunca renderizava
         // porque o pai escondia o grupo inteiro antes disso.
         href: "/bolsa", label: "Bolsa de Ativos", icon: "Gavel",
-        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"],
+        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "ENTERPRISE"],
         children: [
-          { href: "/bolsa", label: "Vitrine", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
+          { href: "/bolsa", label: "Vitrine", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] },
           { href: "/bolsa/mesa", label: "Mesa de Capitais", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
         ],
       },
@@ -133,10 +133,10 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       {
         href: "/simulador-home-equity", label: "Simuladores", icon: "Calculator",
-        roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"],
+        roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"],
         children: [
-          { href: "/simulador-home-equity", label: "Home Equity / CGI", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
-          { href: "/simulador-homecash", label: "HomeCash", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
+          { href: "/simulador-home-equity", label: "Home Equity / CGI", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
+          { href: "/simulador-homecash", label: "HomeCash", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
         ],
       },
       { href: "/enterprise", label: "Enterprise", icon: "Building2", roles: ["ENTERPRISE"] },
@@ -145,13 +145,13 @@ const NAV_SECTIONS: NavSection[] = [
         href: "/consorcio", label: "Consórcio", icon: "Trophy",
         roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"],
         children: [
-          { href: "/consorcio/simulacao", label: "Simulação", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
+          { href: "/consorcio/simulacao", label: "Simulação", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
           { href: "/consorcio/cartas-contempladas", label: "Cartas Contempladas", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
-          { href: "/consorcio/projetos", label: "Projetos", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
+          { href: "/consorcio/projetos", label: "Projetos", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"] },
         ],
       },
       { href: "/marketplace", label: "Marketplace", icon: "ShoppingBag",
-        roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO", "MESA_OPERACIONAL"],
+        roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO", "MESA_OPERACIONAL"],
       },
     ],
   },
@@ -160,10 +160,10 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/agentes", label: "Squads de IA", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/sdr", label: "SDR WhatsApp", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO", "SDR", "CLOSER"] },
-      { href: "/meu-atendimento-ia", label: "Atendimento IA", icon: "MessageSquare", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"] },
+      { href: "/meu-atendimento-ia", label: "Atendimento IA", icon: "MessageSquare", roles: ["PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"] },
       { href: "/deal-rooms", label: "Deal Rooms", icon: "Layers", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/ia-assistant", label: "V3 IA Partner", icon: "BrainCircuit", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"] },
-      { href: "/metas", label: "Metas & Performance", icon: "Target", roles: ["ADMIN", "GESTAO", "STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"] },
+      { href: "/metas", label: "Metas & Performance", icon: "Target", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"] },
       { href: "/projeto", label: "Projeto", icon: "ClipboardList", roles: ["ADMIN", "GESTAO"] },
       { href: "/plan-strategy", label: "Plan Strategy", icon: "Compass", roles: ["ADMIN", "GESTAO"] },
       { href: "/compliance", label: "Compliance", icon: "ShieldCheck", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },

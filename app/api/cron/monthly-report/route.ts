@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
       await sendMonthlyReport({
         partnerEmail: partner.email,
         partnerName: partner.full_name ?? partner.email,
-        plano: partner.role === "ENTERPRISE" ? "Enterprise" : partner.role === "PARTNER_PRO" ? "Partner PRO" : partner.role === "STARTER" ? "Starter" : "Partner",
+        plano: partner.role === "ENTERPRISE" ? "Enterprise" : partner.role === "PARTNER_PRO" ? "Partner PRO" : partner.role === "STARTER" ? "V3 Access" : "Partner",
         mes: mesLabel,
         totalRecebido,
         totalPendente,

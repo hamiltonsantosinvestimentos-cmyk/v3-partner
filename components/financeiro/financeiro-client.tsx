@@ -3459,7 +3459,7 @@ function AssinaturasTab() {
                   onChange={e => setEditForm(f => ({ ...f, role: e.target.value }))}
                   className="w-full bg-card border border-border/40 rounded-lg px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-[#C9A84C]/40"
                 >
-                  <option value="STARTER">V3 Starter</option>
+                  <option value="STARTER">V3 Access</option>
                   <option value="PARTNER">V3 Partner</option>
                   <option value="PARTNER_PRO">V3 Partner PRO</option>
                   <option value="ENTERPRISE">V3 Enterprise</option>
@@ -3661,7 +3661,7 @@ function AssinaturasTab() {
             </div>
             <div className="space-y-1 text-sm">
               <p className="text-muted-foreground">Partner: <span className="text-foreground font-medium">{payPartner.full_name ?? payPartner.email}</span></p>
-              <p className="text-muted-foreground">Plano: <span className="text-foreground font-medium">{payPartner.role === "PARTNER_PRO" ? "Partner PRO" : payPartner.role === "STARTER" ? "Starter" : payPartner.role === "ENTERPRISE" ? "Enterprise" : "Partner"}</span></p>
+              <p className="text-muted-foreground">Plano: <span className="text-foreground font-medium">{payPartner.role === "PARTNER_PRO" ? "Partner PRO" : payPartner.role === "STARTER" ? "V3 Access" : payPartner.role === "ENTERPRISE" ? "Enterprise" : "Partner"}</span></p>
               <p className="text-muted-foreground">Valor: <span className="text-[#C9A84C] font-bold">{formatMoeda(getValorPartner(payPartner))}</span></p>
             </div>
             <div>

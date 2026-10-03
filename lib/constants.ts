@@ -42,7 +42,7 @@ export const PLAN_COMMISSION_PCT: Partial<Record<UserRole, number>> = {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: "Administrador",
-  STARTER: "V3 Starter",
+  STARTER: "V3 Access",
   PARTNER: "V3 Partner",
   PARTNER_PRO: "V3 Partner PRO",
   PARTNER_HE: "Partner HE",

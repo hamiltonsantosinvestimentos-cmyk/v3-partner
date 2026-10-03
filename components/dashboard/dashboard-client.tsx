@@ -502,7 +502,7 @@ export function DashboardClient({
           {/* Breakdown por plano */}
           <div className="grid grid-cols-4 gap-2 pt-1 border-t border-[#C9A84C]/10">
             {[
-              { key: "STARTER",     label: "Starter",     color: "#7A8FA8", preco: "R$297" },
+              { key: "STARTER",     label: "Access",      color: "#7A8FA8", preco: "R$1.447/ano" },
               { key: "PARTNER",     label: "Partner",     color: "#C9A84C", preco: "R$497" },
               { key: "PARTNER_PRO", label: "Partner PRO", color: "#E8C97A", preco: "R$897" },
               { key: "ENTERPRISE",  label: "Enterprise",  color: "#C9A84C", preco: "R$2.5k" },
