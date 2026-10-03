@@ -47,7 +47,7 @@ async function gerarCobrancaCora(params: {
         params.plano === "ENTERPRISE" ? "Enterprise"
         : params.plano === "PARTNER_PRO" ? "Partner PRO"
         : params.plano === "PARTNER_HE" ? "Partner HE"
-        : params.plano === "STARTER" ? "Starter"
+        : params.plano === "STARTER" ? "V3 Access"
         : "Partner"
       }`, amount: valor }],
       notifications: {
@@ -232,9 +232,11 @@ export async function POST(req: NextRequest) {
     // "grandfathered" quando ele é MENOR que o preço mensal vigente, então
     // esse valor anual (bem maior) nunca é interpretado como mensalidade
     // recorrente.
+    // V3 Access: anuidade fechada (R$ 1.447,00), não é mensal x 12 exato.
+    const PLANO_VALOR_ANUAL_FIXO: Record<string, number> = { STARTER: 144700 };
     const valorFinal = isMensal
       ? Math.round(PLANO_VALOR[plano] ?? 9700)
-      : Math.round((PLANO_VALOR[plano] ?? 29700) * 12);
+      : PLANO_VALOR_ANUAL_FIXO[plano] ?? Math.round((PLANO_VALOR[plano] ?? 29700) * 12);
 
     // Cartão recorrente (InfinitePay) é configurado manualmente pelo admin na
     // aprovação — não gera cobrança Cora nesse caso.
@@ -266,7 +268,7 @@ export async function POST(req: NextRequest) {
       const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise"
         : plano === "PARTNER_PRO" ? "V3 Partner PRO"
         : plano === "PARTNER_HE" ? "Partner HE"
-        : plano === "STARTER" ? "V3 Starter"
+        : plano === "STARTER" ? "V3 Access"
         : "V3 Partner";
       const vencimento = new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR");
 

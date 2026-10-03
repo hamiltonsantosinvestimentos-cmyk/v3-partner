@@ -24,7 +24,7 @@ export default async function MeusAtivosPage() {
     .eq("id", user.id)
     .single();
 
-  const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
+  const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "ENTERPRISE"];
   if (!ALLOWED.includes(profile?.role ?? "")) redirect("/unauthorized");
 
   const isInternal = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile?.role ?? "");

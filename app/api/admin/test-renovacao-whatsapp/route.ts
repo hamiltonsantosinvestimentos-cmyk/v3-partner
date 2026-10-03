@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
   // Se não tem assinatura, monta mensagem de teste genérica
   const planoLabel =
     sub?.plano === "PARTNER_PRO" ? "Partner PRO" :
-    sub?.plano === "STARTER" ? "Starter" :
+    sub?.plano === "STARTER" ? "V3 Access" :
     sub?.plano === "ENTERPRISE" ? "Enterprise" :
     sub?.plano ?? p.role.replace("_", " ");
 

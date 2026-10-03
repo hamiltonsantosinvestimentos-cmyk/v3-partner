@@ -352,7 +352,7 @@ export async function PATCH(req: NextRequest) {
         services: [{ name: `V3 Partners — Mensalidade ${
           pp.role === "ENTERPRISE" ? "Enterprise"
           : pp.role === "PARTNER_PRO" ? "Partner PRO"
-          : pp.role === "STARTER" ? "Starter"
+          : pp.role === "STARTER" ? "V3 Access"
           : "Partner"
         }`, amount: valor }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },

@@ -13,7 +13,7 @@ async function enviarBoasVindas(email: string, nome: string, plano: string, cart
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return; // sem chave, ignora silenciosamente
 
-  const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise" : plano === "PARTNER_PRO" ? "V3 Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : plano === "STARTER" ? "V3 Starter" : "V3 Partner";
+  const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise" : plano === "PARTNER_PRO" ? "V3 Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : plano === "STARTER" ? "V3 Access" : "V3 Partner";
   const comissao   = plano === "ENTERPRISE" ? "55%" : plano === "PARTNER_PRO" ? "50%" : plano === "PARTNER_HE" ? "50%" : plano === "STARTER" ? "20%" : "35%";
 
   const html = `<!DOCTYPE html>

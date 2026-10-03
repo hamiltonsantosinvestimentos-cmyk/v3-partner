@@ -40,7 +40,7 @@ const STATUS_CONFIG = {
 };
 
 const PLANO_LABEL: Record<string, string> = {
-  STARTER: "V3 Starter — R$ 297/mês",
+  STARTER: "V3 Access — R$ 1.447/ano",
   PARTNER: "V3 Partner — R$ 908,08/mês",
   PARTNER_HE: "Partner HE — R$ 97/mês",
   PARTNER_PRO: "V3 Partner PRO — R$ 1.324,75/mês",

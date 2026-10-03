@@ -167,7 +167,7 @@ function ModalDetalhe({
             <div>
               <p className="text-xs font-semibold text-[#C9A84C]">Plano solicitado</p>
               <p className="text-sm font-bold text-foreground">
-                {reg.plano === "STARTER" ? "V3 Starter — R$ 297/mês"
+                {reg.plano === "STARTER" ? "V3 Access — R$ 1.447/ano"
                   : reg.plano === "PARTNER" ? "V3 Partner — R$ 497/mês"
                   : reg.plano === "PARTNER_PRO" ? "V3 Partner PRO — R$ 897/mês"
                   : reg.plano === "PARTNER_HE" ? "Partner HE — R$ 97/mês"
@@ -175,7 +175,7 @@ function ModalDetalhe({
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
                 {reg.plano_recorrencia === "ANUAL_PIX_BOLETO" ? "Anual à vista via Pix/Boleto (10% off)"
-                  : reg.plano_recorrencia === "ANUAL_CARTAO" ? "Anual em até 12x no cartão"
+                  : reg.plano_recorrencia === "ANUAL_CARTAO" ? (reg.plano === "STARTER" ? "Anual em até 10x no cartão" : "Anual em até 12x no cartão")
                   : "Mensal, sem fidelidade (legado)"}
               </p>
             </div>
