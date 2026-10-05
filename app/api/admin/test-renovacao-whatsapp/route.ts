@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { ehStarterAntigo, rotuloStarter } from "@/lib/v3-access";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
   // Se não tem assinatura, monta mensagem de teste genérica
   const planoLabel =
     sub?.plano === "PARTNER_PRO" ? "Partner PRO" :
-    sub?.plano === "STARTER" ? "V3 Access" :
+    sub?.plano === "STARTER" ? rotuloStarter(await ehStarterAntigo(p.id)) :
     sub?.plano === "ENTERPRISE" ? "Enterprise" :
     sub?.plano ?? p.role.replace("_", " ");
 

@@ -6,7 +6,8 @@ import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 // (cadastro em /cadastro-partner-access, anuidade de R$ 1.447). O link da Análise Estruturada
 // V3 (R$ 1.500) e o card do dashboard ficam só para esses.
 
-export const ACCESS_LANCAMENTO = "2026-10-03T00:00:00Z";
+import { ACCESS_LANCAMENTO } from "@/lib/v3-access-rotulos";
+export { ACCESS_LANCAMENTO, cadastroStarterAntigo, rotuloStarter } from "@/lib/v3-access-rotulos";
 
 export async function ehPartnerAccess(db: SupabaseClient, profileId: string | null | undefined): Promise<boolean> {
   if (!profileId) return false;
@@ -22,6 +23,20 @@ export async function ehPartnerAccess(db: SupabaseClient, profileId: string | nu
     .limit(1)
     .maybeSingle();
   return !!cadastro;
+}
+
+/** Ids dos perfis STARTER que são do antigo V3 Starter (em lote, para listas). */
+export async function idsStarterAntigo(db: SupabaseClient): Promise<Set<string>> {
+  const { data: starters } = await db.from("profiles").select("id, email").eq("role", "STARTER");
+  if (!starters?.length) return new Set();
+  const { data: cadastros } = await db
+    .from("partner_registrations")
+    .select("email")
+    .eq("plano", "STARTER")
+    .eq("status", "APROVADO")
+    .gte("created_at", ACCESS_LANCAMENTO);
+  const access = new Set((cadastros ?? []).map((c) => String(c.email ?? "").toLowerCase()));
+  return new Set(starters.filter((p) => !access.has(String(p.email ?? "").toLowerCase())).map((p) => p.id as string));
 }
 
 /** Partner do antigo V3 Starter (papel STARTER sem cadastro do Access): mantém o menu de antes do Access. */

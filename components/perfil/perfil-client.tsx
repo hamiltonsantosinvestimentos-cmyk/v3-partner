@@ -12,6 +12,8 @@ import { ROLE_LABELS, type UserRole } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 
 interface ProfileData {
+  /** Antigo V3 Starter (papel STARTER sem cadastro do Access). */
+  starter_antigo?: boolean;
   id: string;
   full_name: string | null;
   email: string;
@@ -318,7 +320,7 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
                 <p className="text-xs text-[#7A8FA8] mt-0.5">{profile.email}</p>
                 <span className="inline-block mt-2 px-2 py-0.5 rounded text-[10px] font-bold"
                   style={{ background: `${plan.color}20`, color: plan.color, border: `1px solid ${plan.color}40` }}>
-                  {ROLE_LABELS[profile.role]}
+                  {profile.starter_antigo && profile.role === "STARTER" ? "V3 Starter" : ROLE_LABELS[profile.role]}
                 </span>
               </div>
 
@@ -367,7 +369,7 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
                 <Field label="CPF / CNPJ" value={cpf} onChange={setCpf} placeholder="000.000.000-00" />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Field label="Cargo / Função" value={ROLE_LABELS[profile.role]} readOnly />
+                <Field label="Cargo / Função" value={profile.starter_antigo && profile.role === "STARTER" ? "V3 Starter" : ROLE_LABELS[profile.role]} readOnly />
                 <Field label="Status da conta" value={profile.is_active ? "Ativa" : "Inativa"} readOnly />
               </div>
 

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Search, CheckCircle2, Clock, XCircle, AlertCircle, Loader2, ArrowRight } from "lucide-react";
+import { cadastroStarterAntigo } from "@/lib/v3-access-rotulos";
 
 const STATUS_CONFIG = {
   PENDENTE: {
@@ -150,7 +151,7 @@ export default function StatusCadastroPage() {
                   style={{ background: cfg.bg, borderColor: cfg.border }}>
                   <div className="flex justify-center mb-3">{cfg.icon}</div>
                   <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: cfg.color }}>
-                    {PLANO_LABEL[result.plano ?? ""] ?? result.plano}
+                    {cadastroStarterAntigo(result.plano, result.created_at) ? "V3 Starter — R$ 297/mês" : PLANO_LABEL[result.plano ?? ""] ?? result.plano}
                   </p>
                   <p className="text-base font-bold text-[#F0ECE4] mb-2">{cfg.label}</p>
                   <p className="text-xs text-[#7A8FA8] leading-relaxed">{cfg.desc}</p>

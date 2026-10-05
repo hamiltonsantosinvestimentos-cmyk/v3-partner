@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { sendMonthlyReport } from "@/lib/email";
 import Anthropic from "@anthropic-ai/sdk";
+import { idsStarterAntigo, rotuloStarter } from "@/lib/v3-access";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -43,6 +44,7 @@ export async function GET(req: NextRequest) {
     MARKETPLACE: "marketplace financeiro",
   };
 
+  const starterAntigo = await idsStarterAntigo(svc());
   for (const partner of partners) {
     try {
       // Comissões do mês anterior (com operation_type para insights de IA)
@@ -95,7 +97,7 @@ export async function GET(req: NextRequest) {
       await sendMonthlyReport({
         partnerEmail: partner.email,
         partnerName: partner.full_name ?? partner.email,
-        plano: partner.role === "ENTERPRISE" ? "Enterprise" : partner.role === "PARTNER_PRO" ? "Partner PRO" : partner.role === "STARTER" ? "V3 Access" : "Partner",
+        plano: partner.role === "ENTERPRISE" ? "Enterprise" : partner.role === "PARTNER_PRO" ? "Partner PRO" : partner.role === "STARTER" ? rotuloStarter(starterAntigo.has(partner.id)) : "Partner",
         mes: mesLabel,
         totalRecebido,
         totalPendente,

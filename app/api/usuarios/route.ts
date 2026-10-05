@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { idsStarterAntigo } from "@/lib/v3-access";
 
 const IS_DEMO = false;
 
@@ -35,9 +36,11 @@ export async function GET() {
 
   const signedIds = new Set((contracts ?? []).map((c: { user_id: string }) => c.user_id));
 
+  const starterAntigo = await idsStarterAntigo(svc);
   const usersWithContract = (data ?? []).map((u: Record<string, unknown>) => ({
     ...u,
     contract_signed: signedIds.has(u.id as string),
+    starter_antigo: starterAntigo.has(u.id as string),
   }));
 
   return NextResponse.json(usersWithContract);

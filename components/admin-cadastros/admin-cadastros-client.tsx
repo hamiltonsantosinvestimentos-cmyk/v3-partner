@@ -8,6 +8,7 @@ import {
   CreditCard, RefreshCw, Copy, ExternalLink, QrCode, Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { cadastroStarterAntigo } from "@/lib/v3-access-rotulos";
 
 interface Registration {
   id: string;
@@ -167,7 +168,7 @@ function ModalDetalhe({
             <div>
               <p className="text-xs font-semibold text-[#C9A84C]">Plano solicitado</p>
               <p className="text-sm font-bold text-foreground">
-                {reg.plano === "STARTER" ? "V3 Access — R$ 1.447/ano"
+                {reg.plano === "STARTER" ? (cadastroStarterAntigo(reg.plano, reg.created_at) ? "V3 Starter — R$ 297/mês" : "V3 Access — R$ 1.447/ano")
                   : reg.plano === "PARTNER" ? "V3 Partner — R$ 497/mês"
                   : reg.plano === "PARTNER_PRO" ? "V3 Partner PRO — R$ 897/mês"
                   : reg.plano === "PARTNER_HE" ? "Partner HE — R$ 97/mês"

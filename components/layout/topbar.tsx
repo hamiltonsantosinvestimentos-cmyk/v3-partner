@@ -60,6 +60,7 @@ interface TopbarProps {
     email: string;
     role: UserRole;
     avatar_url: string | null;
+    starter_antigo?: boolean;
   };
   onMenuClick: () => void;
   notificationCount?: number;
@@ -174,7 +175,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0, marca = null 
                   {user.full_name?.split(" ")[0] || "Usuário"}
                 </span>
                 <span className="text-[9px] text-[#C9A84C] font-bold tracking-[0.08em] mt-0.5">
-                  {ROLE_LABELS[user.role]}
+                  {user.starter_antigo && user.role === "STARTER" ? "V3 Starter" : ROLE_LABELS[user.role]}
                 </span>
               </div>
               <ChevronDown className="w-3 h-3 text-[#7A8FA8] hidden sm:block group-hover:text-[#F0ECE4] transition-colors" />

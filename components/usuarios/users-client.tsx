@@ -104,6 +104,7 @@ interface User {
   created_at: string;
   trial_expires_at?: string | null;
   contract_signed?: boolean;
+  starter_antigo?: boolean;
 }
 
 interface UsersClientProps {
@@ -479,7 +480,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                     <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
                     <td className="px-4 py-3">
                       <Badge className={ROLE_COLORS[user.role]}>
-                        {ROLE_LABELS[user.role]}
+                        {user.starter_antigo && user.role === "STARTER" ? "V3 Starter" : ROLE_LABELS[user.role]}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
