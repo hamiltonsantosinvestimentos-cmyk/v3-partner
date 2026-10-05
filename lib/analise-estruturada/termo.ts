@@ -1,14 +1,15 @@
 // Termo de responsabilidade do parecer da Análise Estruturada V3 (entrega 4).
 //
-// MINUTA redigida em 04/10/2026 para validação do Robson (jurídico/compliance).
+// MINUTA redigida em 04/10/2026 e VALIDADA pelo Robson (jurídico/compliance) em 05/10/2026,
+// sem ajustes no texto.
 // Enquanto TERMO_VALIDADO_JURIDICO for false:
 //   - o PDF sai com a tarja "MINUTA — pendente de validação jurídica";
 //   - a ENTREGA ao cliente fica bloqueada (gerar e assinar continuam liberados para teste).
 // Depois da validação: ajustar o texto se o Robson pedir, trocar a flag para true e
 // atualizar TERMO_VERSAO.
 
-export const TERMO_VALIDADO_JURIDICO = false;
-export const TERMO_VERSAO = "minuta-2026-10-04";
+export const TERMO_VALIDADO_JURIDICO = true;
+export const TERMO_VERSAO = "v1-validado-2026-10-05";
 
 export const TERMO_TITULO = "Termo de responsabilidade e limites de uso do parecer";
 
