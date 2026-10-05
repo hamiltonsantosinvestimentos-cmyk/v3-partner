@@ -19,6 +19,7 @@ import {
 } from "@/lib/qualification-submit";
 import { isValidCNPJ, isValidCPF } from "@/lib/validators/cpf-cnpj";
 import { fetchCep } from "@/lib/viacep";
+import { LGPD_AVISO_QUALIFICACAO, LGPD_CHECKBOX_TEXT } from "@/lib/lgpd-aviso-qualificacao";
 
 const INPUT_CLS = "w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1 disabled:opacity-50";
 const LABEL_CLS = "text-[11px] text-[#9BAFC5] uppercase";
@@ -866,24 +867,26 @@ export default function QualificacaoIntakePage() {
               )}
             </div>
 
-            {/* Sprint 1, Fase 4.2 (19/09/2026): consentimento LGPD, texto padrão até validação formal. */}
-            <div className="pt-3 border-t border-[#9BAFC5]/10">
+            {/* Consentimento LGPD: Aviso de Privacidade da Qualificação aprovado em 05/10/2026
+                (lib/lgpd-aviso-qualificacao.ts). O servidor grava a versão vigente junto ao aceite. */}
+            <div className="pt-3 border-t border-[#9BAFC5]/10 space-y-3">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input type="checkbox" checked={lgpdAccepted} onChange={(e) => setLgpdAccepted(e.target.checked)}
                   className="mt-0.5 w-4 h-4 accent-[#C9A84C] shrink-0" />
-                <span className="text-[12px] text-[#9BAFC5] leading-relaxed">
-                  Declaro estar ciente de que os dados pessoais fornecidos neste formulário
-                  (identificação, documentos, endereço e, quando aplicável, dados bancários)
-                  serão tratados pela V3 Partners Soluções Ltda exclusivamente para fins de
-                  qualificação civil das partes na operação identificada acima, incluindo
-                  verificação de identidade e elaboração do respectivo documento contratual,
-                  em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018).
-                  Os dados serão mantidos pelo prazo necessário à operação e eventuais
-                  obrigações legais, e poderão ser compartilhados com prestadores de serviço
-                  envolvidos nesta finalidade. <span className="text-[#9BAFC5]/70">(Texto padrão,
-                  pendente de validação formal pelo departamento jurídico.)</span>
-                </span>
+                <span className="text-[12px] text-[#9BAFC5] leading-relaxed">{LGPD_CHECKBOX_TEXT}</span>
               </label>
+              <details className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
+                <summary className="text-[12px] text-[#E8C97A] font-bold cursor-pointer">Ler o aviso completo</summary>
+                <div className="mt-3 space-y-3">
+                  <p className="text-[11px] text-[#E8C97A] font-bold uppercase">Aviso de Privacidade da Qualificação</p>
+                  {LGPD_AVISO_QUALIFICACAO.map((s) => (
+                    <div key={s.title}>
+                      <p className="text-[12px] text-[#F5F1E8] font-semibold">{s.title}</p>
+                      <p className="text-[12px] text-[#9BAFC5] leading-relaxed">{s.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </details>
             </div>
 
             {formError && <p className="text-[12px] text-red-400" role="alert">{formError}</p>}

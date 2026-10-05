@@ -4,6 +4,7 @@ import { resolveClient, resolvePassportClient } from "@/lib/v3-clients";
 import { findValidKycDocument, KYC_DOCUMENT_KIND_LABELS, KYC_REUSABLE_KINDS, type KycDocumentKind } from "@/lib/kyc-documents";
 import { lookupCnpj, nameMatchesSocios } from "@/lib/cnpj-lookup";
 import { fetchCep } from "@/lib/viacep";
+import { LGPD_AVISO_QUALIFICACAO_VERSION } from "@/lib/lgpd-aviso-qualificacao";
 import {
   normalizeSubmission,
   toRepresentationJson,
@@ -341,6 +342,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       // so quando o aceite (ja validado como obrigatorio acima) acontece.
       lgpd_accepted_at: new Date().toISOString(),
       lgpd_accepted_ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? null,
+      // Versão do Aviso de Privacidade exibido no aceite (05/10/2026): o servidor grava a vigente,
+      // nunca um valor vindo do cliente.
+      lgpd_text_version: LGPD_AVISO_QUALIFICACAO_VERSION,
     })
     .eq("id", qualification.id);
 
