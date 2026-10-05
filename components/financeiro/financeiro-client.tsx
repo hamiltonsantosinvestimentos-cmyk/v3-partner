@@ -2766,6 +2766,8 @@ function ImpostosTab() {
 // ─── TAB: ASSINATURAS ─────────────────────────────────────────────────────────
 
 interface PartnerRow {
+  /** Antigo V3 Starter (papel STARTER sem cadastro do Access). */
+  starter_antigo?: boolean;
   id: string;
   full_name: string | null;
   email: string;
@@ -3661,7 +3663,7 @@ function AssinaturasTab() {
             </div>
             <div className="space-y-1 text-sm">
               <p className="text-muted-foreground">Partner: <span className="text-foreground font-medium">{payPartner.full_name ?? payPartner.email}</span></p>
-              <p className="text-muted-foreground">Plano: <span className="text-foreground font-medium">{payPartner.role === "PARTNER_PRO" ? "Partner PRO" : payPartner.role === "STARTER" ? "V3 Access" : payPartner.role === "ENTERPRISE" ? "Enterprise" : "Partner"}</span></p>
+              <p className="text-muted-foreground">Plano: <span className="text-foreground font-medium">{payPartner.role === "PARTNER_PRO" ? "Partner PRO" : payPartner.role === "STARTER" ? (payPartner.starter_antigo ? "V3 Starter" : "V3 Access") : payPartner.role === "ENTERPRISE" ? "Enterprise" : "Partner"}</span></p>
               <p className="text-muted-foreground">Valor: <span className="text-[#C9A84C] font-bold">{formatMoeda(getValorPartner(payPartner))}</span></p>
             </div>
             <div>

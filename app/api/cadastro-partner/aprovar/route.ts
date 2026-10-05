@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { cadastroStarterAntigo, rotuloStarter } from "@/lib/v3-access-rotulos";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -9,11 +10,11 @@ function serviceClient() {
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com.br";
 
 // ─── E-mail de boas-vindas via Resend ─────────────────────────────────────────
-async function enviarBoasVindas(email: string, nome: string, plano: string, cartaoRecorrenteLink?: string | null) {
+async function enviarBoasVindas(email: string, nome: string, plano: string, cartaoRecorrenteLink?: string | null, starterAntigo = false) {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return; // sem chave, ignora silenciosamente
 
-  const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise" : plano === "PARTNER_PRO" ? "V3 Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : plano === "STARTER" ? "V3 Access" : "V3 Partner";
+  const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise" : plano === "PARTNER_PRO" ? "V3 Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : plano === "STARTER" ? rotuloStarter(starterAntigo) : "V3 Partner";
   const comissao   = plano === "ENTERPRISE" ? "55%" : plano === "PARTNER_PRO" ? "50%" : plano === "PARTNER_HE" ? "50%" : plano === "STARTER" ? "20%" : "35%";
 
   const html = `<!DOCTYPE html>
@@ -204,7 +205,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Envia e-mail de boas-vindas (async, não bloqueia)
-    enviarBoasVindas(email, nome, reg.plano, linkCartaoFinal).catch(() => {});
+    enviarBoasVindas(email, nome, reg.plano, linkCartaoFinal, cadastroStarterAntigo(reg.plano, reg.created_at)).catch(() => {});
   }
 
   // Atualiza o cadastro

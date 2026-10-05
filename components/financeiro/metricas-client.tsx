@@ -362,7 +362,7 @@ export function MetricasClient() {
         <MetricCard
           label="Partners Ativos"
           value={data.totalAtivos.toString()}
-          sub={`${data.ativosStarter} Access · ${data.ativosPartner} Partner · ${data.ativosPro} PRO · ${data.ativosEnterprise} Enterprise`}
+          sub={`${data.ativosStarter} Access/Starter · ${data.ativosPartner} Partner · ${data.ativosPro} PRO · ${data.ativosEnterprise} Enterprise`}
           icon={Users}
           color="#A78BFA"
           trend={data.crescimentoPartnersM}
@@ -507,7 +507,7 @@ export function MetricasClient() {
           <p className="text-sm font-semibold text-white mb-4">Composição da Base</p>
           <div className="space-y-4">
             {[
-              { label: "Access — R$1.447/ano (20%)", count: data.ativosStarter, color: "#7A8FA8", pct: data.totalAtivos ? Math.round(data.ativosStarter / data.totalAtivos * 100) : 0 },
+              { label: "Access R$1.447/ano · Starter R$297/mês (20%)", count: data.ativosStarter, color: "#7A8FA8", pct: data.totalAtivos ? Math.round(data.ativosStarter / data.totalAtivos * 100) : 0 },
               { label: "Partner — R$497/mês (35%)", count: data.ativosPartner, color: "#60A5FA", pct: data.totalAtivos ? Math.round(data.ativosPartner / data.totalAtivos * 100) : 0 },
               { label: "Partner PRO — R$897/mês (50%)", count: data.ativosPro, color: GOLD, pct: data.totalAtivos ? Math.round(data.ativosPro / data.totalAtivos * 100) : 0 },
               { label: "Enterprise — R$2.500/mês", count: data.ativosEnterprise, color: "#E8C97A", pct: data.totalAtivos ? Math.round(data.ativosEnterprise / data.totalAtivos * 100) : 0 },

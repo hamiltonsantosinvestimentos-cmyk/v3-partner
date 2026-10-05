@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { sendWhatsApp, resolvePartnerPhone, planoLabel, buildRenovacaoManualMessage, buildCobrancaMessage } from "@/lib/whatsapp/subscription-messages";
 import { efetivoVencimento } from "@/lib/partner-vencimento";
 import { PLANO_VALOR } from "@/lib/plano-valor";
+import { ehStarterAntigo, idsStarterAntigo, rotuloStarter } from "@/lib/v3-access";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -146,7 +147,10 @@ export async function GET(req: NextRequest) {
   } catch { coraPaidHistory = []; }
 
   return NextResponse.json({
-    partners: finalPartners ?? [],
+    partners: await (async () => {
+      const antigos = await idsStarterAntigo(svc());
+      return (finalPartners ?? []).map((p: { id: string }) => ({ ...p, starter_antigo: antigos.has(p.id) }));
+    })(),
     pendingNotifs: pendingNotifs ?? [],
     payments,
     coraByPartner,
@@ -352,7 +356,7 @@ export async function PATCH(req: NextRequest) {
         services: [{ name: `V3 Partners — Mensalidade ${
           pp.role === "ENTERPRISE" ? "Enterprise"
           : pp.role === "PARTNER_PRO" ? "Partner PRO"
-          : pp.role === "STARTER" ? "V3 Access"
+          : pp.role === "STARTER" ? rotuloStarter(await ehStarterAntigo(pp.id))
           : "Partner"
         }`, amount: valor }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
