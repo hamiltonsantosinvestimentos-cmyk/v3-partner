@@ -9,6 +9,7 @@ import type { PartnerOrder } from "./pedidos-partners-client";
 import { ReanalisarPendentes } from "./reanalisar-pendentes";
 import { PdfUnificado } from "./pdf-unificado";
 import { ExcluirAnalise } from "./excluir-analise";
+import { DocumentosAnaliseEstruturada } from "./documentos-analise-estruturada";
 
 interface Props {
   order: PartnerOrder;
@@ -412,6 +413,8 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
               <div className="col-span-2"><p className="text-[10px] text-muted-foreground uppercase tracking-wider">Pacote</p><p className="text-foreground font-medium">{order.cnpj_count ?? 0} CNPJ · {order.cpf_count ?? 0} CPF</p></div>
             )}
           </div>
+
+          <DocumentosAnaliseEstruturada orderId={order.id} />
 
           <div className="rounded-xl border border-border/50 bg-card p-4 flex items-center justify-between gap-3 flex-wrap">
             <div>

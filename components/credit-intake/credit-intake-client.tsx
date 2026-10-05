@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { DocumentosAnalise, useStatusDocumentosAnalise } from "@/components/credit-intake/documentos-analise";
 
 interface ValidateResponse {
   valid?: boolean;
@@ -42,6 +43,8 @@ export function CreditIntakeClient({ token }: { token: string }) {
   const [accepted, setAccepted] = useState(false);
   const [socios, setSocios] = useState<Socio[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // Análise Estruturada V3 (pacote Access): depois do consentimento, o cliente envia os documentos.
+  const { status: docs, setStatus: setDocs, carregar: carregarDocs } = useStatusDocumentosAnalise(token);
 
   const validate = useCallback(async () => {
     try {
@@ -87,6 +90,7 @@ export function CreditIntakeClient({ token }: { token: string }) {
         return;
       }
       setStep("done");
+      carregarDocs();
     } catch {
       setErrorMsg("Erro de conexão. Tente novamente.");
     } finally {
@@ -107,7 +111,11 @@ export function CreditIntakeClient({ token }: { token: string }) {
             <p className="text-center text-sm" style={{ color: "#9BAFC5" }}>Validando link…</p>
           )}
 
-          {step === "invalid" && (
+          {docs?.ativo && (step === "done" || (step === "invalid" && docs.consentido)) && (
+            <DocumentosAnalise token={token} status={docs} setStatus={setDocs} />
+          )}
+
+          {step === "invalid" && !(docs?.ativo && docs.consentido) && (
             <div className="text-center space-y-3">
               <p className="text-sm" style={{ color: "#F5F1E8" }}>{errorMsg}</p>
               <p className="text-xs" style={{ color: "#9BAFC5" }}>Solicite um novo link à equipe V3 Partners.</p>
@@ -176,7 +184,7 @@ export function CreditIntakeClient({ token }: { token: string }) {
             </div>
           )}
 
-          {step === "done" && (
+          {step === "done" && !docs?.ativo && (
             <div className="text-center space-y-3">
               <p className="text-lg font-bold" style={{ color: "#F5F1E8" }}>Recebido!</p>
               <p className="text-sm" style={{ color: "#9BAFC5" }}>
