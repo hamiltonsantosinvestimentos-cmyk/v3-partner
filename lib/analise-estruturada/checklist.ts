@@ -1,6 +1,6 @@
 // Análise Estruturada V3 — checklist de documentos do cliente (MELHORIA DA CONSULTA,
-// Fase 1 / entrega 1, 04/10/2026). Vale só para o pacote fechado do V3 Access
-// (R$ 1.500, ver isAccessPackage em lib/credit-analysis-pricing.ts).
+// Fase 1 / entrega 1, 04/10/2026). Vale para os pacotes fechados da Análise Estruturada V3:
+// Access (R$ 1.500) e Completa (R$ 1.000), ver isAnaliseEstruturada em lib/credit-analysis-pricing.ts.
 //
 // Os arquivos ficam no bucket privado "documents" (sem whitelist de MIME, porque
 // extrato vem em OFX/CSV e faturamento em planilha), numa pasta por pedido:

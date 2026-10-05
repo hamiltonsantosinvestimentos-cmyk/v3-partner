@@ -1,7 +1,7 @@
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification, notifyByRoles } from "@/lib/notify";
 import { notifyNovaComissao } from "@/lib/email";
-import { UNIT_PRICE_CENTS, ACCESS_PARTNER_PAYOUT_CENTS, isAccessPackage } from "@/lib/credit-analysis-pricing";
+import { UNIT_PRICE_CENTS, ACCESS_PARTNER_PAYOUT_CENTS, COMPLETA_PARTNER_PAYOUT_CENTS, isAccessPackage, isCompletaPackage } from "@/lib/credit-analysis-pricing";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -128,10 +128,14 @@ export async function gerarComissaoConsultaEntregue(
   const beneficiaryId = order.partner_id ?? order.ref_partner_id ?? null;
   if (!beneficiaryId) return { status: "skipped", reason: "no_partner" };
 
-  // V3 Access: pacote fechado de R$ 1.500 paga R$ 500 fixos ao partner, UMA vez
-  // por pedido (não por documento). Demais pedidos seguem a config global.
-  const pacoteAccess = isAccessPackage(order.amount_cents);
-  const payoutCents = pacoteAccess ? ACCESS_PARTNER_PAYOUT_CENTS : await getConsultaPartnerPayoutCents(db);
+  // Pacotes fechados da Análise Estruturada V3 pagam valor fixo ao partner, UMA vez por
+  // pedido (não por documento): Access R$ 1.500 → R$ 500; Completa R$ 1.000 → R$ 300.
+  // Demais pedidos seguem a config global.
+  const pacoteCompleta = isCompletaPackage(order.amount_cents);
+  const pacoteAccess = isAccessPackage(order.amount_cents) || pacoteCompleta;
+  const payoutCents = isAccessPackage(order.amount_cents) ? ACCESS_PARTNER_PAYOUT_CENTS
+    : pacoteCompleta ? COMPLETA_PARTNER_PAYOUT_CENTS
+    : await getConsultaPartnerPayoutCents(db);
   if (payoutCents <= 0) return { status: "skipped", reason: "no_payout_configured" };
   const payout = Math.round(payoutCents) / 100;
   // Custo de UMA análise (R$197 por CNPJ/CPF), gravado em commissions.reference_cost só para
@@ -241,7 +245,7 @@ export async function gerarComissaoConsultaEntregue(
   if (!order.partner_commission_id) {
     const referencia = order.client_name ?? order.client_doc ?? "cliente";
     const nota = pacoteAccess
-      ? `Comissão da Análise Estruturada V3 (pacote V3 Access de ${pedidoPago}, empresa + sócios), gerada na entrega ` +
+      ? `Comissão da Análise Estruturada V3 (pacote ${pacoteCompleta ? "Análise Completa" : "V3 Access"} de ${pedidoPago}, empresa + sócios), gerada na entrega ` +
         `do relatório ao cliente. Valor fixo de ${money(payout)} por pedido.` + vendaDireta
       : `Comissão da consulta gerada na entrega do relatório ao cliente (Pedidos de Partners). ` +
         `Custo por análise ${money(custoAnalise)} · comissão fixa ${money(payout)} (configurada em Pedidos de Partners). ` +

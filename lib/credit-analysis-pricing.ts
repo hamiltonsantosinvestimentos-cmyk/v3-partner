@@ -17,6 +17,30 @@ export const ACCESS_PACKAGE_TITLE = "Análise Estruturada V3";
 export function isAccessPackage(amountCents: number | null | undefined): boolean {
   return amountCents === ACCESS_PACKAGE_CENTS;
 }
+
+// Análise Completa (05/10/2026): a mesma Análise Estruturada V3 do Access (documentos,
+// leitura, cálculo, rating, situação de crédito, raio-X de custos, parecer assinado e
+// devolutiva com especialista) oferecida a todos no /analise-v2 por R$ 1.000 fechados.
+// Também nunca coincide com o modular (múltiplo de R$ 197), então o valor identifica o pacote.
+export const COMPLETA_PACKAGE_CENTS = 100000; // R$ 1.000,00
+export const COMPLETA_PARTNER_PAYOUT_CENTS = 30000; // R$ 300,00 ao partner, uma vez por pedido
+export function isCompletaPackage(amountCents: number | null | undefined): boolean {
+  return amountCents === COMPLETA_PACKAGE_CENTS;
+}
+/** Pedido da Análise Estruturada V3 (Access R$ 1.500 ou Completa R$ 1.000): documentos, cálculo e parecer. */
+export function isAnaliseEstruturada(amountCents: number | null | undefined): boolean {
+  return isAccessPackage(amountCents) || isCompletaPackage(amountCents);
+}
+/** O que entra na Análise Estruturada V3 (Access e Completa), para páginas de venda. */
+export const ANALISE_ESTRUTURADA_ENTREGAS = [
+  "Envio de balanço, DRE, faturamento, IR e extratos, conferidos pela Mesa",
+  "Capacidade de pagamento, indicadores e teste de estresse",
+  "Rating V3 com o que pesou e a nota que você alcança com o plano",
+  "Situação de crédito: Serasa, SCR do Banco Central e processos (empresa e sócios)",
+  "Raio-X de tarifas, seguros e juros cobrados nos extratos",
+  "Plano de ação e parecer técnico assinado em PDF",
+  "Devolutiva de 45 minutos com um especialista da mesa de crédito",
+];
 // Fallback legado (sem perfil definido): usado por legacyPlanoToSelection
 // (/analise Variante A, congelada) e por qualquer clampSelection() chamado
 // sem mínimos explícitos. Nunca usado no fluxo novo de /analise-v2.

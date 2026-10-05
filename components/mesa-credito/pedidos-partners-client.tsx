@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate, formatDoc } from "@/lib/utils";
 import { PedidoDetailModal } from "./pedido-detail-modal";
 import { UNIT_PRICE_CENTS } from "@/lib/credit-analysis-pricing";
-import { isAccessPackage } from "@/lib/credit-analysis-pricing";
+import { isAccessPackage, isAnaliseEstruturada, isCompletaPackage } from "@/lib/credit-analysis-pricing";
 
 export interface PartnerOrder {
   id: string;
@@ -354,7 +354,7 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
   // as duas tabelas venham do mesmo endpoint (decisão 11/09/2026).
   // Aba "Mesa de Crédito" (22/09/2026): pedidos que vieram do link de Análise gerado numa
   // proposta da Mesa de Crédito — antes caíam misturados em "Diretos (Site)".
-  const [tab, setTab] = useState<"partner" | "mesa" | "direct" | "access">("partner");
+  const [tab, setTab] = useState<"partner" | "mesa" | "direct" | "access" | "completa">("partner");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -387,18 +387,20 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
 
   // Consulta Access (Análise Estruturada V3, R$ 1.500) fica numa aba própria para não
   // misturar com as consultas comuns.
-  const comuns = orders.filter((o) => !isAccessPackage(o.amount_cents));
+  const comuns = orders.filter((o) => !isAnaliseEstruturada(o.amount_cents));
   const porAba = {
     partner: comuns.filter((o) => o.source !== "direct"),
     mesa: comuns.filter((o) => o.source === "direct" && o.origem === "mesa_credito"),
     direct: comuns.filter((o) => o.source === "direct" && o.origem !== "mesa_credito"),
     access: orders.filter((o) => isAccessPackage(o.amount_cents)),
+    completa: orders.filter((o) => isCompletaPackage(o.amount_cents)),
   };
   const abas: { id: keyof typeof porAba; label: string }[] = [
     { id: "partner", label: "Via Partner" },
     { id: "mesa", label: "Mesa de Crédito" },
     { id: "direct", label: "Diretos (Site)" },
     { id: "access", label: "Consulta Access" },
+    { id: "completa", label: "Análise Completa" },
   ];
 
   return (
@@ -449,6 +451,11 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
           {tab === "access" && (
             <p className="text-xs text-muted-foreground -mt-2">
               Análise Estruturada V3 (R$ 1.500) vendida pelos partners V3 Access: documentos do cliente, leitura com IA, cálculo, rating e parecer assinado. A proposta é criada automaticamente no pagamento.
+            </p>
+          )}
+          {tab === "completa" && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              Análise Completa (R$ 1.000) comprada em /analise-v2, por cliente direto ou pelo link de qualquer partner: o mesmo fluxo da Análise Estruturada V3 (documentos, leitura com IA, cálculo, rating, parecer assinado e devolutiva). Comissão fixa de R$ 300 ao partner na entrega.
             </p>
           )}
           {tab === "direct" && (
