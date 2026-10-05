@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Compass, Landmark, Handshake, ArrowRight, Check, Minus, Plus, Building2, UserRound, Users, AlertTriangle } from "lucide-react";
 import { captureRefFromUrl, captureUtmFromUrl, capturePropFromUrl } from "@/lib/ref-tracking";
-import { clampSelection, calcTotalCents, fmtBRL, getMinCounts, UNIT_PRICE_CENTS, type ModularSelection, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
+import { clampSelection, calcTotalCents, fmtBRL, getMinCounts, UNIT_PRICE_CENTS, COMPLETA_PACKAGE_CENTS, ANALISE_ESTRUTURADA_ENTREGAS, type ModularSelection, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
@@ -99,6 +99,8 @@ export function AnaliseLandingV2Client() {
   const [profileType, setProfileType] = useState<ProfileType | null>(null);
   const [companyStructure, setCompanyStructure] = useState<CompanyStructure | null>(null);
   const [selection, setSelection] = useState<ModularSelection>({ cnpjCount: 0, cpfCount: 0, hasConsultancy: false });
+  // Análise Completa: a Análise Estruturada V3 (a mesma do V3 Access) + devolutiva, R$ 1.000 fechados.
+  const [completa, setCompleta] = useState(false);
 
   useEffect(() => {
     captureRefFromUrl();
@@ -133,7 +135,7 @@ export function AnaliseLandingV2Client() {
   }, []);
 
   const min = useMemo(() => getMinCounts(profileType, companyStructure), [profileType, companyStructure]);
-  const totalCents = useMemo(() => calcTotalCents(selection), [selection]);
+  const totalCents = useMemo(() => (completa ? COMPLETA_PACKAGE_CENTS : calcTotalCents(selection)), [selection, completa]);
   const totalAnalyses = selection.cnpjCount + selection.cpfCount;
 
   function selectPessoaFisica() {
@@ -167,15 +169,21 @@ export function AnaliseLandingV2Client() {
     setSelection((p) => clampSelection({ ...p, cpfCount: n }, min));
   }
   function toggleConsultancy() {
+    setCompleta(false);
     setSelection((p) => ({ ...p, hasConsultancy: !p.hasConsultancy }));
+  }
+  function toggleCompleta() {
+    setCompleta((c) => !c);
+    setSelection((p) => ({ ...p, hasConsultancy: false }));
   }
 
   const configuratorCheckoutHref = () => {
     const params = new URLSearchParams({
       cnpj: String(selection.cnpjCount),
       cpf: String(selection.cpfCount),
-      consultoria: selection.hasConsultancy ? "1" : "0",
+      consultoria: selection.hasConsultancy || completa ? "1" : "0",
     });
+    if (completa) params.set("pacote", "completa");
     if (profileType) params.set("perfil", profileType);
     if (companyStructure) params.set("estrutura", companyStructure);
     if (ref) params.set("ref", ref);
@@ -418,10 +426,37 @@ export function AnaliseLandingV2Client() {
                   </span>
                 </button>
 
+                <button
+                  type="button"
+                  onClick={toggleCompleta}
+                  style={{
+                    width: "100%", textAlign: "left", background: completa ? "rgba(201,168,76,0.12)" : N2,
+                    border: `1px solid ${completa ? GO : N4}`, borderRadius: 10, padding: 16, cursor: "pointer",
+                    display: "flex", gap: 12, alignItems: "flex-start", marginTop: -8, marginBottom: 20,
+                    boxShadow: completa ? "0 0 0 3px rgba(201,168,76,0.15)" : "none",
+                  }}
+                >
+                  <ConfigSwitch on={completa} />
+                  <span style={{ fontSize: 12.5, color: MU, lineHeight: 1.6 }}>
+                    <span style={{ display: "inline-block", fontSize: 9.5, fontWeight: 800, letterSpacing: 1.2, textTransform: "uppercase", color: N, background: GO, borderRadius: 4, padding: "2px 7px", marginBottom: 6 }}>Mais completa</span><br />
+                    <strong style={{ color: CR }}>Devolutiva + análise completa, por {fmtBRL(COMPLETA_PACKAGE_CENTS)} fechados</strong><br />
+                    Empresa e todos os sócios num valor só, com o parecer técnico que bancos, FIDCs e securitizadoras pedem:
+                    <span style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+                      {ANALISE_ESTRUTURADA_ENTREGAS.map((item) => (
+                        <span key={item} style={{ display: "flex", gap: 6 }}>
+                          <Check size={13} color={GO} style={{ flexShrink: 0, marginTop: 3 }} /> {item}
+                        </span>
+                      ))}
+                    </span>
+                  </span>
+                </button>
+
                 <div style={{ borderTop: `1px solid ${N4}`, paddingTop: 18, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 }}>
                   <div style={{ fontSize: 11.5, color: MU, lineHeight: 1.5 }}>
-                    {totalAnalyses} análise{totalAnalyses !== 1 ? "s" : ""} selecionada{totalAnalyses !== 1 ? "s" : ""}<br />
-                    Consultoria {selection.hasConsultancy ? "incluída" : "não incluída"}
+                    {completa
+                      ? (profileType === "PF" ? "Pessoa física (CPF)" : `Empresa + ${selection.cpfCount} sócio${selection.cpfCount !== 1 ? "s" : ""}, num valor só`)
+                      : `${totalAnalyses} análise${totalAnalyses !== 1 ? "s" : ""} selecionada${totalAnalyses !== 1 ? "s" : ""}`}<br />
+                    {completa ? "Análise completa + devolutiva (valor fechado)" : <>Consultoria {selection.hasConsultancy ? "incluída" : "não incluída"}</>}
                   </div>
                   <div style={{ fontSize: 26, fontWeight: 800, color: GO, whiteSpace: "nowrap" }}>{fmtBRL(totalCents)}</div>
                 </div>

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendText } from "@/lib/whatsapp/openwa-client";
 import { notifyByRoles, createNotification } from "@/lib/notify";
-import { isAccessPackage } from "@/lib/credit-analysis-pricing";
+import { isAnaliseEstruturada } from "@/lib/credit-analysis-pricing";
 import {
   CHECKLIST, BUCKET_ANALISE, PREFIXO_ANALISE, PRAZO_ENTREGA_HORAS, WHATSAPP_ALERTA_DOCUMENTOS,
   perfilPeloDocumento, type PerfilAnalise,
@@ -42,18 +42,18 @@ export interface StatusDocumentos {
 
 const COLUNAS_PEDIDO = "id, client_name, client_doc, amount_cents, status, intake_token, credit_desk_proposal_id, ref_partner_id, partner_id";
 
-/** Pedido pago do pacote Access pelo token do link do cliente; null se não for um. */
+/** Pedido pago da Análise Estruturada V3 (Access ou Completa) pelo token do link do cliente; null se não for um. */
 export async function pedidoPeloToken(db: SupabaseClient, token: string): Promise<PedidoAnalise | null> {
   const { data } = await db.from("partner_service_orders").select(COLUNAS_PEDIDO).eq("intake_token", token).maybeSingle();
   const pedido = data as PedidoAnalise | null;
-  if (!pedido || pedido.status !== "PAID" || !isAccessPackage(pedido.amount_cents)) return null;
+  if (!pedido || pedido.status !== "PAID" || !isAnaliseEstruturada(pedido.amount_cents)) return null;
   return pedido;
 }
 
 export async function pedidoPeloId(db: SupabaseClient, orderId: string): Promise<PedidoAnalise | null> {
   const { data } = await db.from("partner_service_orders").select(COLUNAS_PEDIDO).eq("id", orderId).maybeSingle();
   const pedido = data as PedidoAnalise | null;
-  if (!pedido || !isAccessPackage(pedido.amount_cents)) return null;
+  if (!pedido || !isAnaliseEstruturada(pedido.amount_cents)) return null;
   return pedido;
 }
 
