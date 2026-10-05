@@ -597,9 +597,9 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
           fetch("/api/profile").then(r => r.json()).catch(() => null),
         ]);
         const code = propRes?.proposal?.code as string | undefined;
-        // V3 Access (papel STARTER): link do pacote fechado "Análise Estruturada V3",
-        // R$ 1.500 pagos pelo cliente, R$ 500 de comissão ao partner.
-        const isAccess = meRes?.profile?.role === "STARTER";
+        // V3 Access: link do pacote fechado "Análise Estruturada V3", R$ 1.500 pagos pelo
+        // cliente, R$ 500 de comissão ao partner. Só partner Access de verdade (lib/v3-access.ts).
+        const isAccess = meRes?.profile?.v3_access === true;
         const payoutReais = isAccess ? 500 : typeof payoutRes?.payout_reais === "number" ? payoutRes.payout_reais : 60;
         if (code) {
           const params = new URLSearchParams({ prop: code });

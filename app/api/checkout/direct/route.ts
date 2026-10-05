@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { clampSelection, calcTotalCents, buildModularTitle, getMinCounts, fmtBRL, ACCESS_PACKAGE_CENTS, ACCESS_PACKAGE_TITLE, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 import { notifyPartnerAnaliseTentativa } from "@/lib/email";
 import { notificarMesaNovoPedidoTentativa } from "@/lib/cora-order-reconcile";
+import { ehPartnerAccess } from "@/lib/v3-access";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -113,14 +114,11 @@ export async function POST(req: NextRequest) {
   }
   if (!refPartnerId && proposalPartnerId) refPartnerId = proposalPartnerId;
 
-  // Pacote fechado do V3 Access só vale no link de um partner Access (papel
-  // STARTER): sem isso, qualquer um editaria a URL pra pagar R$ 1.500 numa
-  // análise que no modular sairia mais cara (empresa + muitos sócios).
+  // Pacote fechado do V3 Access só vale no link de um partner Access (lib/v3-access.ts):
+  // sem isso, qualquer um editaria a URL pra pagar R$ 1.500 numa análise que no modular
+  // sairia mais cara (empresa + muitos sócios).
   if (isAccess) {
-    const { data: refRole } = refPartnerId
-      ? await db.from("profiles").select("role").eq("id", refPartnerId).maybeSingle()
-      : { data: null };
-    if (refRole?.role !== "STARTER") {
+    if (!(await ehPartnerAccess(db, refPartnerId))) {
       return NextResponse.json({ error: "Este link de Análise Estruturada não é válido. Peça um novo link ao seu consultor V3." }, { status: 400 });
     }
   }
