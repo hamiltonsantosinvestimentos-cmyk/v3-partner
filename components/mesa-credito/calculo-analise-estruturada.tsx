@@ -114,6 +114,40 @@ export function CalculoAnaliseEstruturada({ orderId }: { orderId: string }) {
 
       {calculo && (
         <>
+          {calculo.rating && (
+            <Bloco titulo="Rating V3 2.0">
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="w-16 h-16 rounded-xl border-2 border-[#C9A84C] flex flex-col items-center justify-center">
+                  <span className="text-2xl font-extrabold text-[#C9A84C] leading-none">{calculo.rating.faixa}</span>
+                  <span className="text-[10px] text-muted-foreground">{calculo.rating.nota}/100</span>
+                </div>
+                <div className="flex-1 min-w-[12rem] space-y-1">
+                  <p className="text-sm text-foreground">{calculo.rating.leitura}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Confiança <strong className={calculo.rating.confianca === "alto" ? "text-[#C9A84C]" : calculo.rating.confianca === "medio" ? "text-amber-400" : "text-red-400"}>{calculo.rating.confianca === "medio" ? "média" : calculo.rating.confianca === "alto" ? "alta" : "baixa"}</strong>
+                    {calculo.rating.motivosConfianca.length ? ` · ${calculo.rating.motivosConfianca.join("; ")}` : ""}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Nota projetada com o plano de ação: <strong className="text-foreground">{calculo.rating.notaProjetada} ({calculo.rating.faixaProjetada})</strong>
+                  </p>
+                  {calculo.rating.travas.length > 0 && (
+                    <p className="text-xs text-red-400">Travas (limitam a nota à faixa D): {calculo.rating.travas.join("; ")}</p>
+                  )}
+                </div>
+              </div>
+              <table className="w-full text-xs mt-2">
+                <thead><tr className="text-muted-foreground"><th className="text-left font-normal">Pilar</th><th className="text-right font-normal">Peso</th><th className="text-right font-normal">Nota</th></tr></thead>
+                <tbody>{calculo.rating.pilares.map((p) => (
+                  <tr key={p.id} className="border-t border-border/30 align-top">
+                    <td className="py-1"><span className="text-foreground">{p.nome}</span>{p.motivos.length > 0 && <><br /><span className="text-[11px] text-muted-foreground">{p.motivos.join(" · ")}</span></>}</td>
+                    <td className="py-1 text-right">{p.peso}%</td>
+                    <td className="py-1 text-right font-semibold text-foreground">{p.nota ?? "sem dado"}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </Bloco>
+          )}
+
           {calculo.alertas.length > 0 && (
             <Bloco titulo="Pontos de atenção">
               <ul className="space-y-1">
