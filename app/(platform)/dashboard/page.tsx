@@ -1,5 +1,6 @@
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
 import { semAnaliseDoSite } from "@/lib/analise-site";
+import { ehPartnerAccess } from "@/lib/v3-access";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
@@ -458,6 +459,7 @@ export default async function DashboardPage({
   return (
     <DashboardClient
       role={role}
+      partnerAccess={role === "STARTER" ? await ehPartnerAccess(svc, user.id) : false}
       userName={profileData?.full_name || "Usuário"}
       period={period}
       revenueData={revenueData}

@@ -209,6 +209,8 @@ interface MetaMes {
 
 interface DashboardClientProps {
   role: string;
+  /** Partner V3 Access de verdade (papel STARTER + cadastro do Access), não o antigo V3 Starter. */
+  partnerAccess?: boolean;
   userName: string;
   period?: string;
   userCreatedAt?: string | null;
@@ -259,6 +261,7 @@ interface DashboardClientProps {
 
 export function DashboardClient({
   role,
+  partnerAccess = false,
   userName,
   period = "30d",
   userCreatedAt,
@@ -338,7 +341,7 @@ export function DashboardClient({
       )}
 
       {/* V3 Access: link da Análise Estruturada para mandar ao cliente */}
-      {role === "STARTER" && <AccessLinkCard />}
+      {partnerAccess && <AccessLinkCard />}
 
       {/* Próximos Passos — apenas para partners */}
       {["PARTNER", "PARTNER_PRO"].includes(role) && (

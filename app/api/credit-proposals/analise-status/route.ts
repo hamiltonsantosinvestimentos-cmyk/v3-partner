@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ehDaEquipe } from "@/lib/enterprise";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { ehPartnerAccess } from "@/lib/v3-access";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -44,11 +45,12 @@ export async function GET(req: NextRequest) {
     .limit(1)
     .maybeSingle();
 
-  // Partner Access (papel STARTER) vende o pacote fechado de R$ 1.500: o botão
-  // "Link Análise" usa isso para montar o link certo.
+  // Partner Access vende o pacote fechado de R$ 1.500: o botão "Link Análise" usa isso
+  // para montar o link certo. Antigo V3 Starter (mesmo papel) fica no link comum.
   const { data: partner } = proposal.partner_id
     ? await svc.from("profiles").select("role").eq("id", proposal.partner_id).maybeSingle()
     : { data: null };
+  const partner_access = partner?.role === "STARTER" ? await ehPartnerAccess(svc, proposal.partner_id) : false;
 
-  return NextResponse.json({ order: order ?? null, partner_role: partner?.role ?? null });
+  return NextResponse.json({ order: order ?? null, partner_role: partner?.role ?? null, partner_access });
 }

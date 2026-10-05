@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { ehPartnerAccess } from "@/lib/v3-access";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -20,8 +21,10 @@ export async function GET() {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  // v3_access: partner V3 Access de verdade (não o antigo V3 Starter, que tem o mesmo papel).
+  const v3_access = profile?.role === "STARTER" ? await ehPartnerAccess(serviceClient(), user.id) : false;
   // Retorna email do auth se não estiver no profile
-  return NextResponse.json({ profile: { ...profile, email: profile?.email ?? user.email } });
+  return NextResponse.json({ profile: { ...profile, email: profile?.email ?? user.email, v3_access } });
 }
 
 // PATCH — atualiza nome, telefone do usuário autenticado
