@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { AccessAuditClient } from "@/components/compliance/access-audit-client";
+import { ComplianceTabs } from "@/components/compliance/compliance-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -12,5 +13,10 @@ export default async function AccessAuditPage() {
   if (!user) redirect("/login");
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "ADMIN") redirect("/unauthorized");
-  return <AccessAuditClient />;
+  return (
+    <div className="space-y-5">
+      <ComplianceTabs userRole={profile.role} active="auditoria" />
+      <AccessAuditClient />
+    </div>
+  );
 }
