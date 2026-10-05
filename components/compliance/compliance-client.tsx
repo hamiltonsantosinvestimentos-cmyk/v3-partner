@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ComplianceTabs } from "@/components/compliance/compliance-tabs";
 import {
   ShieldCheck, AlertTriangle, Users, FileSearch,
   Building2, CheckCircle2, Clock, XCircle,
@@ -153,12 +154,7 @@ export function ComplianceClient({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {userRole === "ADMIN" && (
-        <a href="/compliance/auditoria" className="block bg-[#12112A] border border-[#C9A84C]/30 rounded-lg p-4 hover:border-[#C9A84C]/60 transition-colors">
-          <p className="text-[12px] text-[#E8C97A] font-bold uppercase">Auditoria de acessos</p>
-          <p className="text-[13px] text-[#F5F1E8]">Quem revelou, abriu ou apagou dados sensíveis das partes. Filtros e exportação CSV.</p>
-        </a>
-      )}
+      <ComplianceTabs userRole={userRole} active="geral" />
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
