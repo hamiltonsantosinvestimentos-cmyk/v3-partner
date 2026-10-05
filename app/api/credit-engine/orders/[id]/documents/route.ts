@@ -97,7 +97,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (orderErr || !order) return NextResponse.json({ error: "Pedido não encontrado" }, { status: 404 });
 
   const link = order.partner_service_links as unknown as { service_type?: string } | null;
-  const CREDIT_TYPES = ["credit_analysis", "credit_analysis_consultoria"];
+  const CREDIT_TYPES = ["credit_analysis", "credit_analysis_consultoria", "analise_completa"];
   const isCreditOrder = link?.service_type === "credit_analysis" || CREDIT_TYPES.includes(order.service_type ?? "");
   if (!isCreditOrder) return NextResponse.json({ error: "Este pedido não é de Análise de Crédito" }, { status: 422 });
   if (order.status !== "PAID") return NextResponse.json({ error: "Pedido ainda não foi pago" }, { status: 422 });

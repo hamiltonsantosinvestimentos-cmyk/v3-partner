@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate, formatDoc } from "@/lib/utils";
 import { PedidoDetailModal } from "./pedido-detail-modal";
 import { UNIT_PRICE_CENTS } from "@/lib/credit-analysis-pricing";
-import { isAccessPackage, isAnaliseEstruturada, isCompletaPackage } from "@/lib/credit-analysis-pricing";
+import { isAccessPackage, isAnaliseEstruturadaOrder, isCompletaOrder } from "@/lib/credit-analysis-pricing";
 
 export interface PartnerOrder {
   id: string;
@@ -22,6 +22,7 @@ export interface PartnerOrder {
   ref_partner_name: string | null;
   service_title: string;
   amount_cents: number;
+  service_type?: string | null;
   status: string;
   paid_at: string | null;
   consent_status: string;
@@ -387,13 +388,13 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
 
   // Consulta Access (Análise Estruturada V3, R$ 1.500) fica numa aba própria para não
   // misturar com as consultas comuns.
-  const comuns = orders.filter((o) => !isAnaliseEstruturada(o.amount_cents));
+  const comuns = orders.filter((o) => !isAnaliseEstruturadaOrder(o));
   const porAba = {
     partner: comuns.filter((o) => o.source !== "direct"),
     mesa: comuns.filter((o) => o.source === "direct" && o.origem === "mesa_credito"),
     direct: comuns.filter((o) => o.source === "direct" && o.origem !== "mesa_credito"),
     access: orders.filter((o) => isAccessPackage(o.amount_cents)),
-    completa: orders.filter((o) => isCompletaPackage(o.amount_cents)),
+    completa: orders.filter((o) => isCompletaOrder(o)),
   };
   const abas: { id: keyof typeof porAba; label: string }[] = [
     { id: "partner", label: "Via Partner" },
@@ -455,7 +456,7 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
           )}
           {tab === "completa" && (
             <p className="text-xs text-muted-foreground -mt-2">
-              Análise Completa (R$ 1.000) comprada em /analise-v2, por cliente direto ou pelo link de qualquer partner: o mesmo fluxo da Análise Estruturada V3 (documentos, leitura com IA, cálculo, rating, parecer assinado e devolutiva). Comissão fixa de R$ 300 ao partner na entrega.
+              Análises do /analise-v2 com a consultoria e acompanhamento (+ R$ 1.000 sobre os R$ 197 por CPF/CNPJ), por cliente direto ou pelo link de qualquer partner: o mesmo fluxo da Análise Estruturada V3 (documentos, leitura com IA, cálculo, rating, parecer assinado e devolutiva). Partner recebe as comissões por análise + R$ 300 pela consultoria na entrega.
             </p>
           )}
           {tab === "direct" && (

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { buildModularTitle, LEGACY_DIRECT_TITLES } from "@/lib/credit-analysis-pricing";
+import { buildModularTitle, LEGACY_DIRECT_TITLES, SERVICE_TYPE_COMPLETA } from "@/lib/credit-analysis-pricing";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
 
   type OrderRow = typeof orders extends (infer T)[] ? T : never;
 
-  const CREDIT_TYPES = ["credit_analysis", "credit_analysis_consultoria"];
+  const CREDIT_TYPES = ["credit_analysis", "credit_analysis_consultoria", "analise_completa"];
 
   let filtered = ((orders ?? []) as OrderRow[]).filter((o) => {
     const link = o.partner_service_links as unknown as { service_type?: string } | null;
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     // cnpj_count NULL = pedido de link de partner (usa o título do próprio
     // link) ou pedido direct legado (pacote fixo pré-20/08/2026).
     const directTitle = row.cnpj_count != null
-      ? buildModularTitle({ cnpjCount: row.cnpj_count, cpfCount: row.cpf_count ?? 0, hasConsultancy: Boolean(row.has_consultancy) })
+      ? buildModularTitle({ cnpjCount: row.cnpj_count, cpfCount: row.cpf_count ?? 0, hasConsultancy: Boolean(row.has_consultancy) }, row.service_type === SERVICE_TYPE_COMPLETA)
       : LEGACY_DIRECT_TITLES[row.service_type ?? ""] ?? "Análise de Crédito Empresarial";
     // De onde veio a solicitação (22/09/2026). O link da Mesa de Crédito (?prop=<code>)
     // grava credit_desk_proposal_id já na criação, apontando para uma proposta que existia
@@ -120,6 +120,7 @@ export async function GET(req: NextRequest) {
       ref_partner_name: row.ref_partner?.full_name ?? null,
       service_title: row.partner_service_links?.title ?? directTitle,
       amount_cents: row.amount_cents,
+      service_type: row.service_type,
       status: row.status,
       paid_at: row.paid_at,
       consent_status: consent?.status ?? "pending",

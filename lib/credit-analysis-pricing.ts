@@ -18,18 +18,21 @@ export function isAccessPackage(amountCents: number | null | undefined): boolean
   return amountCents === ACCESS_PACKAGE_CENTS;
 }
 
-// Análise Completa (05/10/2026): a mesma Análise Estruturada V3 do Access (documentos,
-// leitura, cálculo, rating, situação de crédito, raio-X de custos, parecer assinado e
-// devolutiva com especialista) oferecida a todos no /analise-v2 por R$ 1.000 fechados.
-// Também nunca coincide com o modular (múltiplo de R$ 197), então o valor identifica o pacote.
-export const COMPLETA_PACKAGE_CENTS = 100000; // R$ 1.000,00
-export const COMPLETA_PARTNER_PAYOUT_CENTS = 30000; // R$ 300,00 ao partner, uma vez por pedido
-export function isCompletaPackage(amountCents: number | null | undefined): boolean {
-  return amountCents === COMPLETA_PACKAGE_CENTS;
+// Consultoria e acompanhamento (Análise Completa, 05/10/2026): adicional de R$ 1.000 no
+// /analise-v2, SOMADO aos R$ 197 por CPF/CNPJ (substitui a devolutiva simples de R$ 197).
+// Traz a mesma Análise Estruturada V3 do Access (documentos, leitura, cálculo, rating,
+// situação de crédito, raio-X de custos, parecer assinado e devolutiva). Como o total varia,
+// o pedido é marcado por service_type = "analise_completa" (não pelo valor).
+export const COMPLETA_ADDON_CENTS = 100000; // R$ 1.000,00 de consultoria/acompanhamento
+export const COMPLETA_PARTNER_PAYOUT_CENTS = 30000; // R$ 300,00 ao partner pela consultoria, uma vez por pedido
+export const SERVICE_TYPE_COMPLETA = "analise_completa";
+type PedidoTipo = { amount_cents?: number | null; service_type?: string | null };
+export function isCompletaOrder(o: PedidoTipo | null | undefined): boolean {
+  return o?.service_type === SERVICE_TYPE_COMPLETA;
 }
-/** Pedido da Análise Estruturada V3 (Access R$ 1.500 ou Completa R$ 1.000): documentos, cálculo e parecer. */
-export function isAnaliseEstruturada(amountCents: number | null | undefined): boolean {
-  return isAccessPackage(amountCents) || isCompletaPackage(amountCents);
+/** Pedido da Análise Estruturada V3 (Access R$ 1.500 ou com a consultoria Completa): documentos, cálculo e parecer. */
+export function isAnaliseEstruturadaOrder(o: PedidoTipo | null | undefined): boolean {
+  return isAccessPackage(o?.amount_cents) || isCompletaOrder(o);
 }
 /** O que entra na Análise Estruturada V3 (Access e Completa), para páginas de venda. */
 export const ANALISE_ESTRUTURADA_ENTREGAS = [
@@ -86,9 +89,10 @@ export function clampSelection(sel: Partial<ModularSelection>, min?: Partial<Min
   return { cnpjCount, cpfCount, hasConsultancy: Boolean(sel.hasConsultancy) };
 }
 
-export function calcTotalCents(sel: ModularSelection): number {
+export function calcTotalCents(sel: ModularSelection, completa = false): number {
   const totalAnalyses = sel.cnpjCount + sel.cpfCount;
-  return totalAnalyses * UNIT_PRICE_CENTS + (sel.hasConsultancy ? UNIT_PRICE_CENTS : 0);
+  const adicional = completa ? COMPLETA_ADDON_CENTS : sel.hasConsultancy ? UNIT_PRICE_CENTS : 0;
+  return totalAnalyses * UNIT_PRICE_CENTS + adicional;
 }
 
 export function fmtBRL(cents: number): string {
@@ -109,11 +113,12 @@ export function fmtBRL(cents: number): string {
 // título do produto nunca varia por dealType. A distinção correta
 // (roteamento pra Mesa certa, rótulo de contexto) fica só nas notificações
 // em lib/cora-order-reconcile.ts, nunca no nome do produto em si.
-export function buildModularTitle(sel: ModularSelection): string {
+export function buildModularTitle(sel: ModularSelection, completa = false): string {
   const parts: string[] = [];
   if (sel.cnpjCount > 0) parts.push(`${sel.cnpjCount} CNPJ`);
   if (sel.cpfCount > 0) parts.push(`${sel.cpfCount} CPF`);
   const base = `Análise de Crédito Empresarial (${parts.join(" + ")})`;
+  if (completa) return `${base} + Consultoria e Acompanhamento V3 (Análise Completa)`;
   return sel.hasConsultancy ? `${base} + Consultoria Estratégica V3` : base;
 }
 

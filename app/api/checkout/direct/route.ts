@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
-import { clampSelection, calcTotalCents, buildModularTitle, getMinCounts, fmtBRL, ACCESS_PACKAGE_CENTS, ACCESS_PACKAGE_TITLE, COMPLETA_PACKAGE_CENTS, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
+import { clampSelection, calcTotalCents, buildModularTitle, getMinCounts, fmtBRL, ACCESS_PACKAGE_CENTS, ACCESS_PACKAGE_TITLE, SERVICE_TYPE_COMPLETA, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 import { notifyPartnerAnaliseTentativa } from "@/lib/email";
 import { notificarMesaNovoPedidoTentativa } from "@/lib/cora-order-reconcile";
 import { ehPartnerAccess } from "@/lib/v3-access";
@@ -51,15 +51,16 @@ export async function POST(req: NextRequest) {
   // V3 Access: pacote fechado de R$ 1.500 (empresa + sócios, ou só o CPF),
   // sempre com a devolutiva da Mesa. As contagens continuam valendo para o
   // intake pedir os sócios; só o preço e o título não seguem a tabela modular.
-  // Análise Completa (/analise-v2, aberta a todos): a mesma Análise Estruturada por R$ 1.000.
+  // Consultoria e acompanhamento (Análise Completa, /analise-v2, aberta a todos): + R$ 1.000
+  // somados aos R$ 197 por CPF/CNPJ, no lugar da devolutiva simples.
   const isAccess = body.pacote === "access";
-  const isCompleta = body.pacote === "completa";
+  const isCompleta = !isAccess && body.pacote === "completa";
   if (isAccess || isCompleta) selection.hasConsultancy = true;
-  const priceCents = isAccess ? ACCESS_PACKAGE_CENTS : isCompleta ? COMPLETA_PACKAGE_CENTS : calcTotalCents(selection);
+  const priceCents = isAccess ? ACCESS_PACKAGE_CENTS : calcTotalCents(selection, isCompleta);
   // Produto vendido é sempre "Análise de Crédito", inclusive quando o link
   // está vinculado a um Deal de M&A (ver correção 14/09/2026 em
   // credit-analysis-pricing.ts) -- nunca varia por dealType.
-  const title = isAccess || isCompleta ? ACCESS_PACKAGE_TITLE : buildModularTitle(selection);
+  const title = isAccess ? ACCESS_PACKAGE_TITLE : buildModularTitle(selection, isCompleta);
 
   if (!body.client_name?.trim()) return NextResponse.json({ error: "Nome obrigatório" }, { status: 400 });
   if (!body.client_email?.trim()) return NextResponse.json({ error: "Email obrigatório" }, { status: 400 });
@@ -174,7 +175,7 @@ export async function POST(req: NextRequest) {
       link_id: null,
       partner_id: null,
       source: "direct",
-      service_type: "credit_analysis",
+      service_type: isCompleta ? SERVICE_TYPE_COMPLETA : "credit_analysis",
       cnpj_count: selection.cnpjCount,
       cpf_count: selection.cpfCount,
       has_consultancy: selection.hasConsultancy,

@@ -1,7 +1,8 @@
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification, notifyByRoles } from "@/lib/notify";
 import { notifyNovaComissao } from "@/lib/email";
-import { UNIT_PRICE_CENTS, ACCESS_PARTNER_PAYOUT_CENTS, COMPLETA_PARTNER_PAYOUT_CENTS, isAccessPackage, isCompletaPackage } from "@/lib/credit-analysis-pricing";
+import { createHash } from "crypto";
+import { UNIT_PRICE_CENTS, ACCESS_PARTNER_PAYOUT_CENTS, COMPLETA_PARTNER_PAYOUT_CENTS, isAccessPackage, isCompletaOrder } from "@/lib/credit-analysis-pricing";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -114,7 +115,7 @@ export async function gerarComissaoConsultaEntregue(
   const { data: order } = await db
     .from("partner_service_orders")
     .select(`
-      id, client_name, client_doc, amount_cents, report_delivered_at,
+      id, client_name, client_doc, amount_cents, service_type, report_delivered_at,
       partner_commission_id, partner_id, ref_partner_id,
       partner:profiles!partner_id(id, full_name),
       ref_partner:profiles!ref_partner_id(id, full_name)
@@ -128,14 +129,12 @@ export async function gerarComissaoConsultaEntregue(
   const beneficiaryId = order.partner_id ?? order.ref_partner_id ?? null;
   if (!beneficiaryId) return { status: "skipped", reason: "no_partner" };
 
-  // Pacotes fechados da Análise Estruturada V3 pagam valor fixo ao partner, UMA vez por
-  // pedido (não por documento): Access R$ 1.500 → R$ 500; Completa R$ 1.000 → R$ 300.
-  // Demais pedidos seguem a config global.
-  const pacoteCompleta = isCompletaPackage(order.amount_cents);
-  const pacoteAccess = isAccessPackage(order.amount_cents) || pacoteCompleta;
-  const payoutCents = isAccessPackage(order.amount_cents) ? ACCESS_PARTNER_PAYOUT_CENTS
-    : pacoteCompleta ? COMPLETA_PARTNER_PAYOUT_CENTS
-    : await getConsultaPartnerPayoutCents(db);
+  // V3 Access (pacote fechado de R$ 1.500) paga R$ 500 fixos ao partner, UMA vez por pedido.
+  // Demais pedidos seguem a config global por documento; se o pedido tem a consultoria e
+  // acompanhamento (Análise Completa, + R$ 1.000), soma R$ 300 fixos por isso (item 3 abaixo).
+  const pacoteCompleta = isCompletaOrder(order);
+  const pacoteAccess = isAccessPackage(order.amount_cents);
+  const payoutCents = pacoteAccess ? ACCESS_PARTNER_PAYOUT_CENTS : await getConsultaPartnerPayoutCents(db);
   if (payoutCents <= 0) return { status: "skipped", reason: "no_payout_configured" };
   const payout = Math.round(payoutCents) / 100;
   // Custo de UMA análise (R$197 por CNPJ/CPF), gravado em commissions.reference_cost só para
@@ -159,7 +158,10 @@ export async function gerarComissaoConsultaEntregue(
     descricao: string;
     nota: string;
     referencia: string;
+    /** Valor diferente do payout por documento (ex.: a consultoria da Análise Completa). */
+    valor?: number;
   }): Promise<ComissaoConsultaCriada | null> {
+    const valorComissao = opts.valor ?? payout;
     const { count } = await db.from("commissions").select("*", { count: "exact", head: true });
     const code = `COM-26-${String((count ?? 0) + 1).padStart(4, "0")}-CON`;
 
@@ -172,7 +174,7 @@ export async function gerarComissaoConsultaEntregue(
       operation_description: opts.descricao,
       // commission_value é coluna GERADA (operation_value * commission_percent / 100).
       // operation_value = valor cheio + commission_percent = 100 => commission_value = payout.
-      operation_value: payout,
+      operation_value: valorComissao,
       commission_percent: 100,
       tax_percent: 0,
       status: "AGUARDANDO_AUTORIZACAO",
@@ -197,7 +199,7 @@ export async function gerarComissaoConsultaEntregue(
       throw new Error(`Falha ao gerar comissão da consulta (${opts.referencia}): ${error?.message ?? "sem retorno"}`);
     }
 
-    const valor = Number(commission.commission_value ?? payout);
+    const valor = Number(commission.commission_value ?? valorComissao);
     const valorFmt = money(valor);
 
     // Partner: comissão registrada, aguardando autorização
@@ -245,7 +247,7 @@ export async function gerarComissaoConsultaEntregue(
   if (!order.partner_commission_id) {
     const referencia = order.client_name ?? order.client_doc ?? "cliente";
     const nota = pacoteAccess
-      ? `Comissão da Análise Estruturada V3 (pacote ${pacoteCompleta ? "Análise Completa" : "V3 Access"} de ${pedidoPago}, empresa + sócios), gerada na entrega ` +
+      ? `Comissão da Análise Estruturada V3 (pacote V3 Access de ${pedidoPago}, empresa + sócios), gerada na entrega ` +
         `do relatório ao cliente. Valor fixo de ${money(payout)} por pedido.` + vendaDireta
       : `Comissão da consulta gerada na entrega do relatório ao cliente (Pedidos de Partners). ` +
         `Custo por análise ${money(custoAnalise)} · comissão fixa ${money(payout)} (configurada em Pedidos de Partners). ` +
@@ -287,6 +289,33 @@ export async function gerarComissaoConsultaEntregue(
             `(configurada em Pedidos de Partners). ` +
             `Pedido pago ${pedidoPago}.` + vendaDireta,
           referencia: a.nome,
+        });
+        if (c) criadas.push(c);
+      } catch (e) {
+        erros.push((e as Error).message);
+      }
+    }
+  }
+
+  // ── 3) Consultoria e acompanhamento (Análise Completa): R$ 300 fixos, uma vez por pedido ──
+  // operation_id derivado do pedido (UUID estável) para o índice único impedir duplicidade.
+  if (pacoteCompleta) {
+    const h = createHash("sha1").update(`consultoria-completa:${orderId}`).digest("hex");
+    const opId = `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+    const { count: ja } = await db.from("commissions").select("*", { count: "exact", head: true }).eq("operation_id", opId);
+    if (!ja) {
+      try {
+        const referencia = order.client_name ?? order.client_doc ?? "cliente";
+        const valor = COMPLETA_PARTNER_PAYOUT_CENTS / 100;
+        const c = await criarComissao({
+          operationId: opId,
+          descricao: `Consultoria e acompanhamento (Análise Completa) — ${referencia}`,
+          nota:
+            `Comissão da consultoria e acompanhamento (Análise Completa, + ${money(1000)} no pedido), ` +
+            `gerada na entrega do parecer ao cliente. Valor fixo de ${money(valor)} por pedido, além das comissões por análise. ` +
+            `Pedido pago ${pedidoPago}.` + vendaDireta,
+          referencia,
+          valor,
         });
         if (c) criadas.push(c);
       } catch (e) {

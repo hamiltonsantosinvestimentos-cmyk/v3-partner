@@ -14,7 +14,7 @@
 // o cron de polling) reconcilia da mesma forma, sempre.
 import { randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildModularTitle, LEGACY_DIRECT_TITLES, isAccessPackage, isAnaliseEstruturada, ACCESS_PACKAGE_TITLE } from "@/lib/credit-analysis-pricing";
+import { buildModularTitle, LEGACY_DIRECT_TITLES, isAccessPackage, isCompletaOrder, ACCESS_PACKAGE_TITLE } from "@/lib/credit-analysis-pricing";
 import { criarPropostaDoPedidoAccess } from "@/lib/analise-estruturada/proposta-automatica";
 import {
   notifyPagamentoAnaliseConfirmado,
@@ -24,7 +24,7 @@ import {
   notifyMesaAnaliseTentativa,
 } from "@/lib/email";
 
-const CREDIT_SERVICE_TYPES = ["credit_analysis", "credit_analysis_consultoria"];
+const CREDIT_SERVICE_TYPES = ["credit_analysis", "credit_analysis_consultoria", "analise_completa"];
 
 // action_url pro deal de M&A: quando presente, casa com o padrão que
 // GET /api/ma/timeline já lê (LIKE "/mesa-ma?deal=<id>%") -- as notificações
@@ -291,14 +291,14 @@ export async function reconcileDirectOrderPaid(
 ) {
   const intakeToken = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "").slice(0, 8);
   const dealType: "credit" | "ma" = directOrder.ma_deal_id ? "ma" : "credit";
-  const title = isAnaliseEstruturada(directOrder.amount_cents)
+  const title = isAccessPackage(directOrder.amount_cents)
     ? ACCESS_PACKAGE_TITLE
     : directOrder.cnpj_count != null
     ? buildModularTitle({
         cnpjCount: directOrder.cnpj_count,
         cpfCount: directOrder.cpf_count ?? 0,
         hasConsultancy: Boolean(directOrder.has_consultancy),
-      })
+      }, isCompletaOrder(directOrder))
     : LEGACY_DIRECT_TITLES[directOrder.service_type ?? ""] ?? "Análise de Crédito Empresarial";
 
   await db.from("partner_service_orders").update({
