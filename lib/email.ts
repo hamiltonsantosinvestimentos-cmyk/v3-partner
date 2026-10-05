@@ -1078,8 +1078,11 @@ export async function notifyLeadQuizPartner(opts: {
   planoSugerido: string;
   resumo: string;
   indicadoPor?: string | null;
+  /** Nome do quiz no e-mail (padrão "Seja Partner"; ex.: "White Label"). */
+  quiz?: string;
 }): Promise<void> {
   const adminEmail = process.env.ADMIN_EMAIL || "operacional@v3partners.com.br";
+  const quiz = opts.quiz ?? "Seja Partner";
   const tierMap: Record<string, { label: string; color: string; emoji: string }> = {
     A: { label: "Faixa A — quente", color: "#10B981", emoji: "🔥" },
     B: { label: "Faixa B — morno", color: "#F59E0B", emoji: "🌡️" },
@@ -1088,7 +1091,7 @@ export async function notifyLeadQuizPartner(opts: {
   const t = tierMap[opts.tier] ?? tierMap.C;
   const body = `
     <p style="color:#9BAFC5;font-size:14px;margin:0 0 20px;">
-      Um candidato concluiu o quiz <strong style="color:#F5F1E8;">Seja Partner</strong> e já está na aba Prospecção.
+      Um candidato concluiu o quiz <strong style="color:#F5F1E8;">${quiz}</strong> e já está na aba Prospecção.
     </p>
     ${row("Nome", opts.nome)}
     ${row("E-mail", opts.email)}
@@ -1104,7 +1107,7 @@ export async function notifyLeadQuizPartner(opts: {
   `;
   await send(
     adminEmail,
-    `${t.emoji} Quiz Seja Partner — ${opts.nome} (faixa ${opts.tier})`,
+    `${t.emoji} Quiz ${quiz} — ${opts.nome} (faixa ${opts.tier})`,
     template("Novo candidato a Partner", body, {
       label: "Ver na Prospecção",
       url: "https://app.v3partners.com.br/prospeccao",
@@ -1117,12 +1120,15 @@ export async function notifyQuizPartnerCandidato(opts: {
   candidatoEmail: string;
   candidatoNome: string;
   planoSugerido: string;
+  /** Nome do quiz (padrão "Seja Partner"; ex.: "White Label"). */
+  quiz?: string;
 }): Promise<void> {
+  const quiz = opts.quiz ?? "Seja Partner";
   const primeiroNome = opts.candidatoNome.trim().split(/\s+/)[0] || opts.candidatoNome.trim();
   const body = `
     <p style="color:#F5F1E8;font-size:14px;margin:0 0 20px;">
       Olá, <strong>${primeiroNome}</strong>!<br><br>
-      Recebemos seu interesse em se tornar Partner da V3. Nossa equipe já vai
+      ${quiz === "Seja Partner" ? "Recebemos seu interesse em se tornar Partner da V3." : `Recebemos sua aplicação para o ${quiz} da V3.`} Nossa equipe já vai
       entrar em contato com você pelo <strong style="color:#E8C97A;">WhatsApp</strong>
       para conversar sobre os próximos passos.
     </p>
@@ -1134,7 +1140,7 @@ export async function notifyQuizPartnerCandidato(opts: {
   `;
   await send(
     opts.candidatoEmail,
-    "Recebemos seu interesse — Seja Partner V3",
+    quiz === "Seja Partner" ? "Recebemos seu interesse — Seja Partner V3" : `Recebemos sua aplicação — ${quiz} V3`,
     template("Interesse recebido", body)
   );
 }

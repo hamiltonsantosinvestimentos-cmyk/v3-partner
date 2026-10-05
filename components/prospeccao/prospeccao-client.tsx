@@ -13,6 +13,7 @@ import {
   OBJETIVO, OCUPACAO, RENDA_FAIXA, EXPERIENCIA_B2B, PRIORIDADE, INVESTIMENTO,
   PLANO_LABEL, QUIZ_LEGACY_LABELS, QUIZ_PARCIAL_PAROU_EM, type QuizOption,
 } from "@/lib/quiz-partner";
+import { WL_QUIZ_LABELS, WL_PARCIAL_PAROU_EM, WL_LISTA_LABEL, type WlLista } from "@/lib/quiz-white-label";
 
 const GOLD = "#C9A84C";
 const NAVY_CARD = "#162744";
@@ -94,6 +95,7 @@ const ORIGENS = [
   { value: "indicacao",          label: "Indicação" },
   { value: "indicacao_partner",  label: "Indicação Partner" },
   { value: "quiz_partner",       label: "Quiz Seja Partner" },
+  { value: "quiz_white_label",   label: "Quiz White Label" },
   { value: "landing_parceiro",   label: "Landing Parceiro" },
   { value: "youtube",            label: "YouTube" },
   { value: "google",             label: "Google" },
@@ -115,7 +117,7 @@ function origemLabel(o: string) {
 function origemColor(o: string) {
   const map: Record<string, string> = {
     linkedin: "#0A66C2", instagram: "#E1306C", indicacao: GOLD, indicacao_partner: GOLD,
-    quiz_partner: "#34D399", landing_parceiro: "#60A5FA",
+    quiz_partner: "#34D399", quiz_white_label: "#E8C97A", landing_parceiro: "#60A5FA",
     youtube: "#FF0000", google: "#4285F4", evento: "#A78BFA", outro: MUTED,
   };
   return map[o] ?? MUTED;
@@ -655,20 +657,23 @@ function DetalheModal({
             ))}
           </div>
 
-          {prospect.metadata?.form_type === "quiz_partner" && (() => {
+          {(prospect.metadata?.form_type === "quiz_partner" || prospect.metadata?.form_type === "quiz_white_label") && (() => {
             const m = prospect.metadata as Record<string, unknown>;
+            const wl = m.form_type === "quiz_white_label";
+            const labels = wl ? WL_QUIZ_LABELS : QUIZ_LABELS;
             const incompleto = m.quiz_incompleto === true;
             const tier = String(m.tier ?? "");
             const tierColor = incompleto ? "#E07878" : tier === "A" ? "#34D399" : tier === "B" ? "#F59E0B" : "#7A8FA8";
             const tierLabel = incompleto
-              ? `Incompleto — parou em ${QUIZ_PARCIAL_PAROU_EM[String(m.quiz_parou_em ?? "")] ?? "—"}`
+              ? `Incompleto — parou em ${(wl ? WL_PARCIAL_PAROU_EM : QUIZ_PARCIAL_PAROU_EM)[String(m.quiz_parou_em ?? "")] ?? "—"}`
+              : wl ? (WL_LISTA_LABEL[String(m.lista ?? "") as WlLista] ?? "—")
               : tier === "A" ? "Faixa A — quente" : tier === "B" ? "Faixa B — morno" : "Faixa C — frio";
             const plano = prospect.plano_sugerido ? (PLANO_LABEL[prospect.plano_sugerido] ?? prospect.plano_sugerido) : null;
             return (
               <div className="rounded-xl border overflow-hidden" style={{ background: NAVY_CARD, borderColor: `${tierColor}40` }}>
                 <div className="px-4 py-3 flex items-center justify-between" style={{ background: `${tierColor}15` }}>
                   <span className="text-[11px] font-bold uppercase tracking-widest" style={{ color: tierColor }}>
-                    Quiz Seja Partner · {tierLabel}
+                    {wl ? "Quiz White Label" : "Quiz Seja Partner"} · {tierLabel}
                   </span>
                   <span className="text-[11px] font-bold" style={{ color: tierColor }}>
                     score {String(prospect.score ?? m.score_total ?? "—")}
@@ -684,10 +689,10 @@ function DetalheModal({
                     <span className="text-[12px] text-white">R$ {m.renda_mensal.toLocaleString("pt-BR")}</span>
                   </div>
                 )}
-                {Object.keys(QUIZ_LABELS).filter((key) => m[key] != null && m[key] !== "").map((key, i, arr) => (
+                {Object.keys(labels).filter((key) => m[key] != null && m[key] !== "").map((key, i, arr) => (
                   <div key={key} className={`flex gap-3 px-4 py-2.5 ${i < arr.length - 1 ? "border-b border-white/5" : ""}`}>
-                    <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>{QUIZ_LABELS[key].titulo}</span>
-                    <span className="text-[12px] text-white break-words">{quizLabel(key, m[key], m.quiz_versao !== 2)}</span>
+                    <span className="text-[11px] font-semibold shrink-0 w-36" style={{ color: MUTED }}>{labels[key].titulo}</span>
+                    <span className="text-[12px] text-white break-words">{wl ? (WL_QUIZ_LABELS[key].opts.find((o) => o.value === m[key])?.label ?? String(m[key])) : quizLabel(key, m[key], m.quiz_versao !== 2)}</span>
                   </div>
                 ))}
                 {(Boolean(m.instagram) || Boolean(m.linkedin)) && (

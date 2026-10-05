@@ -13,9 +13,9 @@ import {
 } from "@/lib/quiz-partner";
 
 // Display serifado do manual de marca V4.2 — só nos títulos grandes; o resto é DM Sans.
-const display = Cormorant_Garamond({ subsets: ["latin"], weight: ["500", "600", "700"], style: ["normal", "italic"], display: "swap" });
+export const display = Cormorant_Garamond({ subsets: ["latin"], weight: ["500", "600", "700"], style: ["normal", "italic"], display: "swap" });
 
-const C = {
+export const C = {
   bg: "#09081A",
   base: "#111F35",
   card: "#162744",
@@ -49,7 +49,7 @@ const PASSO_TITULO: Record<number, string> = {
 // WhatsApp do time comercial V3 — botão da tela final quando o link não veio de
 // um partner (?ref=). Pode ser trocado pela env NEXT_PUBLIC_QUIZ_WHATSAPP.
 // Código do país do WhatsApp: Brasil por padrão + os países de onde mais vêm candidatos.
-const DDI_PAISES = [
+export const DDI_PAISES = [
   { sigla: "BR", ddi: "+55" }, { sigla: "PT", ddi: "+351" }, { sigla: "US", ddi: "+1" },
   { sigla: "QA", ddi: "+974" }, { sigla: "AE", ddi: "+971" }, { sigla: "SA", ddi: "+966" },
   { sigla: "GB", ddi: "+44" }, { sigla: "ES", ddi: "+34" }, { sigla: "IT", ddi: "+39" },
@@ -59,14 +59,14 @@ const DDI_PAISES = [
   { sigla: "CN", ddi: "+86" }, { sigla: "AO", ddi: "+244" }, { sigla: "MZ", ddi: "+258" },
 ];
 // Brasil segue sem DDI (o envio põe o 55); fora do Brasil vai com "+" para o 55 nunca ser somado.
-function telefoneCompleto(f: { ddi: string; telefone: string }): string {
+export function telefoneCompleto(f: { ddi: string; telefone: string }): string {
   return f.ddi === "+55" ? f.telefone : `${f.ddi} ${f.telefone.trim()}`;
 }
 
-const WHATSAPP_V3 = (process.env.NEXT_PUBLIC_QUIZ_WHATSAPP || "5511937639475").replace(/\D/g, "");
+export const WHATSAPP_V3 = (process.env.NEXT_PUBLIC_QUIZ_WHATSAPP || "5511937639475").replace(/\D/g, "");
 
-const LETRAS = "ABCDEFGH";
-const SAIDA_MS = 320;
+export const LETRAS = "ABCDEFGH";
+export const SAIDA_MS = 320;
 
 interface FormState {
   objetivo: string; ocupacao: string; nome: string;
@@ -80,7 +80,7 @@ const INITIAL: FormState = {
 };
 
 // ─── Movimento (CSS puro, respeita "reduzir movimento" do sistema) ────────────
-const MOTION_CSS = `
+export const MOTION_CSS = `
 @keyframes q-word { from { opacity: 0; transform: translateY(0.45em); filter: blur(10px); } to { opacity: 1; transform: none; filter: blur(0); } }
 @keyframes q-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
 @keyframes q-line { from { transform: scaleX(0); } to { transform: scaleX(1); } }
@@ -126,7 +126,7 @@ const MOTION_CSS = `
 
 // ─── Peças visuais ────────────────────────────────────────────────────────────
 
-function Backdrop() {
+export function Backdrop() {
   const ref = useRef<HTMLDivElement>(null);
   // Luz que segue o cursor (desktop).
   useEffect(() => {
@@ -158,7 +158,7 @@ function Backdrop() {
   );
 }
 
-function Eyebrow({ children, delay = 0, center }: { children: React.ReactNode; delay?: number; center?: boolean }) {
+export function Eyebrow({ children, delay = 0, center }: { children: React.ReactNode; delay?: number; center?: boolean }) {
   return (
     <p className={`q-rise flex items-center gap-3 text-[10.5px] font-bold uppercase tracking-[0.28em] ${center ? "justify-center" : ""}`}
       style={{ color: C.gold, animationDelay: `${delay}ms` }}>
@@ -169,7 +169,7 @@ function Eyebrow({ children, delay = 0, center }: { children: React.ReactNode; d
 }
 
 // Título revelado palavra por palavra. `destaque` sai em itálico dourado.
-function Pergunta({ antes = "", destaque = "", depois = "", className = "", delay = 120, as = "h2" }: {
+export function Pergunta({ antes = "", destaque = "", depois = "", className = "", delay = 120, as = "h2" }: {
   antes?: string; destaque?: string; depois?: string; className?: string; delay?: number; as?: "h1" | "h2";
 }) {
   const partes: { w: string; em: boolean }[] = [
@@ -191,7 +191,7 @@ function Pergunta({ antes = "", destaque = "", depois = "", className = "", dela
   );
 }
 
-function Opcoes({ options, selected, onSelect, delay = 380 }: {
+export function Opcoes({ options, selected, onSelect, delay = 380 }: {
   options: QuizOption[]; selected?: string; onSelect: (v: string) => void; delay?: number;
 }) {
   return (
@@ -231,7 +231,7 @@ function Opcoes({ options, selected, onSelect, delay = 380 }: {
   );
 }
 
-function Campo({ label, children, delay = 0 }: { label: string; children: React.ReactNode; delay?: number }) {
+export function Campo({ label, children, delay = 0 }: { label: string; children: React.ReactNode; delay?: number }) {
   return (
     <label className="q-rise block" style={{ animationDelay: `${delay}ms` }}>
       <span className="block text-[10.5px] font-bold uppercase tracking-[0.2em] mb-2" style={{ color: C.gold }}>{label}</span>
@@ -240,11 +240,11 @@ function Campo({ label, children, delay = 0 }: { label: string; children: React.
   );
 }
 
-const inputPremium =
+export const inputPremium =
   "q-input w-full bg-transparent border-0 border-b-2 px-0 py-3 text-xl sm:text-2xl outline-none placeholder:text-[#7A8FA8]/50";
-const inputPremiumStyle = { color: C.cream, borderColor: "rgba(240,236,228,0.14)" } as const;
+export const inputPremiumStyle = { color: C.cream, borderColor: "rgba(240,236,228,0.14)" } as const;
 
-function BotaoOuro({ children, onClick, disabled, type = "button" }: {
+export function BotaoOuro({ children, onClick, disabled, type = "button" }: {
   children: React.ReactNode; onClick?: () => void; disabled?: boolean; type?: "button" | "submit";
 }) {
   return (
@@ -256,7 +256,7 @@ function BotaoOuro({ children, onClick, disabled, type = "button" }: {
   );
 }
 
-function Voltar({ onClick }: { onClick: () => void }) {
+export function Voltar({ onClick }: { onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
       className="group inline-flex items-center justify-center gap-2 text-[13px] font-semibold transition-colors hover:text-[#F0ECE4]" style={{ color: C.muted }}>
@@ -266,7 +266,7 @@ function Voltar({ onClick }: { onClick: () => void }) {
 }
 
 // Contador animado do hero: 0 → 21 trilhões.
-function Contador({ ate, duracao = 1700, delay = 350 }: { ate: number; duracao?: number; delay?: number }) {
+export function Contador({ ate, duracao = 1700, delay = 350 }: { ate: number; duracao?: number; delay?: number }) {
   const [semMovimento] = useState(() =>
     typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const [v, setV] = useState(semMovimento ? ate : 0);
@@ -288,7 +288,7 @@ function Contador({ ate, duracao = 1700, delay = 350 }: { ate: number; duracao?:
   return <>{v}</>;
 }
 
-function SeloAprovado() {
+export function SeloAprovado() {
   const faiscas = Array.from({ length: 14 }, (_, i) => i);
   return (
     <div className="relative mx-auto w-28 h-28 mb-8">
