@@ -88,7 +88,9 @@ export async function gerarParecer(
   let pdf: Uint8Array;
   try {
     const page = await browser.newPage();
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await page.setContent(html, { waitUntil: "load", timeout: 60000 });
+    // garante a fonte DM Sans carregada antes de imprimir
+    await page.evaluate(() => document.fonts.ready).catch(() => {});
     pdf = await page.pdf(opcoesPdfParecer({ protocolo, emitidoEm: agora }));
   } finally {
     await browser.close();
