@@ -11,6 +11,7 @@ import { PdfUnificado } from "./pdf-unificado";
 import { ExcluirAnalise } from "./excluir-analise";
 import { DocumentosAnaliseEstruturada } from "./documentos-analise-estruturada";
 import { CalculoAnaliseEstruturada } from "./calculo-analise-estruturada";
+import { ParecerAnaliseEstruturada } from "./parecer-analise-estruturada";
 
 interface Props {
   order: PartnerOrder;
@@ -417,6 +418,7 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
 
           <DocumentosAnaliseEstruturada orderId={order.id} />
           <CalculoAnaliseEstruturada orderId={order.id} />
+          <ParecerAnaliseEstruturada orderId={order.id} />
 
           <div className="rounded-xl border border-border/50 bg-card p-4 flex items-center justify-between gap-3 flex-wrap">
             <div>

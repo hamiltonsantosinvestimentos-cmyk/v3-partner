@@ -1,7 +1,7 @@
 import type { CreditReportData, CreditReportProcesso } from "./credit-report-data";
 import { REPORT_VALIDITY_DAYS } from "./credit-report-data";
 
-function esc(s: string): string {
+export function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
@@ -165,7 +165,7 @@ export const LOGO_URL = "https://app.v3partners.com.br/v3-logo-flat-gold-alpha.p
  * navy limpo antes do conteúdo começar. Sem isso o texto ficava colado no bloco
  * seguinte e a página não tinha a sensação de recomeço.
  */
-const PDF_BAND = (inner: string, opts: { align: string; pad: string; borda: string }) =>
+export const PDF_BAND = (inner: string, opts: { align: string; pad: string; borda: string }) =>
   `<div style="width:100%;height:100%;margin:0;padding:${opts.pad};background:#09081A;` +
   `-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box;` +
   `display:flex;align-items:${opts.align};` +
