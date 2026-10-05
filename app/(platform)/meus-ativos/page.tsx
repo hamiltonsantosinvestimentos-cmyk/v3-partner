@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { ehStarterAntigo } from "@/lib/v3-access";
 import { createClient } from "@/lib/supabase/server";
 import { SellSideListingsPanel } from "@/components/cm/sell-side-listings-panel";
 
@@ -25,7 +26,7 @@ export default async function MeusAtivosPage() {
     .single();
 
   const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "ENTERPRISE"];
-  if (!ALLOWED.includes(profile?.role ?? "")) redirect("/unauthorized");
+  if (!ALLOWED.includes(profile?.role ?? "") && !(profile?.role === "STARTER" && await ehStarterAntigo(user.id))) redirect("/unauthorized");
 
   const isInternal = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile?.role ?? "");
 

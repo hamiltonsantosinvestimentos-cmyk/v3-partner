@@ -134,6 +134,17 @@ export default async function PlatformLayout({
       }
     }
 
+    // V3 Access x antigo V3 Starter (mesmo papel STARTER): só o Access tem o menu enxuto.
+    let starterAntigo = false;
+    if (profile.role === "STARTER") {
+      try {
+        const { ehStarterAntigo } = await import("@/lib/v3-access");
+        starterAntigo = await ehStarterAntigo(profile.id);
+      } catch {
+        // na dúvida fica o menu do Access
+      }
+    }
+
     let notificationCount = 0;
     try {
       const { count } = await supabase
@@ -157,6 +168,7 @@ export default async function PlatformLayout({
             avatar_url: profile.avatar_url,
             trial_expires_at: trialExpiresAt,
             is_active: isActive,
+            starter_antigo: starterAntigo,
           }}
           marca={marca}
           notificationCount={notificationCount}

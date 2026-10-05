@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 
 // V3 Access reaproveitou o papel STARTER (PR #220, no ar em 03/10/2026), mas ainda existem
 // partners do antigo "V3 Starter" (R$ 297/mês) com esse mesmo papel. Só é partner Access quem
@@ -22,4 +22,11 @@ export async function ehPartnerAccess(db: SupabaseClient, profileId: string | nu
     .limit(1)
     .maybeSingle();
   return !!cadastro;
+}
+
+/** Partner do antigo V3 Starter (papel STARTER sem cadastro do Access): mantém o menu de antes do Access. */
+export async function ehStarterAntigo(profileId: string): Promise<boolean> {
+  const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  const { data: profile } = await db.from("profiles").select("role").eq("id", profileId).maybeSingle();
+  return profile?.role === "STARTER" && !(await ehPartnerAccess(db, profileId));
 }
