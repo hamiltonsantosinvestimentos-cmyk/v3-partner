@@ -15,6 +15,7 @@
 import { randomUUID } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildModularTitle, LEGACY_DIRECT_TITLES, isAccessPackage, ACCESS_PACKAGE_TITLE } from "@/lib/credit-analysis-pricing";
+import { criarPropostaDoPedidoAccess } from "@/lib/analise-estruturada/proposta-automatica";
 import {
   notifyPagamentoAnaliseConfirmado,
   notifyMesaPedidoPago,
@@ -313,6 +314,26 @@ export async function reconcileDirectOrderPaid(
     subject_name: directOrder.client_name,
     subject_email: directOrder.client_email,
   }).then(null, () => {});
+
+  // Análise Estruturada V3 vendida pelo link do dashboard do partner Access (sem proposta):
+  // a proposta nasce agora na Mesa de Crédito, com código, em nome do partner.
+  if (isAccessPackage(directOrder.amount_cents)) {
+    try {
+      const proposta = await criarPropostaDoPedidoAccess(db, directOrder.id);
+      if (proposta && directOrder.ref_partner_id) {
+        await db.from("notifications").insert({
+          user_id: directOrder.ref_partner_id,
+          type: "proposal",
+          title: `Proposta ${proposta.code} criada`,
+          message: `${directOrder.client_name} pagou a Análise Estruturada V3. A proposta ${proposta.code} já está na sua Mesa de Crédito.`,
+          action_url: "/mesa-credito/nivel-1",
+          read: false,
+        }).then(null, () => {});
+      }
+    } catch (e) {
+      console.error("[reconcile] proposta automática do Access:", e);
+    }
+  }
 
   await notifyPagamentoAnaliseConfirmado({
     clientEmail: directOrder.client_email,

@@ -46,6 +46,7 @@ import { FounderVideoModal } from "@/components/onboarding/founder-video-modal";
 import { OnboardingCallWidget } from "@/components/onboarding/onboarding-call-widget";
 import { PerformanceBenchmark, type BenchmarkData } from "@/components/dashboard/performance-benchmark";
 import { UpgradeNudge } from "@/components/upgrade/upgrade-nudge";
+import { AccessLinkCard } from "@/components/dashboard/access-link-card";
 
 
 interface KpiCardProps {
@@ -335,6 +336,9 @@ export function DashboardClient({
       {userCreatedAt && (
         <TrialBanner createdAt={userCreatedAt} role={role} />
       )}
+
+      {/* V3 Access: link da Análise Estruturada para mandar ao cliente */}
+      {role === "STARTER" && <AccessLinkCard />}
 
       {/* Próximos Passos — apenas para partners */}
       {["PARTNER", "PARTNER_PRO"].includes(role) && (

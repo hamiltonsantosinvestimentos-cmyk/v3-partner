@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDate, formatDoc } from "@/lib/utils";
 import { PedidoDetailModal } from "./pedido-detail-modal";
 import { UNIT_PRICE_CENTS } from "@/lib/credit-analysis-pricing";
+import { isAccessPackage } from "@/lib/credit-analysis-pricing";
 
 export interface PartnerOrder {
   id: string;
@@ -353,7 +354,7 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
   // as duas tabelas venham do mesmo endpoint (decisão 11/09/2026).
   // Aba "Mesa de Crédito" (22/09/2026): pedidos que vieram do link de Análise gerado numa
   // proposta da Mesa de Crédito — antes caíam misturados em "Diretos (Site)".
-  const [tab, setTab] = useState<"partner" | "mesa" | "direct">("partner");
+  const [tab, setTab] = useState<"partner" | "mesa" | "direct" | "access">("partner");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -384,15 +385,20 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
     setSelected((cur) => (cur ? fresh.find((o) => o.id === cur.id) ?? null : null));
   }, [load]);
 
+  // Consulta Access (Análise Estruturada V3, R$ 1.500) fica numa aba própria para não
+  // misturar com as consultas comuns.
+  const comuns = orders.filter((o) => !isAccessPackage(o.amount_cents));
   const porAba = {
-    partner: orders.filter((o) => o.source !== "direct"),
-    mesa: orders.filter((o) => o.source === "direct" && o.origem === "mesa_credito"),
-    direct: orders.filter((o) => o.source === "direct" && o.origem !== "mesa_credito"),
+    partner: comuns.filter((o) => o.source !== "direct"),
+    mesa: comuns.filter((o) => o.source === "direct" && o.origem === "mesa_credito"),
+    direct: comuns.filter((o) => o.source === "direct" && o.origem !== "mesa_credito"),
+    access: orders.filter((o) => isAccessPackage(o.amount_cents)),
   };
   const abas: { id: keyof typeof porAba; label: string }[] = [
     { id: "partner", label: "Via Partner" },
     { id: "mesa", label: "Mesa de Crédito" },
     { id: "direct", label: "Diretos (Site)" },
+    { id: "access", label: "Consulta Access" },
   ];
 
   return (
@@ -438,6 +444,11 @@ export function PedidosPartnersClient({ canManagePayout = false }: Props) {
           {tab === "mesa" && (
             <p className="text-xs text-muted-foreground -mt-2">
               Clientes que pagaram pelo link de Análise de Crédito gerado numa proposta da Mesa de Crédito. O código do crédito leva direto à proposta.
+            </p>
+          )}
+          {tab === "access" && (
+            <p className="text-xs text-muted-foreground -mt-2">
+              Análise Estruturada V3 (R$ 1.500) vendida pelos partners V3 Access: documentos do cliente, leitura com IA, cálculo, rating e parecer assinado. A proposta é criada automaticamente no pagamento.
             </p>
           )}
           {tab === "direct" && (
