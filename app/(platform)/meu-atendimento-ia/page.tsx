@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { ehStarterAntigo } from "@/lib/v3-access";
 import { SdrAddonLocked } from "@/components/sdr/sdr-addon-locked";
 import { PartnerSdrClient } from "@/components/sdr/partner-sdr-client";
 
@@ -19,7 +20,7 @@ export default async function MeuAtendimentoIaPage() {
     .eq("id", user.id)
     .single();
 
-  if (!PARTNER_ROLES.includes(profile?.role ?? "")) redirect("/unauthorized");
+  if (!PARTNER_ROLES.includes(profile?.role ?? "") && !(profile?.role === "STARTER" && await ehStarterAntigo(user.id))) redirect("/unauthorized");
 
   const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const { data: conexao } = await db

@@ -23,6 +23,8 @@ interface PlatformShellProps {
     avatar_url: string | null;
     trial_expires_at?: string | null;
     is_active?: boolean | null;
+    /** Papel STARTER do antigo V3 Starter (não Access): menu de antes do Access. */
+    starter_antigo?: boolean;
   };
   notificationCount: number;
   /** White label do Enterprise (null = marca V3). */
@@ -47,7 +49,7 @@ export function PlatformShell({ user, notificationCount, marca = null, children 
       <LocationGate role={user.role} />
       {/* Desktop sidebar */}
       <div className="hidden lg:flex flex-shrink-0">
-        <Sidebar role={user.role} marca={marca} />
+        <Sidebar role={user.role} starterAntigo={user.starter_antigo} marca={marca} />
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -58,7 +60,7 @@ export function PlatformShell({ user, notificationCount, marca = null, children 
             onClick={() => setSidebarOpen(false)}
           />
           <div className="absolute left-0 top-0 bottom-0 z-50">
-            <Sidebar role={user.role} marca={marca} onClose={() => setSidebarOpen(false)} />
+            <Sidebar role={user.role} starterAntigo={user.starter_antigo} marca={marca} onClose={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}

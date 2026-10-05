@@ -221,14 +221,25 @@ const ROLE_LABELS: Record<string, string> = {
   CLOSER: "Closer",
 };
 
+// Itens que o V3 Access (papel STARTER, PR #220) não tem, mas o antigo V3 Starter (mesmo
+// papel) sempre teve: para ele o menu continua como antes do Access.
+const MENU_STARTER_ANTIGO = new Set([
+  "/meus-compradores", "/meus-ativos", "/indicacoes", "/bolsa", "/simulador-home-equity",
+  "/simulador-homecash", "/consorcio/simulacao", "/consorcio/projetos", "/marketplace",
+  "/meu-atendimento-ia", "/metas",
+]);
+
 interface SidebarProps {
   role: UserRole;
+  starterAntigo?: boolean;
   onClose?: () => void;
   /** White label do Enterprise (lib/enterprise.ts): logo e nome no lugar da marca V3. */
   marca?: { nome: string; logoUrl: string | null } | null;
 }
 
-export function Sidebar({ role, onClose, marca = null }: SidebarProps) {
+export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: SidebarProps) {
+  const podeVer = (item: { href: string; roles: string[] }) =>
+    item.roles.includes(role) || (starterAntigo && role === "STARTER" && MENU_STARTER_ANTIGO.has(item.href));
   const pathname = usePathname();
   const [expandedItems, setExpandedItems] = useState<string[]>(() => {
     const initial = ["/mesa-credito"];
@@ -317,7 +328,7 @@ export function Sidebar({ role, onClose, marca = null }: SidebarProps) {
       {/* ── NAVIGATION ── */}
       <nav ref={navRef} className="flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5 scrollbar-thin">
         {NAV_SECTIONS.map(section => {
-          const visibleItems = section.items.filter(item => item.roles.includes(role));
+          const visibleItems = section.items.filter(podeVer);
           if (!visibleItems.length) return null;
 
           return (
@@ -330,7 +341,7 @@ export function Sidebar({ role, onClose, marca = null }: SidebarProps) {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                 const isExpanded = expandedItems.includes(item.href);
                 const hasChildren = item.children && item.children.length > 0;
-                const filteredChildren = item.children?.filter(c => c.roles.includes(role));
+                const filteredChildren = item.children?.filter(podeVer);
 
                 return (
                   <div key={item.href} data-active={isActive ? "true" : undefined}>
@@ -401,7 +412,7 @@ export function Sidebar({ role, onClose, marca = null }: SidebarProps) {
           <div className="flex-1 min-w-0">
             <p className="text-[10px] text-[#7A8FA8] leading-none">Perfil ativo</p>
             <p className="text-[11px] font-bold text-[#C9A84C] leading-none mt-0.5 truncate">
-              {ROLE_LABELS[role] ?? role}
+              {starterAntigo && role === "STARTER" ? "V3 Starter" : ROLE_LABELS[role] ?? role}
             </p>
           </div>
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />

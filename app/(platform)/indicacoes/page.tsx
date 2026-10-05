@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { ehStarterAntigo } from "@/lib/v3-access";
 import { IndicacoesDashboardClient } from "@/components/indicacoes/indicacoes-dashboard-client";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +20,7 @@ export default async function IndicacoesPage() {
     .eq("id", user.id)
     .single();
 
-  if (!profile || !["ADMIN", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"].includes(profile.role)) {
+  if (!profile || (!["ADMIN", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO"].includes(profile.role) && !(profile.role === "STARTER" && await ehStarterAntigo(user.id)))) {
     redirect("/unauthorized");
   }
 
