@@ -18,6 +18,9 @@ export const VEREDITO_LABEL: Record<Veredito, { titulo: string; texto: string; c
 export function sugerirVeredito(calculo: CalculoSalvo): Veredito {
   const altos = calculo.alertas.filter((a) => a.nivel === "alto");
   if (altos.some((a) => a.tema === "Capacidade" || a.tema === "Resultado")) return "nao_apto";
+  // Rating V3 2.0 (Fase 2): faixa D/E não sustenta operação; C pede ressalvas.
+  if (calculo.rating && (calculo.rating.faixa === "D" || calculo.rating.faixa === "E")) return "nao_apto";
+  if (calculo.rating?.faixa === "C") return "apto_com_ressalvas";
   if (altos.length || calculo.alertas.filter((a) => a.nivel === "medio").length >= 3) return "apto_com_ressalvas";
   return "apto";
 }
@@ -163,6 +166,20 @@ export function htmlParecer(d: DadosParecer): string {
     <h3 class="sec">1. Resumo executivo</h3>
     <div class="hl ${v.classe}"><div class="veredito">${v.titulo}</div>${v.texto}</div>
     <div class="kpis">${kpis.map(([l, val, g]) => `<div class="kpi"><div class="l">${l}</div><div class="v ${g ? "gold" : ""}">${val}</div></div>`).join("")}</div>
+    ${c.rating ? `
+    <div class="tier-block">
+      <div class="tier-card"><div class="tier-v">${c.rating.faixa}</div><div class="tier-l">Rating V3 2.0 · ${c.rating.nota}/100</div>
+        <p class="note" style="margin-top:8px">Confiança ${c.rating.confianca === "alto" ? "alta" : c.rating.confianca === "medio" ? "média" : "baixa"}</p></div>
+      <div>
+        <p class="note"><strong style="color:var(--cr)">${esc(c.rating.leitura)}</strong></p>
+        <p class="note">Com as ações do plano cumpridas, a nota projetada é <strong style="color:var(--go)">${c.rating.notaProjetada} (faixa ${c.rating.faixaProjetada})</strong>.</p>
+        ${c.rating.travas.length ? `<p class="note" style="color:#E58A8A">Travas que limitam a nota: ${esc(c.rating.travas.join("; "))}.</p>` : ""}
+        ${c.rating.motivosConfianca.length ? `<p class="note">${esc(c.rating.motivosConfianca.join("; "))}.</p>` : ""}
+      </div>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>Pilar do rating</th><th>Peso</th><th>Nota</th><th>O que pesou</th></tr></thead>
+    <tbody>${c.rating.pilares.map((p) => `<tr><td><strong>${esc(p.nome)}</strong></td><td>${p.peso}%</td><td><strong>${p.nota ?? "—"}</strong></td><td>${esc(p.motivos.join(" · ") || (p.nota == null ? "Sem dados suficientes" : ""))}</td></tr>`).join("")}</tbody></table></div>
+    ` : ""}
     ${d.comentarioAnalista ? `<div class="hl hl-gold"><strong>Comentário do analista:</strong> ${esc(d.comentarioAnalista).replace(/\n/g, "<br>")}</div>` : ""}
     <p class="note">Principais pontos de atenção:</p>
     <ul class="lista">${c.alertas.slice(0, 5).map((a) => `<li><strong>${esc(a.tema)}:</strong> ${esc(a.texto)}</li>`).join("") || "<li>Nenhum ponto de atenção relevante.</li>"}</ul>
