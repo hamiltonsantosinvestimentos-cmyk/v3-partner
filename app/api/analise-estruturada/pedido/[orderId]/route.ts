@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { pedidoPeloId, statusDocumentos } from "@/lib/analise-estruturada/documentos";
 import { BUCKET_ANALISE } from "@/lib/analise-estruturada/checklist";
+import { carregarResultado } from "@/lib/analise-estruturada/extracao";
 
 // Documentos da Análise Estruturada V3 de um pedido, para a Mesa (Pedidos de Partners).
 // O prefixo /api/analise-estruturada/ é público no proxy (por causa do envio do cliente),
@@ -33,6 +34,7 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     ? await db.storage.from(BUCKET_ANALISE).createSignedUrls(caminhos, VALIDADE_LINK_SEGUNDOS)
     : { data: [] as { path: string | null; signedUrl: string }[] };
   const urlPorCaminho = new Map((links ?? []).map((l) => [l.path, l.signedUrl]));
+  const leituras = new Map(await Promise.all(caminhos.map(async (c) => [c, await carregarResultado(db, orderId, c)] as const)));
 
   return NextResponse.json({
     ativo: true,
@@ -45,7 +47,10 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
       key: i.key,
       label: i.label,
       obrigatorio: i.obrigatorio,
-      arquivos: i.arquivos.map((a) => ({ nome: a.nome, enviado_em: a.enviado_em, url: urlPorCaminho.get(a.caminho) ?? null })),
+      arquivos: i.arquivos.map((a) => ({
+        nome: a.nome, caminho: a.caminho, enviado_em: a.enviado_em, url: urlPorCaminho.get(a.caminho) ?? null,
+        leitura: leituras.get(a.caminho) ?? null,
+      })),
     })),
   });
 }
