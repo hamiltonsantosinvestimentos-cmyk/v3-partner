@@ -27,7 +27,7 @@ export const PESOS_PJ = { capacidade: 25, financeira: 20, comportamento: 20, jur
 export const PESOS_PF = { capacidade: 35, patrimonio: 15, comportamento: 30, juridico: 10, consistencia: 10 } as const;
 const NOTA_MAXIMA_COM_TRAVA = 54; // trava limita a faixa D
 
-const FAIXAS: Array<{ faixa: Faixa; min: number; leitura: string }> = [
+export const FAIXAS: Array<{ faixa: Faixa; min: number; leitura: string }> = [
   { faixa: "A", min: 85, leitura: "Pronto para o mercado: bancos, FIDCs e securitizadoras, com taxas menores." },
   { faixa: "B", min: 70, leitura: "Apto, com ajustes pontuais que melhoram taxa e prazo." },
   { faixa: "C", min: 55, leitura: "Apto com garantia forte ou estrutura específica (recebíveis, imóvel)." },

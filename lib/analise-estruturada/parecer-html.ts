@@ -3,7 +3,7 @@ import type { CalculoSalvo } from "@/lib/analise-estruturada/calculo-pedido";
 import type { StatusDocumentos } from "@/lib/analise-estruturada/documentos";
 import { planoDeAcao } from "@/lib/analise-estruturada/plano-acao";
 import { TERMO_CLAUSULAS, TERMO_TITULO, TERMO_VALIDADO_JURIDICO, TERMO_VERSAO } from "@/lib/analise-estruturada/termo";
-import { lerValor } from "@/lib/analise-estruturada/rating";
+import { FAIXAS, lerValor, type ResultadoRating } from "@/lib/analise-estruturada/rating";
 import type { SituacaoCreditoParte } from "@/lib/analise-estruturada/situacao-credito";
 
 // Parecer técnico da Análise Estruturada V3 em HTML (entrega 4), no mesmo visual do
@@ -80,6 +80,31 @@ ul.lista li strong { color: var(--cr); }
 .parte-n { font-size: 12px; font-weight: 700; color: var(--cr); text-transform: none; letter-spacing: 0; margin-top: 2px; }
 .parte-d { font-size: 10.5px; color: var(--mu); font-weight: 400; text-transform: none; letter-spacing: 0; }
 td.grupo { background: var(--nc); color: var(--gl); font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; padding-top: 9px; }
+.regua-wrap { margin: 14px 0 6px; }
+.regua-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.regua-top .t { font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gl); }
+.regua-top .m { font-size: 11px; color: var(--mu); }
+.regua-top .m strong { color: var(--cr); }
+.regua { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; align-items: end; }
+.faixa-c { position: relative; background: var(--nc); border: 1px solid var(--nm); border-radius: 8px; padding: 10px 8px 9px; text-align: center; }
+.faixa-c .l { font-size: 22px; font-weight: 800; color: var(--mu); line-height: 1; }
+.faixa-c .r { font-size: 9.5px; color: var(--mu); margin-top: 4px; font-weight: 700; letter-spacing: 0.04em; }
+.faixa-c .n { font-size: 9.5px; color: var(--mu); margin-top: 3px; line-height: 1.3; min-height: 25px; }
+.faixa-c.atual { background: var(--go); border-color: var(--go); padding: 16px 8px 13px; box-shadow: 0 0 0 3px rgba(201,168,76,0.22); }
+.faixa-c.atual .l { font-size: 40px; color: #09081A; }
+.faixa-c.atual .r, .faixa-c.atual .n { color: #09081A; font-weight: 700; }
+.faixa-c.proj { border: 1.5px dashed var(--go); }
+.faixa-c.proj .l { color: var(--go); }
+.faixa-c .selo { position: absolute; top: -9px; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 8.5px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; }
+.faixa-c.atual .selo { background: #09081A; color: var(--gl); border: 1px solid var(--go); }
+.faixa-c.proj .selo { background: var(--nb); color: var(--gl); border: 1px dashed var(--go); }
+.barra { position: relative; height: 8px; border-radius: 4px; margin: 16px 0 4px; background: linear-gradient(90deg, rgba(201,168,76,0.12), rgba(201,168,76,0.75)); }
+.barra .corte { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--nd, #09081A); }
+.barra .pin { position: absolute; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: var(--cr); border: 3px solid var(--go); }
+.barra .pin.proj { background: transparent; border: 2px dashed var(--go); }
+.barra-eixo { display: flex; justify-content: space-between; font-size: 9px; color: var(--mu); }
+.regua-leitura { margin-top: 10px; font-size: 12px; color: var(--cr); line-height: 1.5; }
+.regua-leitura .sub { color: var(--mu); font-size: 11px; }
 @media print {
   /* Toda tabela do parecer cabe numa página: ela viaja inteira, junto com o título e a
      nota que a apresentam (.bloco). O cabeçalho repetido do template (table-header-group)
@@ -107,6 +132,39 @@ function celulaScr(consultado: boolean, valor: string | null, ruim: boolean): st
   if (valor == null) return '<span class="na">não informado</span>';
   return ruim && temValor(valor) ? `<span class="nok">${esc(valor)}</span>` : esc(valor);
 }
+const FAIXA_NOME: Record<string, string> = {
+  A: "Pronto para o mercado", B: "Apto com ajustes", C: "Apto com garantia", D: "Ainda não apto", E: "Reestruturar antes",
+};
+
+/** Régua do Rating V3: todas as faixas de E a A, a atual em destaque e a projetada (com o plano) tracejada. */
+function htmlReguaRating(r: ResultadoRating): string {
+  const ordem = [...FAIXAS].reverse(); // E → A, da pior para a melhor
+  const mudaFaixa = r.faixaProjetada !== r.faixa;
+  const celulas = ordem.map((f, i) => {
+    const max = i === ordem.length - 1 ? 100 : ordem[i + 1].min - 1;
+    const atual = f.faixa === r.faixa;
+    const proj = mudaFaixa && f.faixa === r.faixaProjetada;
+    const selo = atual ? `<span class="selo">Hoje · ${r.nota}</span>` : proj ? `<span class="selo">Com o plano · ${r.notaProjetada}</span>` : "";
+    return `<div class="faixa-c${atual ? " atual" : ""}${proj ? " proj" : ""}">${selo}<div class="l">${f.faixa}</div><div class="r">${f.min}–${max}</div><div class="n">${FAIXA_NOME[f.faixa] ?? ""}</div></div>`;
+  }).join("");
+  const pos = (n: number) => Math.max(1.5, Math.min(98.5, n));
+  const cortes = ordem.slice(1).map((f) => `<span class="corte" style="left:${f.min}%"></span>`).join("");
+  const confianca = r.confianca === "alto" ? "alta" : r.confianca === "medio" ? "média" : "baixa";
+  return `
+    <div class="regua-wrap bloco">
+      <div class="regua-top"><span class="t">Rating V3 · onde o cliente está hoje</span>
+        <span class="m">Nota <strong>${r.nota}/100</strong> · faixa <strong>${r.faixa}</strong> · confiança ${confianca}</span></div>
+      <div class="regua">${celulas}</div>
+      <div class="barra">${cortes}${r.notaProjetada > r.nota ? `<span class="pin proj" style="left:${pos(r.notaProjetada)}%"></span>` : ""}<span class="pin" style="left:${pos(r.nota)}%"></span></div>
+      <div class="barra-eixo"><span>0</span><span>100</span></div>
+      <div class="regua-leitura"><strong>${esc(r.leitura)}</strong>
+        ${r.notaProjetada > r.nota ? `<span class="sub"> Com as ações do plano cumpridas, a nota vai a <strong style="color:var(--go)">${r.notaProjetada}${mudaFaixa ? ` (faixa ${r.faixaProjetada})` : ""}</strong>.</span>` : ""}
+        ${r.travas.length ? `<div class="sub" style="color:#E58A8A;margin-top:4px">Travas que limitam a nota: ${esc(r.travas.join("; "))}.</div>` : ""}
+        ${r.motivosConfianca.length ? `<div class="sub" style="margin-top:4px">${esc(r.motivosConfianca.join("; "))}.</div>` : ""}
+      </div>
+    </div>`;
+}
+
 const PAPEL_LABEL: Record<SituacaoCreditoParte["papel"], string> = { principal: "", socio: "Sócio / garantidor", empresa_grupo: "Empresa do grupo" };
 
 function htmlSituacaoCredito(sc: NonNullable<CalculoSalvo["situacaoCredito"]>, numero: number): string {
@@ -259,17 +317,8 @@ export function htmlParecer(d: DadosParecer): string {
     <h3 class="sec">1. Resumo executivo</h3>
     <div class="hl ${v.classe}"><div class="veredito">${v.titulo}</div>${v.texto}</div>
     <div class="kpis">${kpis.map(([l, val, g]) => `<div class="kpi"><div class="l">${l}</div><div class="v ${g ? "gold" : ""}">${val}</div></div>`).join("")}</div>
-    ${c.rating ? `<div class="bloco">
-    <div class="tier-block">
-      <div class="tier-card"><div class="tier-v">${c.rating.faixa}</div><div class="tier-l">Rating V3 2.0 · ${c.rating.nota}/100</div>
-        <p class="note" style="margin-top:8px">Confiança ${c.rating.confianca === "alto" ? "alta" : c.rating.confianca === "medio" ? "média" : "baixa"}</p></div>
-      <div>
-        <p class="note"><strong style="color:var(--cr)">${esc(c.rating.leitura)}</strong></p>
-        <p class="note">Com as ações do plano cumpridas, a nota projetada é <strong style="color:var(--go)">${c.rating.notaProjetada} (faixa ${c.rating.faixaProjetada})</strong>.</p>
-        ${c.rating.travas.length ? `<p class="note" style="color:#E58A8A">Travas que limitam a nota: ${esc(c.rating.travas.join("; "))}.</p>` : ""}
-        ${c.rating.motivosConfianca.length ? `<p class="note">${esc(c.rating.motivosConfianca.join("; "))}.</p>` : ""}
-      </div>
-    </div>
+    ${c.rating ? `${htmlReguaRating(c.rating)}
+    <div class="bloco"><p class="note">Como a nota foi composta (Rating V3 2.0):</p>
     <div class="tbl-wrap"><table><thead><tr><th>Pilar do rating</th><th>Peso</th><th>Nota</th><th>O que pesou</th></tr></thead>
     <tbody>${c.rating.pilares.map((p) => `<tr><td><strong>${esc(p.nome)}</strong></td><td>${p.peso}%</td><td><strong>${p.nota ?? "—"}</strong></td><td>${esc(p.motivos.join(" · ") || (p.nota == null ? "Sem dados suficientes" : ""))}</td></tr>`).join("")}</tbody></table></div>
     </div>` : ""}
