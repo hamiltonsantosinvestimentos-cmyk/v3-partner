@@ -5,7 +5,7 @@ import { pedidoPeloId } from "@/lib/analise-estruturada/documentos";
 import { BUCKET_ANALISE } from "@/lib/analise-estruturada/checklist";
 import { gerarParecer, carregarEstadoParecer, marcarEntregue, caminhoPdfParecer, protocoloDoPedido } from "@/lib/analise-estruturada/parecer";
 import { VEREDITO_LABEL, type Veredito } from "@/lib/analise-estruturada/parecer-html";
-import { TERMO_VALIDADO_JURIDICO } from "@/lib/analise-estruturada/termo";
+import { TERMO_VALIDADO_JURIDICO, TERMO_VERSAO } from "@/lib/analise-estruturada/termo";
 import { gerarComissaoConsultaEntregue } from "@/lib/consulta-commissions";
 import { createNotification } from "@/lib/notify";
 
@@ -81,6 +81,10 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       const estado = await carregarEstadoParecer(db, orderId);
       if (!estado || estado.status === "rascunho") return NextResponse.json({ error: "Assine o parecer antes de entregar." }, { status: 409 });
       if (estado.status === "entregue") return NextResponse.json({ error: "Parecer já entregue." }, { status: 409 });
+      // PDF gerado com outra versão do termo (ex.: a minuta, com tarja MINUTA) não vai ao cliente.
+      if (estado.termoVersao !== TERMO_VERSAO) {
+        return NextResponse.json({ error: "Este parecer foi gerado com a versão anterior do termo. Gere o rascunho e assine de novo antes de entregar." }, { status: 409 });
+      }
 
       const { data: pedidoCompleto } = await db.from("partner_service_orders").select("client_email").eq("id", orderId).single();
       const email = (pedidoCompleto as { client_email?: string } | null)?.client_email;
