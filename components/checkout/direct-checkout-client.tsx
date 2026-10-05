@@ -6,7 +6,7 @@ import Image from "next/image";
 import { Copy, Check, AlertCircle, AlertTriangle, Loader2, CreditCard, QrCode, FileText, Minus, Plus } from "lucide-react";
 import { getStoredRefPartnerId, getStoredPropCode, getStoredPropDealType } from "@/lib/ref-tracking";
 import { trackEvent } from "@/lib/analytics";
-import { UNIT_PRICE_CENTS, clampSelection, calcTotalCents, buildModularTitle, legacyPlanoToSelection, getMinCounts, fmtBRL, ACCESS_PACKAGE_CENTS, ACCESS_PACKAGE_TITLE, COMPLETA_PACKAGE_CENTS, type ModularSelection, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
+import { UNIT_PRICE_CENTS, clampSelection, calcTotalCents, buildModularTitle, legacyPlanoToSelection, getMinCounts, fmtBRL, ACCESS_PACKAGE_CENTS, ACCESS_PACKAGE_TITLE, COMPLETA_ADDON_CENTS, type ModularSelection, type ProfileType, type CompanyStructure } from "@/lib/credit-analysis-pricing";
 
 const N = "#09081A", N2 = "#13223A", N3 = "#162744", N4 = "#243A66";
 const GO = "#C9A84C", GL = "#E8C97A", CR = "#F5F1E8", MU = "#9BAFC5";
@@ -66,13 +66,12 @@ export function DirectCheckoutClient() {
   // V3 Access (?pacote=access, link do partner Access): pacote fechado de
   // R$ 1.500. O cliente só diz se é CPF ou CNPJ e, no CNPJ, quantos sócios;
   // o nome/CPF de cada sócio (com autorização) é pedido no intake pós-pagamento.
-  // Análise Completa (?pacote=completa, /analise-v2): a mesma Análise Estruturada por
-  // R$ 1.000 fechados, aberta a todos; perfil e sócios vêm preenchidos do configurador.
-  const pacoteParam = searchParams.get("pacote");
-  const pacote: "access" | "completa" | null = pacoteParam === "access" || pacoteParam === "completa" ? pacoteParam : null;
-  const isPacote = pacote !== null;
-  const [accessPerfil, setAccessPerfil] = useState<ProfileType>(pacote === "completa" && profileType === "PF" ? "PF" : "PJ");
-  const [accessSocios, setAccessSocios] = useState(pacote === "completa" ? Math.max(1, Math.min(10, initialSelection.cpfCount)) : 1);
+  // Consultoria e acompanhamento (?pacote=completa, /analise-v2): segue a tabela modular
+  // (R$ 197 por CPF/CNPJ) + R$ 1.000 no lugar da devolutiva simples.
+  const completa = searchParams.get("pacote") === "completa";
+  const isPacote = searchParams.get("pacote") === "access";
+  const [accessPerfil, setAccessPerfil] = useState<ProfileType>("PJ");
+  const [accessSocios, setAccessSocios] = useState(1);
   const [step, setStep] = useState<Step>("form");
   const [payMethod, setPayMethod] = useState<PayMethod>("pix");
   const [form, setForm] = useState({ client_name: "", client_email: "", client_doc: "" });
@@ -90,8 +89,8 @@ export function DirectCheckoutClient() {
   const effCompanyStructure: CompanyStructure | null = isPacote
     ? (accessPerfil === "PJ" ? (accessSocios > 1 ? "MULTIPLOS_SOCIOS" : "UNIPESSOAL") : null)
     : companyStructure;
-  const totalCents = pacote === "access" ? ACCESS_PACKAGE_CENTS : pacote === "completa" ? COMPLETA_PACKAGE_CENTS : calcTotalCents(selection);
-  const title = isPacote ? ACCESS_PACKAGE_TITLE : buildModularTitle(selection);
+  const totalCents = isPacote ? ACCESS_PACKAGE_CENTS : calcTotalCents(selection, completa);
+  const title = isPacote ? ACCESS_PACKAGE_TITLE : buildModularTitle(selection, completa);
   const totalAnalyses = selection.cnpjCount + selection.cpfCount;
 
   function setCnpjCount(n: number) {
@@ -168,7 +167,7 @@ export function DirectCheckoutClient() {
           cnpj_count: effSelection.cnpjCount,
           cpf_count: effSelection.cpfCount,
           has_consultancy: effSelection.hasConsultancy,
-          pacote,
+          pacote: isPacote ? "access" : completa ? "completa" : null,
           ref_partner_id: refPartnerId,
           prop_code: propCode,
           deal_type: dealType,
@@ -270,6 +269,12 @@ export function DirectCheckoutClient() {
                 </div>
               )}
 
+              {completa ? (
+                <div style={{ marginTop: 4, background: "rgba(201,168,76,0.08)", border: `1px solid ${GO}`, borderRadius: 8, padding: 14, fontSize: 12, color: MU, lineHeight: 1.5 }}>
+                  <strong style={{ color: CR }}>Consultoria e acompanhamento V3 · Análise Completa</strong> (+ {fmt(COMPLETA_ADDON_CENTS)}): envio de balanço, DRE, faturamento, IR e extratos;
+                  capacidade de pagamento, rating, situação de crédito, raio-X de custos bancários, parecer técnico assinado e devolutiva de 45 minutos com a mesa de crédito.
+                </div>
+              ) : (
               <button
                 type="button"
                 onClick={toggleConsultancy}
@@ -284,9 +289,10 @@ export function DirectCheckoutClient() {
                   <strong style={{ color: CR }}>Consultoria Estratégica V3</strong> (+ {fmt(UNIT_PRICE_CENTS)}): reunião de 45 minutos com a mesa de crédito, com devolutiva completa dos relatórios e plano de ação prático.
                 </span>
               </button>
+              )}
 
               <div style={{ fontSize: 11, color: MU, textAlign: "right" }}>
-                {totalAnalyses} análise{totalAnalyses !== 1 ? "s" : ""} selecionada{totalAnalyses !== 1 ? "s" : ""} · Consultoria {selection.hasConsultancy ? "incluída" : "não incluída"}
+                {totalAnalyses} análise{totalAnalyses !== 1 ? "s" : ""} selecionada{totalAnalyses !== 1 ? "s" : ""} · {completa ? "Consultoria e acompanhamento incluídos" : <>Consultoria {selection.hasConsultancy ? "incluída" : "não incluída"}</>}
               </div>
             </div>
           )}
