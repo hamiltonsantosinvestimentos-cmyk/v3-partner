@@ -45,7 +45,7 @@ const TAB_CONFIG: { key: Tab; label: string; icon: React.ReactNode }[] = [
 
 function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
   return (
-    <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium animate-fade-in ${
+    <div style={{ "--dur": "4000ms" } as React.CSSProperties} className={`v3-toast fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium ${
       type === "success"
         ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
         : "bg-red-500/15 border-red-500/40 text-red-400"

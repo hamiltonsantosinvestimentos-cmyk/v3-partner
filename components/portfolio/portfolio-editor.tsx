@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Plus, Pencil, Trash2, ChevronDown, ChevronUp,
   Save, X, Loader2, CheckCircle2, AlertCircle, Power, FileText, Check,
@@ -102,8 +102,8 @@ const EMPTY: Omit<PortfolioLinha, "id" | "ativo" | "ordem"> = {
 
 function Toast({ msg, type, onClose }: { msg: string; type: "success" | "error"; onClose: () => void }) {
   return (
-    <div className={cn(
-      "fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium animate-fade-in",
+    <div style={{ "--dur": "3500ms" } as React.CSSProperties} className={cn(
+      "v3-toast fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium",
       type === "success"
         ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
         : "bg-red-500/15 border-red-500/40 text-red-400"

@@ -364,6 +364,13 @@ export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: 
               <p className="px-3 mb-1 mt-2 text-[9px] font-bold tracking-[0.18em] text-[#7A8FA8]/50 uppercase select-none">
                 {section.label}
               </p>
+              {/* índice para a busca Ctrl+K (components/layout/command-palette.tsx), inclui submenus fechados */}
+              <ul hidden>
+                {visibleItems.flatMap(item => [
+                  ...(item.children?.length ? [] : [item]),
+                  ...(item.children?.filter(podeVer) ?? []).map(c => ({ ...c, label: `${item.label} › ${c.label}` })),
+                ]).map(i => <li key={i.href} data-cmdk-href={i.href} data-cmdk-label={i.label} data-cmdk-grupo={section.label} />)}
+              </ul>
               {visibleItems.map(item => {
                 const Icon = iconMap[item.icon];
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
