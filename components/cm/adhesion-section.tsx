@@ -51,6 +51,10 @@ export function AdhesionSection({ contractId, contractCode, onGenerated }: { con
   const [invites, setInvites] = useState<{ name: string; phone: string | null; token: string }[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [openPartyId, setOpenPartyId] = useState<string | null>(null);
+  const [addToBatchId, setAddToBatchId] = useState<string | null>(null);
+  const [newPart, setNewPart] = useState<Aderente>({ name: "", email: "", phone: "" });
+  const [addingPart, setAddingPart] = useState(false);
+  const [addPartError, setAddPartError] = useState<string | null>(null);
   const [generatingBatch, setGeneratingBatch] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -112,6 +116,36 @@ export function AdhesionSection({ contractId, contractCode, onGenerated }: { con
       setError("Erro de conexão.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const submitNewParticipant = async () => {
+    if (!addToBatchId) return;
+    setAddPartError(null);
+    const name = newPart.name.trim();
+    const email = newPart.email.trim();
+    const phone = newPart.phone.trim();
+    if (name.split(/\s+/).filter(Boolean).length < 2) { setAddPartError("Informe nome e sobrenome."); return; }
+    if (!isValidEmail(email)) { setAddPartError("Informe um e-mail válido."); return; }
+    if (phone && !normalizePhone(phone).ok) { setAddPartError("WhatsApp inválido. Confira o DDI e o número."); return; }
+    setAddingPart(true);
+    try {
+      const res = await fetch(`/api/cm/qualifications/${addToBatchId}/add-party`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: name, email, phone: phone || undefined, role_in_document: "partner" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setAddPartError(json.error ?? "Erro ao adicionar o participante."); return; }
+      setInvites((prev) => [...prev, { name: json.party.full_name, phone: json.party.phone ?? null, token: json.party.qualification_token }]);
+      setDone(`${json.party.full_name} foi adicionado(a) e recebeu o link de qualificação por e-mail. Se quiser, envie também por WhatsApp.`);
+      setAddToBatchId(null);
+      setNewPart({ name: "", email: "", phone: "" });
+      await load();
+    } catch {
+      setAddPartError("Erro de conexão.");
+    } finally {
+      setAddingPart(false);
     }
   };
 
@@ -193,6 +227,10 @@ export function AdhesionSection({ contractId, contractCode, onGenerated }: { con
               ))}
               <span className="text-[#9BAFC5]"> ({complete ? "qualificação completa" : "aguardando preenchimento"})</span>
             </div>
+            <button onClick={() => { setNewPart({ name: "", email: "", phone: "" }); setAddPartError(null); setAddToBatchId(b.id); }}
+              className="px-2.5 py-1 bg-[#162744] text-[#C9A84C] border border-[#C9A84C]/30 rounded-lg text-[11px] font-bold hover:bg-[#243A66] transition flex items-center gap-1">
+              <Plus size={11} /> Adicionar participante
+            </button>
             {!complete && b.parties.filter((p) => p.token && p.status !== "preenchido").map((p) => (
               <a key={p.token} href={whatsappInviteLink(p.name, p.phone, p.token!, contractCode)} target="_blank" rel="noreferrer"
                 className="px-2.5 py-1 bg-[#25D366]/15 text-[#4ADE80] border border-[#4ADE80]/30 rounded-lg text-[11px] font-bold hover:bg-[#25D366]/25 transition">
@@ -222,6 +260,45 @@ export function AdhesionSection({ contractId, contractCode, onGenerated }: { con
       ))}
 
       <PartyQualificationCardModal qualificationId={openPartyId} onClose={() => setOpenPartyId(null)} />
+
+      {addToBatchId && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
+          {/* Não fecha clicando fora: só pelos botões. */}
+          <div className="w-full max-w-md bg-[#09081A] border border-[#C9A84C]/30 rounded-xl">
+            <div className="p-4 border-b border-[#9BAFC5]/15 flex items-center justify-between">
+              <div className="text-sm font-bold text-[#F5F1E8] flex items-center gap-2"><Plus size={14} /> Adicionar participante</div>
+              <button onClick={() => setAddToBatchId(null)} disabled={addingPart} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-xs text-[#9BAFC5] leading-relaxed">O novo aderente entra no mesmo Termo e recebe o link de qualificação por e-mail. O botão Gerar Termo volta a liberar quando ele preencher.</p>
+              <div>
+                <label className="block text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-1">Nome completo *</label>
+                <input value={newPart.name} onChange={(e) => setNewPart((p) => ({ ...p, name: e.target.value }))}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-sm text-[#F5F1E8]" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-1">E-mail *</label>
+                <input type="email" inputMode="email" value={newPart.email} onChange={(e) => setNewPart((p) => ({ ...p, email: e.target.value }))}
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-sm text-[#F5F1E8]" />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-1">WhatsApp (opcional)</label>
+                <PhoneIntlInput value={newPart.phone} onChange={(v) => setNewPart((p) => ({ ...p, phone: v }))} placeholder="Fora do Brasil use +DDI"
+                  className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-sm text-[#F5F1E8]" />
+              </div>
+              {addPartError && <p className="text-[11px] text-red-400">{addPartError}</p>}
+              <div className="flex gap-2">
+                <button onClick={() => setAddToBatchId(null)} disabled={addingPart}
+                  className="flex-1 px-3 py-2 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs font-bold hover:bg-[#243A66] transition">Voltar</button>
+                <button onClick={submitNewParticipant} disabled={addingPart}
+                  className="flex-1 px-3 py-2 bg-[#C9A84C]/20 text-[#C9A84C] border border-[#C9A84C]/40 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/30 transition disabled:opacity-50 flex items-center justify-center gap-2">
+                  {addingPart && <Loader2 size={13} className="animate-spin" />} Adicionar e enviar convite
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
