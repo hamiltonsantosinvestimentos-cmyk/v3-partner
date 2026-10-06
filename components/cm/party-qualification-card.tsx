@@ -14,34 +14,87 @@ import { PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, formatDocumentNumber, 
 import { KYC_DOCUMENT_KIND_LABELS } from "@/lib/kyc-documents";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 
-type KycDocument = { document_kind: string; original_filename: string | null; mime_type?: string | null; uploaded_at: string; valid_until: string; download_url: string | null; uploaded_ip?: string | null };
+type KycDocument = { document_id: string; document_kind: string; original_filename: string | null; mime_type?: string | null; uploaded_at: string; valid_until: string; uploaded_ip?: string | null };
 
-function DocumentRow({ doc, onPreview }: { doc: KycDocument; onPreview: (url: string) => void }) {
+/** Data no fuso de Brasília como DD/MM/AAAA (sem deslocar o dia). */
+const dateBr = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+
+// Passo 3 (05/10/2026): o documento fica escondido até o olho. Ao clicar, POST .../documents/[docId]/open
+// grava o log ANTES de devolver um link assinado de 60 segundos. Passado esse prazo o link é descartado
+// e o documento volta a ficar escondido.
+const OPEN_URL_VALID_MS = 55_000;
+
+function DocumentRow({ qualificationId, doc, onPreview }: { qualificationId: string; doc: KycDocument; onPreview: (url: string) => void }) {
   const isImage = doc.mime_type?.startsWith("image/");
+  const isPdf = doc.mime_type === "application/pdf";
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!url) return;
+    const t = setTimeout(() => setUrl(null), OPEN_URL_VALID_MS);
+    return () => clearTimeout(t);
+  }, [url]);
+
+  const openDocument = async () => {
+    setLoading(true);
+    setError(null);
+    // PDF: a janela precisa abrir de forma síncrona no clique, senão o bloqueador de pop-up barra.
+    const pdfWindow = isPdf ? window.open("", "_blank") : null;
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/documents/${doc.document_id}/open`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) {
+        pdfWindow?.close();
+        setError(json.error ?? "Não foi possível abrir o documento");
+        return;
+      }
+      setUrl(json.url);
+      if (isPdf && pdfWindow) pdfWindow.location.href = json.url;
+      else if (isImage) onPreview(json.url);
+    } catch {
+      pdfWindow?.close();
+      setError("Erro de conexão");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2 bg-[#09081A] rounded px-2.5 py-2">
-      {isImage && doc.download_url ? (
-        <button type="button" onClick={() => onPreview(doc.download_url!)} className="flex-shrink-0 w-10 h-10 rounded overflow-hidden border border-[#9BAFC5]/20 hover:border-[#C9A84C]/60 transition-colors">
-          <img src={doc.download_url} alt={doc.original_filename ?? "documento"} className="w-full h-full object-cover" />
-        </button>
-      ) : (
-        <div className="flex-shrink-0 w-10 h-10 rounded flex items-center justify-center bg-[#12112A] border border-[#9BAFC5]/15">
-          <FileText size={16} className="text-[#9BAFC5]" />
+    <div className="bg-[#09081A] rounded px-2.5 py-2 space-y-1">
+      <div className="flex items-center gap-2">
+        {isImage && url ? (
+          <button type="button" onClick={() => onPreview(url)} className="flex-shrink-0 w-10 h-10 rounded overflow-hidden border border-[#9BAFC5]/20 hover:border-[#C9A84C]/60 transition-colors">
+            <img src={url} alt={doc.original_filename ?? "documento"} className="w-full h-full object-cover" />
+          </button>
+        ) : (
+          <div className="flex-shrink-0 w-10 h-10 rounded flex items-center justify-center bg-[#12112A] border border-[#9BAFC5]/15">
+            <FileText size={16} className="text-[#9BAFC5]" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] text-[#E8C97A] font-bold uppercase">{KYC_DOCUMENT_KIND_LABELS[doc.document_kind as keyof typeof KYC_DOCUMENT_KIND_LABELS] ?? doc.document_kind}</p>
+          <p className="text-[11px] text-[#9BAFC5] truncate">
+            {doc.original_filename ?? "arquivo"} · enviado {dateBr(doc.uploaded_at)} · válido até {dateBr(doc.valid_until)}
+          </p>
+          {doc.uploaded_ip && <p className="text-[11px] text-[#9BAFC5]/70">IP de envio: {doc.uploaded_ip}</p>}
         </div>
-      )}
-      <div className="min-w-0 flex-1">
-        <p className="text-[12px] text-[#E8C97A] font-bold uppercase">{KYC_DOCUMENT_KIND_LABELS[doc.document_kind as keyof typeof KYC_DOCUMENT_KIND_LABELS] ?? doc.document_kind}</p>
-        <p className="text-[10px] text-[#9BAFC5] truncate">
-          {doc.original_filename ?? "arquivo"} · enviado {new Date(doc.uploaded_at).toLocaleDateString("pt-BR")} · válido até {new Date(doc.valid_until).toLocaleDateString("pt-BR")}
-        </p>
-        {doc.uploaded_ip && <p className="text-[9px] text-[#9BAFC5]/70">IP de envio: {doc.uploaded_ip}</p>}
+        {url ? (
+          <a href={url} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1 text-[12px] font-semibold text-[#E8C97A] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors flex-shrink-0">
+            <Download size={10} /> Baixar
+          </a>
+        ) : (
+          <button type="button" onClick={openDocument} disabled={loading}
+            aria-label="Ver documento (o acesso é registrado)" title="Ver documento (o acesso é registrado)"
+            className="flex items-center gap-1 text-[12px] font-semibold text-[#E8C97A] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors flex-shrink-0 disabled:opacity-50">
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />} Ver documento
+          </button>
+        )}
       </div>
-      {doc.download_url ? (
-        <a href={doc.download_url} target="_blank" rel="noopener noreferrer"
-          className="flex items-center gap-1 text-[12px] font-semibold text-[#E8C97A] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors flex-shrink-0">
-          <Download size={10} /> Baixar
-        </a>
-      ) : null}
+      {url && <p className="text-[11px] text-[#9BAFC5]">Link válido por 1 minuto. Depois o documento volta a ficar escondido.</p>}
+      {error && <p className="text-[11px] text-red-400" role="alert">{error}</p>}
     </div>
   );
 }
@@ -376,7 +429,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
       {data.documents?.length > 0 && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
           <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Documentos KYC</p>
-          {data.documents.map((doc: any, i: number) => <DocumentRow key={i} doc={doc} onPreview={onPreview} />)}
+          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} />)}
         </div>
       )}
 
@@ -419,7 +472,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
               )}
               {rep.documents?.length > 0 && (
                 <div className="pt-1 space-y-1">
-                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={j} doc={doc} onPreview={onPreview} />)}
+                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} />)}
                 </div>
               )}
             </div>
@@ -431,7 +484,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
 
       <p className="text-[12px] text-[#9BAFC5]/70 pt-2 border-t border-[#9BAFC5]/10 space-y-0.5">
         <span className="block">Preenchido em {q.filled_at ? new Date(q.filled_at).toLocaleString("pt-BR") : "-"}{q.filled_ip ? ` a partir do IP ${q.filled_ip}` : ""}.</span>
-        <span className="block">Abertura desta ficha e download de documentos ficam registrados na trilha de auditoria de KYC. Cada revelação de CPF, identidade e dados de repasse é registrada com quem acessou, o campo e a data.</span>
+        <span className="block">Cada abertura de documento fica registrada na trilha de auditoria de KYC, e os documentos só aparecem depois do clique em "Ver documento". Cada revelação de CPF, identidade e dados de repasse é registrada com quem acessou, o campo e a data.</span>
         <span className="block">Por regra de compliance, seu IP é armazenado por 36 meses como prova de que você teve acesso a dados sensíveis das partes.</span>
       </p>
     </div>

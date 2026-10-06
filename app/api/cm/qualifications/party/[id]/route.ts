@@ -30,39 +30,28 @@ interface DocumentCard {
   mime_type: string | null;
   uploaded_at: string;
   valid_until: string;
-  download_url: string | null;
+  // Passo 3 (05/10/2026): a ficha só recebe metadados. A foto fica escondida até o olho; o link
+  // assinado de 60 segundos e o log saem de POST .../documents/[docId]/open.
+  document_id: string;
   // Compliance (11/09/2026, pedido de Robson Lino): IP de quem enviou.
   uploaded_ip: string | null;
 }
 
-// Para um v3_client_id, resolve os documentos válidos (0-2, um por kind) com URL
-// assinada (1h) e registra o acesso na trilha de auditoria — mesmo padrão de
-// cm_deal_room_document_views (compliance exige log de toda visualização de KYC).
-async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, viewedBy: string, ip: string, qualificationId: string): Promise<DocumentCard[]> {
+// Para um v3_client_id, resolve os documentos válidos (0-2, um por kind) como METADADOS, na ordem
+// fixa identificação com foto e depois contrato social. Nenhum link e nenhum log aqui: o arquivo só
+// é aberto por POST .../documents/[docId]/open, que grava o log ANTES de gerar o link assinado.
+async function loadDocumentsForClient(db: SupabaseClient, v3ClientId: string, _viewedBy: string, _ip: string, _qualificationId: string): Promise<DocumentCard[]> {
   const cards: DocumentCard[] = [];
   for (const kind of DOC_KINDS) {
     const doc = await findValidKycDocument(db, v3ClientId, kind);
     if (!doc) continue;
-    // Log ANTES do documento: se a gravação falhar, o documento não é exibido (BRIEF 5.12, regra 3.2).
-    const { error: logError } = await db.from("cm_party_qualification_document_views").insert({
-      document_id: doc.id,
-      viewed_by: viewedBy,
-      ip_address: ip,
-      // Âncora do titular (migration 20261002a): a qualificação da ficha aberta.
-      qualification_id: qualificationId,
-    });
-    if (logError) {
-      console.error("[qualificacao ficha] falha ao gravar log de abertura de documento", { qualification_id: qualificationId, code: logError.code });
-      continue;
-    }
-    const { data: signed } = await db.storage.from("documents").createSignedUrl(doc.storage_path, 3600);
     cards.push({
+      document_id: doc.id,
       document_kind: kind,
       original_filename: doc.original_filename,
       mime_type: doc.mime_type,
       uploaded_at: doc.uploaded_at,
       valid_until: kycValidUntil(doc.uploaded_at),
-      download_url: signed?.signedUrl ?? null,
       uploaded_ip: doc.uploaded_ip ?? null,
     });
   }
