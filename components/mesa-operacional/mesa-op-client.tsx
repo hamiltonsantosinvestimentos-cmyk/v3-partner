@@ -19,6 +19,7 @@ import {
   CREDIT_DESK_LINES,
   type OperationStatus, type TicketPriority,
 } from "@/lib/constants";
+import { registrarOrigemModal } from "@/components/motion/origem-modal";
 import { PropostaDetailModal, PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO, type ProposalFull, type MesaComment } from "@/components/mesa-credito/proposta-detail-modal";
 import { InstituicoesPanel } from "@/components/mesa-operacional/instituicoes-panel";
 import { NdaClientesPanel } from "@/components/mesa-operacional/nda-clientes-panel";
@@ -2385,7 +2386,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                         <div key={p.id} data-flip-id={p.id}
                           className={`relative w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group cursor-pointer ${draggedId === p.id ? "opacity-40 scale-95 cursor-grabbing" : canChangeStage ? "cursor-grab active:cursor-grabbing" : ""}`}
                           style={slaBorderColor ? { borderLeftWidth: "3px", borderLeftColor: slaBorderColor } : undefined}
-                          onClick={() => setDetailProposal(p)}>
+                          onClick={(e) => { registrarOrigemModal(e.currentTarget); setDetailProposal(p); }}>
                           {(() => {
                             if (!sla) return null;
                             const colors = { ok: "bg-emerald-500", warning: "bg-amber-500", danger: "bg-red-500" };
