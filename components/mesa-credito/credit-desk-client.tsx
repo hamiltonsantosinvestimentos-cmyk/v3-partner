@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import { registrarOrigemModal } from "@/components/motion/origem-modal";
 import { useFlip } from "@/components/motion/use-flip";
 import { LayoutGrid, List, Plus, TrendingUp, Zap, Building2 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
@@ -337,7 +338,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                     cards.map((p) => {
                       const { targetDate } = getSLAInfo(p);
                       return (
-                        <div key={p.id} data-flip-id={p.id} onClick={() => setDetailProposal(p)}
+                        <div key={p.id} data-flip-id={p.id} onClick={(e) => { registrarOrigemModal(e.currentTarget); setDetailProposal(p); }}
                           className="bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-18px_rgba(0,0,0,.9)] transition-all duration-300 space-y-2 group">
                           <div className="flex items-center justify-between gap-1">
                             <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code}</span>
@@ -403,7 +404,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                     return (
                       <tr key={p.id}
                         className="border-b border-border/30 cursor-pointer transition-colors hover:bg-secondary/50"
-                        onClick={() => setDetailProposal(p)}>
+                        onClick={(e) => { registrarOrigemModal(e.currentTarget); setDetailProposal(p); }}>
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code}</td>
                         <td className="px-4 py-3 font-medium text-foreground max-w-36 truncate">{p.client_name}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{p.client_type ?? "PJ"}</td>

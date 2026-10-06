@@ -20,6 +20,7 @@ import { RecomendacaoLinha } from "./recomendacao-linha";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
 import { NdaVinculoProposta } from "@/components/mesa-credito/nda-vinculo-proposta";
 import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
+import { pegarOrigemModal, recorteDe } from "@/components/motion/origem-modal";
 
 export type MesaComment = {
   id: string;
@@ -1098,6 +1099,49 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   type ModalTab = "detalhes" | "recomendacao" | "avaliacao_imovel" | "documentos" | "raio_x" | "comentarios" | "analise_ia" | "chat_ia";
   const [modalTab, setModalTab] = useState<ModalTab>("detalhes");
   const bodyRef = React.useRef<HTMLDivElement>(null);
+
+  // ── Movimento V3: o modal nasce do card clicado e volta para ele ao fechar ──
+  const panelRef = React.useRef<HTMLDivElement>(null);
+  const origemRef = React.useRef<DOMRect | null>(null);
+  const tabsRef = React.useRef<HTMLDivElement>(null);
+  const inkRef = React.useRef<HTMLSpanElement>(null);
+  const semMovimento = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  React.useLayoutEffect(() => {
+    if (!open || !proposal) return;
+    const p = panelRef.current;
+    const o = pegarOrigemModal();
+    origemRef.current = o;
+    if (!p || semMovimento()) return;
+    if (o) {
+      p.animate([{ clipPath: recorteDe(o) }, { clipPath: "inset(0px 0px 0px 0px round 0px)" }], { duration: 560, easing: "cubic-bezier(.2,.9,.1,1)" });
+      p.animate([{ opacity: 0.55 }, { opacity: 1 }], { duration: 300, easing: "ease-out" });
+    } else {
+      p.animate([{ opacity: 0, transform: "scale(.985) translateY(8px)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: "cubic-bezier(.2,.7,.1,1)" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, proposal?.id]);
+  const fecharAnimado = React.useCallback(() => {
+    const p = panelRef.current, o = origemRef.current;
+    if (!p || semMovimento()) { onClose(); return; }
+    const a = o && document.body.contains(p)
+      ? p.animate([{ clipPath: "inset(0px 0px 0px 0px round 0px)", opacity: 1 }, { clipPath: recorteDe(o), opacity: 0.4 }], { duration: 380, easing: "cubic-bezier(.4,0,.2,1)", fill: "forwards" })
+      : p.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.985)" }], { duration: 240, easing: "ease-in", fill: "forwards" });
+    a.onfinish = () => onClose();
+  }, [onClose]);
+  // abas: sublinhado dourado desliza até a aba ativa; conteúdo entra suave
+  React.useLayoutEffect(() => {
+    const t = tabsRef.current, ink = inkRef.current;
+    if (!open || !t || !ink) return;
+    const b = t.querySelector<HTMLElement>(`[data-tab="${modalTab}"]`);
+    if (!b) return;
+    ink.style.width = `${b.offsetWidth}px`;
+    ink.style.transform = `translateX(${b.offsetLeft}px)`;
+  }, [modalTab, open, proposal?.id]);
+  React.useEffect(() => {
+    if (!open || semMovimento()) return;
+    bodyRef.current?.animate([{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }], { duration: 320, easing: "cubic-bezier(.2,.7,.1,1)" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modalTab]);
 
   // Volta ao topo e reseta aba ao abrir uma proposta
   useEffect(() => {
@@ -2959,7 +3003,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60">
-      <div className="bg-card border-0 rounded-none w-screen h-screen max-w-none max-h-none flex flex-col animate-fade-in">
+      <div ref={panelRef} className="bg-card border-0 rounded-none w-screen h-screen max-w-none max-h-none flex flex-col">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-border">
           <div>
@@ -2994,7 +3038,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             <CopyClientLinkButton proposalId={proposal.id} />
             <AnaliseCreditoLinkButton proposalId={proposal.id} proposalCode={proposal.code} partnerId={proposal.partner_id} />
             {(canChangeStage || canEditValorSolicitado) && <GenerateUploadLinkButton proposalId={proposal.id} />}
-            <button onClick={onClose} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white transition-colors">
+            <button onClick={fecharAnimado} className="w-8 h-8 rounded-lg hover:bg-secondary flex items-center justify-center text-muted-foreground hover:text-white hover:rotate-90 transition-all duration-300">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -3028,7 +3072,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         )}
 
         {/* Tabs */}
-        <div className="flex border-b border-border px-6 gap-1">
+        <div ref={tabsRef} className="relative flex border-b border-border px-6 gap-1">
+          <span ref={inkRef} aria-hidden className="absolute bottom-[-1px] left-0 h-[2px] rounded-full bg-[#C9A84C] shadow-[0_0_10px_rgba(201,168,76,.7)] transition-[transform,width] duration-500 ease-[cubic-bezier(.22,1.2,.36,1)] motion-reduce:transition-none" />
           {([
             { id: "detalhes",      label: "Detalhes" },
             { id: "recomendacao",  label: "✦ Recomendação" },
@@ -3039,11 +3084,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             { id: "analise_ia",    label: "🧠 Análise IA" },
             { id: "chat_ia",       label: "💬 Chat IA" },
           ] as { id: ModalTab; label: string }[]).map(t => (
-            <button key={t.id} onClick={() => setModalTab(t.id)}
-              className={`px-3 py-2.5 text-xs font-semibold border-b-2 transition-colors ${
+            <button key={t.id} data-tab={t.id} onClick={() => setModalTab(t.id)}
+              className={`px-3 py-2.5 text-xs font-semibold border-b-2 border-transparent transition-colors ${
                 modalTab === t.id
-                  ? "border-[#C9A84C] text-[#C9A84C]"
-                  : "border-transparent text-muted-foreground hover:text-white"
+                  ? "text-[#C9A84C]"
+                  : "text-muted-foreground hover:text-white"
               }`}>
               {t.label}
             </button>
@@ -5288,7 +5333,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
           <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Fechar</Button>
+            <Button variant="outline" size="sm" onClick={fecharAnimado}>Fechar</Button>
             {canCompileDocuments && (
               <Button variant="outline" size="sm" onClick={compileDocuments} className="gap-1.5 border-primary/40 text-primary hover:bg-primary/10">
                 <Package className="w-3.5 h-3.5" />
