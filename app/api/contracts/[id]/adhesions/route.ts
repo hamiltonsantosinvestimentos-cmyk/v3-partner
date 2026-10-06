@@ -38,7 +38,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: batches } = await db
     .from("cm_qualification_batches")
-    .select("id, status, created_at, consumido_por_contract_id, cm_party_qualifications(full_name, status, deleted_at)")
+    .select("id, status, created_at, consumido_por_contract_id, cm_party_qualifications(full_name, status, deleted_at, phone, qualification_token)")
     .eq("parent_contract_id", id)
     .order("created_at", { ascending: true });
 
@@ -75,9 +75,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         id: b.id,
         status: b.status,
         created_at: b.created_at,
-        parties: ((b.cm_party_qualifications as { full_name: string; status: string; deleted_at: string | null }[]) ?? [])
+        // Nome e status para a lista; telefone e token só servem ao botão de WhatsApp dos convites ainda não preenchidos.
+        parties: ((b.cm_party_qualifications as { full_name: string; status: string; deleted_at: string | null; phone: string | null; qualification_token: string | null }[]) ?? [])
           .filter((p) => !p.deleted_at)
-          .map((p) => ({ name: p.full_name, status: p.status })),
+          .map((p) => ({ name: p.full_name, status: p.status, phone: p.status === "preenchido" ? null : p.phone, token: p.status === "preenchido" ? null : p.qualification_token })),
       })),
   });
 }
