@@ -2,12 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { normalizeDocument, detectDocumentType } from "@/lib/v3-clients";
+import { maskCpfCnpj } from "@/lib/qualification-mask";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const NO_STORE = { "Cache-Control": "no-store" };
+
+// Compliance (05/10/2026, BRIEF de Padronização da Qualificação): o documento do cliente sai
+// MASCARADO (CPF: ***.123.456-**; CNPJ é dado público e fica intacto). O valor real só sai de
+// POST /api/clientes/[id]/reveal, com log gravado antes. Toda consulta grava log de leitura em
+// audit_logs com await, ANTES de devolver o dado (nunca `void ...insert()`).
 
 // GET /api/clientes/[documento] — Registro Central de Cliente (Client 360).
 // Devolve tudo que está vinculado a um CPF/CNPJ entre as verticais que já
@@ -30,43 +38,73 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docu
   }
 
   const { documento } = await params;
-  const digits = normalizeDocument(documento);
-  const docType = detectDocumentType(digits);
-  if (!docType) {
-    return NextResponse.json({ error: "Documento inválido — informe um CPF (11 dígitos) ou CNPJ (14 dígitos)" }, { status: 400 });
+  const byId = UUID_RE.test(documento);
+  const svc = serviceClient();
+
+  let client: { id: string; document_number: string; document_type: string; legal_name: string | null; first_seen_vertical: string | null; first_seen_at: string } | null = null;
+  let docType: string | null = null;
+
+  if (byId) {
+    // Consulta por id (link da ficha da parte): CPF/CNPJ nunca vai na URL. Mesmo 404 genérico
+    // para "não existe" e "sem vínculo", sem confirmar nada sobre o id.
+    const { data, error } = await svc
+      .from("v3_clients")
+      .select("id, document_number, document_type, legal_name, first_seen_vertical, first_seen_at")
+      .eq("id", documento)
+      .maybeSingle();
+    if (error) return NextResponse.json({ error: "Erro ao consultar cliente" }, { status: 500, headers: NO_STORE });
+    if (!data) return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404, headers: NO_STORE });
+    client = data;
+  } else {
+    const digits = normalizeDocument(documento);
+    docType = detectDocumentType(digits);
+    if (!docType) {
+      return NextResponse.json({ error: "Documento inválido, informe um CPF (11 dígitos) ou CNPJ (14 dígitos)" }, { status: 400, headers: NO_STORE });
+    }
+    const { data, error: clientError } = await svc
+      .from("v3_clients")
+      .select("id, document_number, document_type, legal_name, first_seen_vertical, first_seen_at")
+      .eq("document_number", digits)
+      .maybeSingle();
+    if (clientError) return NextResponse.json({ error: clientError.message }, { status: 500, headers: NO_STORE });
+    if (!data) {
+      return NextResponse.json({ found: false, document_number: maskCpfCnpj(digits), document_type: docType }, { headers: NO_STORE });
+    }
+    client = data;
   }
 
-  const svc = serviceClient();
-  const { data: client, error: clientError } = await svc
-    .from("v3_clients")
-    .select("id, document_number, document_type, legal_name, first_seen_vertical, first_seen_at")
-    .eq("document_number", digits)
-    .maybeSingle();
-
-  if (clientError) return NextResponse.json({ error: clientError.message }, { status: 500 });
-  if (!client) {
-    return NextResponse.json({ found: false, document_number: digits, document_type: docType });
+  // Log de leitura ANTES do dado. Falhou, nada sai.
+  const { error: logError } = await svc.from("audit_logs").insert({
+    user_id: user.id,
+    action: "cliente_360_consulta",
+    entity: "v3_clients",
+    entity_id: client.id,
+    ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? null,
+  });
+  if (logError) {
+    console.error("[clientes 360] falha ao gravar log de consulta", { client_id: client.id, code: logError.code });
+    return NextResponse.json({ error: "Não foi possível registrar a consulta, tente novamente" }, { status: 500, headers: NO_STORE });
   }
 
   const [credito, bolsa, creditEngine, partners, maDeals, kyc, trajetoria, sugestoes] = await Promise.all([
     svc.from("credit_desk_proposals")
       .select("id, code, title, client_name, credit_line, requested_value, stage, status, created_at")
-      .eq("v3_client_id", client.id),
+      .eq("v3_client_id", client.id).order("created_at", { ascending: false }),
     svc.from("cm_asset_listings")
       .select("id, numero_interno, seller_name, asset_type, valor_face, listing_status, created_at")
-      .eq("v3_client_id", client.id),
+      .eq("v3_client_id", client.id).order("created_at", { ascending: false }),
     svc.from("credit_profiles")
       .select("id, tier, score_total, analysis_type, created_at")
-      .eq("v3_client_id", client.id),
+      .eq("v3_client_id", client.id).order("created_at", { ascending: false }),
     svc.from("partner_registrations")
       .select("id, nome_completo, plano, status, created_at")
-      .eq("v3_client_id", client.id),
+      .eq("v3_client_id", client.id).order("created_at", { ascending: false }),
     svc.from("ma_deal_clients")
       .select("id, role, status, created_at, ma_deals(id, code, title, stage)")
-      .eq("v3_client_id", client.id),
+      .eq("v3_client_id", client.id).order("created_at", { ascending: false }),
     svc.from("kyc_analyses")
       .select("id, score, risk_label, verdict, dd_level, created_at")
-      .eq("v3_client_id", client.id),
+      .eq("v3_client_id", client.id).order("created_at", { ascending: false }),
     svc.from("v3_client_risk_trajectory")
       .select("dimension, score_atual, classificacao_atual, score_anterior, direcao, created_at")
       .eq("v3_client_id", client.id)
@@ -74,7 +112,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docu
     svc.from("v3_client_risk_suggestions")
       .select("id, dimension, suggestion, status, created_at")
       .eq("v3_client_id", client.id)
-      .eq("status", "aberta"),
+      .eq("status", "aberta")
+      .order("created_at", { ascending: false }),
   ]);
 
   // Trajetória: só a linha mais recente de cada dimensão (a view devolve o
@@ -102,13 +141,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docu
     const { data } = await svc
       .from("operation_contracts")
       .select("id, contract_code, contract_title, vertical, status_signature, deal_id, credit_proposal_id, listing_id, created_at")
-      .or(orParts.join(","));
+      .or(orParts.join(","))
+      .order("created_at", { ascending: false });
     contratos = data ?? [];
   }
 
   return NextResponse.json({
     found: true,
-    client,
+    client: { ...client, document_number: maskCpfCnpj(client.document_number) ?? "" },
     credito: credito.data ?? [],
     bolsa_de_ativos: bolsa.data ?? [],
     credit_engine: creditEngine.data ?? [],
@@ -117,5 +157,5 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docu
     kyc: kyc.data ?? [],
     contratos,
     risco: { trajetoria: trajetoriaPorDimensao, sugestoes: sugestoes.data ?? [] },
-  });
+  }, { headers: NO_STORE });
 }
