@@ -472,6 +472,10 @@ export async function POST(req: NextRequest) {
     // Intermediários por número (lib/qualification-roles.ts).
     const qualifications = qualificationsRaw ? sortQualificationParties(qualificationsRaw) : qualificationsRaw;
 
+    if (adhesionParent && (!qualifications || qualifications.length === 0)) {
+      return NextResponse.json({ error: "Este lote não tem nenhum aderente. Adicione ao menos um participante antes de gerar o Termo." }, { status: 422 });
+    }
+
     if (qualifications && qualifications.length > 0) {
       // D2b: intermediários renumerados de 1 a N só na EXIBIÇÃO. role e as
       // variáveis {{<role>_nome}} continuam com a chave original de origem.

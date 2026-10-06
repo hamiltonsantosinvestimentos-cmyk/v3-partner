@@ -5,6 +5,8 @@ import { randomUUID } from "crypto";
 import { isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { normalizePhone } from "@/lib/phone";
+import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { validateAdhesionParent } from "@/lib/contract-adhesion";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -19,7 +21,7 @@ async function requireMesa() {
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
   if (!profile || !ALLOWED_ROLES.includes(profile.role as string)) return null;
-  return user.id;
+  return { userId: user.id, role: profile.role as string };
 }
 
 // POST /api/cm/qualifications/[id]/add-party — "[id]" aqui é o BATCH_ID
@@ -35,8 +37,8 @@ async function requireMesa() {
 // Se o lote já estava "completo", volta pra "coletando" -- a parte nova
 // ainda não preencheu, o lote deixou de estar 100% pronto.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const userId = await requireMesa();
-  if (!userId) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const caller = await requireMesa();
+  if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id: batchId } = await params;
   const { full_name, email, phone, role_in_document } = await req.json().catch(() => ({}));
@@ -51,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const db = svc();
   const { data: batch } = await db
     .from("cm_qualification_batches")
-    .select("id, status, consumido_por_contract_id")
+    .select("id, status, consumido_por_contract_id, parent_contract_id")
     .eq("id", batchId)
     .single();
 
@@ -60,6 +62,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({
       error: "Este lote já foi consumido por um contrato gerado. Não é possível adicionar partes a ele — gere um novo lote para o próximo contrato.",
     }, { status: 409 });
+  }
+
+  // Lote de Termo de Adesão: mesmas travas do servidor da criação (perfil ADMIN/GESTAO, contrato de
+  // origem assinado e com cláusula de adesões futuras). O contrato de origem nunca é alterado.
+  if (batch.parent_contract_id) {
+    const check = await validateAdhesionParent(db, batch.parent_contract_id as string, caller.role);
+    if (!check.ok) return NextResponse.json({ error: check.error }, { status: check.status });
   }
 
   const { data: inserted, error } = await db
@@ -79,6 +88,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (batch.status === "completo") {
     await db.from("cm_qualification_batches").update({ status: "coletando", completed_at: null }).eq("id", batchId);
+  }
+
+  // Convite por e-mail só no lote de adesão (os demais fluxos seguem como antes: link e WhatsApp pela tela).
+  if (batch.parent_contract_id && process.env.RESEND_API_KEY) {
+    try {
+      const { Resend } = await import("resend");
+      const resend = new Resend(process.env.RESEND_API_KEY);
+      const subjectGate = auditText("Qualificação pendente: Termo de Adesão ao NCNDA, V3 Partners");
+      const htmlGate = auditHtml(`<p>Olá ${inserted.full_name},</p>
+         <p>Você foi cadastrado(a) como envolvido(a) na operação abaixo, referente ao documento <strong>Termo de Adesão ao NCNDA</strong>.</p>
+         <p>Complete seus dados de qualificação para prosseguirmos: https://app.v3partners.com.br/intake/qualificacao/${inserted.qualification_token}</p>`);
+      if (htmlGate.blocking.length > 0) console.error("[add-party] Brand Guardian bloqueou:", htmlGate.blocking);
+      await resend.emails.send({
+        from: "V3 Partners <noreply@v3partners.com.br>",
+        to: inserted.email,
+        subject: subjectGate.corrected,
+        html: htmlGate.corrected,
+      });
+    } catch (err) {
+      console.error(`[add-party] falha ao enviar e-mail para ${inserted.email}:`, err);
+    }
   }
 
   return NextResponse.json({ party: inserted }, { status: 201 });
