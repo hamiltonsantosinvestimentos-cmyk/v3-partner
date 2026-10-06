@@ -1684,9 +1684,6 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [npPartners, setNpPartners] = useState<{ id: string; full_name: string; role?: string }[]>([]);
   const [npPartnersLoading, setNpPartnersLoading] = useState(false);
   const [npPartnerSearch, setNpPartnerSearch] = useState("");
-  // ─── OCR automático (ao entrar em TRIAGEM) ───────────────────────────────
-  const [ocrAutoRunning, setOcrAutoRunning] = useState<Record<string, boolean>>({});
-
   // ─── Estado de pendência ─────────────────────────────────────────────────
   const [pendingTarget, setPendingTarget] = useState<Ticket | null>(null);
   const [resolveTarget, setResolveTarget] = useState<Ticket | null>(null);
@@ -2162,26 +2159,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       body: JSON.stringify({ id: proposalId, stage: newStage }),
     }).catch(() => {});
 
-    // Auto-dispara OCR quando proposta entra em TRIAGEM
-    if (newStage === "TRIAGEM") {
-      setOcrAutoRunning(prev => ({ ...prev, [proposalId]: true }));
-      fetch("/api/credit-proposals/ocr-batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proposal_id: proposalId }),
-      })
-        .then(r => r.ok ? r.json() : Promise.reject())
-        .then((data) => {
-          setOcrAutoRunning(prev => { const n = { ...prev }; delete n[proposalId]; return n; });
-          if (data?.ocr_results) {
-            setProposals(prev => prev.map(p => p.id === proposalId
-              ? { ...p, metadata: { ...(p.metadata ?? {}), ocr_results: data.ocr_results, ocr_resumo_geral: data.resumo_geral, ocr_analyzed_at: new Date().toISOString() } }
-              : p
-            ));
-          }
-        })
-        .catch(() => { setOcrAutoRunning(prev => { const n = { ...prev }; delete n[proposalId]; return n; }); });
-    }
+    // OCR dos documentos é manual (Mesa Operacional, no modal da proposta): não dispara mais ao entrar em TRIAGEM (06/10/2026).
 
     // Auto-abre modal de SLA para a nova etapa (não faz sentido em estágios terminais)
     if (!(TERMINAL_STAGES as readonly string[]).includes(newStage) && SLA_STAGES.includes(newStage as SlaStage)) {
@@ -2576,16 +2554,8 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                             </div>
                           )}
 
-                          {/* Badge OCR automático — validação de documentos */}
-                          {ocrAutoRunning[p.id] ? (
-                            <div className="mt-1.5 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[#C9A84C]/10 border border-[#C9A84C]/30">
-                              <svg className="w-3 h-3 text-[#C9A84C] animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                              </svg>
-                              <span className="text-[10px] font-semibold text-[#C9A84C]">Validando documentos...</span>
-                            </div>
-                          ) : (() => {
+                          {/* Badge do OCR — validação de documentos (feita manualmente pela Mesa) */}
+                          {(() => {
                             const ocrResults = p.metadata?.ocr_results as Array<{ resumo: string }> | undefined;
                             const resumoGeral = (p.metadata?.ocr_resumo_geral as string) ??
                               (ocrResults?.length
