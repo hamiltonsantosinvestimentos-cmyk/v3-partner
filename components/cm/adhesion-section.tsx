@@ -5,6 +5,7 @@ import { FilePlus2, Loader2, Plus, X, CheckCircle2, Clock } from "lucide-react";
 import { isValidEmail } from "@/lib/utils";
 import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
 import { normalizePhone, whatsappDigits } from "@/lib/phone";
+import { PartyQualificationCardModal } from "./party-qualification-card";
 
 // Termo de Adesão ao NCNDA Mestre (BRIEF 06/10/2026). Seção "Adesões deste contrato" e botão
 // "Adicionar adesão" no painel de um contrato ASSINADO. A elegibilidade vem do servidor
@@ -15,7 +16,7 @@ interface AdhesionData {
   reason: string | null;
   template: { id: string; template_name: string; approval_status: string } | null;
   children: { id: string; contract_code: string; status_signature: string; created_at: string; aderentes: string[] }[];
-  pending_batches: { id: string; status: string; created_at: string; parties: { name: string; status: string; phone: string | null; token: string | null }[] }[];
+  pending_batches: { id: string; status: string; created_at: string; parties: { id: string; name: string; status: string; phone: string | null; token: string | null }[] }[];
 }
 
 interface Aderente { name: string; email: string; phone: string }
@@ -49,6 +50,7 @@ export function AdhesionSection({ contractId, contractCode, onGenerated }: { con
   const [done, setDone] = useState<string | null>(null);
   const [invites, setInvites] = useState<{ name: string; phone: string | null; token: string }[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  const [openPartyId, setOpenPartyId] = useState<string | null>(null);
   const [generatingBatch, setGeneratingBatch] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -183,7 +185,12 @@ export function AdhesionSection({ contractId, contractCode, onGenerated }: { con
           <div key={b.id} className="mt-2 flex items-center justify-between gap-2 flex-wrap text-xs">
             <div className="text-[#F5F1E8]">
               <span className="text-[#9BAFC5] flex items-center gap-1"><Clock size={11} /> Aguardando Termo</span>
-              {b.parties.map((p) => p.name).join(", ")}
+              {b.parties.map((p, i) => (
+                <React.Fragment key={p.id}>
+                  {i > 0 && ", "}
+                  <button onClick={() => setOpenPartyId(p.id)} title="Ver ficha e documentos" className="hover:text-[#C9A84C] hover:underline transition-colors">{p.name}</button>
+                </React.Fragment>
+              ))}
               <span className="text-[#9BAFC5]"> ({complete ? "qualificação completa" : "aguardando preenchimento"})</span>
             </div>
             {!complete && b.parties.filter((p) => p.token && p.status !== "preenchido").map((p) => (
@@ -213,6 +220,8 @@ export function AdhesionSection({ contractId, contractCode, onGenerated }: { con
           {c.aderentes.length > 0 && <span className="text-[#9BAFC5]">: {c.aderentes.join(", ")}</span>}
         </div>
       ))}
+
+      <PartyQualificationCardModal qualificationId={openPartyId} onClose={() => setOpenPartyId(null)} />
 
       {showModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4">
