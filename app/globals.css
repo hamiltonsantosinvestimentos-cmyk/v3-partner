@@ -154,6 +154,22 @@ h1, h2, h3 {
 }
 @media (prefers-reduced-motion: reduce) { .kpi-card:hover { transform: none; } }
 
+/* Movimento V3: fundo em gradiente, brilho que segue o mouse e reflexo que atravessa o card */
+.kpi-glow { background: linear-gradient(155deg, #1a2d4f 0%, var(--color-card) 55%, #111F35 100%); isolation: isolate; }
+.kpi-glow::after {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity .35s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), rgba(201,168,76,.16), transparent 65%);
+}
+.kpi-glow:hover::after { opacity: 1; }
+.kpi-glow > * { position: relative; }
+.kpi-glow:hover::before { animation: v3Brilho 1.4s ease-out; }
+@keyframes v3Brilho {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+.kpi-glow::before { background-size: 200% 100% !important; height: 1px; }
+@media (prefers-reduced-motion: reduce) { .kpi-glow::after { display: none; } .kpi-glow:hover::before { animation: none; } }
+
 .kpi-card::before {
   content: "";
   position: absolute;
@@ -365,3 +381,7 @@ h1, h2, h3 {
   will-change: transform;
 }
 .animate-ticker:hover { animation-play-state: paused; }
+
+/* Movimento V3: painéis do Dashboard ganham borda e halo dourado ao passar o mouse */
+.v3-painel { transition: border-color .35s, box-shadow .45s, transform .45s cubic-bezier(.22,1.2,.36,1); }
+.v3-painel:hover { border-color: rgba(201,168,76,.3); box-shadow: 0 0 0 1px rgba(201,168,76,.06), 0 24px 50px -30px rgba(201,168,76,.35); }

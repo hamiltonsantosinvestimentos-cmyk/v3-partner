@@ -63,9 +63,17 @@ interface KpiCardProps {
 
 function KpiCard({ title, value, icon, change, color, subtitle, format }: KpiCardProps) {
   return (
-    <div className="kpi-card group hover:border-border transition-all duration-200">
+    <div
+      className="kpi-card kpi-glow group"
+      onPointerMove={(e) => {
+        // Movimento V3: o brilho dourado segue o cursor dentro do card
+        const r = e.currentTarget.getBoundingClientRect();
+        e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+        e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+      }}
+    >
       <div className="flex items-start justify-between">
-        <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center`}>
+        <div className={`w-10 h-10 rounded-xl ${color} flex items-center justify-center transition-transform duration-500 group-hover:scale-110 group-hover:-rotate-6`}>
           {icon}
         </div>
         {change !== undefined && (
@@ -652,7 +660,7 @@ export function DashboardClient({
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Revenue Chart */}
-        <Card className="lg:col-span-2">
+        <Card className="lg:col-span-2 v3-painel">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               Volume de Operações
@@ -747,7 +755,7 @@ export function DashboardClient({
         </Card>
 
         {/* Operations Bar */}
-        <Card>
+        <Card className="v3-painel">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
               Por Módulo
@@ -790,7 +798,7 @@ export function DashboardClient({
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Recent M&A */}
-        <Card>
+        <Card className="v3-painel">
           <CardHeader>
             <CardTitle className="text-sm font-semibold flex items-center justify-between">
               <span>Pipeline M&A</span>
@@ -837,7 +845,7 @@ export function DashboardClient({
 
         {/* Follow-ups da Semana — CRM */}
         {followUps.length > 0 && (
-          <Card>
+          <Card className="v3-painel">
             <CardHeader>
               <CardTitle className="text-sm font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-1.5"><CalendarDays className="w-4 h-4 text-amber-400" /> Follow-ups da Semana</span>
@@ -875,7 +883,7 @@ export function DashboardClient({
 
         {/* Recent Credit Proposals */}
         {recentProposals.length > 0 && (
-          <Card>
+          <Card className="v3-painel">
             <CardHeader>
               <CardTitle className="text-sm font-semibold flex items-center justify-between">
                 <span>Propostas de Crédito Recentes</span>
