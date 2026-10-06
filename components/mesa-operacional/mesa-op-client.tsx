@@ -32,6 +32,7 @@ const KANBAN_COLUMNS = [...PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO];
 // FINALIZADO é o rótulo legado (antes da separação Liberado/Reprovado/Declinado) — ainda conta como terminal
 const TERMINAL_STAGES = ["LIBERADO", "REPROVADO", "DECLINADO", "FINALIZADO"] as const;
 import { NovaPropostaModal } from "@/components/mesa-credito/nova-proposta-modal";
+import { useFlip } from "@/components/motion/use-flip";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 interface Ticket {
@@ -2129,6 +2130,9 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     const matchStage = !selectedStage || p.stage === selectedStage;
     return matchSearch && matchStage;
   });
+  // Movimento V3: cards do Kanban deslizam até a etapa nova (components/motion/use-flip.ts)
+  const kanbanRef = useRef<HTMLDivElement>(null);
+  useFlip(kanbanRef, [filteredProposals]);
 
   const handleProposalUpdate = useCallback((proposalId: string, updates: Partial<ProposalCard>) => {
     setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, ...updates } : p));
@@ -2326,7 +2330,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
           </div>
 
           {/* Kanban board */}
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div ref={kanbanRef} className="flex gap-3 overflow-x-auto pb-2 v3-stagger">
             {KANBAN_COLUMNS.map((stage) => {
               const stageProposals = filteredProposals.filter((p) => {
                 if (!p.stage) return stage.key === "RECEBIDO";
@@ -2341,7 +2345,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
               });
               const totalValue = stageProposals.reduce((sum, p) => sum + (p.requested_value || 0), 0);
               return (
-                <div key={stage.key} className="flex flex-col gap-2 w-[230px] flex-shrink-0"
+                <div key={stage.key} data-flip-col={stage.key} className="flex flex-col gap-2 w-[230px] flex-shrink-0"
                   onDragOver={(e) => { if (!canChangeStage) return; e.preventDefault(); setDragOverStage(stage.key); }}
                   onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverStage(null); }}
                   onDrop={(e) => { e.preventDefault(); const id = e.dataTransfer.getData("proposalId"); if (id && canChangeStage && id !== "") handleStageChange(id, stage.key); setDragOverStage(null); }}
@@ -2370,7 +2374,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                       // Verde (dentro do prazo) / Amarelo (vencendo) / Vermelho (atrasado) — mesmas cores do dot abaixo
                       const slaBorderColor = sla?.status === "danger" ? "#EF4444" : sla?.status === "warning" ? "#F59E0B" : sla?.status === "ok" ? "#10B981" : undefined;
                       return (
-                        <div key={p.id}
+                        <div key={p.id} data-flip-id={p.id}
                           draggable={canChangeStage}
                           onDragStart={(e) => { e.dataTransfer.setData("proposalId", p.id); e.dataTransfer.effectAllowed = "move"; setDraggedId(p.id); }}
                           onDragEnd={() => { setDraggedId(null); setDragOverStage(null); }}

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { useFlip } from "@/components/motion/use-flip";
 import { LayoutGrid, List, Plus, TrendingUp, Zap, Building2 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -167,6 +168,9 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const partnerId   = currentUser?.id ?? "";
 
   const filtered = applyFilters(proposals, filters);
+  // Movimento V3: cards do Kanban deslizam ao reorganizar (components/motion/use-flip.ts)
+  const kanbanRef = useRef<HTMLDivElement>(null);
+  useFlip(kanbanRef, [filtered, view]);
   const totalValue = filtered.reduce((s, p) => s + p.requested_value, 0);
   const slaCritical = filtered.filter(p => ["critical","expired"].includes(getSLAInfo(p).sla)).length;
   const slaWarning  = filtered.filter(p => getSLAInfo(p).sla === "warning").length;
@@ -317,12 +321,12 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
 
       {/* Kanban */}
       {view === "kanban" && (
-        <div className="overflow-x-auto pb-2">
-          <div className="flex gap-3 min-w-max">
+        <div ref={kanbanRef} className="overflow-x-auto pb-2">
+          <div className="flex gap-3 min-w-max v3-stagger">
             {KANBAN_STAGES.map((stage) => {
               const cards = filtered.filter(p => stageEquivalenteKanban(p) === stage.key);
               return (
-                <div key={stage.key} className={`w-56 flex-shrink-0 rounded-xl border ${stage.borderColor} ${stage.bg} p-3 flex flex-col gap-2`}>
+                <div key={stage.key} data-flip-col={stage.key} className={`w-56 flex-shrink-0 rounded-xl border ${stage.borderColor} ${stage.bg} p-3 flex flex-col gap-2`}>
                   <div className="flex items-center justify-between mb-1">
                     <span className={`text-[11px] font-bold uppercase tracking-wide ${stage.headerColor}`}>{stage.label}</span>
                     <span className="text-[10px] text-muted-foreground bg-secondary/80 rounded px-1.5 py-0.5 font-semibold">{cards.length}</span>
@@ -333,8 +337,8 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                     cards.map((p) => {
                       const { targetDate } = getSLAInfo(p);
                       return (
-                        <div key={p.id} onClick={() => setDetailProposal(p)}
-                          className="bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group">
+                        <div key={p.id} data-flip-id={p.id} onClick={() => setDetailProposal(p)}
+                          className="bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-18px_rgba(0,0,0,.9)] transition-all duration-300 space-y-2 group">
                           <div className="flex items-center justify-between gap-1">
                             <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code}</span>
                             <Badge className={`${STATUS_COLORS[p.status as OperationStatus]} text-[9px] px-1.5 py-0 leading-4`}>
@@ -393,7 +397,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                     ))}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="v3-stagger">
                   {filtered.map((p) => {
                     const { targetDate } = getSLAInfo(p);
                     return (
