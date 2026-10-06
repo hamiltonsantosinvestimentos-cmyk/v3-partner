@@ -21,6 +21,25 @@ import { isValidCNPJ, isValidCPF } from "@/lib/validators/cpf-cnpj";
 import { fetchCep } from "@/lib/viacep";
 import { LGPD_AVISO_QUALIFICACAO, LGPD_CHECKBOX_TEXT } from "@/lib/lgpd-aviso-qualificacao";
 
+/** Data de nascimento digitada (DD/MM/AAAA, teclado numérico no celular). Entrega AAAA-MM-DD ao formulário. */
+function BirthDateInput({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
+  const toBr = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
+  const [text, setText] = useState(toBr(value));
+  const handle = (raw: string) => {
+    const d = raw.replace(/\D/g, "").slice(0, 8);
+    const masked = d.length > 4 ? `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}` : d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+    setText(masked);
+    // Completa: AAAA-MM-DD (o servidor valida calendário e faixa); incompleta: vazio.
+    onChange(d.length === 8 ? `${d.slice(4)}-${d.slice(2, 4)}-${d.slice(0, 2)}` : "");
+  };
+  return (
+    <input
+      type="text" inputMode="numeric" autoComplete="bday" placeholder="DD/MM/AAAA" maxLength={10}
+      value={text} onChange={(e) => handle(e.target.value)} className={INPUT_CLS}
+    />
+  );
+}
+
 const INPUT_CLS = "w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-sm text-[#F5F1E8] mt-1 disabled:opacity-50";
 const LABEL_CLS = "text-[11px] text-[#9BAFC5] uppercase";
 const ERR_CLS = "text-[11px] text-red-400 mt-1";
@@ -509,7 +528,7 @@ function PartyFields({ profile, value, update, errors, path, token, docs, onDocs
       {show("birth_date") && (
         <div>
           <FieldLabel req="obrigatorio">Data de nascimento</FieldLabel>
-          <input type="date" value={value.birthDate} onChange={(e) => set("birthDate", e.target.value)} className={INPUT_CLS} />
+          <BirthDateInput value={value.birthDate} onChange={(v) => set("birthDate", v)} />
           <p className="text-[11px] text-[#9BAFC5] mt-1">Exigida para verificação de identidade, não aparece no texto do contrato.</p>
           <Err errors={errors} path={path} field="birth_date" />
         </div>
