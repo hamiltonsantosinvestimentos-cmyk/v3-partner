@@ -180,7 +180,7 @@ function categoria(descricao: string) {
   return CATEGORIAS_CUSTO.find((c) => c.palavras.some((p) => d.includes(p))) ?? null;
 }
 
-function raioX(extratos: Array<{ banco: string | null; dados: Record<string, unknown> }>) {
+export function raioX(extratos: Array<{ banco: string | null; dados: Record<string, unknown> }>) {
   const linhas: Array<{ data: string; descricao: string; valor: number; banco: string | null; categoria: string; mes: string }> = [];
   const mesesCobertos = new Set<string>();
   for (const e of extratos) {

@@ -19,6 +19,7 @@ import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
 import { RecomendacaoLinha } from "./recomendacao-linha";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
 import { NdaVinculoProposta } from "@/components/mesa-credito/nda-vinculo-proposta";
+import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
 
 export type MesaComment = {
   id: string;
@@ -1094,7 +1095,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     }
   }
   // ── Modal tab ─────────────────────────────────────────────────────────────
-  type ModalTab = "detalhes" | "recomendacao" | "avaliacao_imovel" | "documentos" | "comentarios" | "analise_ia" | "chat_ia";
+  type ModalTab = "detalhes" | "recomendacao" | "avaliacao_imovel" | "documentos" | "raio_x" | "comentarios" | "analise_ia" | "chat_ia";
   const [modalTab, setModalTab] = useState<ModalTab>("detalhes");
   const bodyRef = React.useRef<HTMLDivElement>(null);
 
@@ -3033,6 +3034,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             { id: "recomendacao",  label: "✦ Recomendação" },
             { id: "avaliacao_imovel", label: "🏠 Avaliação de Imóvel" },
             { id: "documentos",    label: "Documentos" },
+            { id: "raio_x",        label: "💳 Raio-X Extrato" },
             { id: "comentarios",   label: "Comentários" },
             { id: "analise_ia",    label: "🧠 Análise IA" },
             { id: "chat_ia",       label: "💬 Chat IA" },
@@ -4845,6 +4847,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           )}
 
           {/* ── Mensagens da Mesa ── */}
+          {modalTab === "raio_x" && <RaioXExtrato proposalId={proposal.id} clienteNome={proposal.client_name ?? "cliente"} />}
+
           {modalTab === "comentarios" && <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
               <MessageSquare className="w-3.5 h-3.5" /> Mensagens da Mesa
