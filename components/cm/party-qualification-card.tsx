@@ -241,6 +241,55 @@ function AccessLog({ qualificationId, refreshKey }: { qualificationId: string; r
   );
 }
 
+// Cliente 360 (05/10/2026): resumo do cadastro central vinculado à parte. Só agregados, nenhum
+// documento. O detalhe abre em /clientes?cliente=<uuid>, sem CPF/CNPJ na URL.
+function Cliente360Block({ qualificationId }: { qualificationId: string }) {
+  const [state, setState] = useState<{ loading: boolean; error: boolean; data: any | null }>({ loading: true, error: false, data: null });
+
+  useEffect(() => {
+    let alive = true;
+    setState({ loading: true, error: false, data: null });
+    fetch(`/api/cm/qualifications/party/${qualificationId}/cliente-360`)
+      .then(async (res) => {
+        const json = await res.json().catch(() => null);
+        if (!alive) return;
+        if (!res.ok || !json) setState({ loading: false, error: true, data: null });
+        else setState({ loading: false, error: false, data: json });
+      })
+      .catch(() => { if (alive) setState({ loading: false, error: true, data: null }); });
+    return () => { alive = false; };
+  }, [qualificationId]);
+
+  const d = state.data;
+  return (
+    <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
+      <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Cliente 360</p>
+      {state.loading && <p className="text-[11px] text-[#9BAFC5]">Consultando o cadastro central...</p>}
+      {state.error && <p className="text-[11px] text-red-400">Não foi possível consultar o Cliente 360 agora.</p>}
+      {d && !d.linked && <p className="text-[11px] text-[#9BAFC5]">Parte ainda sem vínculo de cliente.</p>}
+      {d?.linked && (
+        <>
+          <p className="text-[11px] text-[#F5F1E8]">
+            Cliente desde {d.first_seen_at}{d.first_seen_vertical ? ` (${d.first_seen_vertical})` : ""}
+          </p>
+          <p className="text-[11px] text-[#9BAFC5]">
+            {d.qualificacoes} {d.qualificacoes === 1 ? "qualificação preenchida" : "qualificações preenchidas"} · {d.contratos} {d.contratos === 1 ? "contrato" : "contratos"}
+          </p>
+          {d.kyc.length === 0 && <p className="text-[11px] text-[#9BAFC5]">Nenhum documento KYC arquivado.</p>}
+          {d.kyc.map((k: any) => (
+            <p key={k.kind} className="text-[11px] text-[#9BAFC5]">
+              {k.label}: <span className={k.valid ? "text-emerald-400" : "text-red-400"}>{k.valid ? `válido até ${k.valid_until}` : `vencido em ${k.valid_until}`}</span>
+            </p>
+          ))}
+          <a href={`/clientes?cliente=${d.client_id}`} rel="noreferrer" referrerPolicy="no-referrer" className="inline-block text-[11px] text-[#E8C97A] font-bold underline">
+            Abrir no Cliente 360
+          </a>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string) => void }) {
   const q = data.qualification;
   const [accessBump, setAccessBump] = useState(0);
@@ -268,6 +317,8 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
           {ROLE_LABELS[q.role_in_document] ?? q.role_in_document} · {natureLabel}
         </span>
       </div>
+
+      <Cliente360Block qualificationId={q.id} />
 
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         {q.cpf_cnpj_masked && <div><span className="text-[#9BAFC5]">{canReveal("cpf_cnpj") ? "CPF" : "CPF/CNPJ"}</span><p className="text-[#F5F1E8]">

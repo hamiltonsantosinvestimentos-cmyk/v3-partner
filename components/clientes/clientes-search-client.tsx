@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Search, User, Building2, CreditCard, Gavel, ShieldCheck, Handshake, Building, FileCheck2, FileSignature, TrendingUp, TrendingDown, Minus, Lightbulb } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Eye, EyeOff, Search, User, Building2, CreditCard, Gavel, ShieldCheck, Handshake, Building, FileCheck2, FileSignature, TrendingUp, TrendingDown, Minus, Lightbulb } from "lucide-react";
 import Link from "next/link";
+import { formatDocumentNumber } from "@/lib/legal-qualification";
 
 interface ClientResult {
   found: boolean;
@@ -47,19 +48,24 @@ function formatMoney(v: number | null | undefined) {
 // (crédito e compliance nunca fundidos num indicador só, ver migration
 // 20260811b). CRM e Consórcios ficam de fora até terem coluna normalizada
 // de CPF/CNPJ própria.
-export function ClientesSearchClient() {
+export function ClientesSearchClient({ initialClienteId = null }: { initialClienteId?: string | null }) {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ClientResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Documento revelado pelo olho (CPF). O padrão é sempre mascarado; revelar grava log no servidor.
+  const [revealedDoc, setRevealedDoc] = useState<string | null>(null);
+  const [revealing, setRevealing] = useState(false);
+  const [revealError, setRevealError] = useState<string | null>(null);
 
-  async function handleSearch() {
-    if (!query.trim()) return;
+  async function load(key: string) {
     setLoading(true);
     setError(null);
     setResult(null);
+    setRevealedDoc(null);
+    setRevealError(null);
     try {
-      const res = await fetch(`/api/clientes/${encodeURIComponent(query.trim())}`);
+      const res = await fetch(`/api/clientes/${encodeURIComponent(key)}`);
       const data = await res.json();
       if (!res.ok) {
         setError(data.error ?? "Erro ao buscar cliente");
@@ -70,6 +76,32 @@ export function ClientesSearchClient() {
       setError("Erro de conexão");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSearch() {
+    if (!query.trim()) return;
+    await load(query.trim());
+  }
+
+  // Link da ficha da parte: /clientes?cliente=<uuid>. Carrega sozinho, sem CPF/CNPJ na URL.
+  useEffect(() => {
+    if (initialClienteId) load(initialClienteId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialClienteId]);
+
+  async function handleReveal(clientId: string) {
+    setRevealing(true);
+    setRevealError(null);
+    try {
+      const res = await fetch(`/api/clientes/${clientId}/reveal`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setRevealError(data.error ?? "Não foi possível revelar o documento"); return; }
+      setRevealedDoc(String(data.value));
+    } catch {
+      setRevealError("Erro de conexão");
+    } finally {
+      setRevealing(false);
     }
   }
 
@@ -136,7 +168,21 @@ export function ClientesSearchClient() {
               </span>
             </div>
             <div style={{ fontSize: 12, color: "#9BAFC5" }}>
-              {result.client.document_type} {result.client.document_number} · primeiro registro em {result.client.first_seen_vertical ?? "-"} ({new Date(result.client.first_seen_at).toLocaleDateString("pt-BR")})
+              {result.client.document_type} {revealedDoc ? (formatDocumentNumber(revealedDoc) ?? revealedDoc) : result.client.document_number}
+              {result.client.document_type === "CPF" && (
+                <button
+                  type="button"
+                  onClick={() => (revealedDoc ? setRevealedDoc(null) : handleReveal(result.client!.id))}
+                  disabled={revealing}
+                  aria-label={revealedDoc ? "Ocultar o documento" : "Revelar o documento (o acesso é registrado)"}
+                  title={revealedDoc ? "Ocultar o documento" : "Revelar o documento (o acesso é registrado)"}
+                  style={{ marginLeft: 8, background: "transparent", border: "none", cursor: revealing ? "default" : "pointer", color: "#E8C97A", verticalAlign: "middle" }}
+                >
+                  {revealedDoc ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              )}
+              {" "}· primeiro registro em {result.client.first_seen_vertical ?? "-"} ({new Date(result.client.first_seen_at).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })})
+              {revealError && <span style={{ color: "#f87171", marginLeft: 8 }}>{revealError}</span>}
             </div>
           </div>
 
