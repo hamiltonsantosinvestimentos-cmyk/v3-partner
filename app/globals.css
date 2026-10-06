@@ -271,6 +271,63 @@ h1, h2, h3 {
 }
 .animate-fade-in { animation: fadeIn 0.28s ease-out forwards; }
 
+/* ════════════════════════════════════
+   MOVIMENTO V3 (06/10/2026)
+   Menu com destaque deslizante, entrada de página, barra de rota e entradas em
+   sequência. Só visual; tudo desliga com "reduzir movimento" do sistema.
+════════════════════════════════════ */
+:root {
+  --v3-spring: cubic-bezier(.22, 1.2, .36, 1);
+  --v3-ease: cubic-bezier(.2, .7, .1, 1);
+}
+.nav-pill {
+  position: absolute; left: 10px; right: 10px; top: 0; height: 0;
+  border-radius: 0.625rem; pointer-events: none; z-index: 0; opacity: 0;
+  background: linear-gradient(120deg, rgba(201,168,76,0.14) 0%, rgba(201,168,76,0.04) 100%);
+  border: 1px solid rgba(201,168,76,0.22);
+  box-shadow: 0 2px 14px rgba(201,168,76,0.08), inset 0 1px 0 rgba(201,168,76,0.12);
+  transition: transform .55s var(--v3-spring), height .3s var(--v3-ease), opacity .25s;
+}
+.nav-pill::before {
+  content: ""; position: absolute; left: -10px; top: 9px; bottom: 9px; width: 3px;
+  border-radius: 3px; background: #C9A84C; box-shadow: 0 0 10px rgba(201,168,76,.6);
+}
+.nav-pill-on .nav-item-v3 { z-index: 1; }
+.nav-pill-on .nav-item-v3-active { background: transparent; border-color: transparent; box-shadow: none; }
+.nav-item-v3 svg { transition: transform .45s var(--v3-spring); }
+.nav-item-v3:hover svg { transform: scale(1.14) rotate(-4deg); }
+
+@keyframes v3PageIn {
+  from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+.v3-page-in { animation: v3PageIn .45s var(--v3-ease) both; }
+
+/* Filhos entram em sequência: use .v3-stagger no contêiner */
+.v3-stagger > * { animation: v3PageIn .6s var(--v3-ease) both; }
+.v3-stagger > *:nth-child(1) { animation-delay: .04s; }
+.v3-stagger > *:nth-child(2) { animation-delay: .10s; }
+.v3-stagger > *:nth-child(3) { animation-delay: .16s; }
+.v3-stagger > *:nth-child(4) { animation-delay: .22s; }
+.v3-stagger > *:nth-child(5) { animation-delay: .28s; }
+.v3-stagger > *:nth-child(6) { animation-delay: .34s; }
+.v3-stagger > *:nth-child(7) { animation-delay: .40s; }
+.v3-stagger > *:nth-child(n+8) { animation-delay: .46s; }
+
+.v3-route-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 9999; pointer-events: none;
+  background: linear-gradient(90deg, #C9A84C, #E8C97A); box-shadow: 0 0 12px rgba(201,168,76,.8);
+  transform-origin: left; transform: scaleX(0); opacity: 0;
+}
+.v3-route-bar.is-going { opacity: 1; transform: scaleX(.72); transition: transform 2.4s cubic-bezier(.1,.6,.2,1), opacity .2s; }
+.v3-route-bar.is-done { opacity: 0; transform: scaleX(1); transition: transform .25s ease-out, opacity .35s .2s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v3-page-in, .v3-stagger > * { animation: none !important; }
+  .nav-pill, .v3-route-bar { transition: none !important; }
+  .nav-item-v3:hover svg { transform: none; }
+}
+
 @keyframes shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }

@@ -246,6 +246,24 @@ export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: 
     return initial;
   });
   const navRef = React.useRef<HTMLElement>(null);
+  // Movimento V3: destaque dourado que desliza até o item ativo (app/globals.css .nav-pill).
+  const pillRef = React.useRef<HTMLDivElement>(null);
+  const pillPronto = React.useRef(false);
+  const moverPill = React.useCallback(() => {
+    const nav = navRef.current, pill = pillRef.current;
+    if (!nav || !pill) return;
+    const el = nav.querySelector('[data-active="true"] > .nav-item-v3') as HTMLElement | null;
+    if (!el) { pill.style.opacity = "0"; return; }
+    const top = el.getBoundingClientRect().top - nav.getBoundingClientRect().top + nav.scrollTop;
+    if (!pillPronto.current) {
+      pill.style.transition = "none";
+      requestAnimationFrame(() => { pill.style.transition = ""; });
+      pillPronto.current = true;
+    }
+    pill.style.opacity = "1";
+    pill.style.height = `${el.offsetHeight}px`;
+    pill.style.transform = `translateY(${top}px)`;
+  }, []);
   const [academyProgress, setAcademyProgress] = useState<{ completed: number; total: number } | null>(null);
 
   React.useEffect(() => {
@@ -262,6 +280,15 @@ export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: 
       }
     }, 100);
   }, [pathname]);
+
+  React.useLayoutEffect(() => { moverPill(); }, [pathname, expandedItems, moverPill]);
+  React.useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => moverPill());
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [moverPill]);
 
   React.useEffect(() => {
     fetch("/api/academy/progress")
@@ -326,7 +353,8 @@ export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: 
       </div>
 
       {/* ── NAVIGATION ── */}
-      <nav ref={navRef} className="flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5 scrollbar-thin">
+      <nav ref={navRef} className="nav-pill-on relative flex-1 overflow-y-auto py-3 px-2.5 space-y-0.5 scrollbar-thin">
+        <div ref={pillRef} aria-hidden className="nav-pill" />
         {NAV_SECTIONS.map(section => {
           const visibleItems = section.items.filter(podeVer);
           if (!visibleItems.length) return null;

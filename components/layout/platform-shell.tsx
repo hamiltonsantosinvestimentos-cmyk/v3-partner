@@ -8,6 +8,7 @@ import type { UserRole } from "@/lib/constants";
 import { WelcomeWizard } from "@/components/onboarding/welcome-wizard";
 import { LocationGate } from "@/components/onboarding/location-gate";
 import { SubscriptionGuard } from "./subscription-guard";
+import { RouteProgress } from "@/components/layout/route-progress";
 
 const ChatFloatWidget = dynamic(
   () => import("@/components/chat/chat-float-widget").then(m => m.ChatFloatWidget),
@@ -81,6 +82,7 @@ export function PlatformShell({ user, notificationCount, marca = null, children 
           notificationCount={notificationCount}
           marca={marca}
         />
+        <RouteProgress />
         <main className="flex-1 overflow-y-auto p-5 lg:p-6 relative"
           style={{
             background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(201,168,76,0.03) 0%, transparent 60%)",
