@@ -47,6 +47,7 @@ import { OnboardingCallWidget } from "@/components/onboarding/onboarding-call-wi
 import { PerformanceBenchmark, type BenchmarkData } from "@/components/dashboard/performance-benchmark";
 import { UpgradeNudge } from "@/components/upgrade/upgrade-nudge";
 import { AccessLinkCard } from "@/components/dashboard/access-link-card";
+import { AnimatedNumber } from "@/components/motion/animated-number";
 
 
 interface KpiCardProps {
@@ -56,9 +57,11 @@ interface KpiCardProps {
   change?: number;
   color: string;
   subtitle?: string;
+  /** Formato do número animado (padrão: inteiro pt-BR). */
+  format?: (n: number) => string;
 }
 
-function KpiCard({ title, value, icon, change, color, subtitle }: KpiCardProps) {
+function KpiCard({ title, value, icon, change, color, subtitle, format }: KpiCardProps) {
   return (
     <div className="kpi-card group hover:border-border transition-all duration-200">
       <div className="flex items-start justify-between">
@@ -81,7 +84,7 @@ function KpiCard({ title, value, icon, change, color, subtitle }: KpiCardProps) 
         )}
       </div>
       <div>
-        <p className="text-2xl font-bold text-foreground">{value}</p>
+        <p className="text-2xl font-bold text-foreground">{typeof value === "number" ? <AnimatedNumber value={value} format={format} /> : value}</p>
         <p className="text-sm font-medium text-foreground mt-0.5">{title}</p>
         {subtitle && (
           <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
@@ -325,7 +328,7 @@ export function DashboardClient({
   })();
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-6 v3-stagger">
       {/* Founder Video Modal — renders once for new partners, manages own visibility */}
       <FounderVideoModal partnerName={userName} />
 
@@ -455,7 +458,8 @@ export function DashboardClient({
           />
           <KpiCard
             title="Comissões a Receber"
-            value={new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(comissoesAPagar)}
+            value={comissoesAPagar}
+            format={(n) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(n)}
             icon={<DollarSign className="w-5 h-5 text-amber-400" />}
             color="bg-amber-500/20"
             subtitle="aguardando pagamento"
@@ -721,6 +725,8 @@ export function DashboardClient({
                   stroke="#C9A84C"
                   strokeWidth={2}
                   fill="url(#goldGrad)"
+                  animationDuration={1400}
+                  animationEasing="ease-out"
                 />
                 <Area
                   type="monotone"
@@ -729,6 +735,9 @@ export function DashboardClient({
                   strokeWidth={2}
                   fill="url(#blueGrad)"
                   strokeDasharray="4 2"
+                  animationBegin={200}
+                  animationDuration={1400}
+                  animationEasing="ease-out"
                 />
               </AreaChart>
             </ResponsiveContainer>
@@ -771,7 +780,7 @@ export function DashboardClient({
                     fontSize: "12px",
                   }}
                 />
-                <Bar dataKey="valor" fill="#C9A84C" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="valor" fill="#C9A84C" radius={[0, 4, 4, 0]} animationDuration={1100} animationEasing="ease-out" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
