@@ -12,6 +12,14 @@ export function RouteProgress() {
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
+    document.documentElement.classList.toggle("v3-saindo", estado === "indo");
+    if (estado !== "indo") return;
+    // segurança: se a navegação não acontecer (ex.: bloqueada), tira o desfoque
+    const t = window.setTimeout(() => setEstado("parado"), 8000);
+    return () => window.clearTimeout(t);
+  }, [estado]);
+
+  useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       const a = (e.target as HTMLElement | null)?.closest("a");

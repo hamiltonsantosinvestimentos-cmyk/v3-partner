@@ -9,6 +9,7 @@ import { WelcomeWizard } from "@/components/onboarding/welcome-wizard";
 import { LocationGate } from "@/components/onboarding/location-gate";
 import { SubscriptionGuard } from "./subscription-guard";
 import { RouteProgress } from "@/components/layout/route-progress";
+import { CommandPalette } from "@/components/layout/command-palette";
 
 const ChatFloatWidget = dynamic(
   () => import("@/components/chat/chat-float-widget").then(m => m.ChatFloatWidget),
@@ -83,7 +84,8 @@ export function PlatformShell({ user, notificationCount, marca = null, children 
           marca={marca}
         />
         <RouteProgress />
-        <main className="flex-1 overflow-y-auto p-5 lg:p-6 relative"
+        <CommandPalette />
+        <main className="flex-1 overflow-y-auto p-5 lg:p-6 relative v3-main"
           style={{
             background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(201,168,76,0.03) 0%, transparent 60%)",
           }}>

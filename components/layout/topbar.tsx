@@ -10,6 +10,7 @@ import {
   Settings,
   ChevronDown,
   Zap,
+  Search,
 } from "lucide-react";
 import { NotificationBell } from "@/components/dashboard/notification-bell";
 const IS_DEMO = false;
@@ -148,6 +149,17 @@ export function Topbar({ user, onMenuClick, notificationCount = 0, marca = null 
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
           <span className="text-[9px] font-bold tracking-[0.12em] text-[#7A8FA8] uppercase">Live</span>
         </div>
+
+        {/* Busca rápida (Ctrl+K) — components/layout/command-palette.tsx */}
+        <button
+          onClick={() => window.dispatchEvent(new Event("v3:abrir-busca"))}
+          className="hidden md:flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-white/[0.06] bg-white/[0.03] text-[#7A8FA8] hover:text-[#F0ECE4] hover:border-[#C9A84C]/30 transition-colors"
+          aria-label="Busca rápida"
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span className="text-xs">Buscar</span>
+          <kbd className="text-[9px] border border-white/10 rounded px-1">Ctrl K</kbd>
+        </button>
 
         {/* Notification bell */}
         <NotificationBell />

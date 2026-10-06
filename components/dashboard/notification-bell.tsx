@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bell, X, Check, Headphones, Building2, CreditCard, DollarSign, GitBranch, Info } from "lucide-react";
 import { useRealtimeNotifications, type Notification } from "@/hooks/use-realtime-notifications";
@@ -26,6 +26,18 @@ export function NotificationBell() {
   const { notifications, unreadCount, dismiss, dismissAll } = useRealtimeNotifications();
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  // Movimento V3: o sino balança quando chega notificação nova
+  const sinoRef = React.useRef<HTMLSpanElement>(null);
+  const anterior = React.useRef(unreadCount);
+  React.useEffect(() => {
+    if (unreadCount > anterior.current && sinoRef.current && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      sinoRef.current.animate(
+        [{ transform: "rotate(0)" }, { transform: "rotate(16deg)" }, { transform: "rotate(-14deg)" }, { transform: "rotate(10deg)" }, { transform: "rotate(-6deg)" }, { transform: "rotate(0)" }],
+        { duration: 800, easing: "ease-in-out" },
+      );
+    }
+    anterior.current = unreadCount;
+  }, [unreadCount]);
 
   function handleClickNotification(n: Notification) {
     if (!n.read) dismiss(n.id);
@@ -42,9 +54,9 @@ export function NotificationBell() {
         className="relative p-2 rounded-lg hover:bg-white/5 transition-colors text-muted-foreground hover:text-foreground"
         aria-label="Notificações"
       >
-        <Bell className="w-5 h-5" />
+        <span ref={sinoRef} className="block origin-top"><Bell className="w-5 h-5" /></span>
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 bg-[#C4922E] text-[#070E1A] text-[9px] font-bold rounded-full flex items-center justify-center">
+          <span key={unreadCount} className="v3-badge-pop absolute top-1 right-1 w-4 h-4 bg-[#C4922E] text-[#070E1A] text-[9px] font-bold rounded-full flex items-center justify-center">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
