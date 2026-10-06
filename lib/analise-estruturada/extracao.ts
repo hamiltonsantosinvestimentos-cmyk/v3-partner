@@ -72,13 +72,39 @@ async function lerWord(buffer: Buffer): Promise<string> {
 
 const MIME_IMAGEM: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png" };
 
+/**
+ * Extrai os dados de um arquivo já baixado, pelo esquema do tipo (OFX de extrato sem IA; o resto
+ * pela IA). Devolve `{ naoSuportado }` quando o formato não é lido automaticamente. Lança em falha.
+ * Usada pela leitura do pedido (abaixo) e pelo raio-X de extrato da proposta (lib/raio-x-extrato.ts).
+ */
+export async function extrairDadosDoArquivo(buffer: Buffer, arquivo: string, tipo: TipoDado, rotulo: string):
+  Promise<{ dados: Record<string, unknown>; origem: "ofx" | "ia" } | { naoSuportado: string }> {
+  const ext = extensaoDe(arquivo);
+  if (ext === "ofx" && tipo === "extrato") return { dados: lerOfx(buffer.toString("latin1")), origem: "ofx" };
+  const prompt = promptExtracao(tipo, rotulo, arquivo);
+  let conteudo: Array<Record<string, unknown>>;
+  if (ext === "pdf") {
+    conteudo = [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") } }, { type: "text", text: prompt }];
+  } else if (MIME_IMAGEM[ext]) {
+    conteudo = [{ type: "image", source: { type: "base64", media_type: MIME_IMAGEM[ext], data: buffer.toString("base64") } }, { type: "text", text: prompt }];
+  } else if (ext === "xlsx" || ext === "xls") {
+    conteudo = [{ type: "text", text: `Conteúdo da planilha (CSV por aba):\n\n${await lerPlanilha(buffer)}\n\n${prompt}` }];
+  } else if (ext === "docx" || ext === "doc") {
+    conteudo = [{ type: "text", text: `Texto do documento:\n\n${await lerWord(buffer)}\n\n${prompt}` }];
+  } else if (ext === "csv" || ext === "txt" || ext === "xml" || ext === "ofx") {
+    conteudo = [{ type: "text", text: `Conteúdo do arquivo:\n\n${buffer.toString("utf8").slice(0, 400_000)}\n\n${prompt}` }];
+  } else {
+    return { naoSuportado: `Formato .${ext} não é lido automaticamente; a Mesa confere manualmente.` };
+  }
+  return { dados: await chamarIa(conteudo), origem: "ia" };
+}
+
 /** Lê um arquivo do pedido, valida e grava o resultado. Nunca lança: erro vira status "erro". */
 export async function lerArquivo(db: SupabaseClient, pedido: PedidoAnalise, caminho: string): Promise<ResultadoLeitura> {
   const [, item, nomeNoStorage] = caminho.slice(pastaDoPedido(pedido.id).length).split("/");
   const tipo = TIPO_POR_ITEM[item] ?? "generico";
   const rotulo = itemDoPerfil(perfilPeloDocumento(pedido.client_doc), item)?.label ?? item;
   const arquivo = nomeNoStorage.replace(/^\d+_/, "");
-  const ext = extensaoDe(arquivo);
   const base: ResultadoLeitura = {
     versao: 1, item, tipo, caminho, arquivo, status: "erro", origem: null, lido_em: new Date().toISOString(),
     modelo: null, dados: null, validacoes: [], erro: null, revisado_por: null, revisado_em: null,
@@ -90,32 +116,13 @@ export async function lerArquivo(db: SupabaseClient, pedido: PedidoAnalise, cami
     if (error || !blob) throw new Error("Arquivo não encontrado no storage.");
     const buffer = Buffer.from(await blob.arrayBuffer());
 
-    let dados: Record<string, unknown>;
-    let origem: "ofx" | "ia";
-    if (ext === "ofx" && tipo === "extrato") {
-      dados = lerOfx(buffer.toString("latin1"));
-      origem = "ofx";
-    } else {
-      const prompt = promptExtracao(tipo, rotulo, arquivo);
-      let conteudo: Array<Record<string, unknown>>;
-      if (ext === "pdf") {
-        conteudo = [{ type: "document", source: { type: "base64", media_type: "application/pdf", data: buffer.toString("base64") } }, { type: "text", text: prompt }];
-      } else if (MIME_IMAGEM[ext]) {
-        conteudo = [{ type: "image", source: { type: "base64", media_type: MIME_IMAGEM[ext], data: buffer.toString("base64") } }, { type: "text", text: prompt }];
-      } else if (ext === "xlsx" || ext === "xls") {
-        conteudo = [{ type: "text", text: `Conteúdo da planilha (CSV por aba):\n\n${await lerPlanilha(buffer)}\n\n${prompt}` }];
-      } else if (ext === "docx" || ext === "doc") {
-        conteudo = [{ type: "text", text: `Texto do documento:\n\n${await lerWord(buffer)}\n\n${prompt}` }];
-      } else if (ext === "csv" || ext === "txt" || ext === "xml" || ext === "ofx") {
-        conteudo = [{ type: "text", text: `Conteúdo do arquivo:\n\n${buffer.toString("utf8").slice(0, 400_000)}\n\n${prompt}` }];
-      } else {
-        resultado = { ...base, status: "nao_suportado", erro: `Formato .${ext} não é lido automaticamente; a Mesa confere manualmente.` };
-        await salvar(db, pedido.id, resultado);
-        return resultado;
-      }
-      dados = await chamarIa(conteudo);
-      origem = "ia";
+    const lido = await extrairDadosDoArquivo(buffer, arquivo, tipo, rotulo);
+    if ("naoSuportado" in lido) {
+      resultado = { ...base, status: "nao_suportado", erro: lido.naoSuportado };
+      await salvar(db, pedido.id, resultado);
+      return resultado;
     }
+    const { dados, origem } = lido;
     resultado = { ...base, status: "lido", origem, modelo: origem === "ia" ? MODELO_EXTRACAO : null, dados, validacoes: validar(tipo, dados) };
   } catch (e) {
     resultado = { ...base, status: "erro", erro: e instanceof Error ? e.message.slice(0, 500) : "Falha na leitura." };
