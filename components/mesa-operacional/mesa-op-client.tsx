@@ -33,6 +33,7 @@ const KANBAN_COLUMNS = [...PIPELINE_STAGES, STAGE_REPROVADO, STAGE_DECLINADO];
 const TERMINAL_STAGES = ["LIBERADO", "REPROVADO", "DECLINADO", "FINALIZADO"] as const;
 import { NovaPropostaModal } from "@/components/mesa-credito/nova-proposta-modal";
 import { useFlip } from "@/components/motion/use-flip";
+import { useKanbanDrag } from "@/components/motion/use-kanban-drag";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
 interface Ticket {
@@ -2132,7 +2133,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   });
   // Movimento V3: cards do Kanban deslizam até a etapa nova (components/motion/use-flip.ts)
   const kanbanRef = useRef<HTMLDivElement>(null);
-  useFlip(kanbanRef, [filteredProposals]);
+  const definirOrigemFlip = useFlip(kanbanRef, [filteredProposals]);
 
   const handleProposalUpdate = useCallback((proposalId: string, updates: Partial<ProposalCard>) => {
     setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, ...updates } : p));
@@ -2173,6 +2174,13 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       }
     }
   }, [detailProposal, proposals]);
+  // Movimento V3: arraste premium (cópia flutuante, coluna acende, card voa até a etapa nova)
+  useKanbanDrag({
+    containerRef: kanbanRef,
+    enabled: canChangeStage,
+    onDrop: (id, coluna) => { const p = proposals.find((x) => x.id === id); if (p && (p.stage ?? "RECEBIDO") !== coluna) handleStageChange(id, coluna); },
+    definirOrigem: definirOrigemFlip,
+  });
 
   const stageKeys = PIPELINE_STAGES.map(s => s.key);
 
@@ -2375,9 +2383,6 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                       const slaBorderColor = sla?.status === "danger" ? "#EF4444" : sla?.status === "warning" ? "#F59E0B" : sla?.status === "ok" ? "#10B981" : undefined;
                       return (
                         <div key={p.id} data-flip-id={p.id}
-                          draggable={canChangeStage}
-                          onDragStart={(e) => { e.dataTransfer.setData("proposalId", p.id); e.dataTransfer.effectAllowed = "move"; setDraggedId(p.id); }}
-                          onDragEnd={() => { setDraggedId(null); setDragOverStage(null); }}
                           className={`relative w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group cursor-pointer ${draggedId === p.id ? "opacity-40 scale-95 cursor-grabbing" : canChangeStage ? "cursor-grab active:cursor-grabbing" : ""}`}
                           style={slaBorderColor ? { borderLeftWidth: "3px", borderLeftColor: slaBorderColor } : undefined}
                           onClick={() => setDetailProposal(p)}>

@@ -2,6 +2,7 @@
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useFlip } from "@/components/motion/use-flip";
+import { useKanbanDrag } from "@/components/motion/use-kanban-drag";
 import { LayoutGrid, List, Plus, TrendingUp, Zap, Building2 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -170,7 +171,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const filtered = applyFilters(proposals, filters);
   // Movimento V3: cards do Kanban deslizam ao reorganizar (components/motion/use-flip.ts)
   const kanbanRef = useRef<HTMLDivElement>(null);
-  useFlip(kanbanRef, [filtered, view]);
+  const definirOrigemFlip = useFlip(kanbanRef, [filtered, view]);
   const totalValue = filtered.reduce((s, p) => s + p.requested_value, 0);
   const slaCritical = filtered.filter(p => ["critical","expired"].includes(getSLAInfo(p).sla)).length;
   const slaWarning  = filtered.filter(p => getSLAInfo(p).sla === "warning").length;
@@ -238,6 +239,13 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
         alert("Erro de conexão ao mudar o estágio da proposta.");
       });
   }, [detailProposal, proposals]);
+  // Movimento V3: arrastar o card para outra etapa no Kanban (quem pode mudar etapa)
+  useKanbanDrag({
+    containerRef: kanbanRef,
+    enabled: canChangeStage && view === "kanban",
+    onDrop: (id, coluna) => { const p = proposals.find((x) => x.id === id); if (p && stageEquivalenteKanban(p) !== coluna) handleStageChange(id, coluna); },
+    definirOrigem: definirOrigemFlip,
+  });
 
   const handleProposalUpdate = useCallback((proposalId: string, updates: Partial<Proposal>) => {
     setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, ...updates } : p));
