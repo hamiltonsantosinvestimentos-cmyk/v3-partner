@@ -145,6 +145,15 @@ h1, h2, h3 {
   overflow: hidden;
 }
 
+/* Movimento V3: o card sobe e ganha brilho dourado ao passar o mouse */
+.kpi-card { transition: transform .45s cubic-bezier(.22,1.2,.36,1), border-color .3s, box-shadow .45s; }
+.kpi-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(201,168,76,0.4);
+  box-shadow: 0 22px 40px -24px rgba(0,0,0,.85), 0 0 0 1px rgba(201,168,76,.08);
+}
+@media (prefers-reduced-motion: reduce) { .kpi-card:hover { transform: none; } }
+
 .kpi-card::before {
   content: "";
   position: absolute;
