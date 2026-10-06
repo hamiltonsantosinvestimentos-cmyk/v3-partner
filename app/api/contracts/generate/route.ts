@@ -13,6 +13,7 @@ import {
   dedupePartiesByEmail,
 } from "@/lib/qualification-roles";
 import { CONCRETE_VERTICALS } from "@/lib/contract-verticals";
+import { ADHESION_SERIES, validateAdhesionParent, dateExtensoBR, type AdhesionParent } from "@/lib/contract-adhesion";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
   const caller = await requireRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data, avulso_parties, is_master_agreement, valor_operacao, loi_side, loi_matched_contract_id, loi_override_justification, vertical } = await req.json();
+  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data, avulso_parties, is_master_agreement, valor_operacao, loi_side, loi_matched_contract_id, loi_override_justification, vertical, parent_contract_id } = await req.json();
 
   if (!template_id) return NextResponse.json({ error: "template_id obrigatório" }, { status: 422 });
 
@@ -96,6 +97,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Termo de Adesão (06/10/2026): travas no servidor. O Termo (série V3C-ADE) só nasce a partir de
+  // um contrato de origem assinado e com natureza de Acordo Mestre, gerado por ADMIN ou GESTAO.
+  // O contrato de origem nunca é alterado: aqui só é lido.
+  let adhesionParent: AdhesionParent | null = null;
+  if (template.contract_series === ADHESION_SERIES && !parent_contract_id) {
+    return NextResponse.json({ error: "O Termo de Adesão só pode ser gerado a partir do contrato de origem (botão Adicionar adesão)." }, { status: 422 });
+  }
+  if (parent_contract_id) {
+    if (template.contract_series !== ADHESION_SERIES) {
+      return NextResponse.json({ error: `parent_contract_id só vale para Termo de Adesão (série ${ADHESION_SERIES}).` }, { status: 422 });
+    }
+    const check = await validateAdhesionParent(svc(), parent_contract_id, caller.role);
+    if (!check.ok) return NextResponse.json({ error: check.error }, { status: check.status });
+    adhesionParent = check.parent;
+  }
+
   // Gate Cockpit de Compliance Fase 3 (10/09/2026): NDA/FPA da Bolsa de
   // Ativos não pode ser gerado enquanto houver intermediário qualificado
   // (cm_party_qualifications, role_in_document mandatario/intermediario_*)
@@ -149,6 +166,14 @@ export async function POST(req: NextRequest) {
     data_geracao: new Date().toLocaleDateString("pt-BR"),
     data_geracao_extenso: new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),
     ...(extra_data ?? {}),
+    // Termo de Adesão: código e data de assinatura do contrato de origem (datas por extenso,
+    // data do registro de assinatura no fuso de Brasília). Sempre por último: extra_data não sobrescreve.
+    ...(adhesionParent
+      ? {
+          contrato_origem_codigo: adhesionParent.contract_code,
+          contrato_origem_data_extenso: adhesionParent.signed_at ? dateExtensoBR(adhesionParent.signed_at) : "[ INFORMAÇÃO PENDENTE ]",
+        }
+      : {}),
   };
 
   // Head automático por setor (04/09/2026, pedido explícito de João: "o Head
@@ -387,7 +412,7 @@ export async function POST(req: NextRequest) {
   if (effectiveQualificationBatchId) {
     const { data: explicitBatch } = await svc()
       .from("cm_qualification_batches")
-      .select("id, template_id, status, consumido_por_contract_id")
+      .select("id, template_id, status, consumido_por_contract_id, parent_contract_id")
       .eq("id", effectiveQualificationBatchId)
       .maybeSingle();
 
@@ -396,6 +421,9 @@ export async function POST(req: NextRequest) {
     }
     if (explicitBatch.consumido_por_contract_id) {
       return NextResponse.json({ error: "Este lote de qualificação já foi usado em outro contrato (single-use)." }, { status: 409 });
+    }
+    if ((explicitBatch.parent_contract_id ?? null) !== (adhesionParent?.id ?? null)) {
+      return NextResponse.json({ error: "Este lote de qualificação pertence a outro contrato de origem." }, { status: 422 });
     }
     if (explicitBatch.status !== "completo") {
       return NextResponse.json({ error: "Este lote de qualificação ainda não está completo." }, { status: 422 });
@@ -408,12 +436,17 @@ export async function POST(req: NextRequest) {
   // para clientes" gerando vários lotes do MESMO template (um por cliente), a
   // busca automática poderia puxar a qualificação de outro cliente (LGPD).
   if (!effectiveQualificationBatchId && !ticket_id && !credit_proposal_id) {
-    const { data: earlyBatch } = await svc()
+    // Termo de Adesão: só o lote dos aderentes DESTE contrato de origem; fora disso, nunca um lote de adesão.
+    let earlyBatchQuery = svc()
       .from("cm_qualification_batches")
       .select("id")
       .eq("template_id", template_id)
       .eq("status", "completo")
-      .is("consumido_por_contract_id", null)
+      .is("consumido_por_contract_id", null);
+    earlyBatchQuery = adhesionParent
+      ? earlyBatchQuery.eq("parent_contract_id", adhesionParent.id)
+      : earlyBatchQuery.is("parent_contract_id", null);
+    const { data: earlyBatch } = await earlyBatchQuery
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -443,6 +476,10 @@ export async function POST(req: NextRequest) {
       // D2b: intermediários renumerados de 1 a N só na EXIBIÇÃO. role e as
       // variáveis {{<role>_nome}} continuam com a chave original de origem.
       const displayLabels = buildPartyDisplayLabels(qualifications.map((q) => q.role_in_document));
+      // Termo de Adesão: quem entra pelo lote é ADERENTE, não "Partner" nem "Parte Principal".
+      if (adhesionParent) {
+        for (const q of qualifications) displayLabels[q.role_in_document] = "Aderente";
+      }
       qualificationParties = qualifications.map((q) => ({
         role: q.role_in_document,
         name: cleanPartyText(q.full_name) ?? q.full_name,
@@ -759,6 +796,7 @@ export async function POST(req: NextRequest) {
       credit_proposal_id: credit_proposal_id ?? null,
       ticket_id: ticket_id ?? null,
       qualification_batch_id: effectiveQualificationBatchId,
+      parent_contract_id: adhesionParent?.id ?? null,
       is_master_agreement: is_master_agreement === true,
       contract_title: contractTitle,
       rendered_html: renderedHtml,
