@@ -10,6 +10,7 @@ import {
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
 import { PartyQualificationCardModal } from "./party-qualification-card";
+import { AdhesionSection } from "./adhesion-section";
 import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
 import { whatsappDigits } from "@/lib/phone";
 
@@ -982,6 +983,11 @@ export function ContractsPanelClient({ role }: { role: string }) {
                     </button>
                   )}
                 </div>
+
+                {/* Termo de Adesão (06/10/2026): só em contrato assinado; elegibilidade confirmada pelo servidor. */}
+                {selected.status_signature === "assinado" && (
+                  <AdhesionSection contractId={selected.id} contractCode={selected.contract_code} onGenerated={fetchContracts} />
+                )}
               </div>
 
               {/* Qualificação de Partes */}

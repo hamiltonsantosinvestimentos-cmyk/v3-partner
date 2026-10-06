@@ -6,6 +6,7 @@ import { isValidEmail } from "@/lib/utils";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { normalizePhone } from "@/lib/phone";
+import { ADHESION_SERIES, ADHESION_MIN_PARTIES, ADHESION_MAX_PARTIES, validateAdhesionParent } from "@/lib/contract-adhesion";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -132,7 +133,10 @@ export async function POST(req: NextRequest) {
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
-  const { listing_id, operation_contract_id, demand_id, template_id, match_deal_id, document_type, parties } = body as {
+  const { listing_id, operation_contract_id, demand_id, template_id, match_deal_id, document_type, parties, parent_contract_id, adhesion_reason } = body as {
+    adhesion_reason?: string;
+    // Termo de Adesão (06/10/2026): lote dos ADERENTES de um contrato assinado. Nunca altera o contrato de origem.
+    parent_contract_id?: string;
     listing_id?: string;
     operation_contract_id?: string;
     demand_id?: string;
@@ -193,6 +197,24 @@ export async function POST(req: NextRequest) {
 
   const db = svc();
 
+  // Termo de Adesão (06/10/2026): travas no servidor, nunca só no botão. Perfil, estado do contrato
+  // de origem, natureza de Acordo Mestre, série do template e 1 a 10 aderentes.
+  if (parent_contract_id) {
+    if (!template_id) return NextResponse.json({ error: "template_id do Termo de Adesão é obrigatório." }, { status: 422 });
+    if (typeof adhesion_reason !== "string" || adhesion_reason.trim().length < 5) {
+      return NextResponse.json({ error: "Motivo da adesão obrigatório: mínimo 5 caracteres." }, { status: 422 });
+    }
+    if (parties.length < ADHESION_MIN_PARTIES || parties.length > ADHESION_MAX_PARTIES) {
+      return NextResponse.json({ error: `Informe de ${ADHESION_MIN_PARTIES} a ${ADHESION_MAX_PARTIES} aderentes.` }, { status: 422 });
+    }
+    const check = await validateAdhesionParent(db, parent_contract_id, caller.role);
+    if (!check.ok) return NextResponse.json({ error: check.error }, { status: check.status });
+    const { data: adhesionTemplate } = await db.from("contract_templates").select("contract_series, is_active").eq("id", template_id).maybeSingle();
+    if (!adhesionTemplate?.is_active || adhesionTemplate.contract_series !== ADHESION_SERIES) {
+      return NextResponse.json({ error: `O template informado não é um Termo de Adesão (série ${ADHESION_SERIES}).` }, { status: 422 });
+    }
+  }
+
   // Lado travado no servidor pelo tipo de ancora que originou a chamada -- nunca aceito do
   // client. Card de Ativo (listing_id) so pode gerar SELL_SIDE, card de Comprador (demand_id)
   // so pode gerar BUY_SIDE. Sem isso um intermediario nao tem como migrar de lado por engano.
@@ -205,6 +227,7 @@ export async function POST(req: NextRequest) {
       operation_contract_id: operation_contract_id ?? null,
       demand_id: demand_id ?? null,
       template_id: template_id ?? null,
+      parent_contract_id: parent_contract_id ?? null,
       match_deal_id: match_deal_id ?? null,
       document_type: document_type ?? null,
       status: isQuickIndication ? "aguardando_triagem_governanca" : undefined,
@@ -235,13 +258,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: insertError?.message ?? "Erro ao criar qualificações" }, { status: 500 });
   }
 
+  // Termo de Adesão: registra o motivo na linha do tempo do contrato de origem (tabela de notas, o
+  // contrato em si não é alterado). Com await: gravação de auditoria nunca é "void".
+  if (parent_contract_id) {
+    const { data: authorProfile } = await db.from("profiles").select("full_name").eq("id", caller.userId).maybeSingle();
+    const { error: noteError } = await db.from("contract_notes").insert({
+      contract_id: parent_contract_id,
+      author_id: caller.userId,
+      author_name: authorProfile?.full_name ?? "Usuário",
+      note_type: "sistema",
+      content: `Adesão iniciada: ${inserted.length} aderente(s) convidado(s) a preencher a qualificação. Motivo: ${adhesion_reason!.trim()}`,
+    });
+    if (noteError) console.error("[qualifications] falha ao registrar nota de adesão:", noteError);
+  }
+
   // Indicacao rapida nao dispara email: o instrumento ainda nao foi decidido pela Governanca,
   // entao nao ha o que o indicado preencher ainda de forma util. O envio formal do link
   // acontece no dispatch (Fase 3 do BRIEF de 13/08/2026), quando document_type e definido.
   if (process.env.RESEND_API_KEY && !isQuickIndication) {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
-    const docLabel = DOCUMENT_TYPE_LABELS[document_type!] ?? document_type;
+    const docLabel = parent_contract_id ? "Termo de Adesão ao NCNDA" : (DOCUMENT_TYPE_LABELS[document_type!] ?? document_type);
     await Promise.all(
       inserted.map(async (row) => {
         try {
