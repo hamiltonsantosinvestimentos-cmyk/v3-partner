@@ -11,6 +11,7 @@ type Pos = { x: number; y: number; col: string | null };
 
 export function useFlip(containerRef: RefObject<HTMLElement | null>, deps: unknown[]) {
   const prev = useRef(new Map<string, Pos>());
+  const fixo = useRef(new Set<string>());
 
   const medir = () => {
     const c = containerRef.current;
@@ -45,16 +46,31 @@ export function useFlip(containerRef: RefObject<HTMLElement | null>, deps: unkno
       });
     }
     prev.current = agora;
+    fixo.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
   // Rolagem muda a posição na tela sem mudar a ordem: atualiza a foto para não animar à toa.
   useEffect(() => {
     let raf = 0;
-    const refotografar = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => { prev.current = medir(); }); };
+    const refotografar = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const m = medir();
+        fixo.current.forEach((id) => { const p = prev.current.get(id); if (p) m.set(id, p); });
+        prev.current = m;
+      });
+    };
     window.addEventListener("scroll", refotografar, true);
     window.addEventListener("resize", refotografar);
     return () => { window.removeEventListener("scroll", refotografar, true); window.removeEventListener("resize", refotografar); cancelAnimationFrame(raf); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Posição de onde o card deve partir na próxima mudança (ex.: onde foi solto no arraste). */
+  return (id: string, x: number, y: number) => {
+    const p = prev.current.get(id);
+    prev.current.set(id, { x, y, col: p?.col ?? null });
+    fixo.current.add(id);
+  };
 }
