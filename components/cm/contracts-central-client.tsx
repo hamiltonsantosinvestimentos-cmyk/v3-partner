@@ -2,12 +2,13 @@
 
 import React, { Suspense, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { FileText, LayoutList, Settings, Clock } from "lucide-react";
+import { FileText, LayoutList, Settings, Clock, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ContractTemplatesClient } from "./contract-templates-client";
 import { ContractsPanelClient } from "./contracts-panel-client";
 import { EsignatureConfigClient } from "./esignature-config-client";
 import { PendingQualificationsPanel } from "./pending-qualifications-panel";
+import { CommissionGridsPanel } from "./commission-grids-panel";
 
 const TABS = [
   { id: "painel", label: "Contratos Gerados", icon: <LayoutList size={15} /> },
@@ -17,6 +18,8 @@ const TABS = [
   // no UX?") -- gap real, nenhuma tela agregava os lotes em aberto do
   // sistema inteiro antes desta aba.
   { id: "pendencias", label: "Qualificações Pendentes", icon: <Clock size={15} /> },
+  // Grade de Comissão (06/10/2026): link por grupo para o representante informar o percentual de cada integrante.
+  { id: "grade", label: "Grade de Comissão", icon: <Percent size={15} /> },
   { id: "config", label: "Configurações", icon: <Settings size={15} /> },
 ] as const;
 
@@ -31,7 +34,7 @@ function ContractsCentralInner({ role }: { role: string }) {
   const router = useRouter();
   const [tab, setTab] = useState<TabId>(searchParams.get("vertical") || searchParams.get("template_id") ? "minutas" : "painel");
   const canConfig = ["ADMIN", "GESTAO"].includes(role);
-  const visibleTabs = TABS.filter((t) => t.id !== "config" || canConfig);
+  const visibleTabs = TABS.filter((t) => (t.id !== "config" && t.id !== "grade") || canConfig);
 
   // Deep-link de "Qualificações Pendentes" pra "Minutas" (reaproveita o
   // auto-select por ?template_id= que já existia em ContractTemplatesClient
@@ -63,6 +66,7 @@ function ContractsCentralInner({ role }: { role: string }) {
       {tab === "painel" && <ContractsPanelClient role={role} />}
       {tab === "minutas" && <ContractTemplatesClient />}
       {tab === "pendencias" && <PendingQualificationsPanel onOpenMinuta={openMinuta} />}
+      {tab === "grade" && canConfig && <CommissionGridsPanel />}
       {tab === "config" && canConfig && <EsignatureConfigClient />}
     </div>
   );
