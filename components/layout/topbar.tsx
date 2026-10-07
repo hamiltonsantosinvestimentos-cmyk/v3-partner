@@ -107,13 +107,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0, marca = null 
     "Plataforma";
 
   return (
-    <header className="h-14 flex items-center px-4 gap-3 relative z-[100]"
-      style={{
-        background: "linear-gradient(180deg, rgba(9,8,26,0.98) 0%, rgba(9,8,26,0.95) 100%)",
-        borderBottom: "1px solid rgba(201,168,76,0.08)",
-        backdropFilter: "blur(12px)",
-        boxShadow: "0 1px 0 rgba(201,168,76,0.04), 0 4px 24px rgba(0,0,0,0.3)",
-      }}>
+    <header className="v3-topo h-16 flex items-center px-5 gap-3 relative z-[100]">
 
       {/* Bottom gold shimmer line */}
       <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-[#C9A84C]/25 to-transparent pointer-events-none" />
@@ -138,7 +132,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0, marca = null 
           </span>
           <span className="text-[#7A8FA8]/30 text-sm select-none">/</span>
         </div>
-        <span className="text-sm font-semibold text-[#F0ECE4] truncate">{pageLabel}</span>
+        <span key={pageLabel} className="v3-titulo-topo text-[15px] font-semibold tracking-[-0.01em] text-[#F0ECE4] truncate">{pageLabel}</span>
       </div>
 
       {/* ── Right controls ── */}
