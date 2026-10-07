@@ -310,8 +310,9 @@ export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: 
       {/* Vertical gold accent left edge */}
       <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-transparent via-[#C9A84C]/50 to-transparent" />
 
-      {/* Subtle grid texture */}
-      <div className="absolute inset-0 bg-grid-sidebar opacity-100 pointer-events-none" />
+      {/* Textura fina + brilho dourado no alto do menu */}
+      <div className="absolute inset-0 bg-grid-sidebar opacity-60 pointer-events-none" />
+      <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-56 rounded-full bg-[#C9A84C]/[0.10] blur-3xl pointer-events-none" />
 
       {/* Mobile close */}
       {onClose && (
@@ -361,8 +362,9 @@ export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: 
 
           return (
             <div key={section.label} className="mb-1">
-              <p className="px-3 mb-1 mt-2 text-[9px] font-bold tracking-[0.18em] text-[#7A8FA8]/50 uppercase select-none">
+              <p className="flex items-center gap-2 px-3 mb-1.5 mt-3 text-[9px] font-bold tracking-[0.22em] text-[#C9A84C]/55 uppercase select-none">
                 {section.label}
+                <span className="flex-1 h-px bg-gradient-to-r from-[#C9A84C]/20 to-transparent" />
               </p>
               {/* índice para a busca Ctrl+K (components/layout/command-palette.tsx), inclui submenus fechados */}
               <ul hidden>
@@ -439,7 +441,7 @@ export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: 
 
       {/* ── BOTTOM USER BADGE ── */}
       <div className="px-3 py-3 border-t border-white/[0.05]">
-        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-gradient-to-br from-[#C9A84C]/[0.10] to-white/[0.02] border border-[#C9A84C]/15 shadow-[inset_0_1px_0_rgba(232,201,122,.08)]">
           {/* Avatar placeholder */}
           <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#C9A84C]/80 to-[#E8C97A]/60 flex items-center justify-center flex-shrink-0">
             <Zap className="w-3.5 h-3.5 text-[#09081A]" />

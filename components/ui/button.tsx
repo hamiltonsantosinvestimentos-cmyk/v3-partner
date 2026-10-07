@@ -11,14 +11,14 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-[#C9A84C] text-[#09081A] hover:bg-[#E8C97A] shadow-sm font-semibold",
+          "v3-btn-ouro text-[#09081A] font-semibold",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
-          "border border-border bg-transparent hover:bg-secondary text-foreground",
+          "border border-white/[0.08] bg-white/[0.02] text-foreground hover:border-[#C9A84C]/40 hover:bg-[#C9A84C]/[0.06] hover:text-[#F0ECE4]",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        ghost: "hover:bg-secondary hover:text-foreground",
+          "bg-[#111F35] border border-white/[0.05] text-secondary-foreground hover:border-[#C9A84C]/25 hover:bg-[#162744]",
+        ghost: "hover:bg-white/[0.05] hover:text-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         gold: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",
         success: "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm",

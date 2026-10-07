@@ -38,7 +38,13 @@ export function PlatformShell({ user, notificationCount, marca = null, children 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#09081A]">
+    <div className="flex h-screen overflow-hidden bg-[#09081A] relative isolate">
+      {/* Layout premium: fundo ambiente (aurora dourada + textura fina), atrás de tudo */}
+      <div aria-hidden className="v3-ambiente">
+        <span className="v3-orbe v3-orbe-a" />
+        <span className="v3-orbe v3-orbe-b" />
+        <span className="v3-orbe v3-orbe-c" />
+      </div>
       {/* Bloqueio de assinatura expirada */}
       <SubscriptionGuard
         trialExpiresAt={user.trial_expires_at ?? null}
@@ -86,9 +92,7 @@ export function PlatformShell({ user, notificationCount, marca = null, children 
         <RouteProgress />
         <CommandPalette />
         <main className="flex-1 overflow-y-auto p-5 lg:p-6 relative v3-main"
-          style={{
-            background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(201,168,76,0.03) 0%, transparent 60%)",
-          }}>
+>
           {children}
         </main>
       </div>
