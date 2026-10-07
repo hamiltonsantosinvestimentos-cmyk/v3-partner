@@ -33,7 +33,7 @@ interface Group {
 }
 
 const fmtPct = (n: number) => n.toFixed(2).replace(".", ",") + "%";
-const fmtGroup = (n: number) => String(n).replace(".", ",") + "%";
+const fmtGroup = (n: number) => Number(n).toFixed(2).replace(".", ",") + "%";
 const fmtDateTime = (iso: string) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 function whatsappLink(label: string, name: string | null, phone: string | null, token: string) {

@@ -23,7 +23,7 @@ interface GridData {
 
 const INPUT_CLS = "w-full bg-[#12112A] border border-[#9BAFC5]/25 rounded-lg px-3 py-3 text-base text-[#F5F1E8] text-right focus:outline-none focus:border-[#C9A84C] focus-visible:ring-2 focus-visible:ring-[#C9A84C]/40";
 const fmtPct = (n: number) => n.toFixed(2).replace(".", ",") + "%";
-const fmtGroup = (n: number) => String(n).replace(".", ",") + "%";
+const fmtGroup = (n: number) => Number(n).toFixed(2).replace(".", ",") + "%";
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
