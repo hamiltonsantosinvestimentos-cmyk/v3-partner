@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import React, { useState } from "react";
 import { X, Save, Loader2, RotateCcw, Edit3 } from "lucide-react";
@@ -74,7 +75,7 @@ export function AcademyVideoEdit({ video, override, onSave, onReset, onClose }: 
   }
 
   async function handleReset() {
-    if (!confirm("Restaurar todos os campos para os valores originais?")) return;
+    if (!await confirmar("Restaurar todos os campos para os valores originais?")) return;
     setResetting(true);
     try {
       await onReset(video.id);

@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useCallback, useEffect, useState } from "react";
 import { FileText, Loader2, PenLine, Send, ExternalLink, Lock } from "lucide-react";
@@ -42,7 +43,7 @@ export function ParecerAnaliseEstruturada({ orderId }: { orderId: string }) {
   useEffect(() => { carregar(); }, [carregar]);
 
   async function executar(tipo: "gerar" | "assinar" | "entregar") {
-    if (tipo === "entregar" && !window.confirm("Enviar o parecer assinado para o e-mail do cliente e marcar o pedido como entregue?")) return;
+    if (tipo === "entregar" && !await confirmar("Enviar o parecer assinado para o e-mail do cliente e marcar o pedido como entregue?")) return;
     setAcao(tipo); setErro(""); setAviso("");
     try {
       const r = await fetch(`/api/analise-estruturada/pedido/${orderId}/parecer`, {

@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
@@ -2026,7 +2026,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   }
 
   async function handleContratosCancelar(id: string) {
-    if (!confirm("Cancelar este contrato?")) return;
+    if (!await confirmar("Cancelar este contrato?")) return;
     setContratosAcao(prev => ({ ...prev, [id]: "cancelando" }));
     try {
       const res = await fetch("/api/contratos/cancelar", {

@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import { CheckCircle2, Clock, Loader2, MessageSquare, Pause, Play, Ban, RotateCw, AlertTriangle } from "lucide-react";
@@ -134,7 +135,7 @@ export function AdminSdrAddonClient() {
                               title="Pausar" className="p-1.5 rounded-lg bg-orange-500/15 border border-orange-500/30 text-orange-400 disabled:opacity-60">
                               <Pause className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => confirm(`Cancelar o add-on de ${p.partner_nome ?? "partner"}?`) && acao(p.partner_id, "cancelar")} disabled={proc}
+                            <button onClick={async () => await confirmar(`Cancelar o add-on de ${p.partner_nome ?? "partner"}?`) && acao(p.partner_id, "cancelar")} disabled={proc}
                               title="Cancelar" className="p-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 disabled:opacity-60">
                               <Ban className="w-3.5 h-3.5" />
                             </button>
@@ -146,7 +147,7 @@ export function AdminSdrAddonClient() {
                               title="Retomar" className="p-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 disabled:opacity-60">
                               <Play className="w-3.5 h-3.5" />
                             </button>
-                            <button onClick={() => confirm(`Cancelar o add-on de ${p.partner_nome ?? "partner"}?`) && acao(p.partner_id, "cancelar")} disabled={proc}
+                            <button onClick={async () => await confirmar(`Cancelar o add-on de ${p.partner_nome ?? "partner"}?`) && acao(p.partner_id, "cancelar")} disabled={proc}
                               title="Cancelar" className="p-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400 disabled:opacity-60">
                               <Ban className="w-3.5 h-3.5" />
                             </button>

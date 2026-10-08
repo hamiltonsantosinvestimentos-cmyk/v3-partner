@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useCallback, useEffect, useState } from "react";
 import { FileSignature, Loader2, Upload, Mail, Download, CheckCircle2, Copy, Check, X } from "lucide-react";
@@ -30,7 +31,7 @@ function Item({ doc, emailPadrao, podeMesa, onAtualizado }: { doc: DocComArquivo
   const st = STATUS[doc.status] ?? STATUS.aguardando_envio;
 
   async function acao(nome: "enviar" | "confirmar" | "cancelar") {
-    if (nome === "cancelar" && !window.confirm(`Cancelar "${doc.titulo}"? O link do cliente deixa de funcionar.`)) return;
+    if (nome === "cancelar" && !await confirmar(`Cancelar "${doc.titulo}"? O link do cliente deixa de funcionar.`)) return;
     setBusy(nome); setErro(null); setMsg(null);
     const r = await fetch(`/api/credit-proposals/assinaturas/${doc.id}`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ acao: nome, email }),

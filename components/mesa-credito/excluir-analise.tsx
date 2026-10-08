@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useState } from "react";
 import { Loader2, Trash2 } from "lucide-react";
@@ -50,7 +51,7 @@ export function ExcluirAnalise({
       }
       if (imp.comissao_gerada) linhas.push("A comissão já gerada NÃO será desfeita (segue no fluxo de autorização).");
       linhas.push("", "Para ter a análise de novo será preciso rodar outra consulta, com o custo das fontes pagas.", "Esta ação não pode ser desfeita.");
-      if (!window.confirm(linhas.join("\n"))) return;
+      if (!await confirmar(linhas.join("\n"))) return;
 
       // 2) Exclui
       const res = await fetch(`/api/credit-engine/analysis?proposal_id=${proposalId}`, { method: "DELETE" });

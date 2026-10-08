@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -505,7 +505,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
 
   const handleSendToSignature = async () => {
     if (!selected) return;
-    if (!confirm(`Enviar "${selected.contract_title}" para assinatura digital via ClickSign?`)) return;
+    if (!await confirmar(`Enviar "${selected.contract_title}" para assinatura digital via ClickSign?`)) return;
     setSendingToSignature(true);
     try {
       const res = await fetch(`/api/contracts/${selected.id}/send`, { method: "POST" });
@@ -555,7 +555,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
   const [reopeningId, setReopeningId] = useState<string | null>(null);
   const reopenQualification = async (partyId: string) => {
     if (!selected) return;
-    if (!confirm("Reabrir esta qualificação para correção? A pessoa vai poder reenviar os dados pelo mesmo link.")) return;
+    if (!await confirmar("Reabrir esta qualificação para correção? A pessoa vai poder reenviar os dados pelo mesmo link.")) return;
     setReopeningId(partyId);
     try {
       const res = await fetch(`/api/cm/qualifications/${partyId}/reopen`, { method: "POST" });

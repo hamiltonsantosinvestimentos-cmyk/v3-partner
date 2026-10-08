@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -122,7 +123,7 @@ export function AgentConfigClient({ owner = "interno" }: { owner?: string }) {
   }
 
   async function remove(id: string) {
-    if (!window.confirm("Remover este agente?")) return;
+    if (!await confirmar("Remover este agente?")) return;
     setBusy(true);
     try {
       const res = await fetch(`/api/sdr/agents?id=${id}`, { method: "DELETE" });

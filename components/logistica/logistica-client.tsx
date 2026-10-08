@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useState, useEffect } from "react";
 import {
@@ -323,7 +324,7 @@ export function LogisticaClient({ category, initialItems }: { category: Category
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm(`Excluir este ${cfg.singular.toLowerCase()}?`)) return;
+    if (!await confirmar(`Excluir este ${cfg.singular.toLowerCase()}?`)) return;
     try {
       const res = await fetch(`/api/logistica/items/${id}`, { method: "DELETE" });
       if (res.ok) await reload();

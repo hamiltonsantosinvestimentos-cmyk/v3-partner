@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useCallback, useEffect, useState } from "react";
 import { Users, Wallet, Palette, Loader2, Plus, FileDown, Check, X, Pencil, Upload, Globe, RefreshCw, Copy } from "lucide-react";
@@ -128,7 +129,7 @@ function AbaUsuarios({ limite }: { limite: number }) {
                 </td>
                 <td className="px-3 py-2 text-right">
                   <button
-                    onClick={() => { if (window.confirm(u.is_active === false ? "Reativar o acesso deste usuário?" : "Bloquear o acesso deste usuário? Ele não conseguirá mais entrar.")) atualizar(u.id, { ativo: u.is_active === false }); }}
+                    onClick={async () => { if (await confirmar(u.is_active === false ? "Reativar o acesso deste usuário?" : "Bloquear o acesso deste usuário? Ele não conseguirá mais entrar.")) atualizar(u.id, { ativo: u.is_active === false }); }}
                     className="text-xs text-muted-foreground hover:text-white"
                   >
                     {u.is_active === false ? "Reativar" : "Bloquear"}
@@ -366,7 +367,7 @@ function AbaDominio() {
   }
 
   async function remover() {
-    if (!window.confirm("Remover o domínio próprio? Sua equipe volta a acessar só por app.v3partners.com.br.")) return;
+    if (!await confirmar("Remover o domínio próprio? Sua equipe volta a acessar só por app.v3partners.com.br.")) return;
     setBusy(true);
     await fetch("/api/enterprise/dominio", { method: "DELETE" });
     setBusy(false);

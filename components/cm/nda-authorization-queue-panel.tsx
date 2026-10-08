@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, ShieldCheck, ExternalLink, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
@@ -55,7 +55,7 @@ export function NdaAuthorizationQueuePanel() {
   const runBulk = async (action: "approve" | "reject") => {
     if (selected.size === 0) return;
     const label = action === "approve" ? "aprovar" : "rejeitar";
-    if (!confirm(`Confirma ${label} ${selected.size} NDA(s) selecionado(s)? Cada um já tem anexo e motivo enviados individualmente pela Mesa.`)) return;
+    if (!await confirmar(`Confirma ${label} ${selected.size} NDA(s) selecionado(s)? Cada um já tem anexo e motivo enviados individualmente pela Mesa.`)) return;
 
     setProcessing(true);
     let ok = 0, fail = 0;

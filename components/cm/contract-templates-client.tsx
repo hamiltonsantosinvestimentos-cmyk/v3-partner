@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { maskCpfCnpj } from "@/lib/qualification-mask";
@@ -719,7 +719,7 @@ export function ContractTemplatesClient() {
   const [reopeningId, setReopeningId] = useState<string | null>(null);
   const reopenQualification = async (partyId: string) => {
     if (!selected) return;
-    if (!confirm("Reabrir esta qualificação para correção? A pessoa vai poder reenviar os dados pelo mesmo link.")) return;
+    if (!await confirmar("Reabrir esta qualificação para correção? A pessoa vai poder reenviar os dados pelo mesmo link.")) return;
     setReopeningId(partyId);
     try {
       const res = await fetch(`/api/cm/qualifications/${partyId}/reopen`, { method: "POST" });
@@ -773,7 +773,7 @@ export function ContractTemplatesClient() {
 
   const deletePartyQualification = async (party: QualParty) => {
     if (!selected) return;
-    if (!confirm(`Excluir "${party.full_name}" desta qualificação? A pessoa continua com o link antigo, mas ele deixa de valer -- não entra no próximo contrato gerado desta minuta.`)) return;
+    if (!await confirmar(`Excluir "${party.full_name}" desta qualificação? A pessoa continua com o link antigo, mas ele deixa de valer -- não entra no próximo contrato gerado desta minuta.`)) return;
     setDeletingPartyId(party.id);
     try {
       const res = await fetch(`/api/cm/qualifications/party/${party.id}`, { method: "DELETE" });
@@ -1173,7 +1173,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Desativar este template?")) return;
+    if (!await confirmar("Desativar este template?")) return;
     await fetch(`/api/contracts/templates/${id}`, { method: "DELETE" });
     setSelected(null);
     fetchTemplates();

@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useEffect, useState, useMemo } from "react";
 import {
@@ -1329,7 +1329,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
 
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Excluir este prospect?")) return;
+    if (!await confirmar("Excluir este prospect?")) return;
     await fetch(`/api/prospeccao/${id}`, { method: "DELETE" });
     load();
   };

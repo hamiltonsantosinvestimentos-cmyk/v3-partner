@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -157,7 +158,7 @@ export function SdrCommentTriggersClient() {
   };
 
   const excluir = async (t: CommentTrigger) => {
-    if (!confirm(`Excluir o gatilho "${t.nome}"?`)) return;
+    if (!await confirmar(`Excluir o gatilho "${t.nome}"?`)) return;
     await fetch(`/api/sdr/comment-triggers/${t.id}`, { method: "DELETE" });
     fetchData();
   };

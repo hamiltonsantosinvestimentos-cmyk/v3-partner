@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, Plus, X, Trash2, User } from "lucide-react";
@@ -81,7 +82,7 @@ export function DealClientesPanel({ dealId }: { dealId: string }) {
   };
 
   const handleRemove = async (id: string) => {
-    if (!confirm("Desvincular este cliente do deal?")) return;
+    if (!await confirmar("Desvincular este cliente do deal?")) return;
     await fetch(`/api/ma/deals/${dealId}/clientes/${id}`, { method: "DELETE" });
     load();
   };

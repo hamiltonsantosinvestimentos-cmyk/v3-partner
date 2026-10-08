@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -510,7 +511,7 @@ function AnexosInstituicao({ instituicaoId, canManage }: { instituicaoId: string
   }
 
   async function remover(tipo: TipoAnexo, a: Anexo) {
-    if (!confirm(`Remover o anexo "${a.name}"?`)) return;
+    if (!await confirmar(`Remover o anexo "${a.name}"?`)) return;
     setErro(null);
     setBusy(tipo);
     try {
@@ -780,7 +781,7 @@ export function InstituicoesPanel({ currentUser }: { currentUser?: { id: string;
   }
 
   async function deleteInstituicao(inst: Instituicao) {
-    if (!confirm(`Excluir a instituição "${inst.nome}" e todas as suas linhas cadastradas?`)) return;
+    if (!await confirmar(`Excluir a instituição "${inst.nome}" e todas as suas linhas cadastradas?`)) return;
     await fetch(`/api/instituicoes/${inst.id}`, { method: "DELETE" });
     fetchInstituicoes();
   }
@@ -802,7 +803,7 @@ export function InstituicoesPanel({ currentUser }: { currentUser?: { id: string;
   }
 
   async function deleteLinha(l: LinhaInstituicao) {
-    if (!confirm(`Excluir a linha "${l.nome}"?`)) return;
+    if (!await confirmar(`Excluir a linha "${l.nome}"?`)) return;
     await fetch(`/api/instituicoes/linhas/${l.id}`, { method: "DELETE" });
     fetchInstituicoes();
   }

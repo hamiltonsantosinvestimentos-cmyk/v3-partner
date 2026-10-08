@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 // Painel de indicações (comissionados) de um card de Ativo (SELL_SIDE) ou
 // Comprador (BUY_SIDE) na Bolsa de Ativos. Fase 2 do BRIEF de 13/08/2026:
@@ -75,7 +75,7 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
   // indicação -- soft delete, sem precisar apagar o lote inteiro.
   const [deletingPartyId, setDeletingPartyId] = useState<string | null>(null);
   const deleteParty = async (party: QualParty) => {
-    if (!confirm(`Excluir "${party.full_name}" desta indicação? A pessoa continua com o link antigo, mas ele deixa de valer.`)) return;
+    if (!await confirmar(`Excluir "${party.full_name}" desta indicação? A pessoa continua com o link antigo, mas ele deixa de valer.`)) return;
     setDeletingPartyId(party.id);
     try {
       const res = await fetch(`/api/cm/qualifications/party/${party.id}`, { method: "DELETE" });

@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { Fragment, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -138,7 +139,7 @@ export function RelatorioMensalClient({ rel, equipe, podeReenviar, basePath = "/
   }
 
   async function reenviar() {
-    if (!window.confirm(`Enviar agora os e-mails de ${rel.periodo.label} para os partners e para os sócios?`)) return;
+    if (!await confirmar(`Enviar agora os e-mails de ${rel.periodo.label} para os partners e para os sócios?`)) return;
     setEnviando(true);
     setMsg(null);
     try {

@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -64,7 +65,7 @@ export default function ConsorcioProjetosPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Excluir este projeto?")) return;
+    if (!await confirmar("Excluir este projeto?")) return;
     setDeleting(id);
     const res = await fetch(`/api/consorcio/projetos?id=${id}`, { method: "DELETE" });
     if (res.ok) setProjects(prev => prev.filter(p => p.id !== id));

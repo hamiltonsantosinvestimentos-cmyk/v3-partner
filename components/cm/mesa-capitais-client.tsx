@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { maskCpfCnpj } from "@/lib/qualification-mask";
@@ -758,7 +758,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   };
 
   const removeIntermediary = async (id: string) => {
-    if (!confirm("Remover este intermediário da cadeia?")) return;
+    if (!await confirmar("Remover este intermediário da cadeia?")) return;
     await fetch(`/api/cm/deal-intermediaries/${id}`, { method: "DELETE" });
     setIntermediaries((prev) => prev.filter((i) => i.id !== id));
   };
@@ -1265,7 +1265,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   // window.prompt() de texto livre -- reprovar exige categoria fixa (ver
   // lib/cm-decline-reasons.ts), pra alimentar o relatorio de gargalos.
   // "Aprovar com restrições" continua so texto livre, nao e uma reprovacao.
-  const handleListingDecision = (listingId: string, newStatus: "aprovado_head" | "aprovado_com_restricoes" | "reprovado") => {
+  const handleListingDecision = async (listingId: string, newStatus: "aprovado_head" | "aprovado_com_restricoes" | "reprovado") => {
     if (newStatus === "aprovado_com_restricoes" || newStatus === "reprovado") {
       setShowDeclineModal({ listingId, newStatus });
       setDeclineCategory("");
@@ -1273,7 +1273,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       return;
     }
     if (newStatus === "aprovado_head") {
-      if (!confirm("Confirma aprovação do ativo para publicação na Vitrine?")) return;
+      if (!await confirmar("Confirma aprovação do ativo para publicação na Vitrine?")) return;
       void submitListingDecision(listingId, newStatus);
     }
   };
@@ -1379,7 +1379,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   // isso so acontece via /nda-authorize individual, revisado na Fila NDA.
   const runBulkPublish = async () => {
     if (bulkPublishSelection.size === 0) return;
-    if (!confirm(`Confirma publicar ${bulkPublishSelection.size} ativo(s) na Vitrine? Cada um vai passar pelas etapas restantes até "ativo_vitrine".`)) return;
+    if (!await confirmar(`Confirma publicar ${bulkPublishSelection.size} ativo(s) na Vitrine? Cada um vai passar pelas etapas restantes até "ativo_vitrine".`)) return;
 
     setBulkPublishing(true);
     let ok = 0, fail = 0;

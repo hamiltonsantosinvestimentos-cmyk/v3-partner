@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -188,7 +188,7 @@ export default function CartasContempladasPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Excluir esta carta?")) return;
+    if (!await confirmar("Excluir esta carta?")) return;
     setDeleting(id);
     const res = await fetch(`/api/consorcio/cartas?id=${id}`, { method: "DELETE" });
     if (res.ok) setLetters(prev => prev.filter(l => l.id !== id));

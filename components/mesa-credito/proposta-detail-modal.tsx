@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect, useRef } from "react";
 import { filtrarChecklistPorImovel, imovelGarantiaDaProposta } from "@/lib/checklist-imovel";
@@ -2070,7 +2070,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
   async function handleCancelarContrato() {
     if (!proposal) return;
-    if (!confirm("Cancelar este contrato? O link de assinatura deixará de funcionar.")) return;
+    if (!await confirmar("Cancelar este contrato? O link de assinatura deixará de funcionar.")) return;
     setCancelando(true);
     setContratoAcaoMsg("");
     try {

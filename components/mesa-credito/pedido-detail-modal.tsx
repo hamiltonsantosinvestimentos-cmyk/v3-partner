@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
@@ -328,7 +329,7 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
   // reconciliamento do webhook (token de intake, email ao cliente, avisos) --
   // ver app/api/credit-engine/orders/[id]/mark-paid/route.ts.
   async function handleMarkPaid(paid: boolean) {
-    const ok = window.confirm(
+    const ok = await confirmar(
       paid
         ? "Confirma que o pagamento deste pedido foi recebido? Isso libera o vínculo com a proposta e dispara o mesmo email de confirmação enviado ao cliente na confirmação automática."
         : "Marcar como NÃO PAGO de novo? Isso só corrige o status -- não desfaz email/consentimento já gerados se o pedido já tinha sido confirmado antes."
@@ -357,7 +358,7 @@ export function PedidoDetailModal({ order, onClose, onUpdated, podeExcluirAnalis
     // funcionar. Confirma antes só nesse caso; na primeira geração ou depois
     // de um erro anterior (relatório nunca chegou a existir), gera direto.
     if (order.report_public_token && order.report_delivered_at) {
-      const ok = window.confirm(
+      const ok = await confirmar(
         "Isso gera um relatório novo e invalida o link já enviado ao cliente por email. Você vai precisar reenviar o novo link depois. Continuar?"
       );
       if (!ok) return;

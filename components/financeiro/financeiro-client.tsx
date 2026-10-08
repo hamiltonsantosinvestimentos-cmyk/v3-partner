@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
@@ -588,7 +588,7 @@ function FolhaTab() {
   }, []);
 
   const excluirFuncionario = async (id: string, nome: string) => {
-    if (!window.confirm(`Excluir "${nome}" da folha de pagamento?`)) return;
+    if (!await confirmar(`Excluir "${nome}" da folha de pagamento?`)) return;
     const func = funcionarios.find(f => f.id === id) as (typeof DEMO_FUNCIONARIOS[0] & { _dbId?: string });
     if (func?._dbId) {
       await fetch(`/api/financeiro?id=${func._dbId}`, { method: "DELETE" }).catch(() => {});
@@ -1019,13 +1019,13 @@ function DespesasTab() {
   }, []);
 
   const excluirFixa = async (tplId: string, desc: string) => {
-    if (!window.confirm(`Excluir despesa fixa "${desc}"? Será removida de todos os meses.`)) return;
+    if (!await confirmar(`Excluir despesa fixa "${desc}"? Será removida de todos os meses.`)) return;
     const tpl = templates.find(t => t.id === tplId) as (import("@/lib/demo-data-financeiro").DespesaFixaTemplate & { _dbId?: string });
     if (tpl?._dbId) await fetch(`/api/financeiro?id=${tpl._dbId}`, { method: "DELETE" }).catch(() => {});
     setTemplates(prev => prev.filter(t => t.id !== tplId));
   };
   const excluirVariavel = async (id: string, desc: string) => {
-    if (!window.confirm(`Excluir despesa "${desc}"?`)) return;
+    if (!await confirmar(`Excluir despesa "${desc}"?`)) return;
     const desp = todasVariaveis.find(d => d.id === id) as (import("@/lib/demo-data-financeiro").Despesa & { _dbId?: string });
     if (desp?._dbId) await fetch(`/api/financeiro?id=${desp._dbId}`, { method: "DELETE" }).catch(() => {});
     setTodasVariaveis(prev => prev.filter(d => d.id !== id));
@@ -2614,7 +2614,7 @@ function ImpostosTab() {
   }, []);
 
   const excluirImposto = async (id: string, desc: string) => {
-    if (!window.confirm(`Excluir imposto "${desc}"?`)) return;
+    if (!await confirmar(`Excluir imposto "${desc}"?`)) return;
     const imp = impostos.find(i => i.id === id) as (import("@/lib/demo-data-financeiro").Imposto & { _dbId?: string });
     if (imp?._dbId) await fetch(`/api/financeiro?id=${imp._dbId}`, { method: "DELETE" }).catch(() => {});
     setImpostos(prev => prev.filter(i => i.id !== id));

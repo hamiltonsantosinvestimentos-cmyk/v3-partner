@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import { Users, Plus, Search, UserCheck, UserX, Pencil, Trash2, Clock, ShieldOff, ShieldCheck, Mail, Loader2, FileText, CalendarPlus, History } from "lucide-react";
@@ -254,7 +254,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
   };
 
   const handleReenviarEmail = async (user: User) => {
-    if (!confirm(`Reenviar e-mail de boas-vindas para ${user.email}?\n\nIsso também redefinirá a senha para 12345678.`)) return;
+    if (!await confirmar(`Reenviar e-mail de boas-vindas para ${user.email}?\n\nIsso também redefinirá a senha para 12345678.`)) return;
     setSendingEmail(user.id);
     try {
       const res = await fetch("/api/usuarios/reenviar-email", {
@@ -366,7 +366,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
   };
 
   const handleDelete = async (user: User) => {
-    if (!confirm(`Excluir o usuário "${user.full_name || user.email}"? Esta ação não pode ser desfeita.`)) return;
+    if (!await confirmar(`Excluir o usuário "${user.full_name || user.email}"? Esta ação não pode ser desfeita.`)) return;
 
     const res = await fetch(`/api/usuarios/${user.id}`, { method: "DELETE" });
     if (res.ok) {
