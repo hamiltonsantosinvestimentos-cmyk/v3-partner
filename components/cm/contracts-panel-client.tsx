@@ -138,6 +138,20 @@ export function ContractsPanelClient({ role }: { role: string }) {
   // components/cm/party-qualification-card.tsx -- reaproveitada também em
   // Minutas e Bolsa de Ativos).
   const [openPartyId, setOpenPartyId] = useState<string | null>(null);
+  // Contratos gerados a partir de um lote (reaproveitado) guardam as partes sem qualification_id.
+  // Nesse caso a ficha e achada pelo NOME entre as qualificacoes do lote ligado ao contrato
+  // (sem acento e sem diferenciar maiusculas). Sem correspondencia, vale o aviso inline.
+  const normName = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  const resolveQualificationId = (party: { qualification_id?: string | null; name?: string | null }): string | null => {
+    if (party.qualification_id) return party.qualification_id;
+    const wanted = normName(party.name ?? "");
+    if (!wanted) return null;
+    const match = qualBatches
+      .flatMap((b) => b.cm_party_qualifications ?? [])
+      .find((q) => normName(q.full_name ?? "") === wanted);
+    return match?.id ?? null;
+  };
+
   // Parte sem ficha vinculada: aviso inline sob o nome (nunca aviso() nativo, que trava o navegador).
   const [noFichaKey, setNoFichaKey] = useState<string | null>(null);
   const openPartyCard = (qualificationId?: string | null, key?: string) => {
@@ -892,10 +906,10 @@ export function ContractsPanelClient({ role }: { role: string }) {
                         <div key={i} className="text-xs">
                           <span className="text-[#9BAFC5]">{p.role === "cedente" ? "Cedente" : p.role === "v3_partners" ? "V3 Partners" : p.role}</span>
                           <div className="flex items-center gap-1.5">
-                            <button onClick={() => openPartyCard(p.qualification_id, `parte-${i}`)} className="text-[#F5F1E8] font-medium hover:text-[#C9A84C] hover:underline transition-colors text-left">
+                            <button onClick={() => openPartyCard(resolveQualificationId(p), `parte-${i}`)} className="text-[#F5F1E8] font-medium hover:text-[#C9A84C] hover:underline transition-colors text-left">
                               {p.name}
                             </button>
-                            <button onClick={() => openPartyCard(p.qualification_id, `parte-${i}`)} title="Ver ficha e documentos KYC"
+                            <button onClick={() => openPartyCard(resolveQualificationId(p), `parte-${i}`)} title="Ver ficha e documentos KYC"
                               className="text-[#C9A84C] hover:text-[#E8C97A] transition-colors flex-shrink-0">
                               <Eye size={11} />
                             </button>
