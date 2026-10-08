@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Loader2, Lock } from "lucide-react";
-import { LGPD_AVISO_QUALIFICACAO, LGPD_CHECKBOX_TEXT } from "@/lib/lgpd-aviso-qualificacao";
+import { LGPD_AVISO_QUALIFICACAO_V1, LGPD_CHECKBOX_TEXT } from "@/lib/lgpd-aviso-qualificacao";
 import { percentToCents } from "@/lib/commission-grid";
 
 // Grade de comissionamento por grupo (BRIEF 06/10/2026). Página pública, mobile primeiro.
@@ -204,7 +204,7 @@ export default function ComissaoPage() {
         </button>
         {showPrivacy && (
           <div className="bg-[#162744] border border-[#9BAFC5]/15 rounded-xl p-3 space-y-2 text-xs max-h-64 overflow-y-auto">
-            {LGPD_AVISO_QUALIFICACAO.map((s) => (
+            {LGPD_AVISO_QUALIFICACAO_V1.map((s) => (
               <div key={s.title}><div className="text-[#F5F1E8] font-bold">{s.title}</div><div>{s.text}</div></div>
             ))}
           </div>
