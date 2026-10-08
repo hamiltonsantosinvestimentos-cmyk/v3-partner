@@ -137,8 +137,15 @@ export function ContractsPanelClient({ role }: { role: string }) {
   // components/cm/party-qualification-card.tsx -- reaproveitada também em
   // Minutas e Bolsa de Ativos).
   const [openPartyId, setOpenPartyId] = useState<string | null>(null);
-  const openPartyCard = (qualificationId?: string | null) => {
-    if (!qualificationId) { alert("Sem dados de qualificação civil coletados para esta parte."); return; }
+  // Parte sem ficha vinculada: aviso inline sob o nome (nunca alert() nativo, que trava o navegador).
+  const [noFichaKey, setNoFichaKey] = useState<string | null>(null);
+  const openPartyCard = (qualificationId?: string | null, key?: string) => {
+    if (!qualificationId) {
+      setNoFichaKey(key ?? "sem-chave");
+      setTimeout(() => setNoFichaKey((cur) => (cur === (key ?? "sem-chave") ? null : cur)), 6000);
+      return;
+    }
+    setNoFichaKey(null);
     setOpenPartyId(qualificationId);
   };
 
@@ -884,15 +891,18 @@ export function ContractsPanelClient({ role }: { role: string }) {
                         <div key={i} className="text-xs">
                           <span className="text-[#9BAFC5]">{p.role === "cedente" ? "Cedente" : p.role === "v3_partners" ? "V3 Partners" : p.role}</span>
                           <div className="flex items-center gap-1.5">
-                            <button onClick={() => openPartyCard(p.qualification_id)} className="text-[#F5F1E8] font-medium hover:text-[#C9A84C] hover:underline transition-colors text-left">
+                            <button onClick={() => openPartyCard(p.qualification_id, `parte-${i}`)} className="text-[#F5F1E8] font-medium hover:text-[#C9A84C] hover:underline transition-colors text-left">
                               {p.name}
                             </button>
-                            <button onClick={() => openPartyCard(p.qualification_id)} title="Ver ficha e documentos KYC"
+                            <button onClick={() => openPartyCard(p.qualification_id, `parte-${i}`)} title="Ver ficha e documentos KYC"
                               className="text-[#C9A84C] hover:text-[#E8C97A] transition-colors flex-shrink-0">
                               <Eye size={11} />
                             </button>
                           </div>
                           {p.doc && <p className="text-[10px] text-[#9BAFC5]">{p.doc}</p>}
+                          {noFichaKey === `parte-${i}` && (
+                            <p role="status" className="text-[11px] text-[#E8C97A]">Sem ficha de qualificação vinculada a esta parte.</p>
+                          )}
                         </div>
                       ))}
                     </div>
