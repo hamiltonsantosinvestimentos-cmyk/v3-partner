@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect, useCallback } from "react";
 import { maskCpfCnpj } from "@/lib/qualification-mask";
@@ -276,8 +277,8 @@ export function ContractTemplatesClient() {
         setAddPartyForm({ full_name: "", email: "", phone: "", role_in_document: "parte_principal" });
         setAddingToBatchId(null);
         if (selected) await loadTemplateQualifications(selected.id);
-      } else alert(json.error ?? "Erro ao adicionar envolvido");
-    } catch { alert("Erro de conexão"); }
+      } else aviso(json.error ?? "Erro ao adicionar envolvido");
+    } catch { aviso("Erro de conexão"); }
     finally { setAddPartySubmitting(false); }
   };
 
@@ -296,8 +297,8 @@ export function ContractTemplatesClient() {
         setAddPartnerPickerId("");
         setAddPartnerPickerFor(null);
         if (selected) await loadTemplateQualifications(selected.id);
-      } else alert(json.error ?? "Erro ao adicionar partner");
-    } catch { alert("Erro de conexão"); }
+      } else aviso(json.error ?? "Erro ao adicionar partner");
+    } catch { aviso("Erro de conexão"); }
     finally { setAddPartySubmitting(false); }
   };
   const [copiedToken, setCopiedToken] = useState("");
@@ -611,10 +612,10 @@ export function ContractTemplatesClient() {
     try {
       const res = await fetch(`/api/contracts/templates/${templateId}/retry-analysis`, { method: "POST" });
       const json = await res.json();
-      if (!res.ok) { alert(json.error ?? "Erro ao reprocessar"); return; }
+      if (!res.ok) { aviso(json.error ?? "Erro ao reprocessar"); return; }
       await fetchTemplates();
     } catch {
-      alert("Erro de conexão ao reprocessar");
+      aviso("Erro de conexão ao reprocessar");
     } finally {
       setRetryingAnalysisId(null);
     }
@@ -629,10 +630,10 @@ export function ContractTemplatesClient() {
     try {
       const res = await fetch(`/api/contracts/templates/${templateId}/retry-structuring`, { method: "POST" });
       const json = await res.json();
-      if (!res.ok) { alert(json.error ?? "Erro ao reprocessar"); return; }
+      if (!res.ok) { aviso(json.error ?? "Erro ao reprocessar"); return; }
       await fetchTemplates();
     } catch {
-      alert("Erro de conexão ao reprocessar");
+      aviso("Erro de conexão ao reprocessar");
     } finally {
       setRetryingStructuringId(null);
     }
@@ -724,8 +725,8 @@ export function ContractTemplatesClient() {
       const res = await fetch(`/api/cm/qualifications/${partyId}/reopen`, { method: "POST" });
       const json = await res.json();
       if (res.ok) await loadTemplateQualifications(selected.id);
-      else alert(json.error ?? "Erro ao reabrir qualificação");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao reabrir qualificação");
+    } catch { aviso("Erro de conexão"); }
     finally { setReopeningId(null); }
   };
 
@@ -765,8 +766,8 @@ export function ContractTemplatesClient() {
       if (res.ok) {
         setEditingPartyId(null);
         await loadTemplateQualifications(selected.id);
-      } else alert(json.error ?? "Erro ao editar envolvido");
-    } catch { alert("Erro de conexão"); }
+      } else aviso(json.error ?? "Erro ao editar envolvido");
+    } catch { aviso("Erro de conexão"); }
     finally { setEditPartySubmitting(false); }
   };
 
@@ -778,8 +779,8 @@ export function ContractTemplatesClient() {
       const res = await fetch(`/api/cm/qualifications/party/${party.id}`, { method: "DELETE" });
       const json = await res.json();
       if (res.ok) await loadTemplateQualifications(selected.id);
-      else alert(json.error ?? "Erro ao excluir envolvido");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao excluir envolvido");
+    } catch { aviso("Erro de conexão"); }
     finally { setDeletingPartyId(null); }
   };
 
@@ -836,7 +837,7 @@ export function ContractTemplatesClient() {
       `width=${window.screen.width},height=${window.screen.height},left=0,top=0`
     );
     if (!win) {
-      alert("O navegador bloqueou a nova janela. Libere pop-ups para app.v3partners.com.br e clique em Tela Cheia de novo.");
+      aviso("O navegador bloqueou a nova janela. Libere pop-ups para app.v3partners.com.br e clique em Tela Cheia de novo.");
       return;
     }
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -999,7 +1000,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
     if (!selected) return;
     const invalid = qualParties.some((p) => !p.full_name.trim() || !isValidEmail(p.email));
     if (qualParties.length === 0 || invalid) {
-      alert("Preencha nome e e-mail válido para todos os envolvidos");
+      aviso("Preencha nome e e-mail válido para todos os envolvidos");
       return;
     }
     setCreatingQualification(true);
@@ -1015,9 +1016,9 @@ ${allParties.length > 0 ? `<div class="qualbox">
         setShowQualModal(false);
         loadTemplateQualifications(selected.id);
       } else {
-        alert(json.error ?? "Erro ao gerar qualificação antecipada");
+        aviso(json.error ?? "Erro ao gerar qualificação antecipada");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setCreatingQualification(false); }
   };
 
@@ -1068,7 +1069,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
         body: JSON.stringify({ template_name: formName, body_text_raw: formBody, vertical: formVertical }),
       });
       const saveJson = await saveRes.json();
-      if (!saveRes.ok) { alert(saveJson.error); return; }
+      if (!saveRes.ok) { aviso(saveJson.error); return; }
 
       const submitRes = await fetch(`/api/contracts/templates/${selected.id}`, {
         method: "PATCH",
@@ -1077,8 +1078,8 @@ ${allParties.length > 0 ? `<div class="qualbox">
       });
       const submitJson = await submitRes.json();
       if (submitRes.ok) { fetchTemplates(); selectTemplate(submitJson.template); }
-      else alert(submitJson.error);
-    } catch { alert("Erro de conexão"); }
+      else aviso(submitJson.error);
+    } catch { aviso("Erro de conexão"); }
     finally { setSubmittingForReview(false); }
   };
 
@@ -1093,15 +1094,15 @@ ${allParties.length > 0 ? `<div class="qualbox">
       });
       const json = await res.json();
       if (res.ok) { fetchTemplates(); selectTemplate(json.template); }
-      else alert(json.error);
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error);
+    } catch { aviso("Erro de conexão"); }
     finally { setSubmittingForReview(false); }
   };
 
   const handleReviewDecision = async (decision: "aprovado" | "reprovado") => {
     if (!selected) return;
     if (decision === "reprovado" && !reviewComment.trim()) {
-      alert("Reprovação exige comentário explicando o motivo");
+      aviso("Reprovação exige comentário explicando o motivo");
       return;
     }
     setSubmittingReview(true);
@@ -1113,14 +1114,14 @@ ${allParties.length > 0 ? `<div class="qualbox">
       });
       const json = await res.json();
       if (res.ok) {
-        alert(json.message ?? "Revisão registrada");
+        aviso(json.message ?? "Revisão registrada");
         setReviewComment("");
         fetchTemplates();
         loadReviews(selected.id);
       } else {
-        alert(json.error);
+        aviso(json.error);
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setSubmittingReview(false); }
   };
 
@@ -1133,13 +1134,13 @@ ${allParties.length > 0 ? `<div class="qualbox">
       fd.append("file", file);
       const res = await fetch("/api/contracts/templates/upload", { method: "POST", body: fd });
       const json = await res.json();
-      if (!res.ok) { alert(json.error); return; }
+      if (!res.ok) { aviso(json.error); return; }
       setSelected(null);
       setIsNew(true);
       setFormName(json.suggested_name);
       setFormVertical("capital_markets");
       setFormBody(json.body_text);
-    } catch { alert("Erro ao fazer upload"); }
+    } catch { aviso("Erro ao fazer upload"); }
     finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1157,7 +1158,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
           body: JSON.stringify({ template_name: formName, vertical: formVertical, contract_series: formSeries, body_text_raw: formBody }),
         });
         if (res.ok) { setIsNew(false); fetchTemplates(); }
-        else { const j = await res.json(); alert(j.error); }
+        else { const j = await res.json(); aviso(j.error); }
       } else if (selected) {
         const res = await fetch(`/api/contracts/templates/${selected.id}`, {
           method: "PATCH",
@@ -1165,9 +1166,9 @@ ${allParties.length > 0 ? `<div class="qualbox">
           body: JSON.stringify({ template_name: formName, body_text_raw: formBody, vertical: formVertical }),
         });
         if (res.ok) fetchTemplates();
-        else { const j = await res.json(); alert(j.error); }
+        else { const j = await res.json(); aviso(j.error); }
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setSaving(false); }
   };
 

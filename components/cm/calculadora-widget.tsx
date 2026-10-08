@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import { Calculator, Loader2, ArrowRightLeft, Settings2 } from "lucide-react";
@@ -54,9 +55,9 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
         body: JSON.stringify({ divisao_partes: parseDecimalInput(divisaoPartes) }),
       });
       const json = await res.json();
-      if (res.ok) { alert("Padrão salvo para toda a Mesa"); setEditingDefault(false); }
-      else alert(json.error ?? "Erro ao salvar padrão");
-    } catch { alert("Erro de conexão"); }
+      if (res.ok) { aviso("Padrão salvo para toda a Mesa"); setEditingDefault(false); }
+      else aviso(json.error ?? "Erro ao salvar padrão");
+    } catch { aviso("Erro de conexão"); }
     finally { setSavingDefault(false); }
   };
 

@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import { Users, Plus, Search, UserCheck, UserX, Pencil, Trash2, Clock, ShieldOff, ShieldCheck, Mail, Loader2, FileText, CalendarPlus, History } from "lucide-react";
@@ -222,10 +223,10 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
         setRenewalDate("");
       } else {
         const d = await res.json();
-        alert(d.error ?? "Erro ao renovar trial.");
+        aviso(d.error ?? "Erro ao renovar trial.");
       }
     } catch {
-      alert("Erro de rede. Tente novamente.");
+      aviso("Erro de rede. Tente novamente.");
     } finally {
       setRenewingTrial(false);
     }
@@ -237,7 +238,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
       const res = await fetch(`/api/contratos/parceria?userId=${user.id}`);
       const data = await res.json();
       if (!data.found || !data.contract?.contract_html) {
-        alert("Contrato não encontrado para este usuário.");
+        aviso("Contrato não encontrado para este usuário.");
         return;
       }
       const win = window.open("", "_blank");
@@ -246,7 +247,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
         win.document.close();
       }
     } catch {
-      alert("Erro ao buscar contrato. Tente novamente.");
+      aviso("Erro ao buscar contrato. Tente novamente.");
     } finally {
       setLoadingContract(null);
     }
@@ -263,12 +264,12 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(`E-mail enviado com sucesso para ${user.email}!`);
+        aviso(`E-mail enviado com sucesso para ${user.email}!`);
       } else {
-        alert(`Erro: ${data.error}`);
+        aviso(`Erro: ${data.error}`);
       }
     } catch {
-      alert("Erro ao enviar e-mail. Tente novamente.");
+      aviso("Erro ao enviar e-mail. Tente novamente.");
     } finally {
       setSendingEmail(null);
     }
@@ -376,7 +377,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
         const json = await res.json();
         if (json?.error) msg = json.error;
       } catch { /* ignora */ }
-      alert(`Não foi possível excluir o usuário.\n\n${msg}`);
+      aviso(`Não foi possível excluir o usuário.\n\n${msg}`);
     }
   };
 

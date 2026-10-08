@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState } from "react";
 import { CreditCard, Building2, Trophy, AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Send, Loader2, Clock, XCircle, TrendingUp, Briefcase } from "lucide-react";
@@ -121,7 +122,7 @@ function PendenciasRow({ proposta, onCorrigido }: {
       setEnviados(prev => new Set([...prev, docKey]));
       onCorrigido(proposta.id, docKey, json.novo_stage);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Erro ao enviar");
+      aviso(e instanceof Error ? e.message : "Erro ao enviar");
     } finally {
       setEnviando(null);
     }

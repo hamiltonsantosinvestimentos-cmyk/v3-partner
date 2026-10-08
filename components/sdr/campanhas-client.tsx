@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -197,7 +198,7 @@ export function CampanhasClient() {
         setDisparoResult({ enviados: json.enviados, erros: json.erros });
         await fetchCampanhas();
       } else {
-        alert(json.error ?? "Erro ao disparar");
+        aviso(json.error ?? "Erro ao disparar");
       }
     } finally {
       setDisparando(null);

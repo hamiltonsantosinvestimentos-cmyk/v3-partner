@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, ShieldCheck, ExternalLink, CheckCircle2, XCircle, RefreshCw } from "lucide-react";
@@ -71,7 +72,7 @@ export function NdaAuthorizationQueuePanel() {
       }
     }
     setProcessing(false);
-    alert(`${ok} ${label === "aprovar" ? "aprovado(s)" : "rejeitado(s)"}.${fail > 0 ? ` ${fail} falharam.` : ""}`);
+    aviso(`${ok} ${label === "aprovar" ? "aprovado(s)" : "rejeitado(s)"}.${fail > 0 ? ` ${fail} falharam.` : ""}`);
     fetchQueue();
   };
 

@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState, useEffect, useRef } from "react";
 import {
@@ -497,9 +498,9 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
       if (res.ok) {
         setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
       } else {
-        alert("Erro ao restaurar deal");
+        aviso("Erro ao restaurar deal");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
   };
 
   const [showKitOverride, setShowKitOverride] = useState(false);
@@ -724,12 +725,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         const json = await res.json().catch(() => ({}));
         setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: prevStageId, probability: prevProb } : c));
         setSelectedCard(prev => prev ? { ...prev, stage: prevStageId, probability: prevProb } : null);
-        alert(json.error ?? "Não foi possível mover o deal de fase.");
+        aviso(json.error ?? "Não foi possível mover o deal de fase.");
       }
     } catch {
       setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: prevStageId, probability: prevProb } : c));
       setSelectedCard(prev => prev ? { ...prev, stage: prevStageId, probability: prevProb } : null);
-      alert("Erro de rede ao mover o deal de fase.");
+      aviso("Erro de rede ao mover o deal de fase.");
     }
   };
 
@@ -746,7 +747,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
     );
     if (!reason || reason.trim().length < 5) {
-      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      if (reason !== null) aviso("Motivo obrigatório: mínimo 5 caracteres");
       return;
     }
     setDeletingCard(true);
@@ -759,17 +760,17 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
       const json = await res.json();
       if (res.ok) {
         if (json.mode === "deleted") {
-          alert("Deal excluído. Disponível na Lixeira por 30 dias.");
+          aviso("Deal excluído. Disponível na Lixeira por 30 dias.");
           setCards(prev => prev.filter(c => c.id !== card.id));
           setSelectedCard(null);
         } else {
-          alert("Solicitação enviada por email à governança. O deal continua ativo até a decisão do ADMIN.");
+          aviso("Solicitação enviada por email à governança. O deal continua ativo até a decisão do ADMIN.");
         }
         setConfirmDelete(false);
       } else {
-        alert(json.error ?? "Erro ao processar exclusão");
+        aviso(json.error ?? "Erro ao processar exclusão");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     setDeletingCard(false);
   };
 
@@ -1709,9 +1710,9 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                               setNoteContent("");
                               setNoteMentionedIds([]);
                             } else {
-                              alert(json.error ?? "Erro ao salvar nota");
+                              aviso(json.error ?? "Erro ao salvar nota");
                             }
-                          } catch { alert("Erro de conexão"); }
+                          } catch { aviso("Erro de conexão"); }
                           finally { setSubmittingNote(false); }
                         }}
                         disabled={submittingNote || !noteContent.trim()}
@@ -2215,12 +2216,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                             const regJson = await regRes.json();
                             if (regJson.ok && regJson.document) {
                               if (regJson.duplicate) {
-                                alert(`Arquivo idêntico já existe neste deal: ${regJson.document.file_name}. Nenhuma cópia nova foi criada.`);
+                                aviso(`Arquivo idêntico já existe neste deal: ${regJson.document.file_name}. Nenhuma cópia nova foi criada.`);
                               } else {
                                 setCardDocs(prev => [...prev, { ...regJson.document }]);
                               }
                             } else {
-                              alert(regJson.error ?? "Erro ao registrar arquivo");
+                              aviso(regJson.error ?? "Erro ao registrar arquivo");
                             }
                           } else {
                             // Arquivo pequeno (≤ 4MB): fluxo original via FormData
@@ -2233,16 +2234,16 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                             const json = await res.json();
                             if (json.ok && json.document) {
                               if (json.duplicate) {
-                                alert(`Arquivo idêntico já existe neste deal: ${json.document.file_name}. Nenhuma cópia nova foi criada.`);
+                                aviso(`Arquivo idêntico já existe neste deal: ${json.document.file_name}. Nenhuma cópia nova foi criada.`);
                               } else {
                                 setCardDocs(prev => [...prev, { ...json.document }]);
                               }
                             } else {
-                              alert(json.error ?? "Erro ao enviar arquivo");
+                              aviso(json.error ?? "Erro ao enviar arquivo");
                             }
                           }
                         } catch (err) {
-                          alert(err instanceof Error ? err.message : "Erro ao enviar arquivo");
+                          aviso(err instanceof Error ? err.message : "Erro ao enviar arquivo");
                         }
                         setUploadingDoc(null);
                         setUploadProgress(0);

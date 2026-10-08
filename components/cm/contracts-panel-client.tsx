@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -137,7 +138,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
   // components/cm/party-qualification-card.tsx -- reaproveitada também em
   // Minutas e Bolsa de Ativos).
   const [openPartyId, setOpenPartyId] = useState<string | null>(null);
-  // Parte sem ficha vinculada: aviso inline sob o nome (nunca alert() nativo, que trava o navegador).
+  // Parte sem ficha vinculada: aviso inline sob o nome (nunca aviso() nativo, que trava o navegador).
   const [noFichaKey, setNoFichaKey] = useState<string | null>(null);
   const openPartyCard = (qualificationId?: string | null, key?: string) => {
     if (!qualificationId) {
@@ -194,8 +195,8 @@ export function ContractsPanelClient({ role }: { role: string }) {
         setAddPartyForm({ full_name: "", email: "", phone: "", role_in_document: "parte_principal" });
         setAddingToBatchId(null);
         if (selected) await loadQualifications(selected.id);
-      } else alert(json.error ?? "Erro ao adicionar envolvido");
-    } catch { alert("Erro de conexão"); }
+      } else aviso(json.error ?? "Erro ao adicionar envolvido");
+    } catch { aviso("Erro de conexão"); }
     finally { setAddPartySubmitting(false); }
   };
 
@@ -214,8 +215,8 @@ export function ContractsPanelClient({ role }: { role: string }) {
         setAddPartnerPickerId("");
         setAddPartnerPickerFor(null);
         if (selected) await loadQualifications(selected.id);
-      } else alert(json.error ?? "Erro ao adicionar partner");
-    } catch { alert("Erro de conexão"); }
+      } else aviso(json.error ?? "Erro ao adicionar partner");
+    } catch { aviso("Erro de conexão"); }
     finally { setAddPartySubmitting(false); }
   };
   const [showEdit, setShowEdit] = useState(false);
@@ -271,7 +272,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
         : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
     );
     if (!reason || reason.trim().length < 5) {
-      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      if (reason !== null) aviso("Motivo obrigatório: mínimo 5 caracteres");
       return;
     }
     setDeletingContract(true);
@@ -284,16 +285,16 @@ export function ContractsPanelClient({ role }: { role: string }) {
       const json = await res.json();
       if (res.ok) {
         if (json.mode === "deleted") {
-          alert("Contrato excluído. Disponível na Lixeira por 30 dias.");
+          aviso("Contrato excluído. Disponível na Lixeira por 30 dias.");
           setContracts((prev) => prev.filter((c) => c.id !== contractId));
           setSelected(null);
         } else {
-          alert("Solicitação enviada por email à governança. O contrato continua ativo até a decisão do ADMIN.");
+          aviso("Solicitação enviada por email à governança. O contrato continua ativo até a decisão do ADMIN.");
         }
       } else {
-        alert(json.error ?? "Erro ao processar exclusão");
+        aviso(json.error ?? "Erro ao processar exclusão");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setDeletingContract(false); }
   };
 
@@ -354,9 +355,9 @@ export function ContractsPanelClient({ role }: { role: string }) {
         setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
         fetchContracts();
       } else {
-        alert("Erro ao restaurar contrato");
+        aviso("Erro ao restaurar contrato");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
   };
 
   const addRegPartyRow = () => setRegParties((prev) => [...prev, { name: "", email: "", doc: "", role: "contraparte" }]);
@@ -497,7 +498,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
       if (res.ok) fetchContracts();
       else {
         const j = await res.json();
-        alert(j.error);
+        aviso(j.error);
       }
     } catch { /* */ }
   };
@@ -510,12 +511,12 @@ export function ContractsPanelClient({ role }: { role: string }) {
       const res = await fetch(`/api/contracts/${selected.id}/send`, { method: "POST" });
       const json = await res.json();
       if (res.ok) {
-        alert(`Enviado para assinatura (${json.signatarios} signatário(s)).`);
+        aviso(`Enviado para assinatura (${json.signatarios} signatário(s)).`);
         fetchContracts();
       } else {
-        alert(json.error ?? "Erro ao enviar para assinatura");
+        aviso(json.error ?? "Erro ao enviar para assinatura");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setSendingToSignature(false); }
   };
 
@@ -530,14 +531,14 @@ export function ContractsPanelClient({ role }: { role: string }) {
       });
       const json = await res.json();
       if (res.ok) {
-        alert(json.warning ?? (json.envelope_cancelado_automaticamente ? "Contrato atualizado. Envelope antigo cancelado automaticamente na ClickSign." : "Contrato atualizado."));
+        aviso(json.warning ?? (json.envelope_cancelado_automaticamente ? "Contrato atualizado. Envelope antigo cancelado automaticamente na ClickSign." : "Contrato atualizado."));
         setShowEdit(false);
         setEditReason("");
         fetchContracts();
       } else {
-        alert(json.error ?? "Erro ao editar contrato");
+        aviso(json.error ?? "Erro ao editar contrato");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setSavingEdit(false); }
   };
 
@@ -560,8 +561,8 @@ export function ContractsPanelClient({ role }: { role: string }) {
       const res = await fetch(`/api/cm/qualifications/${partyId}/reopen`, { method: "POST" });
       const json = await res.json();
       if (res.ok) await loadQualifications(selected.id);
-      else alert(json.error ?? "Erro ao reabrir qualificação");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao reabrir qualificação");
+    } catch { aviso("Erro de conexão"); }
     finally { setReopeningId(null); }
   };
 
@@ -575,7 +576,7 @@ export function ContractsPanelClient({ role }: { role: string }) {
     if (!selected) return;
     const invalid = qualParties.some((p) => !p.full_name.trim() || !isValidEmail(p.email));
     if (qualParties.length === 0 || invalid) {
-      alert("Preencha nome e e-mail válido para todos os envolvidos");
+      aviso("Preencha nome e e-mail válido para todos os envolvidos");
       return;
     }
     setCreatingQualification(true);
@@ -591,9 +592,9 @@ export function ContractsPanelClient({ role }: { role: string }) {
         setQualParties([{ full_name: "", email: "", phone: "", role_in_document: "parte_principal" }]);
         loadQualifications(selected.id);
       } else {
-        alert(json.error ?? "Erro ao gerar qualificação");
+        aviso(json.error ?? "Erro ao gerar qualificação");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setCreatingQualification(false); }
   };
 

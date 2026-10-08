@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useEffect, useState, useCallback, type MouseEvent } from "react";
 import { Handshake, Loader2, Wallet, Check, Trash2 } from "lucide-react";
@@ -256,7 +257,7 @@ function ExcluirSolicitacao({ order, onDeleted }: { order: PartnerOrder; onDelet
       if (!res.ok) throw new Error(json.error ?? "Falha ao excluir a solicitação");
       onDeleted();
     } catch (err) {
-      window.alert((err as Error).message);
+      aviso((err as Error).message);
     } finally {
       setBusy(false);
     }

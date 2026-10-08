@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import Link from "next/link";
 import { FileText, Lock, BookOpen, ChevronRight, Shield, GitBranch, Download, Loader2 } from "lucide-react";
@@ -30,7 +31,7 @@ export function DocsHubClient({ userRole, userName }: Props) {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      alert("Erro ao gerar o manual. Tente novamente.");
+      aviso("Erro ao gerar o manual. Tente novamente.");
     } finally {
       setDownloadingManual(false);
     }

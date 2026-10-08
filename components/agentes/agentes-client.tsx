@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Send, Plus, Bot, User, Copy, Check, Download, ChevronRight, Loader2, FileText, Briefcase, Paperclip, X, ExternalLink } from "lucide-react";
@@ -226,7 +227,7 @@ export function AgentesClient({ squads, userName }: Props) {
         emails: [],
       }),
     });
-    if (res.ok) alert("Sessão exportada com sucesso.");
+    if (res.ok) aviso("Sessão exportada com sucesso.");
   }
 
   // Passar output do Scout para o Executor de Deals
@@ -307,7 +308,7 @@ export function AgentesClient({ squads, userName }: Props) {
       setExportDone(true);
       setTimeout(() => setExportDone(false), 3000);
     } catch (err) {
-      alert("Erro ao gerar relatório: " + (err instanceof Error ? err.message : "desconhecido"));
+      aviso("Erro ao gerar relatório: " + (err instanceof Error ? err.message : "desconhecido"));
     } finally {
       setExporting(false);
     }

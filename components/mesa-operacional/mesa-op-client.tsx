@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
@@ -1643,9 +1644,9 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       if (res.ok) {
         setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
       } else {
-        alert("Erro ao restaurar registro");
+        aviso("Erro ao restaurar registro");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
   };
 
   const handleDeleteTicket = async (ticket: Ticket) => {
@@ -1655,7 +1656,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
     );
     if (!reason || reason.trim().length < 5) {
-      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      if (reason !== null) aviso("Motivo obrigatório: mínimo 5 caracteres");
       return;
     }
     try {
@@ -1667,15 +1668,15 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       const json = await res.json();
       if (res.ok) {
         if (json.mode === "deleted") {
-          alert("Ticket excluído. Disponível na Lixeira por 30 dias.");
+          aviso("Ticket excluído. Disponível na Lixeira por 30 dias.");
           setTickets((prev) => prev.filter((t) => t.id !== ticket.id));
         } else {
-          alert("Solicitação enviada por email à governança. O ticket continua ativo até a decisão do ADMIN.");
+          aviso("Solicitação enviada por email à governança. O ticket continua ativo até a decisão do ADMIN.");
         }
       } else {
-        alert(json.error ?? "Erro ao processar exclusão");
+        aviso(json.error ?? "Erro ao processar exclusão");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
   };
 
   // ─── Nova Proposta ───────────────────────────────────────────────────────
@@ -2436,7 +2437,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                                         : `Motivo da solicitação de exclusão de ${p.code} (obrigatório, será enviado por email à governança):`
                                     );
                                     if (!reason || reason.trim().length < 5) {
-                                      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+                                      if (reason !== null) aviso("Motivo obrigatório: mínimo 5 caracteres");
                                       return;
                                     }
                                     fetch(`/api/credit-proposals/${p.id}/delete`, {
@@ -2446,15 +2447,15 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                                     })
                                       .then(async (res) => {
                                         const json = await res.json();
-                                        if (!res.ok) { alert(json.error ?? "Erro ao excluir proposta."); return; }
+                                        if (!res.ok) { aviso(json.error ?? "Erro ao excluir proposta."); return; }
                                         if (json.mode === "deleted") {
-                                          alert("Proposta excluída. Disponível na Lixeira por 30 dias.");
+                                          aviso("Proposta excluída. Disponível na Lixeira por 30 dias.");
                                           setProposals(prev => prev.filter(x => x.id !== p.id));
                                         } else {
-                                          alert("Solicitação enviada por email à governança. A proposta continua ativa até a decisão do ADMIN.");
+                                          aviso("Solicitação enviada por email à governança. A proposta continua ativa até a decisão do ADMIN.");
                                         }
                                       })
-                                      .catch(() => alert("Erro de conexão."));
+                                      .catch(() => aviso("Erro de conexão."));
                                   }}
                                   className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-red-400 hover:bg-red-500/15 transition-colors opacity-0 group-hover:opacity-100"
                                   title="Excluir proposta"

@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect, useRef } from "react";
 import { filtrarChecklistPorImovel, imovelGarantiaDaProposta } from "@/lib/checklist-imovel";
@@ -1681,7 +1682,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setIsUploading(docId);
     try {
       const result = await uploadCreditDocument(proposal.id, docId, file);
-      if (!result.ok) { alert(result.error); return; }
+      if (!result.ok) { aviso(result.error); return; }
       setCheckedDocs((prev) => ({ ...prev, [docId]: true }));
       setUploadedFiles((prev) => ({
         ...prev,
@@ -1925,7 +1926,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       onProposalUpdate?.(proposal.id, { stage: "PENDENCIA" });
       setTimeout(() => setCorrecaoEnviada(null), 5000);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Erro ao solicitar correção");
+      aviso(e instanceof Error ? e.message : "Erro ao solicitar correção");
     } finally {
       setSolicitandoCorrecao(false);
     }
@@ -2155,10 +2156,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         setEditingVmIdx(null);
         onProposalUpdate?.(proposal.id, { metadata: meta as ProposalMeta });
       } else {
-        alert("Erro ao salvar valor médio.");
+        aviso("Erro ao salvar valor médio.");
       }
     } catch {
-      alert("Erro de conexão.");
+      aviso("Erro de conexão.");
     } finally {
       setVmSaving(false);
     }
@@ -2193,10 +2194,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         setEditingAreaIdx(null);
         onProposalUpdate?.(proposal.id, { metadata: meta as ProposalMeta });
       } else {
-        alert("Erro ao salvar área do imóvel.");
+        aviso("Erro ao salvar área do imóvel.");
       }
     } catch {
-      alert("Erro de conexão.");
+      aviso("Erro de conexão.");
     } finally {
       setAreaSaving(false);
     }
@@ -2398,10 +2399,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         onProposalUpdate?.(proposal.id, { metadata: meta as ProposalMeta });
         startEditLoc(imoveis.length - 1, {});
       } else {
-        alert("Erro ao adicionar imóvel.");
+        aviso("Erro ao adicionar imóvel.");
       }
     } catch {
-      alert("Erro de conexão.");
+      aviso("Erro de conexão.");
     } finally {
       setAddingImovel(false);
     }
@@ -2483,10 +2484,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         });
       } else {
         const json = await res.json().catch(() => ({}));
-        alert(typeof json.error === "string" ? json.error : "Erro ao salvar alterações.");
+        aviso(typeof json.error === "string" ? json.error : "Erro ao salvar alterações.");
       }
     } catch {
-      alert("Erro de conexão ao salvar alterações.");
+      aviso("Erro de conexão ao salvar alterações.");
     } finally {
       setEditSaving(false);
     }

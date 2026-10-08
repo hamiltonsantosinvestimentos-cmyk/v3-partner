@@ -44,6 +44,9 @@ export async function GET(_req: NextRequest) {
     .in("status", ["coletando", "completo"])
     .order("created_at", { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[qualifications] erro do banco", { rota: "pending/route.ts", code: error.code });
+    return NextResponse.json({ error: "Não foi possível carregar as qualificações pendentes. Tente novamente." }, { status: 500 });
+  }
   return NextResponse.json({ batches: data ?? [] });
 }

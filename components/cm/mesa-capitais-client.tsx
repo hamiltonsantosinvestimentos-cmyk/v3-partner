@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { maskCpfCnpj } from "@/lib/qualification-mask";
@@ -442,7 +443,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
 
   const submitManualBuyer = async () => {
     if (!manualBuyerForm.nome_contato.trim() || !isValidEmail(manualBuyerForm.email)) {
-      alert("Nome e email válido são obrigatórios");
+      aviso("Nome e email válido são obrigatórios");
       return;
     }
     setSubmittingManualBuyer(true);
@@ -467,7 +468,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (res.ok) {
-        alert("Comprador cadastrado");
+        aviso("Comprador cadastrado");
         setShowManualBuyerForm(false);
         setManualBuyerForm({
           nome_contato: "", email: "", telefone: "", empresa: "", cpf_cnpj: "",
@@ -475,10 +476,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         });
         fetchAll();
       } else {
-        alert(json.error ?? "Erro ao cadastrar comprador");
+        aviso(json.error ?? "Erro ao cadastrar comprador");
       }
     } catch {
-      alert("Erro de conexão");
+      aviso("Erro de conexão");
     } finally {
       setSubmittingManualBuyer(false);
     }
@@ -617,7 +618,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   };
 
   const submitDealNote = async (listingId: string) => {
-    if (!noteContent.trim()) { alert("Escreva uma nota antes de enviar"); return; }
+    if (!noteContent.trim()) { aviso("Escreva uma nota antes de enviar"); return; }
     setSubmittingNote(true);
     try {
       const res = await fetch("/api/cm/deal-notes", {
@@ -631,9 +632,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setNoteContent("");
         setNoteMentionedIds([]);
       } else {
-        alert(json.error ?? "Erro ao salvar nota");
+        aviso(json.error ?? "Erro ao salvar nota");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setSubmittingNote(false); }
   };
 
@@ -688,7 +689,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const submitQualification = async (listingId: string) => {
     const invalid = qualParties.some((p) => !p.full_name.trim() || !isValidEmail(p.email));
     if (qualParties.length === 0 || invalid) {
-      alert("Preencha nome e e-mail válido para todos os envolvidos");
+      aviso("Preencha nome e e-mail válido para todos os envolvidos");
       return;
     }
     setCreatingQualification(true);
@@ -700,14 +701,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (res.ok) {
-        alert("Links de qualificação enviados aos envolvidos.");
+        aviso("Links de qualificação enviados aos envolvidos.");
         setShowQualModal(false);
         setQualParties([{ full_name: "", email: "", role_in_document: "parte_principal" }]);
         loadQualifications(listingId);
       } else {
-        alert(json.error ?? "Erro ao gerar qualificação");
+        aviso(json.error ?? "Erro ao gerar qualificação");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setCreatingQualification(false); }
   };
 
@@ -717,18 +718,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const res = await fetch(`/api/cm/contracts/${contractId}/resend`, { method: "POST" });
       const json = await res.json();
       if (res.ok) {
-        alert(json.message ?? "Notificação reenviada com sucesso.");
+        aviso(json.message ?? "Notificação reenviada com sucesso.");
         if (selectedListing) loadSlaContracts(selectedListing.id);
       } else {
-        alert(json.error ?? "Erro ao reenviar notificação");
+        aviso(json.error ?? "Erro ao reenviar notificação");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setResendingContractId(null); }
   };
 
   const addIntermediary = async (listingId: string) => {
     if (!interName.trim() || !interPercentage || !interMandatarioId) {
-      alert("Nome, percentual e Mandatário são obrigatórios");
+      aviso("Nome, percentual e Mandatário são obrigatórios");
       return;
     }
     setAddingIntermediary(true);
@@ -750,9 +751,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setIntermediaries((prev) => [...prev, json.intermediary]);
         setInterName(""); setInterDoc(""); setInterPercentage("");
       } else {
-        alert(json.error ?? "Erro ao adicionar intermediário");
+        aviso(json.error ?? "Erro ao adicionar intermediário");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setAddingIntermediary(false); }
   };
 
@@ -772,18 +773,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (res.ok) {
-        alert(`Anexo gerado e enviado para assinatura do Mandatário.\nLink: ${json.signing_url}`);
+        aviso(`Anexo gerado e enviado para assinatura do Mandatário.\nLink: ${json.signing_url}`);
         loadSlaContracts(listingId);
       } else {
-        alert(json.error ?? "Erro ao gerar Anexo");
+        aviso(json.error ?? "Erro ao gerar Anexo");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setGeneratingAnnex(null); }
   };
 
   const generateFillLink = async (listingId: string, side: "compra" | "venda") => {
     if (!interMandatarioId) {
-      alert("Selecione o Mandatário deste lado antes de gerar o link de preenchimento");
+      aviso("Selecione o Mandatário deste lado antes de gerar o link de preenchimento");
       return;
     }
     setGeneratingFillLink(side);
@@ -796,17 +797,17 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const json = await res.json();
       if (res.ok) {
         navigator.clipboard.writeText(json.url);
-        alert(`Link copiado e enviado por email ao Mandatário.\n${json.url}`);
+        aviso(`Link copiado e enviado por email ao Mandatário.\n${json.url}`);
       } else {
-        alert(json.error ?? "Erro ao gerar link");
+        aviso(json.error ?? "Erro ao gerar link");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setGeneratingFillLink(null); }
   };
 
   const createQuickPartner = async () => {
     if (!qpName.trim() || !qpEmail.trim()) {
-      alert("Nome e email são obrigatórios");
+      aviso("Nome e email são obrigatórios");
       return;
     }
     setCreatingQuickPartner(true);
@@ -823,14 +824,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setShowQuickPartner(false);
         setQpName(""); setQpEmail(""); setQpPhone(""); setQpDoc("");
       } else {
-        alert(json.error ?? "Erro ao cadastrar Partner");
+        aviso(json.error ?? "Erro ao cadastrar Partner");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setCreatingQuickPartner(false); }
   };
 
   const createReferralPartner = async (): Promise<string | null> => {
-    if (!newReferralName.trim()) { alert("Nome é obrigatório"); return null; }
+    if (!newReferralName.trim()) { aviso("Nome é obrigatório"); return null; }
     setSavingReferralPartner(true);
     try {
       const res = await fetch("/api/cm/referral-partners", {
@@ -839,14 +840,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         body: JSON.stringify({ full_name: newReferralName.trim(), contact: newReferralContact.trim() || undefined }),
       });
       const json = await res.json();
-      if (!res.ok) { alert(json.error ?? "Erro ao criar partner"); return null; }
+      if (!res.ok) { aviso(json.error ?? "Erro ao criar partner"); return null; }
       setReferralPartners((prev) => [...prev, json.partner]);
       setShowNewReferralPartner(false);
       setNewReferralName("");
       setNewReferralContact("");
       return `ref:${json.partner.id}`;
     } catch {
-      alert("Erro de conexão");
+      aviso("Erro de conexão");
       return null;
     } finally {
       setSavingReferralPartner(false);
@@ -858,9 +859,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
     try {
       const res = await fetch("/api/cm/matches/run", { method: "POST" });
       const json = await res.json();
-      alert(json.message ?? `${json.matches_created} match(es) criado(s)`);
+      aviso(json.message ?? `${json.matches_created} match(es) criado(s)`);
       fetchAll();
-    } catch { alert("Erro ao executar matchmaking"); }
+    } catch { aviso("Erro ao executar matchmaking"); }
     finally { setRunningMatch(false); }
   };
 
@@ -877,7 +878,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       );
       const urlJson = await urlRes.json();
       if (!urlRes.ok) {
-        alert(urlJson.error ?? "Erro ao preparar upload");
+        aviso(urlJson.error ?? "Erro ao preparar upload");
         return;
       }
 
@@ -888,7 +889,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         .uploadToSignedUrl(storagePath, token, file);
 
       if (uploadError) {
-        alert(`Falha ao enviar arquivo ao Storage: ${uploadError.message}`);
+        aviso(`Falha ao enviar arquivo ao Storage: ${uploadError.message}`);
         return;
       }
 
@@ -909,9 +910,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       if (res.ok) {
         loadDocs(listingId);
       } else {
-        alert(json.error ?? "Erro no upload");
+        aviso(json.error ?? "Erro no upload");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setUploadingDoc(null); }
   };
 
@@ -1054,9 +1055,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setDealRoomUrl(json.url);
         loadRoomInvites(listingId);
       } else {
-        alert(json.error ?? "Erro ao criar Deal Room");
+        aviso(json.error ?? "Erro ao criar Deal Room");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setCreatingRoom(false); }
   };
 
@@ -1069,8 +1070,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
-      else alert(json.error ?? "Erro ao atualizar vitrine pública");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao atualizar vitrine pública");
+    } catch { aviso("Erro de conexão"); }
   };
 
   const uploadGalleryImage = async (listingId: string, file: File) => {
@@ -1081,8 +1082,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const res = await fetch(`/api/cm/listings/${listingId}/gallery`, { method: "POST", body: formData });
       const json = await res.json();
       if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, public_gallery: json.gallery } : prev));
-      else alert(json.error ?? "Erro no upload da imagem");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro no upload da imagem");
+    } catch { aviso("Erro de conexão"); }
     finally { setUploadingGallery(false); }
   };
 
@@ -1091,8 +1092,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const res = await fetch(`/api/cm/listings/${listingId}/gallery?storage_path=${encodeURIComponent(storagePath)}`, { method: "DELETE" });
       const json = await res.json();
       if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, public_gallery: json.gallery } : prev));
-      else alert(json.error ?? "Erro ao remover imagem");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao remover imagem");
+    } catch { aviso("Erro de conexão"); }
   };
 
   const decideInspection = async (listingId: string, requestId: string, action: "aprovar" | "rejeitar") => {
@@ -1104,8 +1105,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, inspection_requests: json.inspection_requests } : prev));
-      else alert(json.error ?? "Erro ao atualizar pedido de vistoria");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao atualizar pedido de vistoria");
+    } catch { aviso("Erro de conexão"); }
   };
 
   const generateNarrative = async (listingId: string, thesisId: string) => {
@@ -1118,8 +1119,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (res.ok) setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
-      else alert(json.error ?? "Erro ao gerar narrativa");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao gerar narrativa");
+    } catch { aviso("Erro de conexão"); }
     finally { setGeneratingNarrative(false); }
   };
 
@@ -1156,11 +1157,11 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const json = await res.json();
       if (res.ok) {
         setContractResult(json);
-        alert(`Contrato "${json.contract.contract_title}" gerado (${json.variables_resolved} variáveis injetadas)`);
+        aviso(`Contrato "${json.contract.contract_title}" gerado (${json.variables_resolved} variáveis injetadas)`);
       } else {
-        alert(json.error ?? "Erro ao gerar contrato");
+        aviso(json.error ?? "Erro ao gerar contrato");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setGeneratingContract(false); }
   };
 
@@ -1215,19 +1216,19 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
           // Botao manual "Agendar Reuniao": a rota devolve o link da agenda do Head. Copia pra
           // area de transferencia (window.open depois de await e bloqueado pelo Chrome).
           try { await navigator.clipboard.writeText(json.meeting_url); } catch { /* sem permissao de clipboard */ }
-          alert(`Reunião liberada. Link da agenda do Head copiado:\n${json.meeting_url}`);
+          aviso(`Reunião liberada. Link da agenda do Head copiado:\n${json.meeting_url}`);
         } else {
-          alert("Status atualizado");
+          aviso("Status atualizado");
         }
         fetchAll(); setSelectedListing(null);
       }
-      else alert(json.error ?? "Erro ao transicionar status");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao transicionar status");
+    } catch { aviso("Erro de conexão"); }
   };
 
-  // Variante sem alert() pro menu de 3 pontos e pro drag-and-drop do board (Etapa 6,
+  // Variante sem aviso() pro menu de 3 pontos e pro drag-and-drop do board (Etapa 6,
   // 21/08/2026): a mesma rota PATCH /status de sempre, o banco (transition_cm_listing_status)
-  // continua sendo a unica autoridade -- aqui so troca o feedback de alert() bloqueante por
+  // continua sendo a unica autoridade -- aqui so troca o feedback de aviso() bloqueante por
   // um banner inline que some sozinho, pra nao interromper o fluxo de arrastar varios cards.
   const handleQuickTransition = async (listingId: string, newStatus: string) => {
     try {
@@ -1245,7 +1246,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const okJson = await res.json().catch(() => ({}));
       if (okJson.meeting_url) {
         try { await navigator.clipboard.writeText(okJson.meeting_url); } catch { /* sem permissao de clipboard */ }
-        alert(`Reunião liberada. Link da agenda do Head copiado:\n${okJson.meeting_url}`);
+        aviso(`Reunião liberada. Link da agenda do Head copiado:\n${okJson.meeting_url}`);
       }
       fetchAll();
     } catch {
@@ -1287,14 +1288,14 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (!res.ok) {
-        alert(json.error ?? "Transição rejeitada pelo servidor.");
+        aviso(json.error ?? "Transição rejeitada pelo servidor.");
         return;
       }
       await fetchAll();
       setSelectedListing((prev) => prev ? { ...prev, listing_status: newStatus } : prev);
       setShowDeclineModal(null);
     } catch {
-      alert("Erro de conexão ao registrar a decisão.");
+      aviso("Erro de conexão ao registrar a decisão.");
     } finally {
       setDecidingListing(false);
     }
@@ -1316,7 +1317,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const tplJson = await tplRes.json();
       const template = tplJson.template;
       if (!tplRes.ok || !template) {
-        alert(tplJson.error ?? "Nenhuma minuta de NCNDA aprovada para Bolsa de Ativos. Verifique a Revisão Jurídica em Central de Contratos.");
+        aviso(tplJson.error ?? "Nenhuma minuta de NCNDA aprovada para Bolsa de Ativos. Verifique a Revisão Jurídica em Central de Contratos.");
         return;
       }
       const res = await fetch("/api/contracts/generate", {
@@ -1326,13 +1327,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (!res.ok) {
-        alert(json.error ?? "Erro ao gerar NCNDA.");
+        aviso(json.error ?? "Erro ao gerar NCNDA.");
         return;
       }
-      alert(`NCNDA gerado: ${json.contract?.contract_code ?? ""}. Confira na aba Governança.`);
+      aviso(`NCNDA gerado: ${json.contract?.contract_code ?? ""}. Confira na aba Governança.`);
       loadSlaContracts(listingId);
     } catch {
-      alert("Erro de conexão ao gerar NCNDA.");
+      aviso("Erro de conexão ao gerar NCNDA.");
     } finally {
       setGeneratingNda(false);
     }
@@ -1403,7 +1404,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
     }
     setBulkPublishing(false);
     setBulkPublishSelection(new Set());
-    alert(`${ok} ativo(s) publicado(s) na Vitrine.${fail > 0 ? ` ${fail} não completaram (verifique status individual).` : ""}`);
+    aviso(`${ok} ativo(s) publicado(s) na Vitrine.${fail > 0 ? ` ${fail} não completaram (verifique status individual).` : ""}`);
     fetchAll();
   };
 
@@ -1419,9 +1420,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         body: JSON.stringify({ action, commission_percent: commissionPercent, decline_reason_category: declineReasonCategory, reason: declineReasonText }),
       });
       const json = await res.json();
-      if (!res.ok) { alert(json.error ?? "Erro"); return; }
+      if (!res.ok) { aviso(json.error ?? "Erro"); return; }
       if (action === "aceitar" && json.match_deal_id) {
-        alert(`Bid aceito. Operação: ${json.match_deal_id}${json.deal_room_url ? `\nDeal Room: ${json.deal_room_url}` : ""}`);
+        aviso(`Bid aceito. Operação: ${json.match_deal_id}${json.deal_room_url ? `\nDeal Room: ${json.deal_room_url}` : ""}`);
       }
       if (action === "recusar") {
         setShowBidDeclineModal(null);
@@ -1429,7 +1430,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setBidDeclineText("");
       }
       fetchAll();
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setActionLoading(null); }
   };
 
@@ -1463,16 +1464,16 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
           setIntakeUrl(json.url);
         }
       } else {
-        alert(json.error ?? "Erro ao gerar link");
+        aviso(json.error ?? "Erro ao gerar link");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setGeneratingLink(false); }
   };
 
   const copyLink = () => {
     if (intakeUrl) {
       navigator.clipboard.writeText(intakeUrl);
-      alert("Link copiado!");
+      aviso("Link copiado!");
     }
   };
 
@@ -1495,7 +1496,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   };
 
   const uploadKycDoc = async (listingId: string, file: File) => {
-    if (!kycDocType.trim()) { alert("Informe o tipo de documento"); return; }
+    if (!kycDocType.trim()) { aviso("Informe o tipo de documento"); return; }
     setUploadingKyc(true);
     try {
       const fd = new FormData();
@@ -1511,9 +1512,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setKycPartyName("");
         setKycDocType("");
       } else {
-        alert(json.error ?? "Erro no upload");
+        aviso(json.error ?? "Erro no upload");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setUploadingKyc(false); }
   };
 
@@ -1530,9 +1531,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       if (res.ok) {
         setKycDocs((prev) => prev.map((d) => (d.id === kycId ? json.document : d)));
       } else {
-        alert(json.error ?? "Erro ao processar decisão");
+        aviso(json.error ?? "Erro ao processar decisão");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setKycActionLoading(null); }
   };
 
@@ -1546,7 +1547,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
     else {
       const json = await res.json();
       if (res.status === 409 && json.checklist_id) loadChecklists(listingId);
-      else alert(json.error ?? "Erro ao criar checklist");
+      else aviso(json.error ?? "Erro ao criar checklist");
     }
   };
 
@@ -1570,9 +1571,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
           auto_accept_enabled: autoAcceptEnabled,
         }),
       });
-      if (res.ok) alert("Ask price salvo");
-      else alert("Erro ao salvar");
-    } catch { alert("Erro de conexão"); }
+      if (res.ok) aviso("Ask price salvo");
+      else aviso("Erro ao salvar");
+    } catch { aviso("Erro de conexão"); }
     finally { setSavingFloor(false); }
   };
 
@@ -1596,9 +1597,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
         setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
       } else {
-        alert("Erro ao salvar valores negociados");
+        aviso("Erro ao salvar valores negociados");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setSavingValores(false); }
   };
 
@@ -1609,7 +1610,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         : "Motivo da solicitação de exclusão (obrigatório, será enviado por email aos sócios):"
     );
     if (!reason || reason.trim().length < 5) {
-      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      if (reason !== null) aviso("Motivo obrigatório: mínimo 5 caracteres");
       return;
     }
     setDeletingListing(true);
@@ -1622,18 +1623,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       const json = await res.json();
       if (res.ok) {
         if (json.mode === "deleted") {
-          alert("Ativo excluído. Disponível na Lixeira por 30 dias.");
+          aviso("Ativo excluído. Disponível na Lixeira por 30 dias.");
           setListings((prev) => prev.filter((l) => l.id !== listingId));
           setSelectedListing(null);
         } else {
-          alert("Solicitação enviada aos sócios por email. O ativo continua ativo até a decisão.");
+          aviso("Solicitação enviada aos sócios por email. O ativo continua ativo até a decisão.");
           setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
           setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
         }
       } else {
-        alert(json.error ?? "Erro ao processar exclusão");
+        aviso(json.error ?? "Erro ao processar exclusão");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setDeletingListing(false); }
   };
 
@@ -1654,15 +1655,15 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
           setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
         }
       } else {
-        alert(json.error ?? "Erro ao processar decisão");
+        aviso(json.error ?? "Erro ao processar decisão");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setDeletingListing(false); }
   };
 
   const submitNdaAuthorization = async (listingId: string) => {
-    if (!ndaFile) { alert("Anexe o PDF do NDA assinado"); return; }
-    if (!ndaReason || ndaReason.trim().length < 5) { alert("Motivo/contexto obrigatório (mínimo 5 caracteres)"); return; }
+    if (!ndaFile) { aviso("Anexe o PDF do NDA assinado"); return; }
+    if (!ndaReason || ndaReason.trim().length < 5) { aviso("Motivo/contexto obrigatório (mínimo 5 caracteres)"); return; }
 
     setSubmittingNda(true);
     try {
@@ -1671,7 +1672,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       formData.append("document_type", "NDA_ASSINADO_RETROATIVO");
       const uploadRes = await fetch(`/api/cm/listings/${listingId}/documents`, { method: "POST", body: formData });
       const uploadJson = await uploadRes.json();
-      if (!uploadRes.ok) { alert(uploadJson.error ?? "Erro ao anexar NDA"); return; }
+      if (!uploadRes.ok) { aviso(uploadJson.error ?? "Erro ao anexar NDA"); return; }
 
       const res = await fetch(`/api/cm/listings/${listingId}/nda-authorize`, {
         method: "POST",
@@ -1684,7 +1685,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (res.ok) {
-        alert(json.mode === "approved"
+        aviso(json.mode === "approved"
           ? "NDA marcado como assinado."
           : "Solicitação enviada aos diretores por email. Aguardando autorização.");
         setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
@@ -1694,9 +1695,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setNdaReason("");
         loadDocs(listingId);
       } else {
-        alert(json.error ?? "Erro ao registrar autorização");
+        aviso(json.error ?? "Erro ao registrar autorização");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setSubmittingNda(false); }
   };
 
@@ -1712,18 +1713,18 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, ...json.listing } : l)));
         setSelectedListing((prev) => (prev ? { ...prev, ...json.listing } : prev));
       } else {
-        alert(json.error ?? "Erro ao processar decisão");
+        aviso(json.error ?? "Erro ao processar decisão");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
   };
 
   const submitManualListing = async () => {
     if (!manualForm.asset_type) {
-      alert("Selecione a classe do ativo antes de continuar");
+      aviso("Selecione a classe do ativo antes de continuar");
       return;
     }
     if (!manualForm.seller_name.trim() || !manualForm.valor_face) {
-      alert("Preencha ao menos: nome do cedente e valor de face");
+      aviso("Preencha ao menos: nome do cedente e valor de face");
       return;
     }
     setSubmittingManual(true);
@@ -1754,7 +1755,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       });
       const json = await res.json();
       if (res.ok) {
-        alert(`Ativo cadastrado: ${json.listing.anonymous_id}`);
+        aviso(`Ativo cadastrado: ${json.listing.anonymous_id}`);
         setShowManualForm(false);
         setManualForm({
           asset_type: "", currency: "BRL", apelido: "", originator_profile_id: "", seller_name: "", seller_cpf_cnpj: "", ente_devedor: "",
@@ -1764,9 +1765,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         });
         fetchAll();
       } else {
-        alert(json.error ?? "Erro ao cadastrar ativo");
+        aviso(json.error ?? "Erro ao cadastrar ativo");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     finally { setSubmittingManual(false); }
   };
 
@@ -1791,9 +1792,9 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         setLixeiraItems((prev) => prev.filter((i) => i.id !== listingId));
         fetchAll();
       } else {
-        alert("Erro ao restaurar ativo");
+        aviso("Erro ao restaurar ativo");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
   };
 
   const approveQualification = async (accessId: string, decision: "aprovado" | "reprovado") => {
@@ -1804,13 +1805,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
         body: JSON.stringify({ access_id: accessId, decision }),
       });
       if (res.ok) {
-        alert(decision === "aprovado" ? "Qualificação aprovada: Tier 2 liberado" : "Qualificação reprovada");
+        aviso(decision === "aprovado" ? "Qualificação aprovada: Tier 2 liberado" : "Qualificação reprovada");
         if (selectedListing) loadRoomInvites(selectedListing.id);
       } else {
         const json = await res.json();
-        alert(json.error ?? "Erro");
+        aviso(json.error ?? "Erro");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
   };
 
   const generateBuyLink = async () => {
@@ -1832,12 +1833,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
       if (res.ok) {
         setBuyLinkUrl(json.url);
         navigator.clipboard.writeText(json.url);
-        alert("Link do comprador copiado!");
+        aviso("Link do comprador copiado!");
         setShowBuyLinkPartnerModal(false);
         setBuyLinkPartnerValue("");
         setBuyLinkApelido(""); setBuyLinkDistancia(""); setBuyLinkCiencia("");
-      } else alert(json.error ?? "Erro ao gerar link");
-    } catch { alert("Erro de conexão"); }
+      } else aviso(json.error ?? "Erro ao gerar link");
+    } catch { aviso("Erro de conexão"); }
     finally { setGeneratingBuyLink(false); }
   };
 
@@ -3286,7 +3287,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                   <div className="text-[9px] text-emerald-400 font-bold uppercase mb-1">Link Deal Room</div>
                   <div className="flex items-center gap-2">
                     <input readOnly value={dealRoomUrl} className="flex-1 bg-[#09081A] border border-[#9BAFC5]/10 rounded px-2 py-1.5 text-[10px] text-[#F5F1E8] truncate" />
-                    <button onClick={() => { navigator.clipboard.writeText(dealRoomUrl); alert("Link copiado!"); }} className="p-1.5 bg-emerald-500/10 rounded hover:bg-emerald-500/20 transition">
+                    <button onClick={() => { navigator.clipboard.writeText(dealRoomUrl); aviso("Link copiado!"); }} className="p-1.5 bg-emerald-500/10 rounded hover:bg-emerald-500/20 transition">
                       <Copy size={12} className="text-emerald-400" />
                     </button>
                   </div>
@@ -3710,12 +3711,12 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                   try {
                     const res = await fetch(`/api/cm/listings/${selectedListing.id}/gerar-teaser-cego`, { method: "POST" });
                     const json = await res.json();
-                    if (!res.ok) { alert(json.error ?? "Falha ao gerar teaser cego"); return; }
+                    if (!res.ok) { aviso(json.error ?? "Falha ao gerar teaser cego"); return; }
                     setTeaserCegoResult(json);
                     const blob = new Blob([json.html], { type: "text/html" });
                     window.open(URL.createObjectURL(blob), "_blank");
                   } catch {
-                    alert("Erro de conexão ao gerar teaser cego");
+                    aviso("Erro de conexão ao gerar teaser cego");
                   } finally {
                     setTeaserCegoLoading(false);
                   }
@@ -3736,7 +3737,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                       className="flex-1 text-center px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-emerald-400 text-[10px] font-bold hover:bg-emerald-500/20 transition">
                       Abrir WhatsApp
                     </a>
-                    <button onClick={() => { navigator.clipboard.writeText(teaserCegoResult.whatsapp_text); alert("Texto copiado!"); }}
+                    <button onClick={() => { navigator.clipboard.writeText(teaserCegoResult.whatsapp_text); aviso("Texto copiado!"); }}
                       className="flex-1 px-3 py-1.5 bg-[#09081A] border border-[#9BAFC5]/15 rounded text-[#9BAFC5] text-[10px] font-bold hover:text-[#F5F1E8] transition">
                       Copiar Texto
                     </button>

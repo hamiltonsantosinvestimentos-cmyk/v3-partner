@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 // Painel de indicações (comissionados) de um card de Ativo (SELL_SIDE) ou
 // Comprador (BUY_SIDE) na Bolsa de Ativos. Fase 2 do BRIEF de 13/08/2026:
@@ -80,8 +81,8 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
       const res = await fetch(`/api/cm/qualifications/party/${party.id}`, { method: "DELETE" });
       const json = await res.json();
       if (res.ok) await load();
-      else alert(json.error ?? "Erro ao excluir envolvido");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao excluir envolvido");
+    } catch { aviso("Erro de conexão"); }
     finally { setDeletingPartyId(null); }
   };
 
@@ -105,8 +106,8 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
       });
       const json = await res.json();
       if (res.ok) { setEditingPartyId(null); await load(); }
-      else alert(json.error ?? "Erro ao editar envolvido");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao editar envolvido");
+    } catch { aviso("Erro de conexão"); }
     finally { setEditPartySubmitting(false); }
   };
 

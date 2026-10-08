@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useEffect, useState, useMemo } from "react";
 import {
@@ -1323,7 +1324,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
     const p = prospects.find(x => x.id === id);
     if (p && etapa === "agenda_reuniao") { setAgendando({ prospect: p, mover: true }); return; }
     if (p && etapa === "proposta_retorno") { setPropondo({ prospect: p, mover: true }); return; }
-    handleMove(id, etapa).catch(e => alert((e as Error).message));
+    handleMove(id, etapa).catch(e => aviso((e as Error).message));
   };
 
 

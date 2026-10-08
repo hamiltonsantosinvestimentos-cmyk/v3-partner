@@ -59,7 +59,10 @@ export async function GET(req: NextRequest) {
     .eq("id", id)
     .maybeSingle();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[qualifications] erro do banco", { rota: "legal-text/route.ts", code: error.code });
+    return NextResponse.json({ error: "Não foi possível carregar o texto jurídico. Tente novamente." }, { status: 500 });
+  }
   if (!party) return NextResponse.json({ error: "Qualificação não encontrada" }, { status: 404 });
   if (party.status !== "preenchido") {
     return NextResponse.json({ error: "Esta parte ainda não preencheu os dados de qualificação." }, { status: 422 });

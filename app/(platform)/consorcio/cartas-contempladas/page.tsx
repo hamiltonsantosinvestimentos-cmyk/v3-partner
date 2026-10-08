@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -243,13 +244,13 @@ export default function CartasContempladasPage() {
       const res = await fetch(`/api/consorcio/ofertas/${ofertaId}/aceitar`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) {
-        alert(typeof json.error === "string" ? json.error : "Erro ao aceitar oferta");
+        aviso(typeof json.error === "string" ? json.error : "Erro ao aceitar oferta");
         return;
       }
       if (ofertaModal) setLetters(prev => prev.map(l => l.id === ofertaModal.id ? { ...l, status: "VENDIDA" } : l));
       setOfertaModal(null);
     } catch (err) {
-      alert(`Erro de conexão: ${String(err)}`);
+      aviso(`Erro de conexão: ${String(err)}`);
     } finally {
       setAceitandoId(null);
     }

@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
@@ -2918,7 +2919,7 @@ function AssinaturasTab() {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { error?: string };
-        alert(d.error ?? `Erro ao executar ação (${res.status})`);
+        aviso(d.error ?? `Erro ao executar ação (${res.status})`);
       }
       await fetchData();
     } finally {
@@ -2983,7 +2984,7 @@ function AssinaturasTab() {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { error?: string };
-        alert(d.error ?? "Erro ao salvar alterações.");
+        aviso(d.error ?? "Erro ao salvar alterações.");
         return;
       }
       setShowEditModal(false);
