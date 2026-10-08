@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -219,7 +220,7 @@ export function KycClient({ userRole }: KycClientProps) {
   }
 
   async function handleBlDelete(id: string) {
-    if (!confirm("Remover da blacklist?")) return;
+    if (!await confirmar("Remover da blacklist?")) return;
     await fetch("/api/kyc/blacklist", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },

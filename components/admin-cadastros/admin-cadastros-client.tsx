@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState } from "react";
 import {
@@ -496,7 +497,7 @@ export function AdminCadastrosClient({
       setRegs((prev) => prev.map((r) => r.id === id ? { ...r, status: novoStatus as Registration["status"], observacao: obs, ...(cartaoRecorrenteLink ? { cartao_recorrente_link: cartaoRecorrenteLink } : {}) } : r));
     } else {
       const d = await res.json().catch(() => ({})) as { error?: string };
-      alert(d.error ?? "Erro ao processar ação.");
+      aviso(d.error ?? "Erro ao processar ação.");
     }
   };
 

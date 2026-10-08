@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState, useEffect } from "react";
 import {
@@ -208,7 +209,7 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
         : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
     );
     if (!reason || reason.trim().length < 5) {
-      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      if (reason !== null) aviso("Motivo obrigatório: mínimo 5 caracteres");
       return;
     }
     setDeletingCard(id);
@@ -221,16 +222,16 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
       const json = await res.json();
       if (res.ok) {
         if (json.mode === "deleted") {
-          alert("Cota excluída. Disponível na Lixeira por 30 dias.");
+          aviso("Cota excluída. Disponível na Lixeira por 30 dias.");
           setCards(prev => prev.filter(c => c.id !== id));
           setSelectedCard(null);
         } else {
-          alert("Solicitação enviada por email à governança. A cota continua ativa até a decisão do ADMIN.");
+          aviso("Solicitação enviada por email à governança. A cota continua ativa até a decisão do ADMIN.");
         }
       } else {
-        alert(json.error ?? "Erro ao processar exclusão");
+        aviso(json.error ?? "Erro ao processar exclusão");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
     setDeletingCard(null);
   };
 
@@ -259,9 +260,9 @@ export function MesaConsorcioClient({ userRole }: { userRole: string }) {
       if (res.ok) {
         setLixeiraItems((prev) => prev.filter((i) => i.id !== itemId));
       } else {
-        alert("Erro ao restaurar registro");
+        aviso("Erro ao restaurar registro");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
   };
 
   const handleCreateOp = () => {

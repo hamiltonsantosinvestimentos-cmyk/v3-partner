@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, FileText, X, Download, RefreshCw, Package, Link2, Check, UserPlus, Upload, Plus } from "lucide-react";
@@ -134,7 +135,7 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
       if (!res.ok) throw new Error(json.error ?? "Erro ao gerar link de cadastro");
       window.location.href = json.url;
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Erro ao gerar link de cadastro");
+      aviso(err instanceof Error ? err.message : "Erro ao gerar link de cadastro");
       setCreatingAsset(false);
     }
   };
@@ -200,7 +201,7 @@ export function SellSideListingsPanel({ mode = "mine", title, subtitle }: SellSi
 
       await openDetail(listing);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Erro ao enviar documento");
+      aviso(err instanceof Error ? err.message : "Erro ao enviar documento");
     } finally {
       setUploading(false);
     }

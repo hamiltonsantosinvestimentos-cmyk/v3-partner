@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState, useRef, useEffect } from "react";
 import {
@@ -544,9 +545,9 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
                           if (json.ok && json.document) {
                             setDealDocs(prev => [...prev, json.document]);
                           } else {
-                            alert(json.error ?? "Erro ao enviar arquivo");
+                            aviso(json.error ?? "Erro ao enviar arquivo");
                           }
-                        } catch { alert("Erro ao enviar arquivo"); }
+                        } catch { aviso("Erro ao enviar arquivo"); }
                         setUploadingDoc(null);
                       }
                     }}

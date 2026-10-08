@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -188,7 +189,7 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
 
   const handleGenerate = async () => {
     if (isDemo) {
-      alert("Modo demo — conecte o Supabase para disparar a geração real.");
+      aviso("Modo demo — conecte o Supabase para disparar a geração real.");
       return;
     }
     setGenerating(true);
@@ -204,7 +205,7 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
       }
     } catch (e) {
       console.error("handleGenerate error:", e);
-      alert(`Erro ao gerar KIT: ${e instanceof Error ? e.message : String(e)}`);
+      aviso(`Erro ao gerar KIT: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setGenerating(false);
       await loadData();

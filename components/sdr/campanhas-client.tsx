@@ -1,4 +1,5 @@
 "use client";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import { useEffect, useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
@@ -181,13 +182,13 @@ export function CampanhasClient() {
   };
 
   const handleDelete = async (id: string, nomeCamp: string) => {
-    if (!confirm(`Excluir a campanha "${nomeCamp}"?`)) return;
+    if (!await confirmar(`Excluir a campanha "${nomeCamp}"?`)) return;
     await fetch(`/api/sdr/campanhas?id=${id}`, { method: "DELETE" });
     await fetchCampanhas();
   };
 
   const handleDisparar = async (campanha: Campanha) => {
-    if (!confirm(`Disparar a campanha "${campanha.nome}" para ${campanha.total_contatos} contato(s)?`)) return;
+    if (!await confirmar(`Disparar a campanha "${campanha.nome}" para ${campanha.total_contatos} contato(s)?`)) return;
     setDisparando(campanha.id);
     setDisparoResult(null);
     try {
@@ -197,7 +198,7 @@ export function CampanhasClient() {
         setDisparoResult({ enviados: json.enviados, erros: json.erros });
         await fetchCampanhas();
       } else {
-        alert(json.error ?? "Erro ao disparar");
+        aviso(json.error ?? "Erro ao disparar");
       }
     } finally {
       setDisparando(null);

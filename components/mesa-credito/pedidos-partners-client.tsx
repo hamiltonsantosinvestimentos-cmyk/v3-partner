@@ -1,4 +1,5 @@
 "use client";
+import { aviso, confirmar } from "@/lib/aviso";
 
 import { useEffect, useState, useCallback, type MouseEvent } from "react";
 import { Handshake, Loader2, Wallet, Check, Trash2 } from "lucide-react";
@@ -247,7 +248,7 @@ function ExcluirSolicitacao({ order, onDeleted }: { order: PartnerOrder; onDelet
     if (order.status === "PAID") linhas.push("ATENÇÃO: esta solicitação está PAGA.", "");
     if (order.credit_desk_proposal_id) linhas.push("A proposta de crédito vinculada não será apagada.", "");
     linhas.push("Ela sai da lista de Pedidos de Partners. Esta ação não pode ser desfeita.");
-    if (!window.confirm(linhas.join("\n"))) return;
+    if (!await confirmar(linhas.join("\n"))) return;
 
     setBusy(true);
     try {
@@ -256,7 +257,7 @@ function ExcluirSolicitacao({ order, onDeleted }: { order: PartnerOrder; onDelet
       if (!res.ok) throw new Error(json.error ?? "Falha ao excluir a solicitação");
       onDeleted();
     } catch (err) {
-      window.alert((err as Error).message);
+      aviso((err as Error).message);
     } finally {
       setBusy(false);
     }

@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield, Search, Upload } from "lucide-react";
@@ -68,10 +69,10 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
       if (res.ok) {
         setDocs((prev) => [...prev, json.document]);
       } else {
-        alert(json.error ?? "Erro no upload");
+        aviso(json.error ?? "Erro no upload");
       }
     } catch {
-      alert("Erro de conexão");
+      aviso("Erro de conexão");
     } finally {
       setUploadingDoc(null);
     }

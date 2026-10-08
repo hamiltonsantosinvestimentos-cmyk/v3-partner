@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -723,7 +724,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
     );
     if (!reason || reason.trim().length < 5) {
-      if (reason !== null) alert("Motivo obrigatório: mínimo 5 caracteres");
+      if (reason !== null) aviso("Motivo obrigatório: mínimo 5 caracteres");
       return;
     }
     try {
@@ -735,15 +736,15 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
       const json = await res.json();
       if (res.ok) {
         if (json.mode === "deleted") {
-          alert("Lead excluído. Disponível na Lixeira por 30 dias.");
+          aviso("Lead excluído. Disponível na Lixeira por 30 dias.");
           setLeads((prev) => prev.filter((l) => l.id !== lead.id));
         } else {
-          alert("Solicitação enviada por email à governança. O lead continua ativo até a decisão do ADMIN.");
+          aviso("Solicitação enviada por email à governança. O lead continua ativo até a decisão do ADMIN.");
         }
       } else {
-        alert(json.error ?? "Erro ao processar exclusão");
+        aviso(json.error ?? "Erro ao processar exclusão");
       }
-    } catch { alert("Erro de conexão"); }
+    } catch { aviso("Erro de conexão"); }
   };
 
   // ── Feature 3: CSV Import ─────────────────────────────────────────────────

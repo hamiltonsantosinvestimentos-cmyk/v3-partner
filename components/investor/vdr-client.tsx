@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState, useEffect, useRef } from "react";
 import { Shield, FileText, CheckCircle, Lock, Unlock, AlertTriangle, ExternalLink, Clock } from "lucide-react";
@@ -150,7 +151,7 @@ export function VdrClient({ v3Code, token }: VdrClientProps) {
     const r = await fetch(`/api/investor/vdr/${token}/document/${doc.id}`, { method: "POST" });
     const d = await r.json();
     setOpeningDoc(null);
-    if (d.error) { alert(d.error); return; }
+    if (d.error) { aviso(d.error); return; }
 
     // Registra timer para log de duração
     viewTimers.current[doc.id] = { view_id: d.view_id, start: Date.now() };
@@ -181,13 +182,13 @@ export function VdrClient({ v3Code, token }: VdrClientProps) {
     try {
       // deal.id vem do RoomData — tipado como string | null
       const dealId = (data.deal as unknown as Record<string,string>)?.id ?? "";
-      if (!dealId) { alert("Deal ID não encontrado."); return; }
+      if (!dealId) { aviso("Deal ID não encontrado."); return; }
 
       const finalUrl = `/api/ma/cim-pdf?dealId=${encodeURIComponent(dealId)}&vdr_token=${encodeURIComponent(token)}&lang=pt-br`;
       const res = await fetch(finalUrl);
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        alert((err as {error?: string}).error ?? "Erro ao gerar PDF — tente novamente.");
+        aviso((err as {error?: string}).error ?? "Erro ao gerar PDF — tente novamente.");
         return;
       }
       const blob = await res.blob();

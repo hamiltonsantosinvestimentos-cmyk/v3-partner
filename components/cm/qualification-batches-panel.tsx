@@ -1,4 +1,5 @@
 "use client";
+import { aviso, confirmar } from "@/lib/aviso";
 
 // Painel de indicações (comissionados) de um card de Ativo (SELL_SIDE) ou
 // Comprador (BUY_SIDE) na Bolsa de Ativos. Fase 2 do BRIEF de 13/08/2026:
@@ -74,14 +75,14 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
   // indicação -- soft delete, sem precisar apagar o lote inteiro.
   const [deletingPartyId, setDeletingPartyId] = useState<string | null>(null);
   const deleteParty = async (party: QualParty) => {
-    if (!confirm(`Excluir "${party.full_name}" desta indicação? A pessoa continua com o link antigo, mas ele deixa de valer.`)) return;
+    if (!await confirmar(`Excluir "${party.full_name}" desta indicação? A pessoa continua com o link antigo, mas ele deixa de valer.`)) return;
     setDeletingPartyId(party.id);
     try {
       const res = await fetch(`/api/cm/qualifications/party/${party.id}`, { method: "DELETE" });
       const json = await res.json();
       if (res.ok) await load();
-      else alert(json.error ?? "Erro ao excluir envolvido");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao excluir envolvido");
+    } catch { aviso("Erro de conexão"); }
     finally { setDeletingPartyId(null); }
   };
 
@@ -105,8 +106,8 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
       });
       const json = await res.json();
       if (res.ok) { setEditingPartyId(null); await load(); }
-      else alert(json.error ?? "Erro ao editar envolvido");
-    } catch { alert("Erro de conexão"); }
+      else aviso(json.error ?? "Erro ao editar envolvido");
+    } catch { aviso("Erro de conexão"); }
     finally { setEditPartySubmitting(false); }
   };
 

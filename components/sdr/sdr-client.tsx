@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useEffect, useState, useCallback, useRef, type ReactNode } from "react";
 import Image from "next/image";
@@ -342,7 +343,7 @@ export function SdrClient({ currentUserId, currentUserName, currentUserRole }: S
         await fetchConversas(selectedLead.phone);
       } else {
         const json = await res.json();
-        alert(json.error ?? "Erro ao enviar mensagem");
+        aviso(json.error ?? "Erro ao enviar mensagem");
       }
     } finally {
       setSendingHuman(false);

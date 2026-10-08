@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import React, { useState, useRef, useCallback } from "react";
 import {
@@ -209,7 +210,7 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
   }, []);
 
   async function handleRemoveAvatar() {
-    if (!confirm("Remover foto de perfil?")) return;
+    if (!await confirmar("Remover foto de perfil?")) return;
     await fetch("/api/profile/avatar", { method: "DELETE" });
     setProfile(prev => ({ ...prev, avatar_url: null }));
     setAvatarPreview(null);

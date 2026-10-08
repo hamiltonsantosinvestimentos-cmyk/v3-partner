@@ -75,7 +75,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .select("id, full_name, email, phone, role_in_document, status, qualification_token")
     .single();
 
-  if (error || !inserted) return NextResponse.json({ error: error?.message ?? "Erro ao adicionar envolvido" }, { status: 500 });
+  if (error || !inserted) {
+    // Nunca devolver a mensagem bruta do banco ao navegador: registra no servidor e responde generico.
+    console.error("[add-party] falha ao inserir parte", { batch_id: batchId, code: error?.code });
+    return NextResponse.json({ error: "Não foi possível adicionar o envolvido. Tente novamente e, se persistir, avise o suporte." }, { status: 500 });
+  }
 
   if (batch.status === "completo") {
     await db.from("cm_qualification_batches").update({ status: "coletando", completed_at: null }).eq("id", batchId);

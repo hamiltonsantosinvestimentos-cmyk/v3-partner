@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, FileText, X, Download, RefreshCw, Repeat, ShoppingCart, IdCard, Target, ShieldCheck, Link2, Check, UserPlus, ClipboardCheck, History, Send, GitBranch } from "lucide-react";
@@ -272,10 +273,10 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
         setTimeline((prev) => [json.note, ...prev]);
         setNewNote("");
       } else {
-        alert(json.error ?? "Erro ao salvar nota");
+        aviso(json.error ?? "Erro ao salvar nota");
       }
     } catch {
-      alert("Erro de conexão");
+      aviso("Erro de conexão");
     } finally {
       setSavingNote(false);
     }
@@ -292,10 +293,10 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
         setTimeline((prev) => [{ id: `local-${Date.now()}`, content: "KYC aprovado pela Mesa. Full DD liberado para este comprador.", is_system: true, created_at: new Date().toISOString(), profiles: null }, ...prev]);
         fetchDemands();
       } else {
-        alert(json.error ?? "Erro ao aprovar KYC");
+        aviso(json.error ?? "Erro ao aprovar KYC");
       }
     } catch {
-      alert("Erro de conexão");
+      aviso("Erro de conexão");
     } finally {
       setApprovingKyc(false);
     }
@@ -335,10 +336,10 @@ export function BuySideDemandsPanel({ mode = "mesa", title, subtitle }: BuySideD
         }
         fetchDemands();
       } else {
-        alert(json.error ?? "Erro ao mover a demanda de etapa");
+        aviso(json.error ?? "Erro ao mover a demanda de etapa");
       }
     } catch {
-      alert("Erro de conexão");
+      aviso("Erro de conexão");
     } finally {
       setMovingStage(false);
     }

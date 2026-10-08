@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import {
@@ -508,7 +509,7 @@ function LiveClassRow({ liveClass, onSave, onDelete }: {
   }
 
   async function handleDelete() {
-    if (!confirm(`Excluir "${liveClass.title}"? Os inscritos não serão notificados.`)) return;
+    if (!await confirmar(`Excluir "${liveClass.title}"? Os inscritos não serão notificados.`)) return;
     setDeleting(true);
     await onDelete(liveClass.id);
     setDeleting(false);

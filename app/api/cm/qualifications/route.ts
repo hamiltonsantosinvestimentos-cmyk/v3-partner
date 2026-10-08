@@ -119,7 +119,10 @@ export async function GET(req: NextRequest) {
 
   const { data: batches, error } = await query;
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[qualifications] erro do banco", { rota: "route.ts", code: error.code });
+    return NextResponse.json({ error: "Não foi possível processar as qualificações. Tente novamente." }, { status: 500 });
+  }
   return NextResponse.json({ batches: batches ?? [] });
 }
 

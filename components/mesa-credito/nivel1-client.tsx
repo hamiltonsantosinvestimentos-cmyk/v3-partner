@@ -1,4 +1,5 @@
 "use client";
+import { aviso } from "@/lib/aviso";
 
 import React, { useState, useCallback, useEffect } from "react";
 import { Home as HomeIcon, LayoutGrid, List, Plus } from "lucide-react";
@@ -194,12 +195,12 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
         const body = await res.json().catch(() => ({}));
         setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, stage: prevStage ?? p.stage } : p));
         if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, stage: prevStage ?? prev.stage } : prev);
-        alert(typeof body.error === "string" ? body.error : "Não foi possível mudar o estágio da proposta.");
+        aviso(typeof body.error === "string" ? body.error : "Não foi possível mudar o estágio da proposta.");
       })
       .catch(() => {
         setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, stage: prevStage ?? p.stage } : p));
         if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, stage: prevStage ?? prev.stage } : prev);
-        alert("Erro de conexão ao mudar o estágio da proposta.");
+        aviso("Erro de conexão ao mudar o estágio da proposta.");
       });
   }, [detailProposal, proposals]);
 

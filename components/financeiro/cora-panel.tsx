@@ -1,4 +1,5 @@
 "use client";
+import { confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -186,7 +187,7 @@ export function CoraPanel() {
 
   // ── Cancelar cobrança ──────────────────────────────────────────────────────
   async function handleCancelar(id: string) {
-    if (!confirm("Cancelar esta cobrança?")) return;
+    if (!await confirmar("Cancelar esta cobrança?")) return;
     setCancellingId(id);
     try {
       const res = await fetch("/api/cora/cobranca", {
