@@ -13,6 +13,7 @@ import { User, Loader2, FileText, Download, X, Eye, EyeOff } from "lucide-react"
 import { PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, formatDocumentNumber, type PartyNature } from "@/lib/legal-qualification";
 import { KYC_DOCUMENT_KIND_LABELS } from "@/lib/kyc-documents";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
+import { PartyDueDiligenceTab, type DdInitial } from "./party-due-diligence-tab";
 
 type KycDocument = { document_id: string; document_kind: string; original_filename: string | null; mime_type?: string | null; uploaded_at: string; valid_until: string; uploaded_ip?: string | null };
 
@@ -494,6 +495,18 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
 export function PartyQualificationCardModal({ qualificationId, onClose }: { qualificationId: string | null; onClose: () => void }) {
   const [state, setState] = useState<{ loading: boolean; data: any | null; error: string | null }>({ loading: false, data: null, error: null });
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  // Aba Due Diligence (08/10/2026): so aparece para quem tem o grant due_diligence_qualificacao.
+  const [dd, setDd] = useState<DdInitial | null>(null);
+  const [tab, setTab] = useState<"ficha" | "dd">("ficha");
+
+  useEffect(() => {
+    setDd(null);
+    setTab("ficha");
+    if (!qualificationId) return;
+    fetch(`/api/cm/qualifications/party/${qualificationId}/due-diligence`)
+      .then(async (res) => { if (res.ok) setDd(await res.json()); })
+      .catch(() => {});
+  }, [qualificationId]);
 
   useEffect(() => {
     if (!qualificationId) { setState({ loading: false, data: null, error: null }); return; }
@@ -525,8 +538,21 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
             {!state.loading && state.error && (
               <p className="text-xs text-[#9BAFC5] bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">{state.error}</p>
             )}
-            {!state.loading && state.data && (
+            {!state.loading && state.data && dd && state.data.filled && (
+              <div className="flex gap-2 border-b border-[#9BAFC5]/10 pb-2">
+                {(["ficha", "dd"] as const).map((k) => (
+                  <button key={k} type="button" onClick={() => setTab(k)}
+                    className={`text-[12px] font-bold uppercase px-3 py-1.5 rounded ${tab === k ? "bg-[#C9A84C]/15 text-[#E8C97A] border border-[#C9A84C]/40" : "text-[#9BAFC5] border border-transparent hover:text-[#F5F1E8]"}`}>
+                    {k === "ficha" ? "Ficha" : "Due Diligence"}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!state.loading && state.data && tab === "ficha" && (
               <PartyCardBody key={qualificationId} data={state.data} onPreview={setLightboxUrl} />
+            )}
+            {!state.loading && state.data && tab === "dd" && dd && (
+              <PartyDueDiligenceTab key={qualificationId} qualificationId={qualificationId} partyName={state.data.qualification.full_name} initial={dd} />
             )}
           </div>
         </div>
