@@ -5,7 +5,7 @@ import { filtrarChecklistPorImovel, garantiaPelasZonas, type ImovelGarantia } fr
 import {
   X, User, Building2, FileText, Upload, CheckCircle2, Circle,
   ChevronRight, AlertCircle, Home, Shield, TrendingUp, Zap, Download, Loader2,
-  Link2, CheckCheck,
+  Link2, CheckCheck, Keyboard, ScanText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -334,6 +334,13 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   const [enderecoUf, setEnderecoUf] = useState("");
   const [enderecoCep, setEnderecoCep] = useState("");
 
+  // Preenchimento dos dados do cliente: digitação manual (padrão) ou leitura de
+  // documento (CNH/RG, cartão CNPJ, contrato social) via /api/credit-proposals/ler-documento.
+  const [modoCliente, setModoCliente] = useState<"manual" | "documento">("manual");
+  const [lendoDoc, setLendoDoc] = useState(false);
+  const [erroDoc, setErroDoc] = useState<string | null>(null);
+  const [camposLidos, setCamposLidos] = useState<string[]>([]);
+
   // Restrição do cliente
   const [restricao, setRestricao] = useState<"" | "SIM" | "NAO">("");
 
@@ -433,6 +440,59 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
 
   function removeFile(fileKey: string) {
     setUploadedFiles((prev) => prev.filter((f) => f.fileKey !== fileKey));
+  }
+
+  async function lerDocumentoCliente(file: File) {
+    setErroDoc(null);
+    setLendoDoc(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", await reduzirImagem(file));
+      fd.append("clientType", clientType);
+      const res = await fetch("/api/credit-proposals/ler-documento", { method: "POST", body: fd });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.dados) throw new Error(json.error || "Não consegui ler o documento.");
+      const d = json.dados as Record<string, string | undefined>;
+
+      // Só preenche campo vazio: o que já foi digitado nunca é sobrescrito.
+      const campos: [string, string | undefined, string, (v: string) => void][] = clientType === "PF" ? [
+        ["Nome", d.nome, nome, setNome],
+        ["CPF", d.cpf, cpfCnpj, setCpfCnpj],
+        ["RG", d.rg, rg, setRg],
+        ["Data de nascimento", d.nascimento, nascimento, setNascimento],
+        ["Estado civil", d.estado_civil, estadoCivil, setEstadoCivil],
+      ] : [
+        ["Razão social", d.razao_social, razaoSocial, setRazaoSocial],
+        ["CNPJ", d.cnpj, cpfCnpj, setCpfCnpj],
+        ["Nome fantasia", d.nome_fantasia, nomeFantasia, setNomeFantasia],
+        ["Sócio responsável", d.socio_responsavel, socioResponsavel, setSocioResponsavel],
+      ];
+      campos.push(
+        ["CEP", d.cep, enderecoCep, setEnderecoCep],
+        ["Endereço", d.endereco, enderecoRua, setEnderecoRua],
+        ["Cidade", d.cidade, enderecoCity, setEnderecoCity],
+        ["UF", d.uf, enderecoUf, setEnderecoUf],
+      );
+      const lidos: string[] = [];
+      for (const [rotulo, valor, atual, set] of campos) {
+        if (valor && !atual.trim()) { set(valor); lidos.push(rotulo); }
+      }
+      if (lidos.length === 0) throw new Error("Não encontrei dados novos nesse documento. Confira se é o documento certo ou digite manualmente.");
+
+      // O arquivo já entra no checklist da aba Documentos (identidade, contrato social ou cartão CNPJ).
+      const alvo = d.tipo_documento === "contrato_social" ? /contrato social/i
+        : d.tipo_documento === "cartao_cnpj" ? /cart[aã]o.*cnpj/i
+        : /\b(rg|cnh)\b|identifica/i;
+      const docChecklist = checklist.find((c) => alvo.test(c.label));
+      if (docChecklist && !uploadedIds.includes(docChecklist.id)) queueFile(docChecklist.id, file);
+
+      setCamposLidos(lidos);
+      setModoCliente("manual");
+    } catch (e) {
+      setErroDoc(e instanceof Error ? e.message : "Não consegui ler o documento.");
+    } finally {
+      setLendoDoc(false);
+    }
   }
 
   async function buscarCep(cep: string) {
@@ -642,6 +702,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     setRazaoSocial(""); setNomeFantasia(""); setSocioResponsavel(""); setFaturamento("");
     // Endereço
     setEnderecoRua(""); setEnderecoCity(""); setEnderecoUf(""); setEnderecoCep("");
+    setModoCliente("manual"); setErroDoc(null); setCamposLidos([]);
     // Operação
     setCreditLine(LEVEL_LINES[level]?.[0] ?? "");
     setValorSolicitado(""); setPrazo(""); setFinalidade("");
@@ -813,6 +874,67 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
           {/* ── TAB: CLIENTE ── */}
           {tab === "cliente" && (
             <div className="space-y-4">
+              {/* Como preencher: digitar ou enviar documento */}
+              <div className="flex gap-2">
+                {([
+                  { val: "manual", label: "Digitar manualmente", icon: <Keyboard className="w-4 h-4" /> },
+                  { val: "documento", label: "Enviar documento", icon: <ScanText className="w-4 h-4" /> },
+                ] as const).map((opt) => (
+                  <button key={opt.val} type="button" onClick={() => { setModoCliente(opt.val); setErroDoc(null); }}
+                    className={`flex-1 flex items-center justify-center gap-2 h-9 rounded-lg text-xs font-semibold border transition-all ${
+                      modoCliente === opt.val ? "bg-primary/15 border-primary/40 text-primary" : "border-border text-muted-foreground hover:bg-secondary"
+                    }`}>
+                    {opt.icon} {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {modoCliente === "documento" ? (
+                <div className="space-y-3">
+                  <label className={`block rounded-xl border border-dashed border-primary/40 p-6 text-center transition-colors ${lendoDoc ? "opacity-70" : "cursor-pointer hover:bg-primary/5"}`}>
+                    <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.webp" disabled={lendoDoc}
+                      onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) lerDocumentoCliente(f); }} />
+                    {lendoDoc ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                        <p className="text-sm font-semibold text-foreground">Lendo o documento…</p>
+                        <p className="text-[11px] text-muted-foreground">Leva de 5 a 15 segundos.</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="w-6 h-6 text-primary" />
+                        <p className="text-sm font-semibold text-foreground">
+                          {clientType === "PF" ? "Envie a CNH ou o RG do cliente" : "Envie o cartão CNPJ ou o contrato social"}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground">
+                          PDF, JPG ou PNG. Os campos vazios são preenchidos e o arquivo já entra no checklist de documentos.
+                        </p>
+                      </div>
+                    )}
+                  </label>
+                  {erroDoc && (
+                    <div className="flex items-start gap-2 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+                      <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                      <p className="text-xs text-red-300">{erroDoc}</p>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    E-mail, telefone e {clientType === "PF" ? "renda" : "faturamento"} não constam nesses documentos — complete em &quot;Digitar manualmente&quot;.
+                  </p>
+                </div>
+              ) : (
+              <>
+              {camposLidos.length > 0 && (
+                <div className="flex items-start gap-2 rounded-lg border border-primary/30 bg-primary/10 p-3">
+                  <ScanText className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-muted-foreground flex-1">
+                    <span className="font-semibold text-primary">Lido do documento — confira:</span> {camposLidos.join(", ")}.
+                  </p>
+                  <button type="button" onClick={() => setCamposLidos([])} className="text-muted-foreground hover:text-foreground">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               {clientType === "PF" ? (
                 <>
                   <div className="grid grid-cols-2 gap-3">
@@ -909,6 +1031,8 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                     )}
                   </div>
                 </>
+              )}
+              </>
               )}
             </div>
           )}
@@ -1317,6 +1441,23 @@ function applyBRLMask(raw: string): string {
   if (!digits) return "";
   const num = parseInt(digits, 10);
   return (num / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/** Foto de celular costuma passar do limite da rota (4 MB): reduz para JPEG de até 2000px. PDF vai como está. */
+async function reduzirImagem(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.size < 1.5 * 1024 * 1024) return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const escala = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bmp.width * escala);
+    canvas.height = Math.round(bmp.height * escala);
+    canvas.getContext("2d")?.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, "image/jpeg", 0.85));
+    return blob ? new File([blob], file.name.replace(/\.\w+$/, "") + ".jpg", { type: "image/jpeg" }) : file;
+  } catch {
+    return file;
+  }
 }
 
 function Field({ label, value, onChange, placeholder, type = "text" }: {
