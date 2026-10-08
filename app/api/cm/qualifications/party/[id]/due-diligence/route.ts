@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { hasDueDiligenceAccess } from "@/lib/cm/dd-access";
-import { runDdTool, DD_TOOLS_ORDER, type DdTool } from "@/lib/cm/dd-tools";
+import { runDdTool, DD_TOOLS_ORDER, toolsForKind, type DdTool } from "@/lib/cm/dd-tools";
+import { pfBlockReason, PF_BLOCK_TEXT } from "@/lib/cm/dd-gates";
 import { detectDocument } from "@/lib/document-check";
 
 // Aba Due Diligence da Ficha de Qualificacao, Entrega 1 (08/10/2026).
@@ -47,7 +48,7 @@ async function authorize() {
 async function loadParty(db: ReturnType<typeof svc>, id: string) {
   const { data: row } = await db
     .from("cm_party_qualifications")
-    .select("id, status, deleted_at, person_type, cpf_cnpj, company_cnpj, batch_id")
+    .select("id, status, deleted_at, person_type, cpf_cnpj, company_cnpj, batch_id, role_in_document, lgpd_text_version")
     .eq("id", id)
     .maybeSingle();
   if (!row || row.deleted_at) return null;
@@ -91,6 +92,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!party) return NextResponse.json({ error: "Qualificação não encontrada" }, { status: 404, headers: NO_STORE });
 
   const doc = resolveDocument(party);
+  // Consulta de PF: so para decisor (cedente ou mandatario) com o aviso em versao minima. Fail closed.
+  const pfBlock = doc.ok && doc.kind === "cpf"
+    ? pfBlockReason(party.role_in_document as string | null, party.lgpd_text_version as string | null, process.env.DD_PF_MIN_LGPD_VERSION)
+    : null;
   const contractCode = await resolveContractCode(db, party.batch_id as string | null);
 
   const { data: runs } = await db
@@ -119,13 +124,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   return NextResponse.json(
     {
       access: true,
-      document: doc.ok ? { kind: doc.kind, available: doc.kind === "cnpj" } : { kind: null, available: false, reason: doc.reason },
-      pf_blocked_reason: doc.ok && doc.kind === "cpf" ? "Disponível após parecer de compliance" : null,
+      document: doc.ok ? { kind: doc.kind, available: doc.kind === "cnpj" || !pfBlock } : { kind: null, available: false, reason: doc.reason },
+      pf_blocked_reason: pfBlock ? PF_BLOCK_TEXT[pfBlock] : null,
       contract_code: contractCode,
-      tools: DD_TOOLS_ORDER,
+      tools: doc.ok ? toolsForKind(doc.kind) : DD_TOOLS_ORDER,
       recent_days: RECENT_DAYS,
       recent,
-      runs: (runs ?? []).map((r) => ({ ...r, requested_by_name: names[r.requested_by as string] ?? "Usuário", requested_by: undefined })),
+      runs: (runs ?? []).map((r) => ({ ...r, has_raw: r.tool === "scr_cpf" && r.status === "ok", requested_by_name: names[r.requested_by as string] ?? "Usuário", requested_by: undefined })),
     },
     { headers: NO_STORE },
   );
@@ -149,8 +154,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const doc = resolveDocument(party);
   if (!doc.ok) return NextResponse.json({ error: doc.reason }, { status: 422, headers: NO_STORE });
-  if (doc.kind !== "cnpj") {
-    return NextResponse.json({ error: "Disponível após parecer de compliance" }, { status: 422, headers: NO_STORE });
+  if (!toolsForKind(doc.kind).includes(tool)) {
+    return NextResponse.json({ error: "Esta consulta não se aplica ao tipo de documento da parte" }, { status: 422, headers: NO_STORE });
+  }
+  if (doc.kind === "cpf") {
+    const block = pfBlockReason(party.role_in_document as string | null, party.lgpd_text_version as string | null, process.env.DD_PF_MIN_LGPD_VERSION);
+    if (block) {
+      // Tentativa registrada ANTES de negar (nunca `void`: o builder do supabase-js nao envia sem await).
+      const { error: blockLogError } = await db.from("audit_logs").insert({
+        user_id: auth.userId,
+        action: "dd_consulta_pf_bloqueada",
+        entity: "cm_party_qualifications",
+        entity_id: id,
+        new_data: { motivo: block, ferramenta: tool },
+        ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? null,
+      });
+      if (blockLogError) console.error("[due-diligence] falha ao registrar tentativa de PF bloqueada", { party_id: id, code: blockLogError.code });
+      return NextResponse.json({ error: PF_BLOCK_TEXT[block] }, { status: 403, headers: NO_STORE });
+    }
   }
 
   // Alerta de reaproveitamento: mesma ferramenta e mesmo documento com menos de 60 dias.
@@ -175,7 +196,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const contractCode = await resolveContractCode(db, party.batch_id as string | null);
-  const outcome = await runDdTool(tool, doc.value);
+  const outcome = await runDdTool(tool, doc.value, doc.kind);
 
   const { data: saved, error: insertError } = await db
     .from("cm_party_dd_runs")
@@ -187,6 +208,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       document_kind: doc.kind,
       status: outcome.status,
       result_summary: outcome.summary,
+      raw_data: doc.kind === "cpf" ? (outcome.raw ?? null) : null,
       reuse_reason: force ? reason : null,
       requested_by: auth.userId,
     })
