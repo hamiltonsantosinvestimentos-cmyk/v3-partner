@@ -22,6 +22,7 @@ import { NdaAuthorizationQueuePanel } from "./nda-authorization-queue-panel";
 import { QuickIndicateModal } from "./quick-indicate-modal";
 import { KanbanCard } from "./kanban-card";
 import { MeetingAutotriggerToggle } from "./meeting-autotrigger-toggle";
+import { IndicatorsPanel } from "./indicators-panel";
 import { CmSearchFilterBar, EMPTY_CM_FILTERS, CM_STATUS_LABELS, CM_VALOR_FACE_BUCKETS, type CmListingFilters } from "./filter-drawer";
 import { ForjaJuridicoPanel } from "./forja-juridico-panel";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
@@ -270,7 +271,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [savingReferralPartner, setSavingReferralPartner] = useState(false);
   const [loading, setLoading] = useState(true);
   const [runningMatch, setRunningMatch] = useState(false);
-  const [tab, setTab] = useState<"kanban" | "matches" | "bids" | "buydemands" | "ndaqueue">("kanban");
+  const [tab, setTab] = useState<"kanban" | "matches" | "bids" | "buydemands" | "indicators" | "ndaqueue">("kanban");
   const [bulkPublishSelection, setBulkPublishSelection] = useState<Set<string>>(new Set());
   const [bulkPublishing, setBulkPublishing] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -2640,7 +2641,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
 
       {/* Tabs — colapsavel/deslizante em mobile (Etapa 6, 21/08/2026) */}
       <div className="flex gap-1 mb-6 border-b border-[#9BAFC5]/10 overflow-x-auto">
-        {(["kanban", "matches", "bids", "buydemands"] as const).map((t) => (
+        {(["kanban", "matches", "bids", "buydemands", "indicators"] as const).map((t) => (
           <button
             key={t} onClick={() => { setTab(t); if (t === "bids") fetchAll(); }}
             className={cn(
@@ -2648,7 +2649,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               tab === t ? "border-[#C9A84C] text-[#C9A84C]" : "border-transparent text-[#9BAFC5] hover:text-[#F5F1E8]"
             )}
           >
-            {t === "kanban" ? "Pipeline" : t === "matches" ? `Matches (${matches.length})` : t === "bids" ? `Propostas (${bids.length})` : "Demandas de Compra"}
+            {t === "kanban" ? "Pipeline" : t === "matches" ? `Matches (${matches.length})` : t === "bids" ? `Propostas (${bids.length})` : t === "buydemands" ? "Demandas de Compra" : "Indicadores"}
           </button>
         ))}
         {userRole === "ADMIN" && (
@@ -2800,6 +2801,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
 
       {/* Demandas de Compra (Buy-Side) */}
       {tab === "buydemands" && <BuySideDemandsPanel />}
+      {tab === "indicators" && <IndicatorsPanel />}
 
       {/* Fila de Autorização NDA (ADMIN only) */}
       {tab === "ndaqueue" && userRole === "ADMIN" && <NdaAuthorizationQueuePanel />}
