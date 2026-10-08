@@ -59,6 +59,40 @@ const valorDe = (b: any): unknown => (b && typeof b === "object" ? campo(b, ["va
 
 export type BacenResult = { ok: true; data: BacenScrData } | { ok: false; error: string };
 
+/**
+ * Converte a resposta bruta do SCR (querycode 3090) em BacenScrData. Pura, sem rede, para
+ * servir tanto à análise de crédito quanto à checagem de compliance (CPF ou CNPJ).
+ */
+export function parseBacenScr(raw: Record<string, unknown>): BacenScrData {
+  const scr = (raw?.body as any)?.data?.scr ?? {};
+  const consolidado = scr.consolidado ?? {};
+  const mapOps = (ops: any[] | undefined): BacenOperacao[] =>
+    (Array.isArray(ops) ? ops : []).map((o: any) => ({
+      descricao: o.DESCRICAO ?? (campo(o, ["descricao", "modalidade"]) as string | null),
+      valor: o.VALOR ?? (campo(o, ["valor"]) as string | null),
+      qtd_meses: o.QTD_MESES ?? null,
+      percentual: (campo(o, PERCENTUAL) as string | null) ?? null,
+    }));
+  const aVencer = acharBloco(consolidado, (k) => k.includes("avencer"));
+  const limite = acharBloco(consolidado, (k) => k.includes("limite"));
+  return {
+    score_pontuacao: scr.score?.pontuacao ?? null,
+    score_faixa: scr.score?.faixa ?? null,
+    credito_vencido_valor: consolidado.creditoVencido?.valor ?? null,
+    credito_vencido_operacoes: mapOps(consolidado.creditoVencido?.operacoes),
+    prejuizo_valor: consolidado.prejuizo?.valor ?? null,
+    prejuizo_operacoes: mapOps(consolidado.prejuizo?.operacoes),
+    credito_a_vencer_valor: valorDe(aVencer),
+    credito_a_vencer_percentual: campo(aVencer, PERCENTUAL),
+    credito_a_vencer_operacoes: mapOps(aVencer?.operacoes),
+    limite_credito_valor: valorDe(limite),
+    limite_credito_percentual: campo(limite, PERCENTUAL),
+    limite_credito_operacoes: mapOps(limite?.operacoes),
+    consolidado_bruto: consolidado,
+    consultado_em: new Date().toISOString(),
+  };
+}
+
 /** Consulta o SCR no CheckTudo e devolve o dado ou o motivo da falha. Nunca lança. */
 export async function consultarBacenScr(docType: ChecktudoDocType, docValue: string): Promise<BacenResult> {
   const username = process.env.CHECKTUDO_USERNAME;
@@ -68,36 +102,7 @@ export async function consultarBacenScr(docType: ChecktudoDocType, docValue: str
   try {
     const session = await checktudoLogin(username, password);
     const raw = await checktudoSCR(session, docType, docValue);
-    const scr = (raw?.body as any)?.data?.scr ?? {};
-    const consolidado = scr.consolidado ?? {};
-    const mapOps = (ops: any[] | undefined): BacenOperacao[] =>
-      (Array.isArray(ops) ? ops : []).map((o: any) => ({
-        descricao: o.DESCRICAO ?? (campo(o, ["descricao", "modalidade"]) as string | null),
-        valor: o.VALOR ?? (campo(o, ["valor"]) as string | null),
-        qtd_meses: o.QTD_MESES ?? null,
-        percentual: (campo(o, PERCENTUAL) as string | null) ?? null,
-      }));
-    const aVencer = acharBloco(consolidado, (k) => k.includes("avencer"));
-    const limite = acharBloco(consolidado, (k) => k.includes("limite"));
-    return {
-      ok: true,
-      data: {
-        score_pontuacao: scr.score?.pontuacao ?? null,
-        score_faixa: scr.score?.faixa ?? null,
-        credito_vencido_valor: consolidado.creditoVencido?.valor ?? null,
-        credito_vencido_operacoes: mapOps(consolidado.creditoVencido?.operacoes),
-        prejuizo_valor: consolidado.prejuizo?.valor ?? null,
-        prejuizo_operacoes: mapOps(consolidado.prejuizo?.operacoes),
-        credito_a_vencer_valor: valorDe(aVencer),
-        credito_a_vencer_percentual: campo(aVencer, PERCENTUAL),
-        credito_a_vencer_operacoes: mapOps(aVencer?.operacoes),
-        limite_credito_valor: valorDe(limite),
-        limite_credito_percentual: campo(limite, PERCENTUAL),
-        limite_credito_operacoes: mapOps(limite?.operacoes),
-        consolidado_bruto: consolidado,
-        consultado_em: new Date().toISOString(),
-      },
-    };
+    return { ok: true, data: parseBacenScr(raw) };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
