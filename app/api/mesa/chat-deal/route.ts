@@ -1,3 +1,4 @@
+import { chaveIaMesas } from "@/lib/ai/chave-mesas";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -173,7 +174,7 @@ ${contextoProposta}`;
   }
 
   // ── Chama Claude ────────────────────────────────────────────────────────────
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  const apiKey = chaveIaMesas()?.trim();
   if (!apiKey) return NextResponse.json({ error: "API key não configurada" }, { status: 500 });
 
   const { default: Anthropic } = await import("@anthropic-ai/sdk");

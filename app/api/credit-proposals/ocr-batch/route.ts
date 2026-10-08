@@ -1,3 +1,4 @@
+import { chaveIaMesas } from "@/lib/ai/chave-mesas";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -38,7 +39,7 @@ async function uploadToFilesApi(buffer: Buffer, mimeType: string, filename: stri
     const res = await fetch("https://api.anthropic.com/v1/files", {
       method: "POST",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "x-api-key": chaveIaMesas()!,
         "anthropic-version": "2023-06-01",
         "anthropic-beta": "files-api-2025-04-14",
       },
@@ -55,7 +56,7 @@ async function deleteFromFilesApi(fileId: string): Promise<void> {
     await fetch(`https://api.anthropic.com/v1/files/${fileId}`, {
       method: "DELETE",
       headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
+        "x-api-key": chaveIaMesas()!,
         "anthropic-version": "2023-06-01",
         "anthropic-beta": "files-api-2025-04-14",
       },
@@ -110,7 +111,7 @@ async function analyzeOneDoc(
 
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
   const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
+    apiKey: chaveIaMesas(),
     defaultHeaders: { "anthropic-beta": "files-api-2025-04-14" },
   });
 

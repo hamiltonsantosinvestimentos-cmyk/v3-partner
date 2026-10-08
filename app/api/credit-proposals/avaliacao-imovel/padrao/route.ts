@@ -1,3 +1,4 @@
+import { chaveIaMesas } from "@/lib/ai/chave-mesas";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -55,7 +56,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (!ADMIN_ROLES.includes(profile?.role ?? "")) return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-  if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "ANTHROPIC_API_KEY não configurada no servidor" }, { status: 500 });
+  if (!chaveIaMesas()) return NextResponse.json({ error: "ANTHROPIC_API_KEY não configurada no servidor" }, { status: 500 });
 
   const body = (await req.json().catch(() => ({}))) as {
     proposal_id?: string;
@@ -122,7 +123,7 @@ Responda SOMENTE com JSON válido, sem markdown:
 
   try {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const anthropic = new Anthropic({ apiKey: chaveIaMesas() });
     const msg = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 800,

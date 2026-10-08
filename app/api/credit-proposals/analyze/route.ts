@@ -1,3 +1,4 @@
+import { chaveIaMesas } from "@/lib/ai/chave-mesas";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -178,7 +179,7 @@ Retorne APENAS um objeto JSON válido com EXATAMENTE esta estrutura (sem markdow
   // Chama Claude via tool_use para garantir JSON válido
   let analiseJson: Record<string, unknown>;
   try {
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const anthropic = new Anthropic({ apiKey: chaveIaMesas() });
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 4096,

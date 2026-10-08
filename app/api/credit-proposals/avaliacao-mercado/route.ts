@@ -1,3 +1,4 @@
+import { chaveIaMesas } from "@/lib/ai/chave-mesas";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { z } from "zod";
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!chaveIaMesas()) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY não configurada no servidor" }, { status: 500 });
   }
 
@@ -144,7 +145,7 @@ Regras:
 
   try {
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = new Anthropic({ apiKey: chaveIaMesas() });
 
     const raw = (await buscarComparaveis(client, system, userPrompt))
       .trim()

@@ -1,3 +1,4 @@
+import { chaveIaMesas } from "@/lib/ai/chave-mesas";
 import { MODELO_EXTRACAO } from "@/lib/analise-estruturada/extracao";
 
 // Leitura de documento de cadastro (CNH/RG, cartão CNPJ, contrato social) para
@@ -62,7 +63,7 @@ function limpar(bruto: Record<string, unknown>): DadosCadastro {
 
 export async function lerDocumentoCadastro(buffer: Buffer, mime: string, tipoCliente: TipoCliente): Promise<DadosCadastro> {
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = new Anthropic({ apiKey: chaveIaMesas() });
   const data = buffer.toString("base64");
   const fonte = mime === "application/pdf"
     ? { type: "document", source: { type: "base64", media_type: mime, data } }

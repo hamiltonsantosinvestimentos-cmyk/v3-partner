@@ -1,3 +1,4 @@
+import { chaveIaMesas } from "@/lib/ai/chave-mesas";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BUCKET_ANALISE, extensaoDe, itemDoPerfil, perfilPeloDocumento } from "@/lib/analise-estruturada/checklist";
 import { pastaDoPedido, type PedidoAnalise } from "@/lib/analise-estruturada/documentos";
@@ -46,7 +47,7 @@ function jsonDaResposta(texto: string): Record<string, unknown> {
 
 async function chamarIa(conteudo: Array<Record<string, unknown>>): Promise<Record<string, unknown>> {
   const Anthropic = (await import("@anthropic-ai/sdk")).default;
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = new Anthropic({ apiKey: chaveIaMesas() });
   const resp = await anthropic.messages.create({
     model: MODELO_EXTRACAO,
     max_tokens: 16000,
