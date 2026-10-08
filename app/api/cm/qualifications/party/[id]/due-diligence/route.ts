@@ -4,7 +4,8 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { hasDueDiligenceAccess } from "@/lib/cm/dd-access";
 import { runDdTool, DD_TOOLS_ORDER, toolsForKind, type DdTool } from "@/lib/cm/dd-tools";
 import { pfBlockReason, PF_BLOCK_TEXT } from "@/lib/cm/dd-gates";
-import { detectDocument } from "@/lib/document-check";
+import { isNcndaCode, DD_RETENTION_MONTHS } from "@/lib/cm/dd-report";
+import { loadParty, resolveContractCode, resolveDocument, namesByUserId } from "@/lib/cm/dd-party";
 
 // Aba Due Diligence da Ficha de Qualificacao, Entrega 1 (08/10/2026).
 // GET: historico da parte + consultas recentes (menos de 60 dias) do mesmo documento.
@@ -23,18 +24,6 @@ function svc() {
 const NO_STORE = { "Cache-Control": "no-store" };
 const RECENT_DAYS = 60;
 
-type PartyDoc =
-  | { ok: true; kind: "cpf" | "cnpj"; value: string }
-  | { ok: false; reason: string };
-
-function resolveDocument(row: { person_type: string | null; cpf_cnpj: string | null; company_cnpj: string | null }): PartyDoc {
-  const raw = row.person_type === "PJ" ? row.company_cnpj : row.cpf_cnpj;
-  if (!raw || !raw.trim()) return { ok: false, reason: "Parte sem CPF ou CNPJ informado (parte estrangeira ou cadastro incompleto)" };
-  const d = detectDocument(raw);
-  if (!d) return { ok: false, reason: "Documento da parte inválido: a consulta não foi liberada" };
-  return { ok: true, kind: d.kind, value: d.value };
-}
-
 async function authorize() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -43,43 +32,6 @@ async function authorize() {
     return { error: NextResponse.json({ error: "Sem permissão para Due Diligence" }, { status: 403, headers: NO_STORE }) };
   }
   return { userId: user.id };
-}
-
-async function loadParty(db: ReturnType<typeof svc>, id: string) {
-  const { data: row } = await db
-    .from("cm_party_qualifications")
-    .select("id, status, deleted_at, person_type, cpf_cnpj, company_cnpj, batch_id, role_in_document, lgpd_text_version")
-    .eq("id", id)
-    .maybeSingle();
-  if (!row || row.deleted_at) return null;
-  return row;
-}
-
-/**
- * Numero do contrato ligado ao lote da parte. Nos NCNDA o lote e "consumido" pelo contrato
- * (consumido_por_contract_id) e operation_contract_id fica vazio; por isso olhamos os tres
- * vinculos e damos preferencia ao contrato de serie NCNDA (V3C-NDA), que e o que origina a due diligence.
- */
-async function resolveContractCode(db: ReturnType<typeof svc>, batchId: string | null): Promise<string | null> {
-  if (!batchId) return null;
-  const { data: batch } = await db
-    .from("cm_qualification_batches")
-    .select("operation_contract_id, consumido_por_contract_id, parent_contract_id")
-    .eq("id", batchId)
-    .maybeSingle();
-  const ids = [batch?.operation_contract_id, batch?.consumido_por_contract_id, batch?.parent_contract_id].filter(Boolean) as string[];
-  if (ids.length === 0) return null;
-  const { data: contracts } = await db.from("operation_contracts").select("id, contract_code").in("id", ids);
-  const byId = new Map((contracts ?? []).map((c) => [c.id as string, (c.contract_code as string | null) ?? null]));
-  const codes = ids.map((id) => byId.get(id)).filter(Boolean) as string[];
-  return codes.find((c) => c.startsWith("V3C-NDA")) ?? codes[0] ?? null;
-}
-
-async function namesByUserId(db: ReturnType<typeof svc>, ids: string[]): Promise<Record<string, string>> {
-  const uniq = Array.from(new Set(ids));
-  if (uniq.length === 0) return {};
-  const { data } = await db.from("profiles").select("id, full_name").in("id", uniq);
-  return Object.fromEntries((data ?? []).map((p) => [p.id as string, (p.full_name as string) ?? "Usuário"]));
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -120,9 +72,22 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     recent = (rec ?? []).filter((r) => (seen.has(r.tool as string) ? false : (seen.add(r.tool as string), true)));
   }
 
+  // Relatorio da pasta: precisa de NCNDA de origem e de ao menos uma consulta nos ultimos 12 meses.
+  const reportCutoff = new Date();
+  reportCutoff.setUTCMonth(reportCutoff.getUTCMonth() - DD_RETENTION_MONTHS);
+  const hasRecentRun = (runs ?? []).some((r) => new Date(r.created_at as string) >= reportCutoff);
+  const reportBlock = !isNcndaCode(contractCode)
+    ? contractCode
+      ? `Sem NCNDA de origem: o contrato de origem é ${contractCode}`
+      : "Sem NCNDA de origem: a parte não tem contrato de origem no lote"
+    : !hasRecentRun
+    ? `Nenhuma consulta nos últimos ${DD_RETENTION_MONTHS} meses`
+    : null;
+
   const names = await namesByUserId(db, (runs ?? []).map((r) => r.requested_by as string));
   return NextResponse.json(
     {
+      report_block_reason: reportBlock,
       access: true,
       document: doc.ok ? { kind: doc.kind, available: doc.kind === "cnpj" || !pfBlock } : { kind: null, available: false, reason: doc.reason },
       pf_blocked_reason: pfBlock ? PF_BLOCK_TEXT[pfBlock] : null,

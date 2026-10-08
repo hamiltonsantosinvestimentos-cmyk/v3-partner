@@ -5,8 +5,10 @@
 // Nesta entrega: so parte PJ (CNPJ); sem nome ou CPF de socio; SCR detalhado do CPF desabilitado.
 // Confirmacao de consulta em modal V3 que so fecha por botao (nunca clicando fora).
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { aviso } from "@/lib/aviso";
+import { ddSummaryLines } from "@/lib/cm/dd-summary";
 
 export type DdToolId = "receita" | "blacklist" | "escavador" | "datajud" | "scr_cnpj" | "scr_cpf";
 
@@ -33,6 +35,7 @@ type DdRun = {
 };
 
 export type DdInitial = {
+  report_block_reason?: string | null;
   document: { kind: "cpf" | "cnpj" | null; available: boolean; reason?: string };
   pf_blocked_reason: string | null;
   contract_code: string | null;
@@ -53,31 +56,7 @@ const STATUS_BADGE: Record<DdRun["status"], { text: string; cls: string }> = {
 };
 
 function summaryLines(run: DdRun): string[] {
-  const s = run.result_summary ?? {};
-  if (run.status === "nao_consultado") return [s.motivo ?? "A fonte não respondeu. Nenhum resultado foi obtido."];
-  switch (run.tool) {
-    case "receita":
-      return [`Situação cadastral: ${s.situacao_cadastral ?? "-"}`, `Razão social: ${s.razao_social ?? "-"}`, `Sócios no quadro: ${s.socios_qtd ?? 0}`];
-    case "blacklist":
-      return [s.encontrado ? `Consta na Black List V3 (${s.ocorrencias} ocorrência(s))` : "Não consta na Black List V3"];
-    case "escavador":
-      return [run.status === "sem_dados" ? "Nenhum processo encontrado" : `Processos encontrados: ${s.total_processos}`];
-    case "datajud":
-      return run.status === "sem_dados"
-        ? ["Nenhum processo encontrado nos tribunais consultados"]
-        : [`Processos encontrados: ${s.total_processos}`, ...(Array.isArray(s.tribunais) ? [(s.tribunais as { sigla: string; qtd: number }[]).map((t) => `${t.sigla} ${t.qtd}`).join(" · ")] : [])];
-    case "scr_cnpj":
-    case "scr_cpf": {
-      if (run.status === "sem_dados") return ["Sem dados para calcular no SCR (não é o mesmo que sem passivo)"];
-      const passivo = [s.credito_vencido_valor, s.prejuizo_valor].some((v) => v && String(v).replace(/[^0-9]/g, "").replace(/^0+$/, ""));
-      return [
-        `Score: ${s.score_pontuacao ?? "-"} (${s.score_faixa ?? "-"})`,
-        `Crédito vencido: ${s.credito_vencido_valor ?? "-"} · Prejuízo: ${s.prejuizo_valor ?? "-"}`,
-        `A vencer: ${s.credito_a_vencer_valor ?? "-"} · Limite: ${s.limite_credito_valor ?? "-"}`,
-        passivo ? "ATENÇÃO: há passivo registrado no SCR" : "SCR sem passivo vencido ou em prejuízo informado",
-      ];
-    }
-  }
+  return ddSummaryLines(run.tool, run.status, run.result_summary);
 }
 
 type Pending = { tool: DdToolId; recent: DdRun | null };
@@ -88,7 +67,52 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
   const [reason, setReason] = useState("");
   const [running, setRunning] = useState<DdToolId | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reports, setReports] = useState<{ id: string; contract_code: string; file_name: string; folder_path: string; created_at: string; created_by_name: string; expires_br: string }[] | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [access, setAccess] = useState<{ days: number; alert_limit: number; items: { who: string; contract_code: string; party_short: string; ip_masked: string; at_br: string; above_usual: boolean }[] } | null>(null);
   const [rawView, setRawView] = useState<{ loading: boolean; error: string | null; data: unknown } | null>(null);
+
+  const loadReports = useCallback(async () => {
+    const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/due-diligence/reports`);
+    if (res.ok) setReports((await res.json()).reports ?? []);
+  }, [qualificationId]);
+
+  useEffect(() => {
+    void loadReports();
+    // Monitoramento: so ADMIN com a permissao; qualquer outro recebe 403 e a secao nao aparece.
+    fetch("/api/cm/due-diligence/access").then(async (res) => { if (res.ok) setAccess(await res.json()); }).catch(() => {});
+  }, [loadReports]);
+
+  async function generateReport() {
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/due-diligence/reports`, { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { aviso(json.error ?? "Não foi possível gerar o relatório"); return; }
+      aviso("Relatório gerado e guardado na pasta de compliance.");
+      await loadReports();
+    } catch {
+      aviso("Erro de conexão: o relatório não foi gerado");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function openReport(reportId: string) {
+    // A janela abre de forma sincrona no clique, senao o bloqueador de pop-up barra.
+    const win = window.open("", "_blank");
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/due-diligence/reports/${reportId}/open`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) { win?.close(); aviso(json.error ?? "Não foi possível abrir o relatório"); return; }
+      if (win) win.location.href = json.url;
+      // a abertura acabou de ser registrada: atualiza o monitoramento
+      fetch("/api/cm/due-diligence/access").then(async (r) => { if (r.ok) setAccess(await r.json()); }).catch(() => {});
+    } catch {
+      win?.close();
+      aviso("Erro de conexão ao abrir o relatório");
+    }
+  }
 
   async function openRaw(runId: string) {
     setRawView({ loading: true, error: null, data: null });
@@ -217,6 +241,44 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
           </div>
         ))}
       </div>
+
+      <div className="space-y-2 pt-2 border-t border-[#9BAFC5]/10">
+        <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Relatórios de compliance</p>
+        <p className="text-[12px] text-[#9BAFC5]">Pasta: Compliance/DueDiligence. O relatório é guardado por 12 meses e cada abertura fica registrada.</p>
+        <button
+          type="button"
+          onClick={generateReport}
+          disabled={generating || !!data.report_block_reason || !data.document.available}
+          title={data.report_block_reason ?? undefined}
+          className="text-[12px] font-semibold text-[#F5F1E8] border border-[#C9A84C]/40 rounded px-3 py-1.5 hover:border-[#C9A84C] disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+        >
+          {generating && <Loader2 size={12} className="animate-spin" />} Gerar relatório
+        </button>
+        {data.report_block_reason && <p className="text-[12px] text-[#9BAFC5]">{data.report_block_reason}</p>}
+        {reports && reports.length === 0 && <p className="text-[12px] text-[#9BAFC5]">Nenhum relatório gerado para esta parte</p>}
+        {(reports ?? []).map((r) => (
+          <div key={r.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2.5 space-y-1">
+            <p className="text-[12px] text-[#F5F1E8] font-bold break-all">{r.file_name}</p>
+            <p className="text-[11px] text-[#9BAFC5]">{fmtDateTime(r.created_at)} · {r.created_by_name} · será apagado em {r.expires_br}</p>
+            <button type="button" onClick={() => openReport(r.id)} className="text-[12px] font-semibold text-[#E8C97A] underline">
+              Abrir (a abertura fica registrada)
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {access && (
+        <div className="space-y-2 pt-2 border-t border-[#9BAFC5]/10">
+          <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Acessos aos relatórios (últimos {access.days} dias)</p>
+          {access.items.length === 0 && <p className="text-[12px] text-[#9BAFC5]">Nenhum relatório foi aberto no período</p>}
+          {access.items.map((a, i) => (
+            <p key={i} className="text-[12px] text-[#9BAFC5]">
+              <span className="text-[#F5F1E8]">{a.who}</span> · {a.at_br} · {a.contract_code} · parte {a.party_short} · IP {a.ip_masked}
+              {a.above_usual && <span className="ml-2 text-[#F5B942] font-bold">Acesso acima do usual</span>}
+            </p>
+          ))}
+        </div>
+      )}
 
       {rawView && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/75 p-4">
