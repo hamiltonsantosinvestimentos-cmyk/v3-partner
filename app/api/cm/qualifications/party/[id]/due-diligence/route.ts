@@ -54,18 +54,24 @@ async function loadParty(db: ReturnType<typeof svc>, id: string) {
   return row;
 }
 
-/** Numero do contrato (NCNDA ou instrumento de origem) ligado ao lote da parte. */
+/**
+ * Numero do contrato ligado ao lote da parte. Nos NCNDA o lote e "consumido" pelo contrato
+ * (consumido_por_contract_id) e operation_contract_id fica vazio; por isso olhamos os tres
+ * vinculos e damos preferencia ao contrato de serie NCNDA (V3C-NDA), que e o que origina a due diligence.
+ */
 async function resolveContractCode(db: ReturnType<typeof svc>, batchId: string | null): Promise<string | null> {
   if (!batchId) return null;
   const { data: batch } = await db
     .from("cm_qualification_batches")
-    .select("operation_contract_id, parent_contract_id")
+    .select("operation_contract_id, consumido_por_contract_id, parent_contract_id")
     .eq("id", batchId)
     .maybeSingle();
-  const contractId = batch?.operation_contract_id ?? batch?.parent_contract_id ?? null;
-  if (!contractId) return null;
-  const { data: c } = await db.from("operation_contracts").select("contract_code").eq("id", contractId).maybeSingle();
-  return (c?.contract_code as string | undefined) ?? null;
+  const ids = [batch?.operation_contract_id, batch?.consumido_por_contract_id, batch?.parent_contract_id].filter(Boolean) as string[];
+  if (ids.length === 0) return null;
+  const { data: contracts } = await db.from("operation_contracts").select("id, contract_code").in("id", ids);
+  const byId = new Map((contracts ?? []).map((c) => [c.id as string, (c.contract_code as string | null) ?? null]));
+  const codes = ids.map((id) => byId.get(id)).filter(Boolean) as string[];
+  return codes.find((c) => c.startsWith("V3C-NDA")) ?? codes[0] ?? null;
 }
 
 async function namesByUserId(db: ReturnType<typeof svc>, ids: string[]): Promise<Record<string, string>> {
