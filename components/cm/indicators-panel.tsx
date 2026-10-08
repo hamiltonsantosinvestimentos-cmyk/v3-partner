@@ -88,7 +88,7 @@ function FunnelBlock({ title, funnel, note }: { title: string; funnel: Funnel; n
       </div>
       {funnel.estimated_total > 0 && (
         <p className="text-[11px] text-[#9BAFC5]/80">
-          {funnel.estimated_total} item(ns) sem transição registrada: a idade é estimada pela data de criação e vale como &quot;no máximo&quot;.
+          {funnel.estimated_total}{" "}item(ns) sem transição registrada: a idade é estimada pela data de criação e vale como &quot;no máximo&quot;.
           {funnel.updated_at_fallback_total > 0 ? ` ${funnel.updated_at_fallback_total} usam a data da última edição, que pode subestimar o tempo parado.` : ""}
         </p>
       )}
