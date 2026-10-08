@@ -21,6 +21,7 @@ import { BuySideDemandsPanel } from "./buy-side-demands-panel";
 import { NdaAuthorizationQueuePanel } from "./nda-authorization-queue-panel";
 import { QuickIndicateModal } from "./quick-indicate-modal";
 import { KanbanCard } from "./kanban-card";
+import { MeetingAutotriggerToggle } from "./meeting-autotrigger-toggle";
 import { CmSearchFilterBar, EMPTY_CM_FILTERS, CM_STATUS_LABELS, CM_VALOR_FACE_BUCKETS, type CmListingFilters } from "./filter-drawer";
 import { ForjaJuridicoPanel } from "./forja-juridico-panel";
 import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
@@ -1961,6 +1962,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               <ClipboardCheck size={16} /> Lixeira
             </button>
           )}
+          {userRole === "ADMIN" && <MeetingAutotriggerToggle />}
         </div>
       </div>
 
