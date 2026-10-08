@@ -109,10 +109,18 @@ export async function GET(req: NextRequest) {
     // nunca exclui o lote em si, só quem foi excluído dele.
     .is("cm_party_qualifications.deleted_at", null)
     .order("created_at", { ascending: false });
+  // Contrato da Central: lotes ligados por operation_contract_id E lotes CONSUMIDOS pelo contrato
+  // (consumido_por_contract_id). Nos NCNDA gerados a partir de um lote, operation_contract_id fica
+  // vazio, e sem o segundo vinculo o contrato mostrava "Nenhuma qualificação gerada" e as fichas
+  // das partes ficavam inacessiveis (achado na validacao visual de 08/10/2026). O id e validado
+  // como UUID antes de entrar no filtro.
+  if (operationContractId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(operationContractId)) {
+    return NextResponse.json({ error: "operation_contract_id inválido" }, { status: 422 });
+  }
   query = listingId
     ? query.eq("listing_id", listingId)
     : operationContractId
-    ? query.eq("operation_contract_id", operationContractId)
+    ? query.or(`operation_contract_id.eq.${operationContractId},consumido_por_contract_id.eq.${operationContractId}`)
     : templateId
     ? query.eq("template_id", templateId)
     : query.eq("demand_id", demandId!);
