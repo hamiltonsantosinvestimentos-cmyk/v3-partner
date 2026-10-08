@@ -8,7 +8,7 @@
 import { useCallback, useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 
-export type DdToolId = "receita" | "blacklist" | "escavador" | "datajud" | "scr_cnpj";
+export type DdToolId = "receita" | "blacklist" | "escavador" | "datajud" | "scr_cnpj" | "scr_cpf";
 
 const TOOL_LABELS: Record<DdToolId, string> = {
   receita: "Receita / CNPJ",
@@ -16,8 +16,9 @@ const TOOL_LABELS: Record<DdToolId, string> = {
   escavador: "Escavador",
   datajud: "Datajud",
   scr_cnpj: "SCR do CNPJ",
+  scr_cpf: "SCR do CPF",
 };
-const PAID_TOOLS: DdToolId[] = ["escavador", "scr_cnpj"];
+const PAID_TOOLS: DdToolId[] = ["escavador", "scr_cnpj", "scr_cpf"];
 
 type DdRun = {
   id: string;
@@ -26,6 +27,7 @@ type DdRun = {
   result_summary: Record<string, any>;
   contract_code: string | null;
   reuse_reason?: string | null;
+  has_raw?: boolean;
   requested_by_name?: string;
   created_at: string;
 };
@@ -64,7 +66,8 @@ function summaryLines(run: DdRun): string[] {
       return run.status === "sem_dados"
         ? ["Nenhum processo encontrado nos tribunais consultados"]
         : [`Processos encontrados: ${s.total_processos}`, ...(Array.isArray(s.tribunais) ? [(s.tribunais as { sigla: string; qtd: number }[]).map((t) => `${t.sigla} ${t.qtd}`).join(" · ")] : [])];
-    case "scr_cnpj": {
+    case "scr_cnpj":
+    case "scr_cpf": {
       if (run.status === "sem_dados") return ["Sem dados para calcular no SCR (não é o mesmo que sem passivo)"];
       const passivo = [s.credito_vencido_valor, s.prejuizo_valor].some((v) => v && String(v).replace(/[^0-9]/g, "").replace(/^0+$/, ""));
       return [
@@ -85,6 +88,19 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
   const [reason, setReason] = useState("");
   const [running, setRunning] = useState<DdToolId | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rawView, setRawView] = useState<{ loading: boolean; error: string | null; data: unknown } | null>(null);
+
+  async function openRaw(runId: string) {
+    setRawView({ loading: true, error: null, data: null });
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/due-diligence/runs/${runId}/raw`);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setRawView({ loading: false, error: json.error ?? "Não foi possível abrir o detalhe", data: null }); return; }
+      setRawView({ loading: false, error: null, data: json.raw });
+    } catch {
+      setRawView({ loading: false, error: "Erro de conexão", data: null });
+    }
+  }
 
   const reload = useCallback(async () => {
     const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/due-diligence`);
@@ -162,16 +178,20 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
               {running === tool && <Loader2 size={12} className="animate-spin" />} {TOOL_LABELS[tool]}
             </button>
           ))}
-          <button
-            type="button"
-            disabled
-            title="Disponível após parecer de compliance"
-            className="text-[12px] font-semibold text-[#9BAFC5] border border-[#9BAFC5]/20 rounded px-3 py-1.5 opacity-40 cursor-not-allowed"
-          >
-            SCR detalhado do CPF
-          </button>
+          {data.document.kind === "cnpj" && (
+            <button
+              type="button"
+              disabled
+              title="Disponível em entrega seguinte"
+              className="text-[12px] font-semibold text-[#9BAFC5] border border-[#9BAFC5]/20 rounded px-3 py-1.5 opacity-40 cursor-not-allowed"
+            >
+              SCR detalhado de sócio
+            </button>
+          )}
         </div>
-        <p className="text-[12px] text-[#9BAFC5]/80">SCR detalhado do CPF: disponível após parecer de compliance.</p>
+        {data.document.kind === "cnpj" && (
+          <p className="text-[12px] text-[#9BAFC5]/80">Consulta dos sócios (nome, CPF e SCR detalhado): disponível em entrega seguinte.</p>
+        )}
         {error && <p className="text-[12px] text-[#E24B4A]">{error}</p>}
       </div>
 
@@ -185,6 +205,11 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
               <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded border ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].text}</span>
             </div>
             {summaryLines(r).map((l, i) => <p key={i} className="text-[12px] text-[#9BAFC5]">{l}</p>)}
+            {r.has_raw && (
+              <button type="button" onClick={() => openRaw(r.id)} className="text-[12px] font-semibold text-[#E8C97A] underline">
+                Ver detalhe (a abertura fica registrada)
+              </button>
+            )}
             <p className="text-[11px] text-[#9BAFC5]/70">
               {r.requested_by_name ?? "Usuário"} · {fmtDateTime(r.created_at)}{r.contract_code ? ` · ${r.contract_code}` : ""}
               {r.reuse_reason ? ` · Nova consulta: ${r.reuse_reason}` : ""}
@@ -192,6 +217,22 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
           </div>
         ))}
       </div>
+
+      {rawView && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/75 p-4">
+          <div role="dialog" aria-modal="true" aria-label="Detalhe da consulta" className="w-full max-w-lg max-h-[80vh] overflow-y-auto bg-[#09081A] border border-[#C9A84C]/40 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-bold text-[#F5F1E8]">Detalhe da consulta</p>
+            {rawView.loading && <Loader2 size={16} className="animate-spin text-[#C9A84C]" />}
+            {rawView.error && <p className="text-[12px] text-[#E24B4A]">{rawView.error}</p>}
+            {rawView.data != null && (
+              <pre className="whitespace-pre-wrap break-words text-[11px] text-[#9BAFC5]">{JSON.stringify(rawView.data, null, 2)}</pre>
+            )}
+            <div className="flex justify-end">
+              <button type="button" onClick={() => setRawView(null)} className="text-[12px] font-semibold text-[#F5F1E8] border border-[#9BAFC5]/30 rounded px-3 py-1.5">Fechar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pending && (
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/75 p-4">

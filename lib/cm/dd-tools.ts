@@ -10,18 +10,28 @@ import { checktudoLogin, checktudoSCR } from "@/lib/checktudo";
 import { parseBacenScr } from "@/lib/credit-bacen";
 import { cleanDocument } from "@/lib/document-check";
 
-export type DdTool = "receita" | "blacklist" | "escavador" | "datajud" | "scr_cnpj";
+export type DdTool = "receita" | "blacklist" | "escavador" | "datajud" | "scr_cnpj" | "scr_cpf";
+export type DdKind = "cpf" | "cnpj";
 export type DdStatus = "ok" | "sem_dados" | "nao_consultado";
-export type DdOutcome = { status: DdStatus; summary: Record<string, unknown> };
+// raw: resultado bruto da fonte, guardado em cm_party_dd_runs.raw_data (so para PF, retencao 12 meses).
+export type DdOutcome = { status: DdStatus; summary: Record<string, unknown>; raw?: unknown };
 
 // Ordem em que as consultas costumam ser feitas (BRIEF).
-export const DD_TOOLS_ORDER: DdTool[] = ["receita", "blacklist", "escavador", "datajud", "scr_cnpj"];
+export const DD_TOOLS_ORDER: DdTool[] = ["receita", "blacklist", "escavador", "datajud", "scr_cnpj", "scr_cpf"];
+
+/** Ferramentas validas por tipo de documento, na ordem em que costumam ser feitas. */
+export function toolsForKind(kind: DdKind): DdTool[] {
+  return kind === "cnpj"
+    ? ["receita", "blacklist", "escavador", "datajud", "scr_cnpj"]
+    : ["blacklist", "escavador", "datajud", "scr_cpf"];
+}
 export const DD_TOOL_LABELS: Record<DdTool, string> = {
   receita: "Receita / CNPJ",
   blacklist: "Black List V3",
   escavador: "Escavador",
   datajud: "Datajud",
   scr_cnpj: "SCR do CNPJ",
+  scr_cpf: "SCR do CPF",
 };
 
 const naoConsultado = (motivo: string): DdOutcome => ({ status: "nao_consultado", summary: { motivo } });
@@ -50,20 +60,20 @@ async function blacklist(doc: string): Promise<DdOutcome> {
   return { status: "ok", summary: { encontrado: qtd > 0, ocorrencias: qtd } };
 }
 
-async function escavador(doc: string): Promise<DdOutcome> {
+async function escavador(doc: string, kind: DdKind): Promise<DdOutcome> {
   const token = process.env.ESCAVADOR_API_TOKEN;
   if (!token) return naoConsultado("Escavador não configurado");
   try {
-    const r = await buscarProcessosEscavador("cnpj", doc, token);
+    const r = await buscarProcessosEscavador(kind, doc, token);
     return { status: r.total_processos > 0 ? "ok" : "sem_dados", summary: { total_processos: r.total_processos, exibidos: r.processos.length } };
   } catch (e) {
     return naoConsultado(`Escavador indisponível: ${(e as Error).message.slice(0, 120)}`);
   }
 }
 
-async function datajud(doc: string): Promise<DdOutcome> {
+async function datajud(doc: string, kind: DdKind): Promise<DdOutcome> {
   if (!process.env.DATAJUD_API_KEY) return naoConsultado("Datajud não configurado");
-  const query = buildQuery("cnpj", doc);
+  const query = buildQuery(kind, doc);
   const porTribunal: Record<string, number> = {};
   let total = 0;
   const BATCH = 6;
@@ -85,13 +95,13 @@ async function datajud(doc: string): Promise<DdOutcome> {
   return { status: total > 0 ? "ok" : "sem_dados", summary: { total_processos: total, tribunais } };
 }
 
-async function scrCnpj(doc: string): Promise<DdOutcome> {
+async function scrByKind(doc: string, kind: DdKind): Promise<DdOutcome> {
   const user = process.env.CHECKTUDO_USERNAME;
   const pass = process.env.CHECKTUDO_PASSWORD;
   if (!user || !pass) return naoConsultado("CheckTudo não configurado");
   try {
     const session = await checktudoLogin(user, pass);
-    const raw = await checktudoSCR(session, "cnpj", doc);
+    const raw = await checktudoSCR(session, kind, doc);
     const d = parseBacenScr(raw);
     const semScore = !d.score_pontuacao || /SEM DADOS/i.test(String(d.score_pontuacao));
     const semOperacoes = [d.credito_vencido_operacoes, d.prejuizo_operacoes, d.credito_a_vencer_operacoes, d.limite_credito_operacoes]
@@ -106,18 +116,21 @@ async function scrCnpj(doc: string): Promise<DdOutcome> {
         credito_a_vencer_valor: d.credito_a_vencer_valor,
         limite_credito_valor: d.limite_credito_valor,
       },
+      // O bruto so e guardado para PF (dado financeiro pessoal), nunca devolvido por rota de listagem.
+      raw: kind === "cpf" ? { consolidado: d.consolidado_bruto, credito_vencido_operacoes: d.credito_vencido_operacoes, prejuizo_operacoes: d.prejuizo_operacoes, credito_a_vencer_operacoes: d.credito_a_vencer_operacoes, limite_credito_operacoes: d.limite_credito_operacoes } : undefined,
     };
   } catch (e) {
     return naoConsultado(`CheckTudo indisponível: ${(e as Error).message.slice(0, 120)}`);
   }
 }
 
-export async function runDdTool(tool: DdTool, doc: string): Promise<DdOutcome> {
+export async function runDdTool(tool: DdTool, doc: string, kind: DdKind): Promise<DdOutcome> {
   switch (tool) {
     case "receita": return receita(doc);
     case "blacklist": return blacklist(doc);
-    case "escavador": return escavador(doc);
-    case "datajud": return datajud(doc);
-    case "scr_cnpj": return scrCnpj(doc);
+    case "escavador": return escavador(doc, kind);
+    case "datajud": return datajud(doc, kind);
+    case "scr_cnpj": return scrByKind(doc, "cnpj");
+    case "scr_cpf": return scrByKind(doc, "cpf");
   }
 }
