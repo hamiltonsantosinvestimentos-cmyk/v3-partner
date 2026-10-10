@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
 import { Loader2, AlertTriangle, CheckCircle2, Upload, ShieldCheck, X } from "lucide-react";
+import { Dica } from "@/components/shared/dica";
 import {
   type PartyNature, type RepresentativeType, type CompanyLegalNature,
   PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, REQUIRED_REPRESENTATIVE_TYPES,
@@ -379,7 +380,7 @@ function IdentityFields({ profile, value, update, errors, path }: {
   return (
     <div className="space-y-2">
       <div>
-        <FieldLabel req={req}>Documento de identidade</FieldLabel>
+        <FieldLabel req={req}>Documento de identidade <Dica id="doc_identidade_envio" /></FieldLabel>
         <select value={t} onChange={(e) => update((p) => ({ ...p, idType: e.target.value, idIssuer: "", idIssuerUf: "", idCountry: "" }))} className={INPUT_CLS}>
           <option value="">Selecione</option>
           {ID_TYPES.map((i) => <option key={i.code} value={i.code}>{i.label}</option>)}
@@ -459,7 +460,7 @@ function PartyFields({ profile, value, update, errors, path, token, docs, onDocs
 
       {show("cnpj") && (
         <div>
-          <FieldLabel req="obrigatorio">CNPJ</FieldLabel>
+          <FieldLabel req="obrigatorio">CNPJ <Dica id="doc_cpf_cnpj" /></FieldLabel>
           <input value={value.cnpj} onChange={(e) => set("cnpj", maskCnpj(e.target.value))} placeholder="00.000.000/0000-00" className={INPUT_CLS} />
           {isValidCNPJ(value.cnpj) && /[A-Z]/.test(value.cnpj.replace(/[^0-9A-Za-z]/g, "").slice(0, 12)) && (
             <p className="text-[11px] text-[#9BAFC5] mt-1">CNPJ alfanumérico reconhecido.</p>
@@ -470,7 +471,7 @@ function PartyFields({ profile, value, update, errors, path, token, docs, onDocs
 
       {show("cpf") && (
         <div>
-          <FieldLabel req="obrigatorio">{profile === "ESPOLIO" ? "CPF do falecido" : "CPF"}</FieldLabel>
+          <FieldLabel req="obrigatorio">{profile === "ESPOLIO" ? "CPF do falecido" : "CPF"} <Dica id="doc_cpf_cnpj" /></FieldLabel>
           <input value={value.cpf} onChange={(e) => set("cpf", maskCpf(e.target.value))} disabled={value.noCpf} placeholder="000.000.000-00" className={INPUT_CLS} />
           {waiverEligible && (
             <label className="flex items-center gap-2 mt-2 text-[12px] text-[#9BAFC5] cursor-pointer">
@@ -870,7 +871,7 @@ export default function QualificacaoIntakePage() {
 
               {recebeRepasse && (
                 <div className="pt-2 border-t border-[#9BAFC5]/10">
-                  <p className="text-[11px] text-[#E8C97A] font-bold uppercase mb-2">Dados para repasse (ao menos um)</p>
+                  <p className="text-[11px] text-[#E8C97A] font-bold uppercase mb-2">Dados para repasse (ao menos um) <Dica id="repasse" /></p>
                   <label className={LABEL_CLS}>Chave PIX</label>
                   <input value={pixKey} onChange={(e) => setPixKey(e.target.value)} className={`${INPUT_CLS} mb-3`} />
                   <div className="grid grid-cols-2 gap-2">
@@ -894,6 +895,7 @@ export default function QualificacaoIntakePage() {
                   className="mt-0.5 w-4 h-4 accent-[#C9A84C] shrink-0" />
                 <span className="text-[12px] text-[#9BAFC5] leading-relaxed">{LGPD_CHECKBOX_TEXT}</span>
               </label>
+              <p className="text-[11px] text-[#9BAFC5]">Por que pedimos o aceite? <Dica id="aceite_aviso" /> E a análise de KYC? <Dica id="aceite_kyc" /></p>
               <details className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg px-4 py-3">
                 <summary className="text-[12px] text-[#E8C97A] font-bold cursor-pointer">Ler o aviso completo</summary>
                 <div className="mt-3 space-y-3">

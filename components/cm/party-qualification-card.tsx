@@ -10,6 +10,7 @@
 import { formatPhoneIntl } from "@/lib/phone";
 import { useState, useEffect } from "react";
 import { User, Loader2, FileText, Download, X, Eye, EyeOff } from "lucide-react";
+import { Dica } from "@/components/shared/dica";
 import { PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, formatDocumentNumber, type PartyNature } from "@/lib/legal-qualification";
 import { KYC_DOCUMENT_KIND_LABELS } from "@/lib/kyc-documents";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
@@ -144,6 +145,7 @@ function SensitiveValue({ qualificationId, field, masked, label, format, onRevea
       >
         {loading ? <Loader2 size={12} className="animate-spin" /> : value ? <EyeOff size={12} /> : <Eye size={12} />}
       </button>
+      <Dica id="revelar_dado" />
       {error && <span className="basis-full text-[12px] text-[#E24B4A]">{error}</span>}
     </span>
   );
