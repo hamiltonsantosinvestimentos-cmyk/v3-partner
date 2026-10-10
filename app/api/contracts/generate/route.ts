@@ -14,6 +14,7 @@ import {
 } from "@/lib/qualification-roles";
 import { CONCRETE_VERTICALS } from "@/lib/contract-verticals";
 import { ADHESION_SERIES, validateAdhesionParent, dateExtensoBR, type AdhesionParent } from "@/lib/contract-adhesion";
+import { isMandatoTemplateName } from "@/lib/mandato-credito";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -95,6 +96,20 @@ export async function POST(req: NextRequest) {
       { error: `Minuta "${template.template_name}" ainda não foi aprovada pelo jurídico (status atual: ${template.approval_status}). Envie para revisão em Central de Contratos > Minutas antes de gerar contrato.` },
       { status: 422 }
     );
+  }
+
+  // Mandato de Crédito (09/10/2026): só nasce do botão "Mandato" do modal da
+  // proposta, com a qualificação completa da CONTRATANTE e o % do mandato.
+  if (isMandatoTemplateName(template.template_name)) {
+    const ed = (extra_data ?? {}) as Record<string, unknown>;
+    const faltando = ["contratante_qualificacao", "percentual_mandato", "nome_cedente", "email_cedente"]
+      .filter((k) => typeof ed[k] !== "string" || !(ed[k] as string).trim());
+    if (!credit_proposal_id || faltando.length > 0) {
+      return NextResponse.json(
+        { error: `Mandato de Crédito precisa da proposta e dos dados do cliente (faltando: ${[!credit_proposal_id ? "credit_proposal_id" : null, ...faltando].filter(Boolean).join(", ")}). Use o botão "Mandato" no modal da proposta.` },
+        { status: 422 }
+      );
+    }
   }
 
   // Termo de Adesão (06/10/2026): travas no servidor. O Termo (série V3C-ADE) só nasce a partir de
@@ -671,8 +686,10 @@ export async function POST(req: NextRequest) {
     ...avulsoParties,
     { role: "v3_partners", name: "João Lemos Netto", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
   ] : qualificationParties ?? (variables.nome_cedente ? [
-    { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente, email: variables.email_cedente ?? null },
-    { role: "v3_partners", name: "João Lemos Netto", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br" },
+    // Rótulo do bloco de assinaturas opcional (09/10/2026, Mandato de Crédito:
+    // "Contratante" / "Contratada"), vindo do extra_data de quem gera.
+    { role: "cedente", name: variables.nome_cedente, doc: variables.cpf_cnpj_cedente, email: variables.email_cedente ?? null, ...(typeof variables.rotulo_assinatura_cedente === "string" && variables.rotulo_assinatura_cedente.trim() ? { display_label: variables.rotulo_assinatura_cedente.trim() } : {}) },
+    { role: "v3_partners", name: "João Lemos Netto", doc: "14.219.287/0001-50", email: "joao.lemos@v3partners.com.br", ...(typeof variables.rotulo_assinatura_v3 === "string" && variables.rotulo_assinatura_v3.trim() ? { display_label: variables.rotulo_assinatura_v3.trim() } : {}) },
     ...(partnerParty ? [partnerParty] : []),
   ] : headParty.length > 0 ? [
     // P0 real 11/09/2026 (mesma causa do fix acima em qualificationParties):

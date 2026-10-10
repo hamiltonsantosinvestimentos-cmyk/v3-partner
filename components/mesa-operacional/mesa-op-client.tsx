@@ -3073,6 +3073,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         canCompileDocuments={canChangeStage}
         canEditInstituicao={canChangeStage}
         canGenerateContract={["ADMIN", "GESTAO"].includes(currentUser?.role ?? "")}
+        canSendMandato={["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "")}
         isAdmin={currentUser?.role === "ADMIN"}
         showDocsChecklistConfirm
         canConfirmDocsChecklist={["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "")}
