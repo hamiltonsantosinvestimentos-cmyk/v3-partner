@@ -26,6 +26,7 @@ const ETAPAS = ["incompleto", "prospect", "contatado", "interessado", "agenda_re
 //   material_enviado_em: ISO 8601 (quando foi enviado; preenchido aqui)
 //   material_descricao: texto livre (o que foi enviado)
 //   agendado_em: ISO 8601 (data e hora agendada com o lead, em qualquer etapa; null limpa)
+//   nota: inteiro 1-5 (propensão do lead a fechar; null limpa)
 function fmtReuniao(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
@@ -141,6 +142,17 @@ export async function PATCH(
         metaNova.agendado_em = new Date(v).toISOString();
       } else {
         return NextResponse.json({ error: "Data/hora do agendamento inválidas" }, { status: 400 });
+      }
+      metaMudou = true;
+    }
+    if ("nota" in metaPatch) {
+      const v = metaPatch.nota;
+      if (v === null || v === "" || v === 0) {
+        delete metaNova.nota;
+      } else if (Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 5) {
+        metaNova.nota = v;
+      } else {
+        return NextResponse.json({ error: "Nota inválida (use de 1 a 5)" }, { status: 400 });
       }
       metaMudou = true;
     }

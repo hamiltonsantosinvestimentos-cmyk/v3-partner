@@ -8,7 +8,7 @@ import {
   Copy, Check, User, MapPin, Phone, Building2, Search,
   Loader2, Trash2, Pencil, RefreshCw, AlertCircle, ExternalLink,
   Crown, Users, Target, TrendingUp, PhoneCall, Send, Clock,
-  CalendarClock, PackageCheck, PackageX, GripVertical,
+  CalendarClock, PackageCheck, PackageX, GripVertical, Star,
 } from "lucide-react";
 
 import {
@@ -82,12 +82,12 @@ type Etapa = "incompleto" | "prospect" | "contatado" | "interessado" | "agenda_r
 const ETAPAS: { id: Etapa; label: string; color: string; bg: string }[] = [
   // Quiz Seja Partner: deixou nome + WhatsApp + e-mail, mas não concluiu (ver /api/public/partner-quiz/parcial).
   { id: "incompleto",  label: "Lead incompleto", color: "#E07878", bg: "#E0787820" },
+  { id: "followup",    label: "Follow-up",   color: "#F472B6", bg: "#F472B620" },
   { id: "prospect",    label: "Prospect",    color: "#7A8FA8", bg: "#7A8FA820" },
   { id: "contatado",   label: "Contatado",   color: "#60A5FA", bg: "#60A5FA20" },
   { id: "interessado", label: "Interessado", color: "#F59E0B", bg: "#F59E0B20" },
   { id: "agenda_reuniao",   label: "Agenda de Reunião",   color: "#2DD4BF", bg: "#2DD4BF20" },
   { id: "proposta_retorno", label: "Proposta e Retorno", color: "#FB923C", bg: "#FB923C20" },
-  { id: "followup",    label: "Follow-up",   color: "#F472B6", bg: "#F472B620" },
   { id: "trial",       label: "Em Trial",    color: "#A78BFA", bg: "#A78BFA20" },
   { id: "convertido",  label: "Convertido",  color: "#34D399", bg: "#34D39920" },
 ];
@@ -182,6 +182,42 @@ function statusAgendamento(iso: string): { label: string; color: string; atrasad
   return new Date(iso).getTime() < Date.now()
     ? { label: "Em atraso", color: "#F87171", atrasado: true }
     : { label: "Em dia", color: "#34D399", atrasado: false };
+}
+
+// Nota de 1 a 5 (propensão do lead a fechar), guardada em metadata.nota
+function notaLead(p: Prospect): number {
+  const v = Number(p.metadata?.nota);
+  return Number.isInteger(v) && v >= 1 && v <= 5 ? v : 0;
+}
+const NOTA_LABEL = ["Sem nota", "Muito baixa", "Baixa", "Média", "Alta", "Muito alta"];
+
+function Estrelas({ nota, onChange, tamanho = "w-3.5 h-3.5" }: {
+  nota: number;
+  onChange?: (n: number) => void;
+  tamanho?: string;
+}) {
+  const [hover, setHover] = useState(0);
+  const ativa = hover || nota;
+  return (
+    <span className="inline-flex items-center gap-0.5" onMouseLeave={() => setHover(0)}>
+      {[1, 2, 3, 4, 5].map(n => {
+        const cheia = n <= ativa;
+        const icone = <Star className={tamanho} style={{ color: cheia ? GOLD : `${MUTED}70`, fill: cheia ? GOLD : "transparent" }} />;
+        return onChange ? (
+          <button
+            key={n}
+            type="button"
+            onMouseEnter={() => setHover(n)}
+            onClick={(e) => { e.stopPropagation(); onChange(n === nota ? 0 : n); }}
+            className="p-0.5 rounded hover:scale-110 transition-transform"
+            title={n === nota ? "Clique de novo para tirar a nota" : `${n} — ${NOTA_LABEL[n]}`}
+          >
+            {icone}
+          </button>
+        ) : <span key={n}>{icone}</span>;
+      })}
+    </span>
+  );
 }
 
 /** Renderiza o modal direto no <body>, acima da topbar (z-[100]) e de qualquer transform do layout. */
@@ -575,7 +611,7 @@ function tipoFollowup(tipo: string) {
 // ─── Modal de Detalhe do Prospect ────────────────────────────────────────────
 
 function DetalheModal({
-  prospect, onClose, onEdit, onLink, isAdmin, onDelete, onMove, onAgendar,
+  prospect, onClose, onEdit, onLink, isAdmin, onDelete, onMove, onAgendar, onNota,
 }: {
   prospect: Prospect;
   onClose: () => void;
@@ -584,6 +620,7 @@ function DetalheModal({
   onDelete: (id: string) => void;
   onMove: (id: string, etapa: Etapa) => void;
   onAgendar: (id: string, iso: string | null) => Promise<void>;
+  onNota: (id: string, nota: number) => void;
   isAdmin: boolean;
 }) {
   const etapa = ETAPAS.find(e => e.id === prospect.etapa);
@@ -690,6 +727,11 @@ function DetalheModal({
                 {etapa?.label ?? (prospect.etapa === "perdido" ? "Perdido" : prospect.etapa)}
               </p>
               <h3 className="text-lg font-bold text-white truncate">{prospect.nome}</h3>
+              <div className="flex items-center gap-2 mt-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: MUTED }}>Chance de fechar</span>
+                <Estrelas nota={notaLead(prospect)} onChange={n => onNota(prospect.id, n)} tamanho="w-5 h-5" />
+                <span className="text-[11px] font-semibold" style={{ color: notaLead(prospect) ? GOLD : MUTED }}>{NOTA_LABEL[notaLead(prospect)]}</span>
+              </div>
             </div>
             <button onClick={onClose} title="Fechar (Esc)" className="p-1.5 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10 transition-colors">
               <X className="w-5 h-5" />
@@ -1064,6 +1106,14 @@ function ProspectCard({
         </div>
       </div>
 
+      {/* Nota + data de entrada */}
+      <div className="flex items-center justify-between gap-2">
+        <Estrelas nota={notaLead(prospect)} />
+        <span className="text-[10px] flex items-center gap-1 shrink-0" style={{ color: MUTED }} title="Data em que o lead entrou">
+          <Clock className="w-3 h-3" /> Entrou {new Date(prospect.created_at).toLocaleDateString("pt-BR", { timeZone: TZ, day: "2-digit", month: "2-digit", year: "2-digit" })}
+        </span>
+      </div>
+
       {/* Info */}
       <div className="space-y-1">
         {prospect.email && (
@@ -1425,6 +1475,8 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
   const [propondo, setPropondo] = useState<{ prospect: Prospect; mover: boolean } | null>(null);
   const isAdmin = role === "ADMIN";
 
+  // Só a primeira carga mostra "Carregando…"; as atualizações depois de salvar/mover
+  // trocam os dados por baixo, sem desmontar o quadro (a tela não sai do lugar)
   const load = () => {
     setLoading(true); setErr(null);
     fetch("/api/prospeccao")
@@ -1463,7 +1515,12 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
     load();
   };
 
+  // Atualiza o card na hora, antes da resposta do servidor
+  const otimista = (id: string, mudar: (p: Prospect) => Prospect) =>
+    setProspects(ps => ps.map(p => (p.id === id ? mudar(p) : p)));
+
   const handleMove = async (id: string, etapa: Etapa, metadata_patch?: Record<string, unknown>) => {
+    otimista(id, p => ({ ...p, etapa, metadata: { ...(p.metadata ?? {}), ...(metadata_patch ?? {}) } }));
     const res = await fetch(`/api/prospeccao/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1471,6 +1528,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
+      load();
       throw new Error(j.error ?? "Erro ao mover o prospect");
     }
     load();
@@ -1478,6 +1536,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
 
   // Só atualiza os dados de agenda/proposta (sem mudar de etapa)
   const handleMeta = async (id: string, metadata_patch: Record<string, unknown>) => {
+    otimista(id, p => ({ ...p, metadata: { ...(p.metadata ?? {}), ...metadata_patch } }));
     const res = await fetch(`/api/prospeccao/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1485,6 +1544,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
     });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
+      load();
       throw new Error(j.error ?? "Erro ao salvar");
     }
     load();
@@ -1637,7 +1697,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
       </div>
 
       {/* Loading / Error */}
-      {loading && (
+      {loading && prospects.length === 0 && (
         <div className="flex items-center justify-center h-48 gap-2" style={{ color: MUTED }}>
           <Loader2 className="w-4 h-4 animate-spin" style={{ color: GOLD }} />
           <span className="text-sm">Carregando…</span>
@@ -1651,7 +1711,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
       )}
 
       {/* Kanban */}
-      {!loading && !err && (
+      {!err && !(loading && prospects.length === 0) && (
         <div className="flex gap-3 overflow-x-auto pb-4">
           {ETAPAS.map(etapa => {
             const cards = filtered.filter(p => p.etapa === etapa.id);
@@ -1798,6 +1858,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
           onDelete={id => { handleDelete(id); setDetalhe(null); }}
           onMove={requestMove}
           onAgendar={(id, iso) => handleMeta(id, { agendado_em: iso })}
+          onNota={(id, nota) => { handleMeta(id, { nota: nota || null }).catch(e => aviso((e as Error).message)); }}
           isAdmin={isAdmin}
         />
       )}
