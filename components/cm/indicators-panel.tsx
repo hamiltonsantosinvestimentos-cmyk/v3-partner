@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { Dica } from "@/components/shared/dica";
 
 type StageRow = { key: string; label: string; count: number; stalled: number; median_days: number | null; estimated: number };
 type Funnel = {
@@ -60,7 +61,7 @@ function FunnelBlock({ title, funnel, note }: { title: string; funnel: Funnel; n
             <tr className="border-b border-[#243A66] bg-[#13223A] text-left text-[#E8C97A]">
               <th className="px-3 py-2 font-bold">Etapa</th>
               <th className="px-3 py-2 font-bold text-right">Itens</th>
-              <th className="px-3 py-2 font-bold text-right">Parados há mais de 30 dias</th>
+              <th className="px-3 py-2 font-bold text-right">Parados há mais de 30 dias <Dica id="parado_30_dias" /></th>
               <th className="px-3 py-2 font-bold text-right">Idade mediana na etapa</th>
             </tr>
           </thead>

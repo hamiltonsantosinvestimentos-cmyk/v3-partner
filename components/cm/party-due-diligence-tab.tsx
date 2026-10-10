@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { Dica } from "@/components/shared/dica";
 import { aviso } from "@/lib/aviso";
 import { ddSummaryLines } from "@/lib/cm/dd-summary";
 
@@ -220,19 +221,19 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
       </div>
 
       <div className="space-y-2 pt-2 border-t border-[#9BAFC5]/10">
-        <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Histórico desta parte</p>
+        <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Histórico desta parte <Dica id="consultas" /></p>
         {data.runs.length === 0 && <p className="text-[12px] text-[#9BAFC5]">Nenhuma consulta feita para esta parte</p>}
         {data.runs.map((r) => (
           <div key={r.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-2.5 space-y-1">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[12px] text-[#F5F1E8] font-bold">{TOOL_LABELS[r.tool]}</p>
-              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded border ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].text}</span>
+              <span className="inline-flex items-center gap-1"><span className={`text-[11px] font-bold px-1.5 py-0.5 rounded border ${STATUS_BADGE[r.status].cls}`}>{STATUS_BADGE[r.status].text}</span>{r.status === "nao_consultado" && <Dica id="selo_nao_consultado" />}{r.status === "sem_dados" && <Dica id="selo_sem_dados" />}</span>
             </div>
             {summaryLines(r).map((l, i) => <p key={i} className="text-[12px] text-[#9BAFC5]">{l}</p>)}
             {r.has_raw && (
-              <button type="button" onClick={() => openRaw(r.id)} className="text-[12px] font-semibold text-[#E8C97A] underline">
+              <span className="inline-flex items-center gap-1"><button type="button" onClick={() => openRaw(r.id)} className="text-[12px] font-semibold text-[#E8C97A] underline">
                 Ver detalhe (a abertura fica registrada)
-              </button>
+              </button><Dica id={r.tool === "scr_cnpj" || r.tool === "scr_cpf" ? "scr_detalhe" : "revelar_dado"} /></span>
             )}
             <p className="text-[11px] text-[#9BAFC5]/70">
               {r.requested_by_name ?? "Usuário"} · {fmtDateTime(r.created_at)}{r.contract_code ? ` · ${r.contract_code}` : ""}
@@ -243,8 +244,8 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
       </div>
 
       <div className="space-y-2 pt-2 border-t border-[#9BAFC5]/10">
-        <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Relatórios de compliance</p>
-        <p className="text-[12px] text-[#9BAFC5]">Pasta: Compliance/DueDiligence. O relatório é guardado por 12 meses e cada abertura fica registrada.</p>
+        <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Relatórios de compliance <Dica id="gerar_relatorio" /></p>
+        <p className="text-[12px] text-[#9BAFC5]">Pasta: Compliance/DueDiligence. O relatório é guardado por 12 meses e cada abertura fica registrada. <Dica id="pasta_compliance" /></p>
         <button
           type="button"
           onClick={generateReport}
@@ -269,7 +270,7 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
 
       {access && (
         <div className="space-y-2 pt-2 border-t border-[#9BAFC5]/10">
-          <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Acessos aos relatórios (últimos {access.days} dias)</p>
+          <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Acessos aos relatórios (últimos {access.days} dias) <Dica id="acessos_relatorios" /></p>
           {access.items.length === 0 && <p className="text-[12px] text-[#9BAFC5]">Nenhum relatório foi aberto no período</p>}
           {access.items.map((a, i) => (
             <p key={i} className="text-[12px] text-[#9BAFC5]">
@@ -300,7 +301,8 @@ export function PartyDueDiligenceTab({ qualificationId, partyName, initial }: { 
         <div className="fixed inset-0 z-[140] flex items-center justify-center bg-black/75 p-4">
           <div role="dialog" aria-modal="true" aria-labelledby="dd-confirm-title" className="w-full max-w-md bg-[#09081A] border border-[#C9A84C]/40 rounded-xl p-4 space-y-3">
             <p id="dd-confirm-title" className="text-sm font-bold text-[#F5F1E8]">
-              {pending.recent ? "Já existe consulta recente" : `Consultar ${TOOL_LABELS[pending.tool]}`}
+              {pending.recent ? "Já existe consulta recente" : `Consultar ${TOOL_LABELS[pending.tool]}`}{" "}
+              <Dica id={pending.recent ? "consulta_recente" : pending.tool === "scr_cnpj" || pending.tool === "scr_cpf" ? "scr" : "consultas"} />
             </p>
             <p className="text-[12px] text-[#9BAFC5]">Parte: <span className="text-[#F5F1E8]">{partyName}</span></p>
             {pending.recent ? (

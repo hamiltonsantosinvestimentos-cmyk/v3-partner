@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, CalendarClock } from "lucide-react";
+import { Dica } from "@/components/shared/dica";
 import { aviso, confirmar } from "@/lib/aviso";
 
 const URL_FLAG = "/api/cm/feature-flags/meeting_autotrigger";
@@ -72,6 +73,7 @@ export function MeetingAutotriggerToggle() {
         {loading || saving ? <Loader2 size={16} className="animate-spin" /> : <CalendarClock size={16} />}
         Agendamento automático: {indisponivel ? "Indisponível" : state?.enabled ? "Ligado" : "Desligado"}
       </button>
+      <Dica id="agendamento_auto" />
       {state?.updated_at_br && (
         <span className="text-[11px] text-[#9BAFC5]">
           Alterado em {state.updated_at_br}{state.updated_by_name ? ` por ${state.updated_by_name}` : ""}
