@@ -20,6 +20,7 @@ import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
 import { RecomendacaoLinha } from "./recomendacao-linha";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
 import { NdaVinculoProposta } from "@/components/mesa-credito/nda-vinculo-proposta";
+import { MandatoEnvio } from "@/components/mesa-credito/mandato-envio";
 import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
 import { pegarOrigemModal, recorteDe } from "@/components/motion/origem-modal";
 
@@ -248,6 +249,9 @@ interface PropostaDetailModalProps {
    *  (contract_templates vertical='credito'). Mesmo gate de role do backend
    *  (/api/contracts/generate, /api/contracts/templates): ADMIN/GESTAO/MESA_OPERACIONAL. */
   canGenerateContract?: boolean;
+  /** 09/10/2026: botão "Mandato" (gera e envia o Mandato de Crédito PF/PJ da
+   *  Central de Contratos com o % do campo Mandato). ADMIN/GESTAO/MESA_OPERACIONAL. */
+  canSendMandato?: boolean;
   /** 26/08/2026: estritamente role === "ADMIN" (nunca GESTAO/MESA_OPERACIONAL)
    *  -- libera o botão "Autorizar avanço sem Análise" no gate de Análise de
    *  Crédito. Mesmo critério exigido pelo backend em /api/credit-proposals. */
@@ -938,7 +942,7 @@ function TimelineOperacao({ proposal }: { proposal: ProposalFull }) {
   );
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa, canGenerateContract, isAdmin, showDocsChecklistConfirm, canConfirmDocsChecklist }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa, canGenerateContract, canSendMandato, isAdmin, showDocsChecklistConfirm, canConfirmDocsChecklist }: PropostaDetailModalProps) {
   // ── Gate Análise de Crédito (26/08/2026) ─────────────────────────────────
   // Status do pedido de Análise vinculado a esta proposta (?prop=<code> em
   // /analise-v2) -- alimenta a tarja grande na aba Detalhes e o bloqueio do
@@ -5384,6 +5388,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 </div>
               );
             })()}
+            {canSendMandato && (
+              <MandatoEnvio
+                proposal={proposal}
+                percMandato={percMandato}
+                onMetadataUpdate={(metadata) => onProposalUpdate?.(proposal.id, { metadata: metadata as ProposalMeta })}
+              />
+            )}
           </div>
           {canChangeStage && activeIdx > 0 && prevStage && !isEmAprovacao && (
             <Button size="sm" variant="outline" onClick={goBack} className="gap-2 border-border text-muted-foreground hover:text-white">
