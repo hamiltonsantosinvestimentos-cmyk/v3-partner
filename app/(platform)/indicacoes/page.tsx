@@ -72,7 +72,7 @@ export default async function IndicacoesPage() {
     pendentes = leads.filter(
       (l: { id: string; etapa: string }) =>
         l.etapa === "prospect" || l.etapa === "contatado" || l.etapa === "interessado" ||
-        l.etapa === "agenda_reuniao" || l.etapa === "proposta_retorno"
+        l.etapa === "agenda_reuniao" || l.etapa === "proposta_retorno" || l.etapa === "followup"
     ).length;
 
     ganhosTotal = (commissionsRes.data ?? []).reduce(

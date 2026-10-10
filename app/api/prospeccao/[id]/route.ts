@@ -16,7 +16,7 @@ async function getUser() {
   return profile as { id: string; role: string; full_name: string } | null;
 }
 
-const ETAPAS = ["incompleto", "prospect", "contatado", "interessado", "agenda_reuniao", "proposta_retorno", "trial", "convertido", "perdido"];
+const ETAPAS = ["incompleto", "prospect", "contatado", "interessado", "agenda_reuniao", "proposta_retorno", "followup", "trial", "convertido", "perdido"];
 
 // Agenda de reunião e proposta/retorno ficam em prospeccao_leads.metadata (jsonb, já existente),
 // sem coluna nova. Só estas chaves podem ser gravadas por aqui: o resto do metadata (respostas
@@ -25,6 +25,7 @@ const ETAPAS = ["incompleto", "prospect", "contatado", "interessado", "agenda_re
 //   material_enviado: boolean (proposta/material foi enviado ao lead?)
 //   material_enviado_em: ISO 8601 (quando foi enviado; preenchido aqui)
 //   material_descricao: texto livre (o que foi enviado)
+//   agendado_em: ISO 8601 (data e hora agendada com o lead, em qualquer etapa; null limpa)
 function fmtReuniao(iso: string) {
   return new Date(iso).toLocaleString("pt-BR", {
     timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
@@ -129,6 +130,17 @@ export async function PATCH(
         metaNova.reuniao_em = new Date(v).toISOString();
       } else {
         return NextResponse.json({ error: "Data/horário da reunião inválidos" }, { status: 400 });
+      }
+      metaMudou = true;
+    }
+    if ("agendado_em" in metaPatch) {
+      const v = metaPatch.agendado_em;
+      if (v === null || v === "") {
+        delete metaNova.agendado_em;
+      } else if (typeof v === "string" && !Number.isNaN(new Date(v).getTime())) {
+        metaNova.agendado_em = new Date(v).toISOString();
+      } else {
+        return NextResponse.json({ error: "Data/hora do agendamento inválidas" }, { status: 400 });
       }
       metaMudou = true;
     }

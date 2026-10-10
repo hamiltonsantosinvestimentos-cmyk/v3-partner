@@ -49,6 +49,7 @@ const ETAPA_LABELS: Record<string, string> = {
   interessado: "Interessado",
   agenda_reuniao: "Agenda de Reunião",
   proposta_retorno: "Proposta e Retorno",
+  followup: "Follow-up",
   trial: "Trial",
   convertido: "Convertido",
 };

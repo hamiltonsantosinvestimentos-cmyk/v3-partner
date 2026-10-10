@@ -2,12 +2,13 @@
 import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useEffect, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import {
   Plus, X, ChevronRight, ChevronLeft, Link2, MessageCircle, Mail,
   Copy, Check, User, MapPin, Phone, Building2, Search,
   Loader2, Trash2, Pencil, RefreshCw, AlertCircle, ExternalLink,
   Crown, Users, Target, TrendingUp, PhoneCall, Send, Clock,
-  CalendarClock, PackageCheck, PackageX,
+  CalendarClock, PackageCheck, PackageX, GripVertical,
 } from "lucide-react";
 
 import {
@@ -76,7 +77,7 @@ interface Prospect {
 interface Equipe { id: string; full_name: string; role: string; }
 interface Partner { id: string; full_name: string; email: string; }
 
-type Etapa = "incompleto" | "prospect" | "contatado" | "interessado" | "agenda_reuniao" | "proposta_retorno" | "trial" | "convertido" | "perdido";
+type Etapa = "incompleto" | "prospect" | "contatado" | "interessado" | "agenda_reuniao" | "proposta_retorno" | "followup" | "trial" | "convertido" | "perdido";
 
 const ETAPAS: { id: Etapa; label: string; color: string; bg: string }[] = [
   // Quiz Seja Partner: deixou nome + WhatsApp + e-mail, mas não concluiu (ver /api/public/partner-quiz/parcial).
@@ -86,6 +87,7 @@ const ETAPAS: { id: Etapa; label: string; color: string; bg: string }[] = [
   { id: "interessado", label: "Interessado", color: "#F59E0B", bg: "#F59E0B20" },
   { id: "agenda_reuniao",   label: "Agenda de Reunião",   color: "#2DD4BF", bg: "#2DD4BF20" },
   { id: "proposta_retorno", label: "Proposta e Retorno", color: "#FB923C", bg: "#FB923C20" },
+  { id: "followup",    label: "Follow-up",   color: "#F472B6", bg: "#F472B620" },
   { id: "trial",       label: "Em Trial",    color: "#A78BFA", bg: "#A78BFA20" },
   { id: "convertido",  label: "Convertido",  color: "#34D399", bg: "#34D39920" },
 ];
@@ -171,6 +173,22 @@ function statusReuniao(iso: string): { label: string; color: string } {
   return { label: "Agendada", color: "#2DD4BF" };
 }
 
+// Data e hora agendada com o lead (qualquer etapa): verde enquanto está em dia, vermelho quando atrasa
+function agendadoEm(p: Prospect): string | null {
+  const v = p.metadata?.agendado_em;
+  return typeof v === "string" ? v : null;
+}
+function statusAgendamento(iso: string): { label: string; color: string; atrasado: boolean } {
+  return new Date(iso).getTime() < Date.now()
+    ? { label: "Em atraso", color: "#F87171", atrasado: true }
+    : { label: "Em dia", color: "#34D399", atrasado: false };
+}
+
+/** Renderiza o modal direto no <body>, acima da topbar (z-[100]) e de qualquer transform do layout. */
+function NaFrente({ children }: { children: React.ReactNode }) {
+  return typeof document === "undefined" ? null : createPortal(children, document.body);
+}
+
 function AgendaModal({
   prospect, onSave, onClose,
 }: {
@@ -191,7 +209,7 @@ function AgendaModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "#00000090" }} onClick={onClose}>
+    <div className="fixed inset-0 z-[310] flex items-center justify-center p-4" style={{ background: "#00000090" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl border border-white/10 p-5 space-y-4" style={{ background: "#0F1E35" }} onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
@@ -248,7 +266,7 @@ function PropostaModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "#00000090" }} onClick={onClose}>
+    <div className="fixed inset-0 z-[310] flex items-center justify-center p-4" style={{ background: "#00000090" }} onClick={onClose}>
       <div className="w-full max-w-sm rounded-2xl border border-white/10 p-5 space-y-4" style={{ background: "#0F1E35" }} onClick={e => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
@@ -347,7 +365,7 @@ function ProspectModal({
   const inputCls = "w-full rounded-xl px-3 py-2 text-sm text-white border border-white/10 focus:border-yellow-500/50 focus:outline-none transition-colors";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#00000080" }}>
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: "#00000080" }}>
       <div className="w-full max-w-lg rounded-2xl border border-white/10 overflow-hidden" style={{ background: "#0F1E35" }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <h3 className="text-base font-bold text-white">
@@ -557,13 +575,15 @@ function tipoFollowup(tipo: string) {
 // ─── Modal de Detalhe do Prospect ────────────────────────────────────────────
 
 function DetalheModal({
-  prospect, onClose, onEdit, onLink, isAdmin, onDelete,
+  prospect, onClose, onEdit, onLink, isAdmin, onDelete, onMove, onAgendar,
 }: {
   prospect: Prospect;
   onClose: () => void;
   onEdit: (p: Prospect) => void;
   onLink: (p: Prospect) => void;
   onDelete: (id: string) => void;
+  onMove: (id: string, etapa: Etapa) => void;
+  onAgendar: (id: string, iso: string | null) => Promise<void>;
   isAdmin: boolean;
 }) {
   const etapa = ETAPAS.find(e => e.id === prospect.etapa);
@@ -575,6 +595,30 @@ function DetalheModal({
   const [novoTipo, setNovoTipo] = useState("ligacao");
   const [novoNota, setNovoNota] = useState("");
   const [salvando, setSalvando] = useState(false);
+
+  // Agendamento com o lead
+  const agendado = agendadoEm(prospect);
+  const [agValor, setAgValor] = useState(isoParaInputLocal(agendado));
+  const [agBase, setAgBase] = useState(agendado);
+  const [agSalvando, setAgSalvando] = useState(false);
+  const [agErro, setAgErro] = useState<string | null>(null);
+  // Data salva mudou (salvou/limpou/recarregou): o campo acompanha
+  if (agBase !== agendado) { setAgBase(agendado); setAgValor(isoParaInputLocal(agendado)); }
+  const agIso = inputLocalParaIso(agValor);
+  const agStatus = agendado ? statusAgendamento(agendado) : null;
+  const salvarAgendamento = async (iso: string | null) => {
+    setAgSalvando(true); setAgErro(null);
+    try { await onAgendar(prospect.id, iso); }
+    catch (e) { setAgErro((e as Error).message); }
+    finally { setAgSalvando(false); }
+  };
+
+  // Esc fecha
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   useEffect(() => {
     fetch(`/api/prospeccao/${prospect.id}/followups`)
@@ -629,24 +673,56 @@ function DetalheModal({
   ].filter(r => r.value);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#00000090" }}>
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 overflow-hidden flex flex-col max-h-[92vh]" style={{ background: "#0F1E35" }}>
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-3 sm:p-5" style={{ background: "#000000B0" }} onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full h-full max-w-7xl rounded-2xl border border-white/10 overflow-hidden flex flex-col shadow-2xl"
+        style={{ background: "#0F1E35" }}
+        onClick={e => e.stopPropagation()}
+      >
 
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-white/10 shrink-0">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: etapa?.color ?? MUTED }}>
-              {etapa?.label ?? prospect.etapa}
-            </p>
-            <h3 className="text-base font-bold text-white">{prospect.nome}</h3>
+        <div className="px-5 py-4 border-b border-white/10 shrink-0 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: etapa?.color ?? (prospect.etapa === "perdido" ? "#F87171" : MUTED) }}>
+                {etapa?.label ?? (prospect.etapa === "perdido" ? "Perdido" : prospect.etapa)}
+              </p>
+              <h3 className="text-lg font-bold text-white truncate">{prospect.nome}</h3>
+            </div>
+            <button onClick={onClose} title="Fechar (Esc)" className="p-1.5 rounded-lg text-muted-foreground hover:text-white hover:bg-white/10 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-white transition-colors mt-0.5">
-            <X className="w-4 h-4" />
-          </button>
+          {/* Mover de etapa */}
+          <div className="flex flex-wrap gap-1.5">
+            {[...ETAPAS, { id: "perdido" as Etapa, label: "Perdido", color: "#F87171", bg: "#F8717120" }].map(e => {
+              const atual = e.id === prospect.etapa;
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  disabled={atual}
+                  onClick={() => onMove(prospect.id, e.id)}
+                  className="text-[10px] font-bold uppercase tracking-wide px-2.5 py-1 rounded-full border transition-colors disabled:cursor-default hover:bg-white/5"
+                  style={{
+                    borderColor: atual ? e.color : "rgba(255,255,255,0.08)",
+                    background: atual ? e.bg : "transparent",
+                    color: atual ? e.color : MUTED,
+                  }}
+                  title={atual ? "Etapa atual" : `Mover para ${e.label}`}
+                >
+                  {e.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Conteúdo */}
-        <div className="overflow-y-auto p-5 space-y-5 flex-1">
+        <div className="overflow-y-auto p-5 flex-1 grid grid-cols-1 lg:grid-cols-2 gap-5 content-start">
+          <div className="space-y-5 min-w-0">
 
           {/* Dados cadastrais */}
           <div className="rounded-xl border border-white/5 overflow-hidden" style={{ background: NAVY_CARD }}>
@@ -743,6 +819,62 @@ function DetalheModal({
             </div>
           )}
 
+          </div>
+
+          <div className="space-y-5 min-w-0">
+          {/* ── Agendamento com o lead ── */}
+          <div className="space-y-3">
+            <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Agendado com o lead</p>
+            <div
+              className="rounded-xl border p-3 space-y-3"
+              style={{ background: NAVY_CARD, borderColor: agStatus ? `${agStatus.color}60` : "rgba(255,255,255,0.1)" }}
+            >
+              {agendado && agStatus ? (
+                <div className="flex items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: `${agStatus.color}18` }}>
+                  <span className="flex items-center gap-1.5 text-sm font-bold" style={{ color: agStatus.color }}>
+                    <CalendarClock className="w-4 h-4 shrink-0" /> {fmtDiaHora(agendado)}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ background: `${agStatus.color}25`, color: agStatus.color }}>
+                    {agStatus.label}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-xs" style={{ color: MUTED }}>Nenhuma data agendada com este lead.</p>
+              )}
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="datetime-local"
+                  value={agValor}
+                  onChange={e => setAgValor(e.target.value)}
+                  className="flex-1 rounded-xl px-3 py-2 text-sm text-white border border-white/10 focus:border-yellow-500/40 focus:outline-none"
+                  style={{ background: "#0F1E35", colorScheme: "dark" }}
+                  aria-label="Data e hora agendada com o lead (horário de Brasília)"
+                />
+                <button
+                  onClick={() => salvarAgendamento(agIso)}
+                  disabled={agSalvando || !agIso || agIso === agendado}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-black flex items-center justify-center gap-1.5 disabled:opacity-40"
+                  style={{ background: GOLD }}
+                >
+                  {agSalvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarClock className="w-3.5 h-3.5" />}
+                  {agendado ? "Reagendar" : "Agendar"}
+                </button>
+                {agendado && (
+                  <button
+                    onClick={() => salvarAgendamento(null)}
+                    disabled={agSalvando}
+                    className="px-3 py-2 rounded-xl text-xs font-semibold border border-white/10 hover:border-white/20 disabled:opacity-40"
+                    style={{ color: MUTED }}
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px]" style={{ color: MUTED }}>Horário de Brasília · verde = em dia · vermelho = em atraso</p>
+              {agErro && <p className="text-[11px] text-red-400">{agErro}</p>}
+            </div>
+          </div>
+
           {/* ── Follow-ups ── */}
           <div className="space-y-3">
             <p className="text-xs font-bold uppercase tracking-widest" style={{ color: GOLD }}>Follow-up</p>
@@ -835,10 +967,11 @@ function DetalheModal({
               );
             })}
           </div>
+          </div>
         </div>
 
         {/* Ações */}
-        <div className="flex gap-2 px-5 pb-5 pt-3 border-t border-white/5 shrink-0">
+        <div className="flex flex-wrap gap-2 px-5 pb-5 pt-3 border-t border-white/5 shrink-0">
           <button
             onClick={() => { onClose(); onEdit(prospect); }}
             className="flex-1 py-2 rounded-xl text-sm font-semibold border border-white/10 text-white hover:border-white/20 transition-colors flex items-center justify-center gap-1.5"
@@ -860,6 +993,12 @@ function DetalheModal({
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
+          <button
+            onClick={onClose}
+            className="w-full sm:w-auto sm:min-w-[140px] py-2 px-5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 border border-white/15 text-white hover:bg-white/10 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" /> Fechar
+          </button>
         </div>
       </div>
     </div>
@@ -884,14 +1023,25 @@ function ProspectCard({
   const etapaAtual = ETAPAS.findIndex(e => e.id === prospect.etapa);
   const podeMover = prospect.etapa !== "perdido";
 
+  const [arrastando, setArrastando] = useState(false);
+
   return (
     <div
-      className="rounded-xl border border-white/5 p-3 space-y-2 hover:border-white/10 transition-colors cursor-pointer"
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData("text/plain", prospect.id);
+        e.dataTransfer.effectAllowed = "move";
+        setArrastando(true);
+      }}
+      onDragEnd={() => setArrastando(false)}
+      className={`rounded-xl border border-white/5 p-3 space-y-2 hover:border-white/10 transition-all cursor-grab active:cursor-grabbing ${arrastando ? "opacity-40 scale-[0.98]" : ""}`}
       style={{ background: "#0F1E35" }}
       onClick={() => onDetalhe(prospect)}
+      title="Clique para abrir · arraste para mudar de etapa"
     >
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
+        <GripVertical className="w-3.5 h-3.5 shrink-0 mt-0.5 -ml-1" style={{ color: `${MUTED}80` }} />
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onDetalhe(prospect); }}
@@ -969,6 +1119,22 @@ function ProspectCard({
           </a>
         )}
       </div>
+
+      {/* Data e hora agendada com o lead: verde em dia, vermelho em atraso */}
+      {agendadoEm(prospect) && (() => {
+        const iso = agendadoEm(prospect)!;
+        const st = statusAgendamento(iso);
+        return (
+          <div className="rounded-lg border px-2.5 py-1.5" style={{ borderColor: `${st.color}50`, background: `${st.color}12` }}>
+            <span className="flex items-center gap-1.5 text-[11px] font-bold" style={{ color: st.color }}>
+              <CalendarClock className="w-3.5 h-3.5 shrink-0" /> {fmtDiaHora(iso)}
+            </span>
+            <span className="block text-[9px] font-semibold mt-0.5 uppercase tracking-wide" style={{ color: st.color }}>
+              Agendado · {st.label}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Agenda de reunião: dia e horário marcados */}
       {prospect.etapa === "agenda_reuniao" && (() => {
@@ -1083,7 +1249,7 @@ function LinkGeralModal({ onClose }: { onClose: () => void }) {
   const emailUrl = `mailto:?subject=${emailSubject}&body=${emailBody}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#00000080" }}>
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: "#00000080" }}>
       <div className="w-full max-w-md rounded-2xl border border-white/10 overflow-hidden" style={{ background: "#0F1E35" }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div>
@@ -1160,7 +1326,7 @@ function LinkModal({ prospect, onClose }: { prospect: Prospect; onClose: () => v
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "#00000080" }}>
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4" style={{ background: "#00000080" }}>
       <div className="w-full max-w-md rounded-2xl border border-white/10 overflow-hidden" style={{ background: "#0F1E35" }}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <h3 className="text-base font-bold text-white">Link de Cadastro</h3>
@@ -1248,7 +1414,12 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
   const [editing, setEditing] = useState<Prospect | null>(null);
   const [linking, setLinking] = useState<Prospect | null>(null);
   const [showLinkGeral, setShowLinkGeral] = useState(false);
-  const [detalhe, setDetalhe] = useState<Prospect | null>(null);
+  // Guarda só o id: depois de salvar/mover, o modal reflete os dados recarregados
+  const [detalheId, setDetalheId] = useState<string | null>(null);
+  const detalhe = detalheId ? prospects.find(p => p.id === detalheId) ?? null : null;
+  const setDetalhe = (p: Prospect | null) => setDetalheId(p?.id ?? null);
+  // Coluna sob o card arrastado
+  const [dropAlvo, setDropAlvo] = useState<Etapa | null>(null);
   // Mover para "Agenda de Reunião" exige dia/horário; para "Proposta e Retorno" pergunta se o material foi enviado
   const [agendando, setAgendando] = useState<{ prospect: Prospect; mover: boolean } | null>(null);
   const [propondo, setPropondo] = useState<{ prospect: Prospect; mover: boolean } | null>(null);
@@ -1326,6 +1497,21 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
     if (p && etapa === "proposta_retorno") { setPropondo({ prospect: p, mover: true }); return; }
     handleMove(id, etapa).catch(e => aviso((e as Error).message));
   };
+
+  // Soltar um card arrastado numa coluna
+  const dropProps = (etapa: Etapa) => ({
+    onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (dropAlvo !== etapa) setDropAlvo(etapa); },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropAlvo(a => (a === etapa ? null : a));
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setDropAlvo(null);
+      const id = e.dataTransfer.getData("text/plain");
+      const p = prospects.find(x => x.id === id);
+      if (p && p.etapa !== etapa) requestMove(id, etapa);
+    },
+  });
 
 
   const handleDelete = async (id: string) => {
@@ -1470,7 +1656,12 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
           {ETAPAS.map(etapa => {
             const cards = filtered.filter(p => p.etapa === etapa.id);
             return (
-              <div key={etapa.id} className="shrink-0 w-64 space-y-3">
+              <div
+                key={etapa.id}
+                {...dropProps(etapa.id)}
+                className="shrink-0 w-64 space-y-3 rounded-xl transition-colors"
+                style={dropAlvo === etapa.id ? { background: `${etapa.color}12`, outline: `2px dashed ${etapa.color}70`, outlineOffset: 4 } : undefined}
+              >
                 {/* Coluna header */}
                 <div className="flex items-center justify-between px-3 py-2 rounded-xl" style={{ background: etapa.bg }}>
                   <span className="text-xs font-bold uppercase tracking-widest" style={{ color: etapa.color }}>
@@ -1511,7 +1702,11 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
           })}
 
           {/* Coluna Perdidos */}
-          <div className="shrink-0 w-56 space-y-3">
+          <div
+            {...dropProps("perdido")}
+            className="shrink-0 w-56 space-y-3 rounded-xl transition-colors"
+            style={dropAlvo === "perdido" ? { background: "#F8717112", outline: "2px dashed #F8717170", outlineOffset: 4 } : undefined}
+          >
             <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-red-500/10">
               <span className="text-xs font-bold uppercase tracking-widest text-red-400">Perdidos</span>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
@@ -1520,11 +1715,11 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
             </div>
             <div className="space-y-2 min-h-[60px]">
               {filtered.filter(p => p.etapa === "perdido").map(p => (
-                <div key={p.id} className="rounded-xl border border-white/5 p-3" style={{ background: "#0F1E35" }}>
+                <div key={p.id} className="rounded-xl border border-white/5 p-3 cursor-pointer hover:border-white/10" style={{ background: "#0F1E35" }} onClick={() => setDetalhe(p)}>
                   <div className="flex items-start justify-between gap-1">
                     <p className="text-xs font-semibold text-white leading-tight">{p.nome}</p>
                     {isAdmin && (
-                      <button onClick={() => handleDelete(p.id)} className="p-0.5 hover:text-red-400 transition-colors">
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(p.id); }} className="p-0.5 hover:text-red-400 transition-colors">
                         <Trash2 className="w-3 h-3" style={{ color: MUTED }} />
                       </button>
                     )}
@@ -1533,7 +1728,7 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
                     <p className="text-[10px] mt-1" style={{ color: MUTED }}>{p.motivo_perda}</p>
                   )}
                   <button
-                    onClick={() => requestMove(p.id, "prospect")}
+                    onClick={(e) => { e.stopPropagation(); requestMove(p.id, "prospect"); }}
                     className="mt-1.5 text-[10px] px-2 py-0.5 rounded-full border border-white/10 hover:border-white/20 transition-colors"
                     style={{ color: MUTED }}
                   >
@@ -1546,7 +1741,8 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
         </div>
       )}
 
-      {/* Modals */}
+      {/* Modals (renderizados no <body>, na frente de tudo) */}
+      <NaFrente>
       {showModal && (
         <ProspectModal
           initial={editing}
@@ -1600,9 +1796,12 @@ export function ProspeccaoClient({ role, userId }: { role: string; userId: strin
           onEdit={p => { setDetalhe(null); setEditing(p); setShowModal(true); }}
           onLink={p => { setDetalhe(null); setLinking(p); }}
           onDelete={id => { handleDelete(id); setDetalhe(null); }}
+          onMove={requestMove}
+          onAgendar={(id, iso) => handleMeta(id, { agendado_em: iso })}
           isAdmin={isAdmin}
         />
       )}
+      </NaFrente>
     </div>
   );
 }
