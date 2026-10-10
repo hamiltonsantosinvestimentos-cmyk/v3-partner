@@ -13,6 +13,8 @@ export function isDecisorRole(role: string | null | undefined): boolean {
 
 // Ordem cronologica das versoes do Aviso de Privacidade da Qualificacao (a mais antiga primeiro).
 // A versao 2 esta em aprovacao (rascunho); ela entra aqui para a comparacao funcionar assim que for ao ar.
+// Em 09/10/2026 DD_PF_MIN_LGPD_VERSION=2026-10-08-v2 foi configurada na Vercel de producao por CLI (decisao de Joao).
+// Sem essa variavel toda consulta de PF fica bloqueada (fail closed).
 export const LGPD_VERSION_ORDER = ["2026-10-05-v1", "2026-10-08-v2"] as const;
 
 /**
