@@ -37,6 +37,7 @@ import {
   Home,
   Gavel,
   Loader2,
+  Clock,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,7 @@ type CRMLead = {
   partnerId: string;
   partnerName: string;
   createdAt: string;
+  updatedAt?: string;
   interactions: Interaction[];
   metadata?: Record<string, unknown>;
   clientToken?: string | null;
@@ -133,6 +135,78 @@ function parseCSV(text: string): string[][] {
 }
 
 // ─── Kanban columns ───────────────────────────────────────────────────────────
+
+// ─── Nota (estrelas), criação e tempo parado ────────────────────────────────
+
+// Nota de 1 a 5 (propensão do lead a fechar), guardada em metadata.nota
+function notaLead(lead: CRMLead): number {
+  const v = Number(lead.metadata?.nota);
+  return Number.isInteger(v) && v >= 1 && v <= 5 ? v : 0;
+}
+const NOTA_LABEL = ["Sem nota", "Muito baixa", "Baixa", "Média", "Alta", "Muito alta"];
+
+/** Última movimentação: mudança de etapa (metadata.ultima_movimentacao_em) ou follow-up; sem isso, updated_at/created_at. */
+function ultimaMovimentacao(lead: CRMLead): number {
+  const datas: number[] = [];
+  const mov = lead.metadata?.ultima_movimentacao_em;
+  if (typeof mov === "string") datas.push(new Date(mov).getTime());
+  for (const i of lead.interactions ?? []) if (i.date) datas.push(new Date(i.date.length === 10 ? `${i.date}T12:00:00-03:00` : i.date).getTime());
+  if (!datas.length && lead.updatedAt) datas.push(new Date(lead.updatedAt).getTime());
+  if (!datas.length && lead.createdAt) datas.push(new Date(`${lead.createdAt}T12:00:00-03:00`).getTime());
+  const validas = datas.filter(d => !Number.isNaN(d));
+  return validas.length ? Math.max(...validas) : Date.now();
+}
+function tempoParado(lead: CRMLead): { texto: string; cor: string } {
+  const dias = Math.floor((Date.now() - ultimaMovimentacao(lead)) / 86_400_000);
+  const texto = dias <= 0 ? "Movimentado hoje" : dias === 1 ? "Parado há 1 dia" : `Parado há ${dias} dias`;
+  const cor = dias >= 7 ? "#F87171" : dias >= 3 ? "#FBBF24" : "#34D399";
+  return { texto, cor };
+}
+
+function Estrelas({ nota, onChange, tamanho = 13 }: { nota: number; onChange?: (n: number) => void; tamanho?: number }) {
+  const [hover, setHover] = useState(0);
+  const ativa = hover || nota;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 1 }} onMouseLeave={() => setHover(0)}>
+      {[1, 2, 3, 4, 5].map(n => {
+        const cheia = n <= ativa;
+        const icone = <Star style={{ width: tamanho, height: tamanho, color: cheia ? "#C9A84C" : "#7A8FA870", fill: cheia ? "#C9A84C" : "transparent" }} />;
+        return onChange ? (
+          <button
+            key={n}
+            type="button"
+            onMouseEnter={() => setHover(n)}
+            onClick={(e) => { e.stopPropagation(); onChange(n === nota ? 0 : n); }}
+            style={{ background: "transparent", border: "none", padding: 1, cursor: "pointer", display: "inline-flex" }}
+            title={n === nota ? "Clique de novo para tirar a nota" : `${n} — ${NOTA_LABEL[n]}`}
+          >
+            {icone}
+          </button>
+        ) : <span key={n} style={{ display: "inline-flex" }}>{icone}</span>;
+      })}
+    </span>
+  );
+}
+
+/** Linha do card fechado: estrelas, data de criação e tempo parado. */
+function CardResumo({ lead }: { lead: CRMLead }) {
+  const parado = tempoParado(lead);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3, marginBottom: 5 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 4 }}>
+        <Estrelas nota={notaLead(lead)} />
+        {lead.createdAt && (
+          <span style={{ fontSize: 10, color: "#7A8FA8", whiteSpace: "nowrap" }} title="Data em que o lead foi criado">
+            Criado {formatDate(lead.createdAt)}
+          </span>
+        )}
+      </div>
+      <span style={{ fontSize: 10, fontWeight: 700, color: parado.cor, display: "flex", alignItems: "center", gap: 3 }} title="Tempo sem mudança de etapa ou follow-up">
+        <Clock style={{ width: 10, height: 10 }} /> {parado.texto}
+      </span>
+    </div>
+  );
+}
 
 const KANBAN_COLUMNS = [
   { id: "prospect",    label: "Prospect",    color: "border-blue-500/40",    bg: "bg-blue-500/5",    count_color: "text-blue-400",    hex: "#3B82F6" },
@@ -663,7 +737,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
           productInterest: (l.product_interest as string) ?? "", creditLine: (l.credit_line as string) ?? "",
           partnerId: (l.partner_id as string) ?? userId, partnerName: (l.partner_name as string) ?? userName,
           createdAt: ((l.created_at as string) ?? "").split("T")[0] ?? todayISO(),
-          interactions: [], metadata: (l.metadata as Record<string, unknown>) ?? {},
+          updatedAt: (l.updated_at as string) ?? undefined,
+          interactions: Array.isArray(l.interactions) ? (l.interactions as Interaction[]) : [],
+          metadata: (l.metadata as Record<string, unknown>) ?? {},
         }));
         setLeads(mapped);
       }
@@ -1075,10 +1151,58 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
         ? { ...l, interactions: [...l.interactions, interaction] }
         : l
     );
-    setLeads(updated);
-    setSelectedLead({ ...selectedLead, interactions: [...selectedLead.interactions, interaction] });
+    const agora = new Date().toISOString();
+    const interactions = [...selectedLead.interactions, interaction];
+    const metadata = { ...(selectedLead.metadata ?? {}), ultima_movimentacao_em: agora };
+    setLeads(updated.map(l => (l.id === selectedLead.id ? { ...l, metadata } : l)));
+    setSelectedLead({ ...selectedLead, interactions, metadata });
     setNewInteractionNotes("");
+    fetch("/api/crm", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: selectedLead.id, interactions }),
+    }).then(r => { if (!r.ok) aviso("Não foi possível salvar o follow-up. Tente de novo."); })
+      .catch(() => aviso("Não foi possível salvar o follow-up. Tente de novo."));
   }
+
+  // Nota de 1 a 5 (0 tira a nota)
+  function handleNota(leadId: string, nota: number) {
+    const aplicar = (l: CRMLead): CRMLead => {
+      const metadata = { ...(l.metadata ?? {}) };
+      if (nota) metadata.nota = nota; else delete metadata.nota;
+      return { ...l, metadata };
+    };
+    setLeads(prev => prev.map(l => (l.id === leadId ? aplicar(l) : l)));
+    setSelectedLead(prev => (prev && prev.id === leadId ? aplicar(prev) : prev));
+    fetch("/api/crm", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: leadId, metadata_patch: { nota: nota || null } }),
+    }).then(r => { if (!r.ok) aviso("Não foi possível salvar a nota."); })
+      .catch(() => aviso("Não foi possível salvar a nota."));
+  }
+
+  // Arrastar card entre colunas
+  const [arrastandoId, setArrastandoId] = useState<string | null>(null);
+  const [colunaAlvo, setColunaAlvo] = useState<string | null>(null);
+  const cardArrastavel = (lead: CRMLead) => ({
+    draggable: true,
+    onDragStart: (e: React.DragEvent) => { e.dataTransfer.setData("text/plain", lead.id); e.dataTransfer.effectAllowed = "move"; setArrastandoId(lead.id); },
+    onDragEnd: () => { setArrastandoId(null); setColunaAlvo(null); },
+  });
+  const colunaSoltavel = (status: CRMLead["status"]) => ({
+    onDragOver: (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (colunaAlvo !== status) setColunaAlvo(status); },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setColunaAlvo(a => (a === status ? null : a));
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      setColunaAlvo(null);
+      const id = e.dataTransfer.getData("text/plain");
+      const lead = leads.find(l => l.id === id);
+      if (lead && lead.status !== status) handleMoveKanban(id, status);
+    },
+  });
 
   function handleUpdateNotes(notes: string) {
     if (!selectedLead) return;
@@ -1087,8 +1211,9 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   }
 
   async function handleMoveToStage(leadId: string, newStatus: CRMLead["status"]) {
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
-    setSelectedLead(prev => prev ? { ...prev, status: newStatus } : prev);
+    const mov = { ultima_movimentacao_em: new Date().toISOString() };
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus, metadata: { ...(l.metadata ?? {}), ...mov } } : l));
+    setSelectedLead(prev => prev ? { ...prev, status: newStatus, metadata: { ...(prev.metadata ?? {}), ...mov } } : prev);
     try {
       await fetch("/api/crm", {
         method: "PATCH",
@@ -1370,7 +1495,8 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
 
   // ── Feature 4: Kanban move handler ────────────────────────────────────────
   async function handleMoveKanban(leadId: string, newStatus: CRMLead["status"]) {
-    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus } : l));
+    const mov = { ultima_movimentacao_em: new Date().toISOString() };
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus, metadata: { ...(l.metadata ?? {}), ...mov } } : l));
     try {
       await fetch("/api/crm", {
         method: "PATCH",
@@ -1855,13 +1981,15 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                 return (
                   <div
                     key={stage.id}
+                    {...colunaSoltavel(stage.id as CRMLead["status"])}
                     style={{
                       minWidth: 220,
                       flex: "0 0 220px",
-                      background: "#091221",
-                      border: `1px solid #122036`,
+                      background: colunaAlvo === stage.id ? `${stage.color}14` : "#091221",
+                      border: colunaAlvo === stage.id ? `2px dashed ${stage.color}` : `1px solid #122036`,
                       borderRadius: 12,
                       overflow: "hidden",
+                      transition: "background 0.15s",
                     }}
                   >
                     {/* Column header */}
@@ -1902,14 +2030,17 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                         return (
                         <div
                           key={lead.id}
+                          {...cardArrastavel(lead)}
                           onClick={() => openLead(lead)}
+                          title="Clique para abrir · arraste para outra coluna"
                           style={{
                             background: "#0F1E35",
                             border: "1px solid #122036",
                             borderRadius: 8,
                             padding: "10px 12px",
-                            cursor: "pointer",
-                            transition: "border-color 0.15s",
+                            cursor: "grab",
+                            transition: "border-color 0.15s, opacity 0.15s",
+                            opacity: arrastandoId === lead.id ? 0.4 : 1,
                           }}
                           onMouseEnter={(e) => (e.currentTarget.style.borderColor = stage.color)}
                           onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#122036")}
@@ -1939,6 +2070,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                               </span>
                             </div>
                           </div>
+                          <CardResumo lead={lead} />
                           {/* Score badge + AI */}
                           <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 5, flexWrap: "wrap" }}>
                             <span style={{
@@ -2488,7 +2620,7 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                   const colLeads = visibleLeads.filter(l => l.status === col.id);
                   const totalValue = colLeads.reduce((acc, l) => acc + (l.annualRevenue || 0), 0);
                   return (
-                    <div key={col.id} style={{ minWidth: 230, flex: "0 0 230px", background: "#091221", border: `1px solid ${col.hex}30`, borderRadius: 12, overflow: "hidden" }}>
+                    <div key={col.id} {...colunaSoltavel(col.id as CRMLead["status"])} style={{ minWidth: 230, flex: "0 0 230px", background: colunaAlvo === col.id ? `${col.hex}14` : "#091221", border: colunaAlvo === col.id ? `2px dashed ${col.hex}` : `1px solid ${col.hex}30`, borderRadius: 12, overflow: "hidden", transition: "background 0.15s" }}>
                       {/* Column header */}
                       <div style={{ padding: "10px 14px", background: `${col.hex}08`, borderBottom: `1px solid ${col.hex}30`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <span style={{ fontWeight: 700, fontSize: 13, color: col.hex }}>{col.label}</span>
@@ -2503,12 +2635,13 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                         {colLeads.map((lead) => {
                           const ls = calcLeadScore(lead);
                           return (
-                            <div key={lead.id} style={{ background: "#0F1E35", border: "1px solid #122036", borderRadius: 8, padding: "10px 12px", cursor: "pointer", transition: "border-color 0.15s" }}
+                            <div key={lead.id} {...cardArrastavel(lead)} title="Clique para abrir · arraste para outra coluna" style={{ background: "#0F1E35", border: "1px solid #122036", borderRadius: 8, padding: "10px 12px", cursor: "grab", transition: "border-color 0.15s, opacity 0.15s", opacity: arrastandoId === lead.id ? 0.4 : 1 }}
                               onClick={() => openLead(lead)}
                               onMouseEnter={(e) => (e.currentTarget.style.borderColor = col.hex)}
                               onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#122036")}
                             >
                               <div style={{ fontWeight: 700, fontSize: 12, color: "#E8EDF5", marginBottom: 4 }}>{lead.name}</div>
+                              <CardResumo lead={lead} />
                               {/* Score badge */}
                               <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4, flexWrap: "wrap" }}>
                                 <span style={{
@@ -3416,6 +3549,13 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
                     </span>
                   </div>
                 </DialogTitle>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#7A8FA8" }}>Chance de fechar</span>
+                  <Estrelas nota={notaLead(selectedLead)} onChange={n => handleNota(selectedLead.id, n)} tamanho={20} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: notaLead(selectedLead) ? "#C9A84C" : "#7A8FA8" }}>{NOTA_LABEL[notaLead(selectedLead)]}</span>
+                  {selectedLead.createdAt && <span style={{ fontSize: 11, color: "#7A8FA8" }}>· Criado {formatDate(selectedLead.createdAt)}</span>}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: tempoParado(selectedLead).cor }}>· {tempoParado(selectedLead).texto}</span>
+                </div>
                 <div style={{ fontSize: 12, color: "#7A8FA8", marginTop: 4 }}>
                   {selectedLead.code}
                   {isAdmin && ` · ${selectedLead.partnerName}`}

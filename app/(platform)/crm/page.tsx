@@ -64,6 +64,7 @@ export default async function CRMPage() {
     partnerId:       l.partner_id ?? "",
     partnerName:     l.partner_name ?? "",
     createdAt:       l.created_at?.split("T")[0] ?? "",
+    updatedAt:       l.updated_at ?? undefined,
     interactions:    Array.isArray(l.interactions) ? l.interactions : [],
     metadata:        (l.metadata ?? {}) as Record<string, unknown>,
     clientToken:     (l.client_token as string | null) ?? null,
