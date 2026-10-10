@@ -78,10 +78,32 @@ export async function PATCH(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json();
-  const { id, ...updates } = body;
+  const { id, metadata_patch, ...updates } = body;
   if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
 
   const isAdmin = ["ADMIN", "GESTAO"].includes(profile?.role ?? "");
+
+  // metadata é mesclado com o que já está no banco: nota (1-5) e a data da última
+  // movimentação (mudança de etapa ou follow-up), usada no "parado há X dias" do Kanban.
+  const movimentou = "status" in updates || "interactions" in updates;
+  if (metadata_patch || movimentou) {
+    let atualQ = supabase.from("crm_leads").select("metadata").eq("id", id);
+    if (!isAdmin) atualQ = atualQ.eq("partner_id", user.id);
+    const { data: atual } = await atualQ.maybeSingle();
+    const meta: Record<string, unknown> = {
+      ...(((atual as { metadata?: Record<string, unknown> | null } | null)?.metadata) ?? {}),
+      ...((updates.metadata as Record<string, unknown> | undefined) ?? {}),
+    };
+    if (metadata_patch && typeof metadata_patch === "object" && "nota" in metadata_patch) {
+      const v = (metadata_patch as Record<string, unknown>).nota;
+      if (v === null || v === 0 || v === "") delete meta.nota;
+      else if (Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 5) meta.nota = v;
+      else return NextResponse.json({ error: "Nota inválida (use de 1 a 5)" }, { status: 400 });
+    }
+    if (movimentou) meta.ultima_movimentacao_em = new Date().toISOString();
+    updates.metadata = meta;
+  }
+
   let query = supabase.from("crm_leads").update(updates).eq("id", id);
   if (!isAdmin) query = query.eq("partner_id", user.id);
 
