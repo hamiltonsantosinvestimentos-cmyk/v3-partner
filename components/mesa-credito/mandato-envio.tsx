@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { FileSignature, Loader2, ClipboardList, PencilLine, ArrowLeft, Send, CheckCircle2, AlertTriangle } from "lucide-react";
+import { FileSignature, Loader2, ClipboardList, PencilLine, ArrowLeft, Send, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   camposFaltantes, camposVisiveis, dadosDaProposta, montarQualificacao, percentualPorExtenso,
-  pickMandatoTemplate, signatarioMandato, mandatoTemplateName,
+  pickMandatoTemplate, signatarioMandato, mandatoTemplateName, enviosDoMandato,
   type MandatoCampo, type MandatoDados, type MandatoTipo, type MandatoTemplate,
 } from "@/lib/mandato-credito";
 
@@ -52,6 +52,11 @@ export function MandatoEnvio({
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ code: string | null; enviado: boolean; email: string } | null>(null);
+  // Cancelamento de um mandato já gerado (12/10/2026): contrato em confirmação + motivo.
+  const [cancelandoId, setCancelandoId] = useState<string | null>(null);
+  const [motivoCancel, setMotivoCancel] = useState("");
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<string | null>(null);
 
   function abrir() {
     setAberto(true);
@@ -59,6 +64,8 @@ export function MandatoEnvio({
     setErro(null);
     setResultado(null);
     setTentouAvancar(false);
+    setCancelandoId(null);
+    setCancelMsg(null);
     if (!templates) {
       fetch("/api/contracts/templates?vertical=credito")
         .then((r) => r.json())
@@ -185,6 +192,39 @@ export function MandatoEnvio({
     }
   }
 
+  const envios = enviosDoMandato(proposal.metadata).slice().reverse();
+
+  async function cancelarMandato(contractId: string) {
+    if (motivoCancel.trim().length < 5) {
+      setErro("Informe o motivo do cancelamento (mínimo 5 caracteres).");
+      return;
+    }
+    setCancelLoading(true);
+    setErro(null);
+    setCancelMsg(null);
+    try {
+      const res = await fetch(`/api/mesa-credito/mandato/${contractId}/cancelar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivo: motivoCancel.trim() }),
+      }).then((r) => r.json());
+      if (res.error) {
+        setErro(res.error);
+        return;
+      }
+      if (res.metadata) onMetadataUpdate?.(res.metadata);
+      setCancelMsg(res.modo === "enviado"
+        ? `Mandato ${res.contract_code ?? ""} cancelado${res.provedor_cancelado ? " no ClickSign" : ""}. Os signatários não conseguem mais assinar.`
+        : `Mandato ${res.contract_code ?? ""} (rascunho) cancelado e enviado para a Lixeira.`);
+      setCancelandoId(null);
+      setMotivoCancel("");
+    } catch {
+      setErro("Erro de conexão.");
+    } finally {
+      setCancelLoading(false);
+    }
+  }
+
   function renderCampo(c: MandatoCampo) {
     const invalido = tentouAvancar && faltantesKeys.has(c.key);
     const cls = `${INPUT} ${invalido ? "border-red-500/60" : ""}`;
@@ -217,12 +257,13 @@ export function MandatoEnvio({
 
   return (
     <>
+      {/* Com 0% não envia, mas continua abrindo quando já há mandato gerado (para cancelar). */}
       <div title={percMandato > 0 ? `Mandato ${percMandato}%` : "Defina o % do mandato antes de enviar"}>
         <Button
           variant="outline"
           size="sm"
           onClick={abrir}
-          disabled={percMandato <= 0}
+          disabled={percMandato <= 0 && envios.length === 0}
           className="gap-1.5 border-[#C9A84C]/40 text-[#C9A84C] hover:bg-[#C9A84C]/10 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <FileSignature className="w-3.5 h-3.5" />
@@ -243,8 +284,10 @@ export function MandatoEnvio({
 
             {etapa === "origem" && (
               <div className="px-5 py-4 space-y-3">
-                <p className="text-xs text-muted-foreground">Quais dados vão no contrato de mandato?</p>
-                <div className="grid sm:grid-cols-2 gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {percMandato > 0 ? "Quais dados vão no contrato de mandato?" : "Defina o % do mandato no modal para enviar um novo mandato."}
+                </p>
+                {percMandato > 0 && <div className="grid sm:grid-cols-2 gap-3">
                   <button onClick={() => escolherOrigem("proposta")}
                     className="text-left rounded-xl border border-border hover:border-[#C9A84C]/60 bg-background/40 p-4 space-y-1 transition-colors">
                     <ClipboardList className="w-4 h-4 text-[#C9A84C]" />
@@ -259,7 +302,56 @@ export function MandatoEnvio({
                     <p className="text-sm font-semibold text-white">Outros dados</p>
                     <p className="text-[11px] text-muted-foreground">Preencher a qualificação completa de outro contratante.</p>
                   </button>
-                </div>
+                </div>}
+
+                {envios.length > 0 && (
+                  <div className="pt-2 space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-[#C9A84C]">Mandatos já gerados</p>
+                    {envios.map((e) => (
+                      <div key={e.contract_id} className="rounded-lg border border-border bg-background/40 px-3 py-2 space-y-2">
+                        <div className="flex items-center gap-2 text-[11px]">
+                          <span className="font-semibold text-white">{e.contract_code ?? "Sem código"}</span>
+                          <span className="text-muted-foreground truncate">
+                            {e.tipo ?? ""}{e.signatario_email ? ` · ${e.signatario_email}` : ""}{e.em ? ` · ${new Date(e.em).toLocaleDateString("pt-BR")}` : ""}
+                          </span>
+                          {e.cancelado_em ? (
+                            <span className="ml-auto shrink-0 text-[10px] uppercase tracking-wider text-red-400">Cancelado</span>
+                          ) : cancelandoId !== e.contract_id && (
+                            <button onClick={() => { setCancelandoId(e.contract_id); setMotivoCancel(""); setErro(null); setCancelMsg(null); }}
+                              className="ml-auto shrink-0 flex items-center gap-1 text-[11px] text-red-400 hover:text-red-300">
+                              <XCircle className="w-3.5 h-3.5" /> Cancelar mandato
+                            </button>
+                          )}
+                        </div>
+                        {e.cancelado_em && e.cancelado_motivo && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Cancelado em {new Date(e.cancelado_em).toLocaleDateString("pt-BR")}{e.cancelado_por ? ` por ${e.cancelado_por}` : ""}: {e.cancelado_motivo}
+                          </p>
+                        )}
+                        {cancelandoId === e.contract_id && (
+                          <div className="space-y-2">
+                            <p className="text-[11px] text-muted-foreground">
+                              Cancela a assinatura no ClickSign para todos os signatários. Se ainda for rascunho, vai para a Lixeira. Mandato já assinado não pode ser cancelado.
+                            </p>
+                            <input value={motivoCancel} onChange={(ev) => setMotivoCancel(ev.target.value)}
+                              placeholder="Motivo do cancelamento" className={INPUT} autoFocus />
+                            <div className="flex justify-end gap-2">
+                              <Button size="sm" variant="outline" disabled={cancelLoading} onClick={() => { setCancelandoId(null); setErro(null); }}>
+                                Voltar
+                              </Button>
+                              <Button size="sm" disabled={cancelLoading} onClick={() => cancelarMandato(e.contract_id)}
+                                className="gap-1.5 bg-red-500/80 hover:bg-red-500 text-white border-0">
+                                {cancelLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <XCircle className="w-3.5 h-3.5" />}
+                                Confirmar cancelamento
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {cancelMsg && <p className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle2 className="w-3.5 h-3.5" /> {cancelMsg}</p>}
+                  </div>
+                )}
               </div>
             )}
 

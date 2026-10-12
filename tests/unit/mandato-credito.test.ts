@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   camposFaltantes, dadosDaProposta, montarQualificacao, percentualPorExtenso, pickMandatoTemplate,
-  signatarioMandato, tipoDaProposta, isMandatoTemplateName,
+  signatarioMandato, tipoDaProposta, isMandatoTemplateName, enviosDoMandato, marcarEnvioCancelado,
 } from "../../lib/mandato-credito";
 
 const PF_COMPLETO = {
@@ -89,4 +89,16 @@ test("escolhe a minuta pelo tipo do cliente", () => {
   assert.equal(pickMandatoTemplate(ts, "PJ")?.id, "b");
   assert.ok(isMandatoTemplateName("Mandato de Crédito (Cliente PJ)"));
   assert.ok(!isMandatoTemplateName("Mandato do Locatário, Operação de Locação do Código Brink's"));
+});
+
+test("histórico de envios: lê só registros válidos e marca o cancelado", () => {
+  const meta = { mandato_envios: [{ contract_id: "c1", contract_code: "V3C-MAN-1" }, null, { x: 1 }, { contract_id: "c2", contract_code: "V3C-MAN-2" }] };
+  const envios = enviosDoMandato(meta);
+  assert.deepEqual(envios.map((e) => e.contract_id), ["c1", "c2"]);
+  assert.deepEqual(enviosDoMandato({}), []);
+  assert.deepEqual(enviosDoMandato(null), []);
+  const marcados = marcarEnvioCancelado(envios, "c2", { em: "2026-10-12T20:00:00Z", por: "Hamilton", motivo: "dados errados" });
+  assert.equal(marcados[0].cancelado_em, undefined);
+  assert.equal(marcados[1].cancelado_motivo, "dados errados");
+  assert.equal(marcados[1].cancelado_por, "Hamilton");
 });
