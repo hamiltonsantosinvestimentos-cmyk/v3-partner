@@ -86,6 +86,40 @@ export function maskPhoneInput(value: string): string {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 }
 
+/**
+ * Mascara de telefone para os modais de crédito (12/10/2026, pedido do Hamilton):
+ * brasileiro vira (DD) 00000-0000 enquanto digita; internacional (começa com +)
+ * fica como digitado, para não virar DDD falso.
+ */
+export function maskTelefoneCredito(value: string): string {
+  return value.trim().startsWith("+") ? value : maskPhoneInput(value);
+}
+
+/** Telefone no formato gravado na proposta: "(51) 99746-6001", DDD entre parênteses. */
+export function telefoneCreditoParaSalvar(value: string): string | undefined {
+  const raw = value.trim();
+  if (!raw) return undefined;
+  if (raw.startsWith("+")) return raw;
+  const d = raw.replace(/\D/g, "");
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return raw;
+}
+
+/**
+ * Valor já gravado (número, ou texto antigo como "5000", "5.000,00" ou "R$ 5.000")
+ * para o campo com máscara de R$. Texto sem vírgula é lido como reais inteiros.
+ */
+export function valorParaCampoBRL(value: unknown): string {
+  if (typeof value === "number") return value > 0 ? formatCurrencyBRLFromNumber(value) : "";
+  if (typeof value !== "string" || !value.trim()) return "";
+  const limpo = value.replace(/[^\d.,]/g, "");
+  const n = limpo.includes(",")
+    ? parseFloat(limpo.replace(/\./g, "").replace(",", "."))
+    : parseFloat(limpo.replace(/\./g, ""));
+  return Number.isFinite(n) && n > 0 ? formatCurrencyBRLFromNumber(n) : "";
+}
+
 /** Validacao simples de email para feedback visual em formularios. */
 export function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, maskTelefoneCredito, telefoneCreditoParaSalvar } from "@/lib/utils";
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 
 // Checklists de documentos e linhas por nível — em lib/credit-checklists.ts
@@ -581,7 +581,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     const metadata = {
       client_type: clientType,
       email: email || undefined,
-      telefone: telefone || undefined,
+      telefone: telefoneCreditoParaSalvar(telefone),
       prazo: prazo || undefined,
       finalidade: finalidade || undefined,
       restricao_cliente: restricao || undefined,
@@ -615,7 +615,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
       client_type: clientType,
       cpf_cnpj: cpfCnpj,
       email,
-      telefone,
+      telefone: telefoneCreditoParaSalvar(telefone) ?? "",
       credit_line: creditLine,
       requested_value: parseBRL(valorSolicitado),
       approved_value: null,
@@ -947,7 +947,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="E-mail *" value={email} onChange={setEmail} placeholder="joao@email.com" type="email" />
-                    <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 99999-0000" />
+                    <Field label="Telefone *" value={telefone} onChange={(v) => setTelefone(maskTelefoneCredito(v))} placeholder="(11) 99999-0000" />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <SelectField label="Estado Civil" value={estadoCivil} onChange={setEstadoCivil}
@@ -997,7 +997,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="E-mail *" value={email} onChange={setEmail} placeholder="contato@empresa.com" type="email" />
-                    <Field label="Telefone *" value={telefone} onChange={setTelefone} placeholder="(11) 3000-0000" />
+                    <Field label="Telefone *" value={telefone} onChange={(v) => setTelefone(maskTelefoneCredito(v))} placeholder="(11) 3000-0000" />
                   </div>
                   <CurrencyField label="Faturamento Mensal (R$) *" value={faturamento} onChange={setFaturamento} />
                   <div className="grid grid-cols-2 gap-3">
