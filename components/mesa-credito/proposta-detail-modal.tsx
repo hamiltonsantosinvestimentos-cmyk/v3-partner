@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, maskCurrencyBRLInput, maskTelefoneCredito, parseCurrencyBRLInput, telefoneCreditoParaSalvar, valorParaCampoBRL } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, PLAN_COMMISSION_PCT, ROLE_LABELS, type OperationStatus, type UserRole } from "@/lib/constants";
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
@@ -2420,17 +2420,17 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setEditNome(proposal.client_name ?? "");
     setEditCpfCnpj(proposal.client_cpf_cnpj ?? proposal.cpf_cnpj ?? "");
     setEditEmail((meta.email ?? proposal.email ?? "") as string);
-    setEditTelefone((meta.telefone ?? proposal.telefone ?? "") as string);
+    setEditTelefone(maskTelefoneCredito((meta.telefone ?? proposal.telefone ?? "") as string));
     setEditRg((meta.rg ?? "") as string);
     setEditNascimento((meta.nascimento ?? "") as string);
     setEditEstadoCivil((meta.estado_civil ?? meta.estadoCivil ?? "") as string);
     const rm = meta.renda_mensal ?? meta.renda;
-    setEditRenda(rm ? String(rm) : "");
+    setEditRenda(valorParaCampoBRL(rm));
     setEditRazaoSocial((meta.razao_social ?? meta.razaoSocial ?? "") as string);
     setEditNomeFantasia((meta.nome_fantasia ?? meta.nomeFantasia ?? "") as string);
     setEditSocioResp((meta.socio_responsavel ?? meta.socioResponsavel ?? "") as string);
     const fm = meta.faturamento_mensal ?? meta.faturamento;
-    setEditFaturamento(fm ? String(fm) : "");
+    setEditFaturamento(valorParaCampoBRL(fm));
     setEditEndRua((meta.endereco_rua ?? meta.enderecoRua ?? "") as string);
     setEditEndCidade((meta.endereco_cidade ?? meta.cidade ?? meta.city ?? "") as string);
     setEditEndUf((meta.endereco_uf ?? meta.estado ?? meta.state ?? "") as string);
@@ -2449,7 +2449,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       ...proposal.metadata,
       client_type: editClientType,
       email: editEmail || undefined,
-      telefone: editTelefone || undefined,
+      telefone: telefoneCreditoParaSalvar(editTelefone),
       prazo: editPrazo || undefined,
       finalidade: editFinalidade || undefined,
       restricao_cliente: editRestricao || undefined,
@@ -2457,11 +2457,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       rg: editRg || undefined,
       nascimento: editNascimento || undefined,
       estado_civil: editEstadoCivil || undefined,
-      renda_mensal: editRenda ? parseFloat(editRenda) || undefined : undefined,
+      renda_mensal: parseCurrencyBRLInput(editRenda) || undefined,
       razao_social: editRazaoSocial || undefined,
       nome_fantasia: editNomeFantasia || undefined,
       socio_responsavel: editSocioResp || undefined,
-      faturamento_mensal: editFaturamento ? parseFloat(editFaturamento) || undefined : undefined,
+      faturamento_mensal: parseCurrencyBRLInput(editFaturamento) || undefined,
       endereco_rua: editEndRua || undefined,
       endereco_cidade: editEndCidade || undefined,
       endereco_uf: editEndUf || undefined,
@@ -5837,7 +5837,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <EField label="E-mail" value={editEmail} onChange={setEditEmail} placeholder="joao@email.com" type="email" />
-                    <EField label="Telefone" value={editTelefone} onChange={setEditTelefone} placeholder="(11) 99999-0000" />
+                    <EField label="Telefone" value={editTelefone} onChange={(v) => setEditTelefone(maskTelefoneCredito(v))} placeholder="(11) 99999-0000" />
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <EField label="RG" value={editRg} onChange={setEditRg} placeholder="00.000.000-0" />
@@ -5846,7 +5846,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                       options={["Solteiro(a)","Casado(a)","Divorciado(a)","Viúvo(a)","União Estável"]} />
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <EField label="Renda Mensal (R$)" value={editRenda} onChange={setEditRenda} placeholder="0,00" />
+                    <ECurrencyField label="Renda Mensal (R$)" value={editRenda} onChange={setEditRenda} />
                     <EField label="Endereço" value={editEndRua} onChange={setEditEndRua} placeholder="Rua, número, bairro" />
                     <EField label="CEP" value={editEndCep} onChange={setEditEndCep} placeholder="00000-000" />
                   </div>
@@ -5867,10 +5867,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <EField label="E-mail" value={editEmail} onChange={setEditEmail} placeholder="contato@empresa.com" type="email" />
-                    <EField label="Telefone" value={editTelefone} onChange={setEditTelefone} placeholder="(11) 3000-0000" />
+                    <EField label="Telefone" value={editTelefone} onChange={(v) => setEditTelefone(maskTelefoneCredito(v))} placeholder="(11) 3000-0000" />
                   </div>
                   <div className="grid grid-cols-3 gap-3">
-                    <EField label="Faturamento Mensal (R$)" value={editFaturamento} onChange={setEditFaturamento} placeholder="0,00" />
+                    <ECurrencyField label="Faturamento Mensal (R$)" value={editFaturamento} onChange={setEditFaturamento} />
                     <EField label="Endereço" value={editEndRua} onChange={setEditEndRua} placeholder="Rua, número, bairro" />
                     <EField label="CEP" value={editEndCep} onChange={setEditEndCep} placeholder="00000-000" />
                   </div>
@@ -5957,6 +5957,22 @@ function EField({ label, value, onChange, placeholder, type = "text" }: {
       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
         className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+    </div>
+  );
+}
+
+/** Campo de valor com "R$" fixo e máscara de centavos enquanto digita (mesmo padrão da Nova Proposta). */
+function ECurrencyField({ label, value, onChange }: {
+  label: string; value: string; onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground select-none pointer-events-none">R$</span>
+        <input type="text" inputMode="numeric" value={value} onChange={(e) => onChange(maskCurrencyBRLInput(e.target.value))} placeholder="0,00"
+          className="w-full h-9 pl-8 pr-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+      </div>
     </div>
   );
 }
