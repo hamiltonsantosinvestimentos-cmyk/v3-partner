@@ -3,6 +3,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { sendText } from "@/lib/whatsapp/openwa-client";
 import { notifyLeadQuizPartner, notifyQuizPartnerCandidato } from "@/lib/email";
+import { acharLeadPorContato, type LeadExistente } from "@/lib/quiz-lead-unico";
 import { PLANO_LABEL } from "@/lib/quiz-partner";
 import {
   classificarWhiteLabel, WL_LISTA_LABEL,
@@ -112,6 +113,13 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
     existente = (data as LeadParcial | null) ?? null;
   }
+  // A mesma pessoa já está na Prospecção (fez o outro quiz ou refez este numa sessão nova):
+  // atualiza esse card em vez de criar outro.
+  let unificado: LeadExistente | null = null;
+  if (!existente) {
+    unificado = await acharLeadPorContato(db, { email, telefone: d.telefone });
+    if (unificado) existente = unificado;
+  }
 
   const campos = {
     nome: d.nome.trim(),
@@ -127,15 +135,32 @@ export async function POST(req: NextRequest) {
   let lead: { id: string } | null = null;
   let error: { message: string } | null = null;
   if (existente) {
-    const novaEtapa = existente.etapa === "incompleto" ? s.etapa : existente.etapa;
+    const etapaAnterior = existente.etapa;
+    const novaEtapa = etapaAnterior === "incompleto" || etapaAnterior === "perdido" ? s.etapa : etapaAnterior;
+    const metaAntiga = existente.metadata ?? {};
+    // Card unificado: guarda as respostas anteriores (o detalhe mostra o quiz mais recente)
+    const historicoQuiz = unificado
+      ? { quizzes_anteriores: [
+          ...((metaAntiga.quizzes_anteriores as unknown[] | undefined) ?? []),
+          { ...metaAntiga, quizzes_anteriores: undefined, origem: unificado.origem },
+        ] }
+      : {};
     const r = await db.from("prospeccao_leads").update({
       ...campos,
+      ...(unificado ? { origem: "quiz_white_label", notas: `${resumo} (Já estava na Prospecção: lead unificado.)` } : {}),
       etapa: novaEtapa,
-      metadata: { ...(existente.metadata ?? {}), ...metadata },
+      metadata: { ...metaAntiga, ...metadata, ...historicoQuiz },
       updated_at: new Date().toISOString(),
     }).eq("id", existente.id).select("id").single();
     lead = r.data; error = r.error;
-    if (!error && existente.etapa === "incompleto") {
+    if (!error && unificado) {
+      await db.from("prospeccao_historico").insert({
+        lead_id: existente.id,
+        etapa_anterior: etapaAnterior,
+        etapa_nova: novaEtapa,
+        nota: "Concluiu o quiz White Label: a pessoa já estava na Prospecção, então o card foi atualizado (sem duplicar)",
+      });
+    } else if (!error && existente.etapa === "incompleto") {
       await db.from("prospeccao_historico").insert({
         lead_id: existente.id,
         etapa_anterior: "incompleto",
@@ -177,6 +202,7 @@ export async function POST(req: NextRequest) {
     `\n${WL_LISTA_LABEL[s.lista]} · score ${s.total}` +
     `\nAção: ${ACAO[s.lista]}` +
     (origemTrafego ? `\nOrigem: ${origemTrafego}` : "") +
+    (unificado ? `\n↺ Já estava na Prospecção (outro quiz ou outra sessão): mesmo card, sem duplicar` : "") +
     `\n\nVer: app.v3partners.com.br/prospeccao`;
   const alertNumbers = (process.env.QUIZ_LEAD_ALERT_WHATSAPP || "51997466001,+97433006127")
     .split(",").map((n) => n.trim()).filter(Boolean);
