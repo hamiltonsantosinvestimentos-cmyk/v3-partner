@@ -290,3 +290,37 @@ export function percentualPorExtenso(pct: number): string {
   }
   return `${numero}% (${extenso} por cento)`;
 }
+
+// ── Histórico de envios (metadata.mandato_envios da proposta) ───────────────
+
+export type MandatoEnvioRegistro = {
+  contract_id: string;
+  contract_code: string | null;
+  tipo?: MandatoTipo;
+  origem?: string;
+  percentual?: number;
+  signatario_email?: string;
+  enviado?: boolean;
+  em?: string;
+  cancelado_em?: string;
+  cancelado_por?: string;
+  cancelado_motivo?: string;
+};
+
+export function enviosDoMandato(metadata: Record<string, unknown> | null | undefined): MandatoEnvioRegistro[] {
+  const lista = metadata?.mandato_envios;
+  if (!Array.isArray(lista)) return [];
+  return lista.filter((e): e is MandatoEnvioRegistro =>
+    !!e && typeof e === "object" && typeof (e as { contract_id?: unknown }).contract_id === "string");
+}
+
+/** Marca o envio do contrato como cancelado; os demais ficam como estão. */
+export function marcarEnvioCancelado(
+  envios: MandatoEnvioRegistro[],
+  contractId: string,
+  info: { em: string; por: string; motivo: string },
+): MandatoEnvioRegistro[] {
+  return envios.map((e) => e.contract_id === contractId
+    ? { ...e, cancelado_em: info.em, cancelado_por: info.por, cancelado_motivo: info.motivo }
+    : e);
+}
