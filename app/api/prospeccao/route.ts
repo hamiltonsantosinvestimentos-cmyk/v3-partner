@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { incompletoAguardando } from "@/lib/quiz-lead-unico";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
@@ -60,7 +61,8 @@ export async function GET() {
     .limit(1000);
 
   return NextResponse.json({
-    leads: leads ?? [],
+    // Lead incompleto do quiz só entra no Kanban depois de 1 minuto sem concluir
+    leads: (leads ?? []).filter((l) => !incompletoAguardando(l as { etapa?: string; created_at?: string; metadata?: Record<string, unknown> | null })),
     equipe: equipe ?? [],
     partners: partners ?? [],
   });

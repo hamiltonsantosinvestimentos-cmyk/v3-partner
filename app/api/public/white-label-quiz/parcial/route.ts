@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
-import { sendText } from "@/lib/whatsapp/openwa-client";
+import { acharLeadPorContato, avisarIncompletoDepoisDeUmMinuto } from "@/lib/quiz-lead-unico";
 import {
   WL_OBJETIVO, WL_CAPITAL, WL_DEDICACAO, WL_EXPERIENCIA, WL_PARCIAL_PAROU_EM,
 } from "@/lib/quiz-white-label";
@@ -10,7 +10,11 @@ import {
 // nome + WhatsApp + e-mail (com consentimento LGPD) e a cada passo seguinte. Cria/atualiza um lead
 // em prospeccao_leads na etapa "incompleto" (coluna "Lead incompleto" do Kanban), casado pela sessão.
 // Diferente do Seja Partner, o lead incompleto também avisa o time no WhatsApp (decisão do Hamilton,
-// 05/10/2026), uma vez só, na criação. A conclusão (../route.ts) completa ESTE mesmo lead.
+// 05/10/2026), uma vez só. A conclusão (../route.ts) completa ESTE mesmo lead.
+// Espera de 1 minuto (12/10/2026): o card só aparece no Kanban e o aviso só sai se o candidato
+// não concluir em 1 minuto (ver lib/quiz-lead-unico.ts).
+
+export const maxDuration = 120;
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -74,6 +78,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, id: existente.id });
   }
 
+  // A pessoa já está na Prospecção (outro quiz ou outra sessão): não cria outro card;
+  // se ela concluir, a conclusão atualiza esse mesmo card.
+  const porContato = await acharLeadPorContato(db, { email: d.email, telefone: d.telefone });
+  if (porContato) return NextResponse.json({ ok: true, id: porContato.id });
+
   let partnerId: string | null = null;
   let partnerName: string | null = null;
   if (d.ref && /^[0-9a-f-]{36}$/i.test(d.ref)) {
@@ -120,7 +129,7 @@ export async function POST(req: NextRequest) {
     nota: "Quiz White Label — deixou contato e ainda não concluiu",
   });
 
-  // Aviso ao time no WhatsApp: lead incompleto já pode ser chamado.
+  // Aviso ao time no WhatsApp, só se continuar incompleto depois de 1 minuto.
   const origemTrafego = d.tracking?.utm_source || d.tracking?.utm_campaign
     ? [d.tracking?.utm_source, d.tracking?.utm_medium, d.tracking?.utm_campaign].filter(Boolean).join(" / ")
     : null;
@@ -131,9 +140,7 @@ export async function POST(req: NextRequest) {
     `\nParou em: ${parouLabel}` +
     (origemTrafego ? `\nOrigem: ${origemTrafego}` : "") +
     `\n\nVer: app.v3partners.com.br/prospeccao`;
-  const alertNumbers = (process.env.QUIZ_LEAD_ALERT_WHATSAPP || "51997466001,+97433006127")
-    .split(",").map((n) => n.trim()).filter(Boolean);
-  await Promise.allSettled(alertNumbers.map((n) => sendText(n, msgAlerta).catch(() => false)));
+  after(() => avisarIncompletoDepoisDeUmMinuto(db, lead.id, msgAlerta));
 
   return NextResponse.json({ ok: true, id: lead.id });
 }
