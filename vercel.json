@@ -11,7 +11,6 @@
     { "path": "/api/cm/matches/run",             "schedule": "0 11 * * *" },
     { "path": "/api/cron/relatorio-mensal-partners", "schedule": "0 11 1 * *" },
     { "path": "/api/cron/purge-access-logs",      "schedule": "0 6 * * *" },
-    { "path": "/api/cron/dd-retention",           "schedule": "15 6 * * *" },
-    { "path": "/api/cron/lembrete-agenda-prospeccao", "schedule": "* * * * *" }
+    { "path": "/api/cron/dd-retention",           "schedule": "15 6 * * *" }
   ]
 }
