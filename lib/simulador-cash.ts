@@ -11,6 +11,8 @@
 //   - Taxa média = a taxa que liga valor liberado × prazo × parcela do
 //     demonstrativo (R$ 6.273.327,39 em 188 × R$ 86.989,37) = 1,2533% a.m.;
 //     a parcela é PRICE sobre o valor liberado a essa taxa
+//   - A taxa é mensal + INCC: parcela e saldo são corrigidos pelo INCC, então os
+//     valores do simulador são em moeda de hoje (sem a correção)
 // Só há um ponto de taxa (188 meses), então a taxa média é a mesma em toda a
 // faixa de 140 a 190 meses até a Mesa passar a tabela por prazo (TAXAS_POR_PRAZO).
 
