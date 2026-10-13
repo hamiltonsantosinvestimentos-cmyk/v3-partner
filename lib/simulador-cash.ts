@@ -30,6 +30,9 @@ export const PARAMETROS_CASH = {
   iofPctEntrada: 0.00978404,
   ccbPctCredito: 0.00244607,
   jurosFundoPctEntrada: 0.1121088,
+  // Taxa de transferência: no demonstrativo era isenta; na V3 é 1% da média de
+  // avaliação, descontada do valor liberado (Hamilton, 13/10/2026).
+  transferenciaPctCredito: 0.01,
   taxaMensalPadrao: 0.0129,
 };
 
@@ -77,6 +80,7 @@ export type SimulacaoCash = {
   iof: number;
   emissaoCcb: number;
   jurosFundo: number;
+  taxaTransferencia: number;
   valorLiberado: number;
   taxaAnual: number;
 };
@@ -88,10 +92,11 @@ export function simularCash(credito: number, prazo: number, taxaMensal = taxaMed
   const iof = r2(entrada * p.iofPctEntrada);
   const emissaoCcb = r2(credito * p.ccbPctCredito);
   const jurosFundo = r2(entrada * p.jurosFundoPctEntrada);
-  const valorLiberado = r2(credito - entrada - iof - emissaoCcb - jurosFundo);
+  const taxaTransferencia = r2(credito * p.transferenciaPctCredito);
+  const valorLiberado = r2(credito - entrada - iof - emissaoCcb - jurosFundo - taxaTransferencia);
   const parcela = r2(parcelaPrice(valorLiberado, taxaMensal, prazo));
   return {
-    credito, entrada, prazo, taxaMensal, parcela, iof, emissaoCcb, jurosFundo, valorLiberado,
+    credito, entrada, prazo, taxaMensal, parcela, iof, emissaoCcb, jurosFundo, taxaTransferencia, valorLiberado,
     taxaAnual: Math.pow(1 + taxaMensal, 12) - 1,
   };
 }
