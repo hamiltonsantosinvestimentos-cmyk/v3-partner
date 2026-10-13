@@ -5,7 +5,7 @@ import { Home, Wheat, FileDown, Info, Plus, X, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LINHAS_CASH, PARAMETROS_CASH, PRAZO_MAX, PRAZO_MIN,
-  mediaAvaliacoes, simularCash, type LinhaCash,
+  mediaAvaliacoes, parcelaMaxima, prazoMinimoQueCabe, simularCash, type LinhaCash,
 } from "@/lib/simulador-cash";
 
 // Simulador CASH HOME / CASH AGRO — mesmo demonstrativo do fundo, com a média
@@ -65,6 +65,7 @@ export function CashSimulator() {
   const [linha, setLinha] = useState<LinhaCash>("CASH_HOME");
   const [avaliacoes, setAvaliacoes] = useState<number[]>([13_666_029]);
   const [prazo, setPrazo] = useState(188);
+  const [renda, setRenda] = useState(0);
 
   const media = mediaAvaliacoes(avaliacoes);
   const sim = useMemo(() => simularCash(media, prazo), [media, prazo]);
@@ -73,6 +74,9 @@ export function CashSimulator() {
     [media],
   );
   const nomeLinha = LINHAS_CASH[linha].nome;
+  const maxParcela = parcelaMaxima(renda);
+  const prazoMin = useMemo(() => prazoMinimoQueCabe(media, renda), [media, renda]);
+  const cabe = (parcela: number) => maxParcela > 0 && parcela <= maxParcela;
 
   const exportar = () => {
     if (!sim) return;
@@ -94,6 +98,7 @@ ${linhaPdf("Média de avaliação do imóvel", fmtBRL(sim.credito), avaliacoes.f
 ${linhaPdf("Prazo", `${sim.prazo} meses`)}
 ${linhaPdf("Parcela", fmtBRL(sim.parcela), `taxa média ${fmtPct(sim.taxaMensal)} a.m. + INCC`)}
 ${linhaPdf("Renda necessária", fmtBRL(sim.rendaNecessaria), `parcela até ${fmtPct(PARAMETROS_CASH.comprometimentoRenda, 0)} da renda`)}
+${renda > 0 ? linhaPdf("Renda do cliente", fmtBRL(renda), `parcela máxima ${fmtBRL(maxParcela)} · ${cabe(sim.parcela) ? "parcela cabe na renda" : "parcela acima da renda"}`) : ""}
 <div class="total"><span>Valor liberado ao cliente</span><span>${fmtBRL(sim.valorLiberado)}</span></div>
 <p class="foot">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br<br>Taxa de juros + INCC: parcelas corrigidas pelo INCC, valores mostrados sem a correção. Simulação estimada com fins ilustrativos. Não constitui proposta formal de crédito; sujeita à análise e avaliação do imóvel.</p>
 </div><script>window.onload=()=>window.print()</script></body></html>`;
@@ -173,6 +178,30 @@ ${linhaPdf("Renda necessária", fmtBRL(sim.rendaNecessaria), `parcela até ${fmt
               <span>{PRAZO_MIN} meses</span><span>{PRAZO_MAX} meses</span>
             </div>
           </div>
+
+          <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 space-y-3">
+            <CurrencyInput label="Renda mensal do cliente" value={renda} onChange={setRenda} />
+            {renda > 0 && (
+              <div className="bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-xl p-3 space-y-1">
+                <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wide">
+                  Parcela máxima ({fmtPct(PARAMETROS_CASH.comprometimentoRenda, 0)} da renda)
+                </p>
+                <p className="text-2xl font-bold text-foreground">{fmtBRL(maxParcela)}</p>
+                {prazoMin !== null ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Cabe a partir de <strong className="text-foreground">{prazoMin} meses</strong>
+                    {prazo < prazoMin && (
+                      <button onClick={() => setPrazo(prazoMin)} className="ml-2 font-bold text-[#C9A84C] hover:text-[#E8C97A]">
+                        usar {prazoMin} meses
+                      </button>
+                    )}
+                  </p>
+                ) : media > 0 ? (
+                  <p className="text-[11px] text-red-400">Nenhum prazo de {PRAZO_MIN} a {PRAZO_MAX} meses cabe nessa renda.</p>
+                ) : null}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Demonstrativo */}
@@ -188,6 +217,10 @@ ${linhaPdf("Renda necessária", fmtBRL(sim.rendaNecessaria), `parcela até ${fmt
                 <Linha label="Prazo" valor={`${sim.prazo} meses`} />
                 <Linha label="Parcela" valor={fmtBRL(sim.parcela)} sub={`taxa média ${fmtPct(sim.taxaMensal)} a.m. + INCC`} forte />
                 <Linha label="Renda necessária" valor={fmtBRL(sim.rendaNecessaria)} sub={`parcela até ${fmtPct(PARAMETROS_CASH.comprometimentoRenda, 0)} da renda`} />
+                {renda > 0 && (
+                  <Linha label="Parcela máxima pela renda" valor={fmtBRL(maxParcela)}
+                    sub={cabe(sim.parcela) ? "parcela cabe na renda" : "parcela acima da renda do cliente"} />
+                )}
                 <div className="flex justify-between items-center mt-4 p-4 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30">
                   <span className="text-sm font-bold text-foreground">Valor liberado ao cliente</span>
                   <span className="text-2xl font-bold text-[#C9A84C]">{fmtBRL(sim.valorLiberado)}</span>
@@ -207,6 +240,7 @@ ${linhaPdf("Renda necessária", fmtBRL(sim.rendaNecessaria), `parcela até ${fmt
                         <th className="text-right px-4 py-2 font-semibold">Taxa média</th>
                         <th className="text-right px-4 py-2 font-semibold">Parcela</th>
                         <th className="text-right px-4 py-2 font-semibold">Renda necessária</th>
+                        {renda > 0 && <th className="text-right px-4 py-2 font-semibold">Cabe na renda</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -218,6 +252,11 @@ ${linhaPdf("Renda necessária", fmtBRL(sim.rendaNecessaria), `parcela até ${fmt
                           <td className="px-4 py-2.5 text-right text-muted-foreground">{fmtPct(t.taxaMensal)} a.m. + INCC</td>
                           <td className="px-4 py-2.5 text-right font-semibold text-foreground">{fmtBRL(t.parcela)}</td>
                           <td className="px-4 py-2.5 text-right text-muted-foreground">{fmtBRL(t.rendaNecessaria)}</td>
+                          {renda > 0 && (
+                            <td className={cn("px-4 py-2.5 text-right font-bold", cabe(t.parcela) ? "text-[#C9A84C]" : "text-red-400")}>
+                              {cabe(t.parcela) ? "Sim" : "Não"}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
