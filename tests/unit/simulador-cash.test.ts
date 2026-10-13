@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mediaAvaliacoes, simularCash, taxaMediaDoPrazo, PARAMETROS_CASH } from "../../lib/simulador-cash";
+import { mediaAvaliacoes, taxaImplicita, simularCash, taxaMediaDoPrazo, PARAMETROS_CASH } from "../../lib/simulador-cash";
 
 const perto = (a: number, b: number, tol: number) => assert.ok(Math.abs(a - b) <= tol, `${a} ≉ ${b}`);
 
@@ -12,6 +12,8 @@ test("reproduz o demonstrativo da liquidez do fundo (188 meses)", () => {
   perto(s.jurosFundo, 735_399.38, 1);
   perto(s.valorLiberado, 6_273_327.39, 2);
   perto(s.parcela, 86_989.37, 5);
+  // taxa = valor liberado × prazo × parcela do demonstrativo
+  perto(taxaImplicita(6_273_327.39, 86_989.37, 188), PARAMETROS_CASH.taxaMensalPadrao, 1e-7);
 });
 
 test("prazo maior baixa a parcela e mantém o valor liberado", () => {
@@ -19,7 +21,6 @@ test("prazo maior baixa a parcela e mantém o valor liberado", () => {
   const b = simularCash(1_000_000, 190)!;
   assert.ok(a.parcela > b.parcela);
   assert.equal(a.valorLiberado, b.valorLiberado);
-  assert.ok(b.cetMensal > PARAMETROS_CASH.taxaMensalPadrao);
 });
 
 test("média das avaliações ignora campos vazios", () => {

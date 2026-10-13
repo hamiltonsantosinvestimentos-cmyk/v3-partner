@@ -201,7 +201,7 @@ ${linhaPdf("Juros de fundo", fmtBRL(sim.jurosFundo), `${fmtPct(PARAMETROS_CASH.j
                   <span className="text-2xl font-bold text-[#C9A84C]">{fmtBRL(sim.valorLiberado)}</span>
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-3">
-                  Total das parcelas {fmtBRL(sim.totalParcelas)} · custo efetivo sobre o valor liberado ≈ {fmtPct(sim.cetMensal)} a.m.
+                  Taxa média {fmtPct(sim.taxaMensal)} a.m. ({fmtPct(sim.taxaAnual)} a.a.) sobre o valor liberado · total das parcelas {fmtBRL(sim.totalParcelas)}
                 </p>
               </div>
 
