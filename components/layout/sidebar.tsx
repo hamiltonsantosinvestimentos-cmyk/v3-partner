@@ -137,6 +137,7 @@ const NAV_SECTIONS: NavSection[] = [
         children: [
           { href: "/simulador-home-equity", label: "Home Equity / CGI", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
           { href: "/simulador-homecash", label: "HomeCash", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
+          { href: "/simulador-cash", label: "Cash Home / Cash Agro", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "MESA_OPERACIONAL"] },
         ],
       },
       { href: "/enterprise", label: "Enterprise", icon: "Building2", roles: ["ENTERPRISE"] },
@@ -225,7 +226,7 @@ const ROLE_LABELS: Record<string, string> = {
 // papel) sempre teve: para ele o menu continua como antes do Access.
 const MENU_STARTER_ANTIGO = new Set([
   "/meus-compradores", "/meus-ativos", "/indicacoes", "/bolsa", "/simulador-home-equity",
-  "/simulador-homecash", "/consorcio/simulacao", "/consorcio/projetos", "/marketplace",
+  "/simulador-homecash", "/simulador-cash", "/consorcio/simulacao", "/consorcio/projetos", "/marketplace",
   "/meu-atendimento-ia", "/metas",
 ]);
 
