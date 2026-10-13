@@ -5,7 +5,7 @@ import { Home, Wheat, FileDown, Info, Plus, X, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LINHAS_CASH, PARAMETROS_CASH, PRAZO_MAX, PRAZO_MIN,
-  mediaAvaliacoes, parcelaMaxima, prazoMinimoQueCabe, simularCash, type LinhaCash,
+  creditoPelaRenda, mediaAvaliacoes, parcelaMaxima, prazoMinimoQueCabe, simularCash, type LinhaCash,
 } from "@/lib/simulador-cash";
 
 // Simulador CASH HOME / CASH AGRO — mesmo demonstrativo do fundo, com a média
@@ -76,6 +76,7 @@ export function CashSimulator() {
   const nomeLinha = LINHAS_CASH[linha].nome;
   const maxParcela = parcelaMaxima(renda);
   const prazoMin = useMemo(() => prazoMinimoQueCabe(media, renda), [media, renda]);
+  const pelaRenda = creditoPelaRenda(renda, prazo);
   const cabe = (parcela: number) => maxParcela > 0 && parcela <= maxParcela;
 
   const exportar = () => {
@@ -99,6 +100,7 @@ ${linhaPdf("Prazo", `${sim.prazo} meses`)}
 ${linhaPdf("Parcela", fmtBRL(sim.parcela), `taxa média ${fmtPct(sim.taxaMensal)} a.m. + INCC`)}
 ${linhaPdf("Renda necessária", fmtBRL(sim.rendaNecessaria), `parcela até ${fmtPct(PARAMETROS_CASH.comprometimentoRenda, 0)} da renda`)}
 ${renda > 0 ? linhaPdf("Renda do cliente", fmtBRL(renda), `parcela máxima ${fmtBRL(maxParcela)} · ${cabe(sim.parcela) ? "parcela cabe na renda" : "parcela acima da renda"}`) : ""}
+${pelaRenda ? linhaPdf(`Crédito máximo pela renda (${prazo} meses)`, fmtBRL(pelaRenda.valorLiberado), `avaliação necessária ${fmtBRL(pelaRenda.avaliacaoNecessaria)}`) : ""}
 <div class="total"><span>Valor liberado ao cliente</span><span>${fmtBRL(sim.valorLiberado)}</span></div>
 <p class="foot">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br<br>Taxa de juros + INCC: parcelas corrigidas pelo INCC, valores mostrados sem a correção. Simulação estimada com fins ilustrativos. Não constitui proposta formal de crédito; sujeita à análise e avaliação do imóvel.</p>
 </div><script>window.onload=()=>window.print()</script></body></html>`;
@@ -187,6 +189,23 @@ ${renda > 0 ? linhaPdf("Renda do cliente", fmtBRL(renda), `parcela máxima ${fmt
                   Parcela máxima ({fmtPct(PARAMETROS_CASH.comprometimentoRenda, 0)} da renda)
                 </p>
                 <p className="text-2xl font-bold text-foreground">{fmtBRL(maxParcela)}</p>
+                {pelaRenda && (
+                  <div className="pt-2 mt-1 border-t border-[#C9A84C]/20 space-y-1.5">
+                    <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wide">Com essa renda, em {prazo} meses</p>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Crédito liberado até</span>
+                      <span className="font-bold text-foreground">{fmtBRL(pelaRenda.valorLiberado)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Avaliação do imóvel necessária</span>
+                      <span className="font-bold text-foreground">{fmtBRL(pelaRenda.avaliacaoNecessaria)}</span>
+                    </div>
+                    <button onClick={() => setAvaliacoes([Math.floor(pelaRenda.avaliacaoNecessaria)])}
+                      className="text-[11px] font-bold text-[#C9A84C] hover:text-[#E8C97A]">
+                      simular com essa avaliação
+                    </button>
+                  </div>
+                )}
                 {prazoMin !== null ? (
                   <p className="text-[11px] text-muted-foreground">
                     Cabe a partir de <strong className="text-foreground">{prazoMin} meses</strong>
@@ -241,6 +260,8 @@ ${renda > 0 ? linhaPdf("Renda do cliente", fmtBRL(renda), `parcela máxima ${fmt
                         <th className="text-right px-4 py-2 font-semibold">Parcela</th>
                         <th className="text-right px-4 py-2 font-semibold">Renda necessária</th>
                         {renda > 0 && <th className="text-right px-4 py-2 font-semibold">Cabe na renda</th>}
+                        {renda > 0 && <th className="text-right px-4 py-2 font-semibold">Crédito máx. pela renda</th>}
+                        {renda > 0 && <th className="text-right px-4 py-2 font-semibold">Avaliação necessária</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -257,6 +278,15 @@ ${renda > 0 ? linhaPdf("Renda do cliente", fmtBRL(renda), `parcela máxima ${fmt
                               {cabe(t.parcela) ? "Sim" : "Não"}
                             </td>
                           )}
+                          {renda > 0 && (() => {
+                            const c = creditoPelaRenda(renda, t.prazo);
+                            return (
+                              <>
+                                <td className="px-4 py-2.5 text-right text-foreground">{c ? fmtBRL(c.valorLiberado) : "—"}</td>
+                                <td className="px-4 py-2.5 text-right text-muted-foreground">{c ? fmtBRL(c.avaliacaoNecessaria) : "—"}</td>
+                              </>
+                            );
+                          })()}
                         </tr>
                       ))}
                     </tbody>

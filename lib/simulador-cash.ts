@@ -122,3 +122,28 @@ export function prazoMinimoQueCabe(credito: number, renda: number): number | nul
   }
   return null;
 }
+
+/** Fração da avaliação que chega ao cliente como valor liberado (≈ 44,9%). */
+export function fatorValorLiberado(): number {
+  const p = PARAMETROS_CASH;
+  const e = p.entradaPct;
+  return 1 - e - e * p.iofPctEntrada - p.ccbPctCredito - e * p.jurosFundoPctEntrada - p.transferenciaPctCredito;
+}
+
+/**
+ * A partir da renda: maior valor liberado cuja parcela cabe em 30% da renda no
+ * prazo dado, e a média de avaliação do imóvel necessária para liberá-lo.
+ */
+export function creditoPelaRenda(renda: number, prazo: number, taxaMensal = taxaMediaDoPrazo(prazo)) {
+  const parcela = parcelaMaxima(renda);
+  if (!(parcela > 0) || !(prazo > 0)) return null;
+  const valorLiberado = taxaMensal > 0
+    ? (parcela * (1 - Math.pow(1 + taxaMensal, -prazo))) / taxaMensal
+    : parcela * prazo;
+  return {
+    prazo,
+    parcela,
+    valorLiberado: r2(valorLiberado),
+    avaliacaoNecessaria: r2(valorLiberado / fatorValorLiberado()),
+  };
+}
