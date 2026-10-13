@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Home, Wheat, FileDown, Info, Plus, X, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  LINHAS_CASH, PRAZO_MAX, PRAZO_MIN,
+  LINHAS_CASH, PARAMETROS_CASH, PRAZO_MAX, PRAZO_MIN,
   mediaAvaliacoes, simularCash, type LinhaCash,
 } from "@/lib/simulador-cash";
 
@@ -93,6 +93,7 @@ export function CashSimulator() {
 ${linhaPdf("Média de avaliação do imóvel", fmtBRL(sim.credito), avaliacoes.filter((v) => v > 0).length > 1 ? `média de ${avaliacoes.filter((v) => v > 0).length} avaliações` : "")}
 ${linhaPdf("Prazo", `${sim.prazo} meses`)}
 ${linhaPdf("Parcela", fmtBRL(sim.parcela), `taxa média ${fmtPct(sim.taxaMensal)} a.m. + INCC`)}
+${linhaPdf("Renda necessária", fmtBRL(sim.rendaNecessaria), `parcela até ${fmtPct(PARAMETROS_CASH.comprometimentoRenda, 0)} da renda`)}
 <div class="total"><span>Valor liberado ao cliente</span><span>${fmtBRL(sim.valorLiberado)}</span></div>
 <p class="foot">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br<br>Taxa de juros + INCC: parcelas corrigidas pelo INCC, valores mostrados sem a correção. Simulação estimada com fins ilustrativos. Não constitui proposta formal de crédito; sujeita à análise e avaliação do imóvel.</p>
 </div><script>window.onload=()=>window.print()</script></body></html>`;
@@ -186,6 +187,7 @@ ${linhaPdf("Parcela", fmtBRL(sim.parcela), `taxa média ${fmtPct(sim.taxaMensal)
                 <Linha label="Média de avaliação do imóvel" valor={fmtBRL(sim.credito)} forte />
                 <Linha label="Prazo" valor={`${sim.prazo} meses`} />
                 <Linha label="Parcela" valor={fmtBRL(sim.parcela)} sub={`taxa média ${fmtPct(sim.taxaMensal)} a.m. + INCC`} forte />
+                <Linha label="Renda necessária" valor={fmtBRL(sim.rendaNecessaria)} sub={`parcela até ${fmtPct(PARAMETROS_CASH.comprometimentoRenda, 0)} da renda`} />
                 <div className="flex justify-between items-center mt-4 p-4 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30">
                   <span className="text-sm font-bold text-foreground">Valor liberado ao cliente</span>
                   <span className="text-2xl font-bold text-[#C9A84C]">{fmtBRL(sim.valorLiberado)}</span>
@@ -204,6 +206,7 @@ ${linhaPdf("Parcela", fmtBRL(sim.parcela), `taxa média ${fmtPct(sim.taxaMensal)
                         <th className="text-left px-4 py-2 font-semibold">Prazo</th>
                         <th className="text-right px-4 py-2 font-semibold">Taxa média</th>
                         <th className="text-right px-4 py-2 font-semibold">Parcela</th>
+                        <th className="text-right px-4 py-2 font-semibold">Renda necessária</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -214,6 +217,7 @@ ${linhaPdf("Parcela", fmtBRL(sim.parcela), `taxa média ${fmtPct(sim.taxaMensal)
                           <td className="px-4 py-2.5 font-bold text-foreground">{t.prazo} meses</td>
                           <td className="px-4 py-2.5 text-right text-muted-foreground">{fmtPct(t.taxaMensal)} a.m. + INCC</td>
                           <td className="px-4 py-2.5 text-right font-semibold text-foreground">{fmtBRL(t.parcela)}</td>
+                          <td className="px-4 py-2.5 text-right text-muted-foreground">{fmtBRL(t.rendaNecessaria)}</td>
                         </tr>
                       ))}
                     </tbody>

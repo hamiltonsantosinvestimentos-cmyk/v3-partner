@@ -31,3 +31,10 @@ test("média das avaliações ignora campos vazios", () => {
   assert.equal(simularCash(0, 160), null);
   assert.equal(taxaMediaDoPrazo(150), PARAMETROS_CASH.taxaMensalPadrao);
 });
+
+test("renda necessária: parcela de até 30% da renda", () => {
+  const s = simularCash(13_666_029, 188)!;
+  perto(s.rendaNecessaria * 0.3, s.parcela, 0.01);
+  // renda de R$ 100 mil comporta parcela de até R$ 30 mil
+  perto(30_000 / PARAMETROS_CASH.comprometimentoRenda, 100_000, 0.001);
+});

@@ -33,6 +33,10 @@ export const PARAMETROS_CASH = {
   // Taxa de transferência: no demonstrativo era isenta; na V3 é 1% da média de
   // avaliação, descontada do valor liberado (Hamilton, 13/10/2026).
   transferenciaPctCredito: 0.01,
+  // Comprometimento máximo de renda: a parcela pode ser até 30% da renda
+  // (renda de R$ 100 mil → parcela máxima de R$ 30 mil). Renda necessária =
+  // parcela / 30%, ou seja, parcela × 3,33.
+  comprometimentoRenda: 0.30,
   taxaMensalPadrao: 0.0129,
 };
 
@@ -83,6 +87,7 @@ export type SimulacaoCash = {
   taxaTransferencia: number;
   valorLiberado: number;
   taxaAnual: number;
+  rendaNecessaria: number;
 };
 
 export function simularCash(credito: number, prazo: number, taxaMensal = taxaMediaDoPrazo(prazo)): SimulacaoCash | null {
@@ -98,5 +103,6 @@ export function simularCash(credito: number, prazo: number, taxaMensal = taxaMed
   return {
     credito, entrada, prazo, taxaMensal, parcela, iof, emissaoCcb, jurosFundo, taxaTransferencia, valorLiberado,
     taxaAnual: Math.pow(1 + taxaMensal, 12) - 1,
+    rendaNecessaria: r2(parcela / p.comprometimentoRenda),
   };
 }
