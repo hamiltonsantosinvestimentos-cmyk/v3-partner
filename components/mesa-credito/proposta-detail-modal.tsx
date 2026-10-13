@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate, maskCurrencyBRLInput, maskTelefoneCredito, parseCurrencyBRLInput, telefoneCreditoParaSalvar, valorParaCampoBRL } from "@/lib/utils";
+import { formatCurrency, formatDate, maskCurrencyBRLInput, maskTelefoneCredito, parseCurrencyBRLInput, telefoneCreditoParaSalvar, valorBRLParaNumero, valorParaCampoBRL } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, PLAN_COMMISSION_PCT, ROLE_LABELS, type OperationStatus, type UserRole } from "@/lib/constants";
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
@@ -2757,7 +2757,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
     const fmt = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString("pt-BR") : "-";
-    const fmtNum  = (v: unknown) => { const n = parseFloat(String(v ?? "").replace(/\D/g, "")); return isNaN(n) || n === 0 ? "" : fmt(n); };
+    const fmtNum  = (v: unknown) => { const n = valorBRLParaNumero(v); return n === 0 ? "" : fmt(n); };
 
     const comments = (mesaComments.length > 0 ? mesaComments : (proposal.mesa_comments ?? []));
 
@@ -3304,13 +3304,13 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             const estadoCivil  = (meta.estado_civil ?? meta.estadoCivil ?? "") as string;
             const rg           = (meta.rg ?? "") as string;
             const rendaRaw     = meta.renda_mensal ?? meta.renda;
-            const rendaMensal  = rendaRaw ? parseFloat(String(rendaRaw).replace(/\D/g, "")) || 0 : 0;
+            const rendaMensal  = valorBRLParaNumero(rendaRaw);
             // PJ
             const razaoSocial      = (meta.razao_social ?? meta.razaoSocial ?? "") as string;
             const nomeFantasia     = (meta.nome_fantasia ?? meta.nomeFantasia ?? "") as string;
             const socioResponsavel = (meta.socio_responsavel ?? meta.socioResponsavel ?? "") as string;
             const fatRaw           = meta.faturamento_mensal ?? meta.faturamento;
-            const faturamentoMensal = fatRaw ? parseFloat(String(fatRaw).replace(/\D/g, "")) || 0 : 0;
+            const faturamentoMensal = valorBRLParaNumero(fatRaw);
             // Endereço
             const endRua    = (meta.endereco_rua  ?? meta.endereco    ?? meta.enderecoRua ?? "") as string;
             const endCidade = (meta.endereco_cidade ?? meta.cidade    ?? meta.city        ?? "") as string;

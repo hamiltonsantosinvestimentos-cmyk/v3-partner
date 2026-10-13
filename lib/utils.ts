@@ -107,17 +107,25 @@ export function telefoneCreditoParaSalvar(value: string): string | undefined {
 }
 
 /**
- * Valor já gravado (número, ou texto antigo como "5000", "5.000,00" ou "R$ 5.000")
- * para o campo com máscara de R$. Texto sem vírgula é lido como reais inteiros.
+ * Valor monetário gravado (número, ou texto antigo como "5000", "5.000,00" ou
+ * "R$ 5.000") em reais. Texto sem vírgula é lido como reais inteiros. Nunca
+ * tirar só os não-dígitos de um número: 1285754.28 viraria 128575428
+ * (achado real 12/10/2026, renda da proposta V3-CR-2026-10-GRL-007).
  */
-export function valorParaCampoBRL(value: unknown): string {
-  if (typeof value === "number") return value > 0 ? formatCurrencyBRLFromNumber(value) : "";
-  if (typeof value !== "string" || !value.trim()) return "";
+export function valorBRLParaNumero(value: unknown): number {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (typeof value !== "string" || !value.trim()) return 0;
   const limpo = value.replace(/[^\d.,]/g, "");
   const n = limpo.includes(",")
     ? parseFloat(limpo.replace(/\./g, "").replace(",", "."))
     : parseFloat(limpo.replace(/\./g, ""));
-  return Number.isFinite(n) && n > 0 ? formatCurrencyBRLFromNumber(n) : "";
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Valor já gravado para o campo com máscara de R$ ("" quando vazio ou zero). */
+export function valorParaCampoBRL(value: unknown): string {
+  const n = valorBRLParaNumero(value);
+  return n > 0 ? formatCurrencyBRLFromNumber(n) : "";
 }
 
 /** Validacao simples de email para feedback visual em formularios. */
