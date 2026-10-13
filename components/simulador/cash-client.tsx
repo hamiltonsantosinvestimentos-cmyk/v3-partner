@@ -28,15 +28,15 @@ function CurrencyInput({ label, value, onChange, onRemove }: {
       <div className={cn("flex items-center gap-2 px-4 py-3 rounded-xl border transition-all",
         focused ? "border-[#C9A84C] bg-[#09081A]" : "border-[#243A66] bg-[#111F35]")}>
         <span className="text-muted-foreground text-sm font-semibold">R$</span>
-        <input type="text" inputMode="numeric" value={raw} placeholder="0"
+        <input type="text" inputMode="numeric" value={focused ? raw : fmt(value)} placeholder="0"
           onChange={(e) => {
             const digitos = e.target.value.replace(/\D/g, "");
             const num = digitos ? parseInt(digitos, 10) : 0;
             setRaw(fmt(num));
             onChange(num);
           }}
-          onFocus={() => setFocused(true)}
-          onBlur={() => { setFocused(false); setRaw(fmt(value)); }}
+          onFocus={() => { setFocused(true); setRaw(fmt(value)); }}
+          onBlur={() => setFocused(false)}
           className="flex-1 min-w-0 bg-transparent text-foreground text-lg font-bold focus:outline-none" />
         {onRemove && (
           <button type="button" onClick={onRemove} title="Remover avaliação"
@@ -66,8 +66,18 @@ export function CashSimulator() {
   const [avaliacoes, setAvaliacoes] = useState<number[]>([13_666_029]);
   const [prazo, setPrazo] = useState(188);
   const [renda, setRenda] = useState(0);
+  // Quem manda na simulação: a renda (avaliação e valor liberado saem dela,
+  // no prazo escolhido) ou a avaliação digitada (cálculo normal).
+  const [origem, setOrigem] = useState<"avaliacao" | "renda">("avaliacao");
 
-  const media = mediaAvaliacoes(avaliacoes);
+  const pelaRenda = creditoPelaRenda(renda, prazo);
+  // floor: a parcela nunca passa dos 30% da renda por arredondamento
+  const avaliacoesVisiveis = origem === "renda" && pelaRenda ? [Math.floor(pelaRenda.avaliacaoNecessaria)] : avaliacoes;
+  const editarAvaliacoes = (f: (a: number[]) => number[]) => {
+    setAvaliacoes(f(avaliacoesVisiveis));
+    setOrigem("avaliacao");
+  };
+  const media = mediaAvaliacoes(avaliacoesVisiveis);
   const sim = useMemo(() => simularCash(media, prazo), [media, prazo]);
   const tabela = useMemo(
     () => [110, 120, 130, 140, 150, 160, 170, 180, 190].map((p) => simularCash(media, p)).filter((s) => s !== null),
@@ -76,7 +86,6 @@ export function CashSimulator() {
   const nomeLinha = LINHAS_CASH[linha].nome;
   const maxParcela = parcelaMaxima(renda);
   const prazoMin = useMemo(() => prazoMinimoQueCabe(media, renda), [media, renda]);
-  const pelaRenda = creditoPelaRenda(renda, prazo);
   const cabe = (parcela: number) => maxParcela > 0 && parcela <= maxParcela;
 
   const exportar = () => {
@@ -95,7 +104,7 @@ export function CashSimulator() {
 @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>
 <body><div class="page"><div class="badge">V3 PARTNERS · ${nomeLinha}</div>
 <h1>Demonstrativo da Liquidez</h1><p class="em">Emitido em ${d}</p>
-${linhaPdf("Média de avaliação do imóvel", fmtBRL(sim.credito), avaliacoes.filter((v) => v > 0).length > 1 ? `média de ${avaliacoes.filter((v) => v > 0).length} avaliações` : "")}
+${linhaPdf("Média de avaliação do imóvel", fmtBRL(sim.credito), origem === "renda" ? "calculada pela renda do cliente" : avaliacoesVisiveis.filter((v) => v > 0).length > 1 ? `média de ${avaliacoesVisiveis.filter((v) => v > 0).length} avaliações` : "")}
 ${linhaPdf("Prazo", `${sim.prazo} meses`)}
 ${linhaPdf("Parcela", fmtBRL(sim.parcela), `taxa média ${fmtPct(sim.taxaMensal)} a.m. + INCC`)}
 ${linhaPdf("Renda necessária", fmtBRL(sim.rendaNecessaria), `parcela até ${fmtPct(PARAMETROS_CASH.comprometimentoRenda, 0)} da renda`)}
@@ -148,17 +157,20 @@ ${pelaRenda ? linhaPdf(`Crédito máximo pela renda (${prazo} meses)`, fmtBRL(pe
           <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#243A66]">
               <span className="text-sm font-bold text-foreground">Avaliações do imóvel</span>
-              {avaliacoes.length < 3 && (
-                <button onClick={() => setAvaliacoes((a) => [...a, 0])}
+              {avaliacoesVisiveis.length < 3 && (
+                <button onClick={() => editarAvaliacoes((a) => [...a, 0])}
                   className="flex items-center gap-1 text-[11px] font-bold text-[#C9A84C] hover:text-[#E8C97A]">
                   <Plus className="w-3.5 h-3.5" /> Avaliação
                 </button>
               )}
             </div>
-            {avaliacoes.map((v, i) => (
+            {origem === "renda" && pelaRenda && (
+              <p className="text-[10px] text-[#E8C97A]">Calculada pela renda do cliente. Digite uma avaliação para simular por ela.</p>
+            )}
+            {avaliacoesVisiveis.map((v, i) => (
               <CurrencyInput key={i} label={`Avaliação ${i + 1}`} value={v}
-                onChange={(n) => setAvaliacoes((a) => a.map((x, j) => (j === i ? n : x)))}
-                onRemove={avaliacoes.length > 1 ? () => setAvaliacoes((a) => a.filter((_, j) => j !== i)) : undefined} />
+                onChange={(n) => editarAvaliacoes((a) => a.map((x, j) => (j === i ? n : x)))}
+                onRemove={avaliacoesVisiveis.length > 1 ? () => editarAvaliacoes((a) => a.filter((_, j) => j !== i)) : undefined} />
             ))}
             <div className="bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-xl p-3">
               <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wide">Média de avaliação</p>
@@ -182,7 +194,8 @@ ${pelaRenda ? linhaPdf(`Crédito máximo pela renda (${prazo} meses)`, fmtBRL(pe
           </div>
 
           <div className="bg-[#111F35] border border-[#243A66] rounded-2xl p-5 space-y-3">
-            <CurrencyInput label="Renda mensal do cliente" value={renda} onChange={setRenda} />
+            <CurrencyInput label="Renda mensal do cliente" value={renda}
+              onChange={(n) => { setRenda(n); setOrigem(n > 0 ? "renda" : "avaliacao"); }} />
             {renda > 0 && (
               <div className="bg-[#C9A84C]/10 border border-[#C9A84C]/20 rounded-xl p-3 space-y-1">
                 <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wide">
@@ -200,13 +213,15 @@ ${pelaRenda ? linhaPdf(`Crédito máximo pela renda (${prazo} meses)`, fmtBRL(pe
                       <span className="text-muted-foreground">Avaliação do imóvel necessária</span>
                       <span className="font-bold text-foreground">{fmtBRL(pelaRenda.avaliacaoNecessaria)}</span>
                     </div>
-                    <button onClick={() => setAvaliacoes([Math.floor(pelaRenda.avaliacaoNecessaria)])}
-                      className="text-[11px] font-bold text-[#C9A84C] hover:text-[#E8C97A]">
-                      simular com essa avaliação
-                    </button>
+                    {origem === "avaliacao" && (
+                      <button onClick={() => setOrigem("renda")}
+                        className="text-[11px] font-bold text-[#C9A84C] hover:text-[#E8C97A]">
+                        voltar a calcular pela renda
+                      </button>
+                    )}
                   </div>
                 )}
-                {prazoMin !== null ? (
+                {origem === "renda" ? null : prazoMin !== null ? (
                   <p className="text-[11px] text-muted-foreground">
                     Cabe a partir de <strong className="text-foreground">{prazoMin} meses</strong>
                     {prazo < prazoMin && (
