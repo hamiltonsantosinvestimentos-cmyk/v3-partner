@@ -106,3 +106,19 @@ export function simularCash(credito: number, prazo: number, taxaMensal = taxaMed
     rendaNecessaria: r2(parcela / p.comprometimentoRenda),
   };
 }
+
+/** Maior parcela que a renda mensal do cliente comporta (30% da renda). */
+export function parcelaMaxima(renda: number): number {
+  return renda > 0 ? r2(renda * PARAMETROS_CASH.comprometimentoRenda) : 0;
+}
+
+/** Menor prazo (110 a 190 meses) cuja parcela cabe na renda; null se nenhum cabe. */
+export function prazoMinimoQueCabe(credito: number, renda: number): number | null {
+  const max = parcelaMaxima(renda);
+  if (!(max > 0)) return null;
+  for (let n = PRAZO_MIN; n <= PRAZO_MAX; n++) {
+    const s = simularCash(credito, n);
+    if (s && s.parcela <= max) return n;
+  }
+  return null;
+}
