@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mediaAvaliacoes, parcelaMaxima, prazoMinimoQueCabe, taxaImplicita, simularCash, taxaMediaDoPrazo, PARAMETROS_CASH } from "../../lib/simulador-cash";
+import { creditoPelaRenda, mediaAvaliacoes, parcelaMaxima, prazoMinimoQueCabe, taxaImplicita, simularCash, taxaMediaDoPrazo, PARAMETROS_CASH } from "../../lib/simulador-cash";
 
 const perto = (a: number, b: number, tol: number) => assert.ok(Math.abs(a - b) <= tol, `${a} ≉ ${b}`);
 
@@ -47,4 +47,13 @@ test("renda do cliente: parcela máxima e menor prazo que cabe", () => {
   assert.ok(simularCash(credito, n)!.parcela <= 90_000);
   if (n > 110) assert.ok(simularCash(credito, n - 1)!.parcela > 90_000);
   assert.equal(prazoMinimoQueCabe(credito, 100_000), null);
+});
+
+test("renda → crédito máximo e avaliação necessária (ida e volta)", () => {
+  const c = creditoPelaRenda(100_000, 190)!;
+  assert.equal(c.parcela, 30_000);
+  const s = simularCash(c.avaliacaoNecessaria, 190)!;
+  perto(s.valorLiberado, c.valorLiberado, 1);
+  perto(s.parcela, 30_000, 1);
+  assert.equal(creditoPelaRenda(0, 190), null);
 });
