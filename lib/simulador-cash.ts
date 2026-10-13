@@ -8,15 +8,15 @@
 //   - IOF = 0,9784% da entrada (o demonstrativo arredonda para 0,98%)
 //   - Emissão CCB = 0,2446% do crédito (R$ 33.428 no exemplo)
 //   - Juros de fundo = 11,2109% da entrada
-//   - Taxa média = a taxa que liga valor liberado × prazo × parcela do
-//     demonstrativo (R$ 6.273.327,39 em 188 × R$ 86.989,37) = 1,2533% a.m.;
+//   - Taxa média 1,29% a.m. + INCC (definida pelo Hamilton em 13/10/2026; a
+//     do demonstrativo, valor liberado × prazo × parcela, dava 1,2533% a.m.);
 //     a parcela é PRICE sobre o valor liberado a essa taxa
 //   - A taxa é mensal + INCC: parcela e saldo são corrigidos pelo INCC, então os
 //     valores do simulador são em moeda de hoje (sem a correção)
 // Só há um ponto de taxa (188 meses), então a taxa média é a mesma em toda a
-// faixa de 140 a 190 meses até a Mesa passar a tabela por prazo (TAXAS_POR_PRAZO).
+// faixa de 110 a 190 meses até a Mesa passar a tabela por prazo (TAXAS_POR_PRAZO).
 
-export const PRAZO_MIN = 140;
+export const PRAZO_MIN = 110;
 export const PRAZO_MAX = 190;
 
 export type LinhaCash = "CASH_HOME" | "CASH_AGRO";
@@ -30,7 +30,10 @@ export const PARAMETROS_CASH = {
   iofPctEntrada: 0.00978404,
   ccbPctCredito: 0.00244607,
   jurosFundoPctEntrada: 0.1121088,
-  taxaMensalPadrao: 0.012532862,
+  // Taxa de transferência: no demonstrativo era isenta; na V3 é 1% da média de
+  // avaliação, descontada do valor liberado (Hamilton, 13/10/2026).
+  transferenciaPctCredito: 0.01,
+  taxaMensalPadrao: 0.0129,
 };
 
 // Taxa média a.m. por prazo (meses). Prazos sem entrada usam a faixa anterior
@@ -77,8 +80,8 @@ export type SimulacaoCash = {
   iof: number;
   emissaoCcb: number;
   jurosFundo: number;
+  taxaTransferencia: number;
   valorLiberado: number;
-  totalParcelas: number;
   taxaAnual: number;
 };
 
@@ -89,11 +92,11 @@ export function simularCash(credito: number, prazo: number, taxaMensal = taxaMed
   const iof = r2(entrada * p.iofPctEntrada);
   const emissaoCcb = r2(credito * p.ccbPctCredito);
   const jurosFundo = r2(entrada * p.jurosFundoPctEntrada);
-  const valorLiberado = r2(credito - entrada - iof - emissaoCcb - jurosFundo);
+  const taxaTransferencia = r2(credito * p.transferenciaPctCredito);
+  const valorLiberado = r2(credito - entrada - iof - emissaoCcb - jurosFundo - taxaTransferencia);
   const parcela = r2(parcelaPrice(valorLiberado, taxaMensal, prazo));
   return {
-    credito, entrada, prazo, taxaMensal, parcela, iof, emissaoCcb, jurosFundo, valorLiberado,
-    totalParcelas: r2(parcela * prazo),
+    credito, entrada, prazo, taxaMensal, parcela, iof, emissaoCcb, jurosFundo, taxaTransferencia, valorLiberado,
     taxaAnual: Math.pow(1 + taxaMensal, 12) - 1,
   };
 }
