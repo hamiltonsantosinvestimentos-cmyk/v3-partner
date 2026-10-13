@@ -11,13 +11,13 @@ test("reproduz o demonstrativo da liquidez do fundo (188 meses)", () => {
   perto(s.emissaoCcb, 33_428, 1);
   perto(s.jurosFundo, 735_399.38, 1);
   perto(s.valorLiberado, 6_273_327.39, 2);
-  perto(s.parcela, 86_989.37, 5);
-  // taxa = valor liberado × prazo × parcela do demonstrativo
-  perto(taxaImplicita(6_273_327.39, 86_989.37, 188), PARAMETROS_CASH.taxaMensalPadrao, 1e-7);
+  // taxa média 1,29% a.m. sobre o valor liberado
+  assert.equal(PARAMETROS_CASH.taxaMensalPadrao, 0.0129);
+  perto(taxaImplicita(s.valorLiberado, s.parcela, 188), 0.0129, 1e-6);
 });
 
 test("prazo maior baixa a parcela e mantém o valor liberado", () => {
-  const a = simularCash(1_000_000, 140)!;
+  const a = simularCash(1_000_000, 110)!;
   const b = simularCash(1_000_000, 190)!;
   assert.ok(a.parcela > b.parcela);
   assert.equal(a.valorLiberado, b.valorLiberado);

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Home, Wheat, FileDown, Info, Plus, X, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  LINHAS_CASH, PARAMETROS_CASH, PRAZO_MAX, PRAZO_MIN,
+  LINHAS_CASH, PRAZO_MAX, PRAZO_MIN,
   mediaAvaliacoes, simularCash, type LinhaCash,
 } from "@/lib/simulador-cash";
 
@@ -69,7 +69,7 @@ export function CashSimulator() {
   const media = mediaAvaliacoes(avaliacoes);
   const sim = useMemo(() => simularCash(media, prazo), [media, prazo]);
   const tabela = useMemo(
-    () => [140, 150, 160, 170, 180, 190].map((p) => simularCash(media, p)).filter((s) => s !== null),
+    () => [110, 120, 130, 140, 150, 160, 170, 180, 190].map((p) => simularCash(media, p)).filter((s) => s !== null),
     [media],
   );
   const nomeLinha = LINHAS_CASH[linha].nome;
@@ -91,13 +91,8 @@ export function CashSimulator() {
 <body><div class="page"><div class="badge">V3 PARTNERS · ${nomeLinha}</div>
 <h1>Demonstrativo da Liquidez</h1><p class="em">Emitido em ${d}</p>
 ${linhaPdf("Média de avaliação do imóvel", fmtBRL(sim.credito), avaliacoes.filter((v) => v > 0).length > 1 ? `média de ${avaliacoes.filter((v) => v > 0).length} avaliações` : "")}
-${linhaPdf("Entrada", fmtBRL(sim.entrada), `${fmtPct(PARAMETROS_CASH.entradaPct, 0)} da avaliação`)}
 ${linhaPdf("Prazo", `${sim.prazo} meses`)}
 ${linhaPdf("Parcela", fmtBRL(sim.parcela), `taxa média ${fmtPct(sim.taxaMensal)} a.m. + INCC`)}
-${linhaPdf("IOF", fmtBRL(sim.iof), `${fmtPct(PARAMETROS_CASH.iofPctEntrada)} de IOF`)}
-${linhaPdf("Emissão CCB", fmtBRL(sim.emissaoCcb))}
-${linhaPdf("Taxa de transferência", "ISENTA")}
-${linhaPdf("Juros de fundo", fmtBRL(sim.jurosFundo), `${fmtPct(PARAMETROS_CASH.jurosFundoPctEntrada)} de juros`)}
 <div class="total"><span>Valor liberado ao cliente</span><span>${fmtBRL(sim.valorLiberado)}</span></div>
 <p class="foot">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br<br>Taxa de juros + INCC: parcelas corrigidas pelo INCC, valores mostrados sem a correção. Simulação estimada com fins ilustrativos. Não constitui proposta formal de crédito; sujeita à análise e avaliação do imóvel.</p>
 </div><script>window.onload=()=>window.print()</script></body></html>`;
@@ -189,19 +184,14 @@ ${linhaPdf("Juros de fundo", fmtBRL(sim.jurosFundo), `${fmtPct(PARAMETROS_CASH.j
                   <span className="text-[10px] font-bold text-[#C9A84C] tracking-widest">{nomeLinha}</span>
                 </div>
                 <Linha label="Média de avaliação do imóvel" valor={fmtBRL(sim.credito)} forte />
-                <Linha label="Entrada" valor={fmtBRL(sim.entrada)} sub={`${fmtPct(PARAMETROS_CASH.entradaPct, 0)} da avaliação`} />
                 <Linha label="Prazo" valor={`${sim.prazo} meses`} />
                 <Linha label="Parcela" valor={fmtBRL(sim.parcela)} sub={`taxa média ${fmtPct(sim.taxaMensal)} a.m. + INCC`} forte />
-                <Linha label="IOF" valor={fmtBRL(sim.iof)} sub={`${fmtPct(PARAMETROS_CASH.iofPctEntrada)} de IOF`} />
-                <Linha label="Emissão CCB" valor={fmtBRL(sim.emissaoCcb)} />
-                <Linha label="Taxa de transferência" valor="ISENTA" />
-                <Linha label="Juros de fundo" valor={fmtBRL(sim.jurosFundo)} sub={`${fmtPct(PARAMETROS_CASH.jurosFundoPctEntrada)} de juros`} />
                 <div className="flex justify-between items-center mt-4 p-4 rounded-xl bg-[#C9A84C]/10 border border-[#C9A84C]/30">
                   <span className="text-sm font-bold text-foreground">Valor liberado ao cliente</span>
                   <span className="text-2xl font-bold text-[#C9A84C]">{fmtBRL(sim.valorLiberado)}</span>
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-3">
-                  Taxa média {fmtPct(sim.taxaMensal)} a.m. + INCC ({fmtPct(sim.taxaAnual)} a.a. + INCC) sobre o valor liberado · parcela e total ({fmtBRL(sim.totalParcelas)}) em valores de hoje, corrigidos pelo INCC
+                  Taxa média {fmtPct(sim.taxaMensal)} a.m. + INCC ({fmtPct(sim.taxaAnual)} a.a. + INCC) sobre o valor liberado · parcela em valores de hoje, corrigida pelo INCC
                 </p>
               </div>
 
@@ -214,7 +204,6 @@ ${linhaPdf("Juros de fundo", fmtBRL(sim.jurosFundo), `${fmtPct(PARAMETROS_CASH.j
                         <th className="text-left px-4 py-2 font-semibold">Prazo</th>
                         <th className="text-right px-4 py-2 font-semibold">Taxa média</th>
                         <th className="text-right px-4 py-2 font-semibold">Parcela</th>
-                        <th className="text-right px-4 py-2 font-semibold">Total pago (sem INCC)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -225,7 +214,6 @@ ${linhaPdf("Juros de fundo", fmtBRL(sim.jurosFundo), `${fmtPct(PARAMETROS_CASH.j
                           <td className="px-4 py-2.5 font-bold text-foreground">{t.prazo} meses</td>
                           <td className="px-4 py-2.5 text-right text-muted-foreground">{fmtPct(t.taxaMensal)} a.m. + INCC</td>
                           <td className="px-4 py-2.5 text-right font-semibold text-foreground">{fmtBRL(t.parcela)}</td>
-                          <td className="px-4 py-2.5 text-right text-muted-foreground">{fmtBRL(t.totalParcelas)}</td>
                         </tr>
                       ))}
                     </tbody>
