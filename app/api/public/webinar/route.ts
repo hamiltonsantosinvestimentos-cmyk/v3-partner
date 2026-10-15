@@ -85,6 +85,8 @@ export async function GET(req: NextRequest) {
   // Sem o nome: o token sai de um WhatsApp digitado na LP, e o lead pode ser de outra origem.
   return NextResponse.json({
     status,
+    // Link do grupo só para inscrição paga.
+    grupo_url: status === "pago" ? WEBINAR.grupoUrl : null,
     abertas: inscricoesAbertas(),
     forma: w.forma ?? null,
     vencimento: w.vencimento ?? null,

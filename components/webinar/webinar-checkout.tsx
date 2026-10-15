@@ -5,7 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Copy, FileText, Loader2, Lock, MonitorPlay, QrCode, Ticket,
+  ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Copy, FileText, Loader2, Lock, MessageCircle, MonitorPlay, QrCode, Ticket,
 } from "lucide-react";
 import { display, C, MOTION_CSS, Backdrop } from "@/components/quiz/partner-quiz-client";
 import { maskPhone } from "@/components/quiz/wizard-ui";
@@ -27,6 +27,7 @@ type Estado = {
   boleto_barcode: string | null;
   boleto_pdf: string | null;
   tem_cpf?: boolean;
+  grupo_url?: string | null;
 };
 
 const input = "w-full rounded-xl border bg-[#09081A]/70 px-4 py-3.5 text-[15px] outline-none transition-colors focus:border-[#C9A84C]/70 placeholder:text-[#7A8FA8]/50";
@@ -217,7 +218,7 @@ export function WebinarCheckout() {
           ) : passo === "dados" ? (
             <form onSubmit={enviarDados}>
               <h1 className={`${display.className} text-3xl sm:text-4xl font-semibold leading-tight`}>Garanta sua vaga no webinar.</h1>
-              <p className="mt-2 text-sm" style={{ color: C.muted }}>É por esse WhatsApp que você recebe a confirmação e o link da sala.</p>
+              <p className="mt-2 text-sm" style={{ color: C.muted }}>É por esse WhatsApp que você recebe a confirmação e o acesso ao grupo dos inscritos.</p>
               <div className="mt-8 space-y-4">
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold" style={{ color: C.muted }}>Nome completo</label>
@@ -315,7 +316,7 @@ export function WebinarCheckout() {
 
               <div className="mt-8 flex items-center gap-3 rounded-xl border px-4 py-3 text-xs" style={{ borderColor: C.line, background: `${C.gold}0D`, color: C.muted }}>
                 <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin" style={{ color: C.gold }} />
-                Aguardando o pagamento. Assim que ele for identificado, esta página confirma sua vaga e você recebe a confirmação no WhatsApp.
+                Aguardando o pagamento. Assim que ele for identificado, esta página confirma sua vaga e libera o grupo dos inscritos no WhatsApp.
               </div>
               <button onClick={() => setEstado((p) => p && { ...p, pix_emv: null, pix_qr_code: null, boleto_barcode: null, boleto_pdf: null })}
                 className="mt-5 inline-flex items-center gap-1.5 text-xs" style={{ color: C.muted }}>
@@ -329,8 +330,16 @@ export function WebinarCheckout() {
               </span>
               <h1 className={`${display.className} mt-7 text-4xl sm:text-5xl font-semibold`}>Vaga garantida!</h1>
               <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed" style={{ color: C.muted }}>
-                Pagamento confirmado. Mandamos a confirmação no seu WhatsApp, e o link da sala ao vivo chega no mesmo número no dia do evento.
+                Pagamento confirmado. Agora entre no grupo exclusivo dos inscritos no WhatsApp: é por lá que enviamos o link da sala ao vivo.
               </p>
+              {estado?.grupo_url && (
+                <a href={estado.grupo_url} target="_blank" rel="noopener noreferrer"
+                  className="q-btn mt-8 inline-flex items-center justify-center gap-2.5 rounded-xl px-8 py-4 text-[15px] font-bold transition-all hover:brightness-110"
+                  style={{ background: `linear-gradient(135deg, ${C.goldLight}, ${C.gold})`, color: C.bg, boxShadow: `0 16px 44px -14px ${C.gold}` }}>
+                  <MessageCircle className="w-4 h-4" /> Entrar no grupo do webinar
+                </a>
+              )}
+              <p className="mt-4 text-xs" style={{ color: C.muted }}>O link do grupo também foi enviado no seu WhatsApp.</p>
               <p className="mt-6 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm" style={{ borderColor: C.line }}>
                 <CalendarDays className="w-4 h-4" style={{ color: C.gold }} /> 06/11 · 20h · ao vivo
               </p>

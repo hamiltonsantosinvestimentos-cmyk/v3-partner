@@ -27,7 +27,7 @@ const TOPICOS = [
 const COMISSOES = ["R$ 20 mil", "R$ 30 mil", "R$ 100 mil", "R$ 500 mil"];
 
 const FAQ = [
-  { p: "Como eu recebo o link da sala?", r: "No seu WhatsApp. Depois da confirmação do pagamento você recebe a confirmação da inscrição, e o link da sala ao vivo chega no mesmo número no dia do evento." },
+  { p: "Como eu recebo o link da sala?", r: "Assim que o pagamento é confirmado, você recebe o acesso ao grupo exclusivo dos inscritos no WhatsApp. É por lá que enviamos o link da sala ao vivo." },
   { p: "Quais as formas de pagamento?", r: "Pix ou boleto, direto na conta da V3 Partners. O Pix é confirmado em instantes; o boleto leva até 2 dias úteis para compensar." },
   { p: "Preciso ser do mercado financeiro?", r: "Não. O webinar é para quem se relaciona com empresários, produtores rurais ou grupos empresariais e quer entender como as operações com garantia são estruturadas." },
   { p: "Vou poder indicar operações depois?", r: "Indicar operações e receber comissões é exclusivo de quem se torna Partner V3. No webinar mostramos o caminho para o credenciamento." },
@@ -143,7 +143,7 @@ export function WebinarLp() {
             <div className="q-rise mt-9 flex flex-col sm:flex-row sm:items-center gap-4" style={{ animationDelay: "380ms" }}>
               {cta()}
               <p className="flex items-center gap-2 text-xs" style={{ color: C.muted }}>
-                <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} /> Pix ou boleto · vaga confirmada no WhatsApp
+                <ShieldCheck className="w-4 h-4" style={{ color: C.gold }} /> Pix ou boleto · acesso ao grupo dos inscritos
               </p>
             </div>
           </div>
@@ -278,7 +278,7 @@ export function WebinarLp() {
             </p>
             <p className="mt-3 text-sm" style={{ color: C.muted }}>{"Webinar ao vivo · 06/11 · 20h"}</p>
             <ul className="mx-auto mt-8 max-w-sm space-y-3 text-left text-sm">
-              {["Acesso à transmissão ao vivo e online", "Link da sala enviado no seu WhatsApp", "Pagamento por Pix ou boleto"].map((x) => (
+              {["Acesso à transmissão ao vivo e online", "Grupo exclusivo dos inscritos no WhatsApp", "Pagamento por Pix ou boleto"].map((x) => (
                 <li key={x} className="flex items-center gap-3"><CheckCircle2 className="w-4 h-4 flex-shrink-0" style={{ color: C.gold }} /> {x}</li>
               ))}
             </ul>

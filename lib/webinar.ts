@@ -19,6 +19,8 @@ export const WEBINAR = {
   inicioISO: "2026-11-06T20:00:00-03:00",
   precoCents: 2700,
   apresentadores: "Hamilton Santos e Robson Lino",
+  /** Grupo do WhatsApp onde sai o link da sala. Só é mostrado/enviado depois do pagamento confirmado. */
+  grupoUrl: "https://chat.whatsapp.com/BljzUDOR86Q0dvKmSKhMmT",
 };
 
 export const APP_URL = "https://app.v3partners.com.br";
@@ -149,7 +151,7 @@ export async function confirmarPagamentoWebinar(db: SupabaseClient, leadId: stri
     await sendText(String(data.telefone),
       `✅ Inscrição confirmada, ${primeiroNome(nome)}!\n\n` +
       `Webinar *${WEBINAR.titulo}*\n📅 ${WEBINAR.dataLonga}\n🎙 Com ${WEBINAR.apresentadores}\n\n` +
-      `O link da sala ao vivo chega aqui no seu WhatsApp no dia do evento. Até lá!\n\nV3 Partners`,
+      `👉 Entre agora no grupo exclusivo dos inscritos. É por lá que enviamos o link da sala ao vivo:\n${WEBINAR.grupoUrl}\n\nAté lá!\nV3 Partners`,
     ).catch(() => false);
   }
   await Promise.allSettled(numerosAlertaQuiz().map((n) => sendText(n,

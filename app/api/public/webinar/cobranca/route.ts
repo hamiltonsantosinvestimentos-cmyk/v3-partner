@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const lead = await leadPorToken(db, t);
   const w = lead && webinarDe(lead);
   if (!lead || !w) return NextResponse.json({ error: "Inscrição não encontrada." }, { status: 404 });
-  if (w.status === "pago") return NextResponse.json({ status: "pago" });
+  if (w.status === "pago") return NextResponse.json({ status: "pago", grupo_url: WEBINAR.grupoUrl });
 
   // Fatura do mesmo CPF ainda no prazo: só troca a forma exibida (a fatura já tem Pix e boleto).
   if (w.cora_invoice_id && w.cpf === cpf && w.vencimento && w.vencimento >= hojeSP()) {
