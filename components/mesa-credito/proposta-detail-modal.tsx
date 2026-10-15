@@ -21,6 +21,7 @@ import { RecomendacaoLinha } from "./recomendacao-linha";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
 import { NdaVinculoProposta } from "@/components/mesa-credito/nda-vinculo-proposta";
 import { MandatoEnvio } from "@/components/mesa-credito/mandato-envio";
+import { RecursosLiberados } from "@/components/mesa-credito/recursos-liberados";
 import { DuplicarProposta, type PropostaDuplicada } from "@/components/mesa-credito/duplicar-proposta";
 import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
 import { pegarOrigemModal, recorteDe } from "@/components/motion/origem-modal";
@@ -4064,6 +4065,17 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <p className="text-[10px] text-muted-foreground text-center italic">Somente analistas e administradores podem editar os campos de comissão.</p>
             )}
           </div>
+
+          {/* ── Recursos liberados + PDF de cobrança pelo mandato assinado ── */}
+          {canSendMandato && (
+            <RecursosLiberados
+              proposalId={proposal.id}
+              canEdit={!!canChangeStage}
+              onChange={(recursos_liberados) => onProposalUpdate?.(proposal.id, {
+                metadata: { ...((proposal.metadata ?? {}) as Record<string, unknown>), recursos_liberados } as ProposalMeta,
+              })}
+            />
+          )}
 
           {/* ── Aba Recomendação ── */}
           {modalTab === "recomendacao" && (
