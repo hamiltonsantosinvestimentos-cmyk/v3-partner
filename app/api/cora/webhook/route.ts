@@ -4,6 +4,7 @@ import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
 import { getPlanoValor } from "@/lib/plano-valor";
 import { reconcilePartnerLinkOrderPaid, reconcileDirectOrderPaid } from "@/lib/cora-order-reconcile";
+import { confirmarPagamentoWebinar } from "@/lib/webinar";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -130,6 +131,18 @@ export async function POST(req: NextRequest) {
 
     const db = svc();
     const paidAt = body.data?.payment_date ?? new Date().toISOString();
+
+    // Ingresso do webinar (lib/webinar.ts): a fatura fica em metadata.webinar do lead da Prospecção.
+    const { data: inscrito } = await db
+      .from("prospeccao_leads")
+      .select("id")
+      .eq("metadata->webinar->>cora_invoice_id", invoiceId)
+      .limit(1)
+      .maybeSingle();
+    if (inscrito) {
+      await confirmarPagamentoWebinar(db, inscrito.id, paidAt);
+      return NextResponse.json({ received: true });
+    }
 
     // 1. Atualiza cadastro pendente de adesão
     const { data: reg } = await db

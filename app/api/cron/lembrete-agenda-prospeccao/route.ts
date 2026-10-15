@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { sendText } from "@/lib/whatsapp/openwa-client";
 import { numerosAlertaQuiz } from "@/lib/quiz-lead-unico";
 import { lembretesDevidos } from "@/lib/prospeccao-lembrete";
+import { recuperarCheckoutsWebinar } from "@/lib/webinar";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -66,5 +67,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, enviados: enviados.length });
+  // Mesmo pg_cron por minuto: recuperação do checkout do webinar (WhatsApp para quem não pagou).
+  const webinar = await recuperarCheckoutsWebinar(db).catch((e) => { console.error("Recuperação webinar:", e); return 0; });
+
+  return NextResponse.json({ ok: true, enviados: enviados.length, webinar });
 }
