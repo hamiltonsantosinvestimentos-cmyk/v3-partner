@@ -44,6 +44,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ETAPA_LABELS: Record<string, string> = {
   incompleto: "Lead incompleto",
+  webinar: "Webinar",
   prospect: "Prospect",
   contatado: "Contatado",
   interessado: "Interessado",

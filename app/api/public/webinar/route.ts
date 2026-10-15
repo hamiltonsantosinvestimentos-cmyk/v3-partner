@@ -37,12 +37,15 @@ export async function POST(req: NextRequest) {
     const w = webinarDe(existente);
     if (w) return NextResponse.json({ token: w.token });
     const webinar: WebinarMeta = { token: novoToken(), status: "aguardando", nome: d.nome, criado_em: agora, tracking: d.tracking ?? null };
+    // Vai para a coluna Webinar do Kanban, exceto quem já é partner (convertido).
+    const mover = existente.etapa !== "convertido" && existente.etapa !== "webinar";
     await db.from("prospeccao_leads").update({
       metadata: { ...(existente.metadata ?? {}), webinar },
+      ...(mover ? { etapa: "webinar" } : {}),
       updated_at: agora,
     }).eq("id", existente.id);
     await db.from("prospeccao_historico").insert({
-      lead_id: existente.id, etapa_anterior: null, etapa_nova: null,
+      lead_id: existente.id, etapa_anterior: mover ? existente.etapa : null, etapa_nova: mover ? "webinar" : null,
       nota: `Webinar ${WEBINAR.dataLabel}: começou a inscrição.`,
     }).then(null, () => {});
     return NextResponse.json({ token: webinar.token });
@@ -53,13 +56,13 @@ export async function POST(req: NextRequest) {
     nome: d.nome,
     telefone: d.telefone,
     origem: "webinar",
-    etapa: "prospect",
+    etapa: "webinar",
     notas: `Webinar ${WEBINAR.titulo} (${WEBINAR.dataLabel}) — inscrição pela LP /webinar.`,
     metadata: { form_type: "webinar", consentimento: true, tracking: d.tracking ?? null, webinar },
   }).select("id").single();
   if (error || !lead) return NextResponse.json({ error: "Não foi possível registrar. Tente novamente." }, { status: 500 });
   await db.from("prospeccao_historico").insert({
-    lead_id: lead.id, etapa_anterior: null, etapa_nova: "prospect",
+    lead_id: lead.id, etapa_anterior: null, etapa_nova: "webinar",
     nota: `Webinar ${WEBINAR.dataLabel}: começou a inscrição.`,
   }).then(null, () => {});
   return NextResponse.json({ token: webinar.token });

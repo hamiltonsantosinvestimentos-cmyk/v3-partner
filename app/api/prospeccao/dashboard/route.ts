@@ -44,7 +44,7 @@ export async function GET() {
   }>;
 
   // ── Funil global ─────────────────────────────────────────────────────────────
-  const etapas = ["incompleto", "prospect", "contatado", "interessado", "agenda_reuniao", "proposta_retorno", "followup", "trial", "convertido"];
+  const etapas = ["incompleto", "webinar", "prospect", "contatado", "interessado", "agenda_reuniao", "proposta_retorno", "followup", "trial", "convertido"];
   const funil = etapas.map(etapa => ({
     etapa,
     count: leads.filter(l => l.etapa === etapa).length,
