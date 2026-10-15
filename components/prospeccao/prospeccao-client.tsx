@@ -77,11 +77,13 @@ interface Prospect {
 interface Equipe { id: string; full_name: string; role: string; }
 interface Partner { id: string; full_name: string; email: string; }
 
-type Etapa = "incompleto" | "prospect" | "contatado" | "interessado" | "agenda_reuniao" | "proposta_retorno" | "followup" | "trial" | "convertido" | "perdido";
+type Etapa = "incompleto" | "webinar" | "prospect" | "contatado" | "interessado" | "agenda_reuniao" | "proposta_retorno" | "followup" | "trial" | "convertido" | "perdido";
 
 const ETAPAS: { id: Etapa; label: string; color: string; bg: string }[] = [
   // Quiz Seja Partner: deixou nome + WhatsApp + e-mail, mas não concluiu (ver /api/public/partner-quiz/parcial).
   { id: "incompleto",  label: "Lead incompleto", color: "#E07878", bg: "#E0787820" },
+  // Inscritos do webinar (LP /webinar, lib/webinar.ts): todo lead que se inscreve cai aqui (15/10/2026).
+  { id: "webinar",     label: "Webinar",     color: "#C9A84C", bg: "#C9A84C20" },
   { id: "followup",    label: "Follow-up",   color: "#F472B6", bg: "#F472B620" },
   { id: "prospect",    label: "Prospect",    color: "#7A8FA8", bg: "#7A8FA820" },
   { id: "contatado",   label: "Contatado",   color: "#60A5FA", bg: "#60A5FA20" },
@@ -1154,6 +1156,17 @@ function ProspectCard({
             Link ativo
           </span>
         )}
+        {(() => {
+          const w = prospect.metadata?.webinar as { status?: string; forma?: string; cora_invoice_id?: string } | undefined;
+          if (!w) return null;
+          const pago = w.status === "pago";
+          const cor = pago ? "#34D399" : "#F59E0B";
+          return (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: `${cor}20`, color: cor }}>
+              {pago ? "Webinar: pago" : w.cora_invoice_id ? `Webinar: ${w.forma === "boleto" ? "boleto" : "Pix"} gerado` : "Webinar: sem pagamento"}
+            </span>
+          );
+        })()}
         {prospect.metadata?.quiz_incompleto === true && (
           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#E0787820", color: "#E07878" }}>
             Parou em: {QUIZ_PARCIAL_PAROU_EM[String(prospect.metadata?.quiz_parou_em ?? "")] ?? "—"}

@@ -5,8 +5,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
-  ArrowRight, Building2, CalendarDays, CheckCircle2, ChevronDown, Clock3, Handshake, KeyRound,
-  Layers3, MonitorPlay, Route, ShieldCheck, Sprout, Ticket, Users,
+  ArrowRight, BadgeCheck, Banknote, Building2, CalendarDays, CheckCircle2, ChevronDown, Clock3, Coins,
+  FileSearch, FileSignature, Handshake, Home, KeyRound, Landmark, MessagesSquare, MonitorPlay, Route,
+  ScanSearch, ShieldCheck, Sprout, Stamp, Ticket, Users,
 } from "lucide-react";
 import { display, C, MOTION_CSS, Backdrop } from "@/components/quiz/partner-quiz-client";
 import { trackPixel } from "@/components/quiz/meta-pixel";
@@ -16,12 +17,26 @@ import { trackPixel } from "@/components/quiz/meta-pixel";
 
 const INICIO = new Date("2026-11-06T20:00:00-03:00").getTime();
 
-const TOPICOS = [
-  { icon: Building2, titulo: "Cash Home", texto: "O imóvel que vira capital de giro para a empresa: como a operação é montada e por que ela destrava crédito que o banco tradicional não libera." },
-  { icon: Sprout, titulo: "Cash Agro", texto: "Liquidez com garantia rural para quem move o agronegócio, do produtor ao grupo empresarial do campo." },
+// O que o inscrito aprende (15/10/2026, pedido do Hamilton: "colocar o que o lead irá aprender").
+// Tudo sai do roteiro do post do Instagram; nada de promessa que o webinar não cobre.
+const APRENDIZADOS = [
+  { icon: ScanSearch, titulo: "Enxergar a operação antes de todo mundo", texto: "Como reconhecer, numa conversa com um empresário ou produtor rural, que ali existe uma operação de crédito com garantia para ser estruturada." },
+  { icon: Building2, titulo: "Cash Home por dentro", texto: "Como o imóvel vira capital de giro para a empresa: a lógica da garantia e por que ela destrava crédito que o banco tradicional não libera." },
+  { icon: Sprout, titulo: "Cash Agro por dentro", texto: "Liquidez com garantia rural para quem move o agronegócio, do produtor ao grupo empresarial do campo." },
   { icon: KeyRound, titulo: "A estratégia que poucos conhecem", texto: "Como o empresário pode fazer a operação usando o imóvel de um terceiro ou do próprio grupo econômico." },
-  { icon: Route, titulo: "O passo a passo completo", texto: "Da primeira conversa com o cliente até o crédito liberado na conta, etapa por etapa." },
-  { icon: Layers3, titulo: "Outras modalidades", texto: "As demais linhas do portfólio de crédito estruturado da V3 Partners." },
+  { icon: Route, titulo: "O passo a passo completo", texto: "Cada etapa, da primeira conversa ao crédito liberado: análise, avaliação do imóvel, aprovação, contrato e registro." },
+  { icon: Coins, titulo: "Onde está a comissão", texto: "Por que estruturar paga mais do que só indicar crédito, e como a comissão acompanha o porte de cada operação." },
+  { icon: BadgeCheck, titulo: "O caminho para virar Partner V3", texto: "Como funciona o credenciamento que permite indicar operações para a V3 e receber comissões." },
+];
+
+const JORNADA = [
+  { icon: MessagesSquare, titulo: "Primeira conversa", texto: "A necessidade do cliente" },
+  { icon: FileSearch, titulo: "Análise de crédito", texto: "Empresa, sócios e garantia" },
+  { icon: Home, titulo: "Avaliação do imóvel", texto: "Quanto a garantia sustenta" },
+  { icon: Stamp, titulo: "Aprovação", texto: "Condições da operação" },
+  { icon: FileSignature, titulo: "Contrato", texto: "Assinatura das partes" },
+  { icon: Landmark, titulo: "Registro", texto: "Garantia formalizada" },
+  { icon: Banknote, titulo: "Crédito liberado", texto: "O dinheiro na conta" },
 ];
 
 const COMISSOES = ["R$ 20 mil", "R$ 30 mil", "R$ 100 mil", "R$ 500 mil"];
@@ -49,7 +64,108 @@ function Revelar({ children, delay = 0, className = "" }: { children: React.Reac
   return <div ref={ref} className={`w-rev ${visivel ? "w-in" : ""} ${className}`} style={{ transitionDelay: `${delay}ms` }}>{children}</div>;
 }
 
-function Contagem() {
+/** Lista de aprendizados: a linha dourada enche e cada item acende conforme a rolagem. */
+function Aprendizados() {
+  const ref = useRef<HTMLOListElement>(null);
+  const [progresso, setProgresso] = useState(0);
+  const [ativos, setAtivos] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const medir = () => {
+      const el = ref.current;
+      if (!el) return;
+      const corte = window.innerHeight * 0.62;
+      const box = el.getBoundingClientRect();
+      setProgresso(Math.min(1, Math.max(0, (corte - box.top) / box.height)));
+      const itens = Array.from(el.querySelectorAll<HTMLElement>("[data-item]"));
+      setAtivos(itens.filter((it) => it.getBoundingClientRect().top < corte).length);
+    };
+    const onScroll = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(medir); };
+    raf = requestAnimationFrame(medir);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("scroll", onScroll); window.removeEventListener("resize", onScroll); };
+  }, []);
+  return (
+    <ol ref={ref} className="relative">
+      <span aria-hidden className="absolute left-[27px] top-2 bottom-2 w-px" style={{ background: C.lineSoft }} />
+      <span aria-hidden className="absolute left-[27px] top-2 w-px origin-top transition-[height] duration-300"
+        style={{ height: `calc((100% - 16px) * ${progresso})`, background: `linear-gradient(${C.goldLight}, ${C.gold})`, boxShadow: `0 0 14px ${C.gold}` }} />
+      {APRENDIZADOS.map((a, i) => {
+        const on = i < ativos;
+        return (
+          <li key={a.titulo} data-item className="relative flex gap-5 sm:gap-7 pb-10 last:pb-0">
+            <span className="relative z-10 flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl border transition-all duration-500"
+              style={{ borderColor: on ? `${C.gold}99` : C.lineSoft, background: on ? `radial-gradient(circle at 30% 25%, #243A66, ${C.bg})` : C.bg, color: on ? C.goldLight : C.muted, boxShadow: on ? `0 0 28px -6px ${C.gold}` : "none" }}>
+              <a.icon className="h-6 w-6" />
+            </span>
+            <div className="pt-1 transition-opacity duration-500" style={{ opacity: on ? 1 : 0.45 }}>
+              <p className={`${display.className} text-sm italic`} style={{ color: C.gold }}>{String(i + 1).padStart(2, "0")}</p>
+              <h3 className="mt-0.5 text-lg sm:text-xl font-bold" style={{ color: C.cream }}>{a.titulo}</h3>
+              <p className="mt-1.5 max-w-xl text-sm sm:text-[15px] leading-relaxed" style={{ color: C.muted }}>{a.texto}</p>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Linha do tempo de uma operação: as etapas acendem em sequência quando entram na tela. */
+function Jornada() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [acesas, setAcesas] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const acender = () => {
+      timer = setInterval(() => setAcesas((n) => { if (n >= JORNADA.length) { clearInterval(timer); return n; } return n + 1; }), 260);
+    };
+    if (!("IntersectionObserver" in window)) { const t = setTimeout(() => setAcesas(JORNADA.length), 0); return () => clearTimeout(t); }
+    const io = new IntersectionObserver(([en]) => { if (en?.isIntersecting) { acender(); io.disconnect(); } }, { threshold: 0.35 });
+    io.observe(el);
+    return () => { io.disconnect(); if (timer) clearInterval(timer); };
+  }, []);
+  const pct = acesas <= 1 ? 0 : (acesas - 1) / (JORNADA.length - 1);
+  return (
+    <div ref={ref} className="relative">
+      {/* trilho: horizontal no desktop, vertical no celular */}
+      <span aria-hidden className="absolute hidden lg:block left-[7%] right-[7%] top-7 h-px" style={{ background: C.lineSoft }} />
+      <span aria-hidden className="absolute hidden lg:block left-[7%] top-7 h-px transition-[width] duration-300"
+        style={{ width: `calc(86% * ${pct})`, background: `linear-gradient(90deg, ${C.gold}, ${C.goldLight})`, boxShadow: `0 0 12px ${C.gold}` }} />
+      <span aria-hidden className="absolute lg:hidden left-7 top-7 bottom-7 w-px" style={{ background: C.lineSoft }} />
+      <span aria-hidden className="absolute lg:hidden left-7 top-7 w-px transition-[height] duration-300"
+        style={{ height: `calc((100% - 56px) * ${pct})`, background: `linear-gradient(${C.gold}, ${C.goldLight})`, boxShadow: `0 0 12px ${C.gold}` }} />
+      <ol className="relative grid gap-6 lg:grid-cols-7 lg:gap-3">
+        {JORNADA.map((j, i) => {
+          const on = i < acesas;
+          const ultimo = i === JORNADA.length - 1;
+          return (
+            <li key={j.titulo} className="flex items-center gap-4 lg:flex-col lg:items-center lg:gap-0 lg:text-center">
+              <span className="relative z-10 flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full border transition-all duration-500"
+                style={{
+                  borderColor: on ? (ultimo ? C.goldLight : `${C.gold}AA`) : C.lineSoft,
+                  background: on ? (ultimo ? `linear-gradient(135deg, ${C.goldLight}, ${C.gold})` : `radial-gradient(circle at 30% 25%, #243A66, ${C.bg})`) : C.bg,
+                  color: on ? (ultimo ? C.bg : C.goldLight) : C.muted,
+                  boxShadow: on ? `0 0 ${ultimo ? 40 : 22}px -4px ${C.gold}` : "none",
+                  transform: on ? "scale(1)" : "scale(0.9)",
+                }}>
+                <j.icon className="h-5 w-5" />
+              </span>
+              <div className="transition-opacity duration-500 lg:mt-4" style={{ opacity: on ? 1 : 0.4 }}>
+                <p className="text-[15px] font-bold" style={{ color: ultimo && on ? C.goldLight : C.cream }}>{j.titulo}</p>
+                <p className="mt-0.5 text-xs" style={{ color: C.muted }}>{j.texto}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+function useAgora() {
   const [agora, setAgora] = useState<number | null>(null);
   useEffect(() => {
     // Só no cliente (o horário do servidor geraria diferença de hidratação).
@@ -57,15 +173,24 @@ function Contagem() {
     const t = setInterval(() => setAgora(Date.now()), 1000);
     return () => { clearTimeout(primeiro); clearInterval(t); };
   }, []);
-  if (agora === null) return <div className="h-[74px]" />;
+  return agora;
+}
+
+function partesAte(agora: number) {
   const resto = Math.max(0, INICIO - agora);
-  if (resto === 0) return null;
-  const partes = [
+  return [
     { v: Math.floor(resto / 86_400_000), l: "dias" },
     { v: Math.floor(resto / 3_600_000) % 24, l: "horas" },
     { v: Math.floor(resto / 60_000) % 60, l: "min" },
     { v: Math.floor(resto / 1000) % 60, l: "seg" },
   ];
+}
+
+function Contagem() {
+  const agora = useAgora();
+  if (agora === null) return <div className="h-[74px]" />;
+  if (INICIO - agora <= 0) return null;
+  const partes = partesAte(agora);
   return (
     <div className="flex gap-2.5 sm:gap-3">
       {partes.map((p) => (
@@ -82,6 +207,13 @@ function Contagem() {
 export function WebinarLp() {
   const searchParams = useSearchParams();
   const [faqAberto, setFaqAberto] = useState<number | null>(0);
+  const [barra, setBarra] = useState(false);
+  const agora = useAgora();
+  useEffect(() => {
+    const onScroll = () => setBarra(window.scrollY > 640);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Leva UTM / fbclid para o checkout (atribuição da campanha).
   const hrefCheckout = useMemo(() => {
@@ -113,6 +245,34 @@ export function WebinarLp() {
         @media (prefers-reduced-motion: reduce) { .w-rev { opacity: 1; transform: none; transition: none; } .w-card:hover { transform: none; } }
       `}</style>
       <Backdrop />
+
+      {/* Barra fixa (desktop): aparece depois do hero, com a contagem e o CTA */}
+      <div className="fixed inset-x-0 top-0 z-30 hidden sm:block border-b backdrop-blur-xl transition-all duration-500"
+        style={{ borderColor: C.line, background: "rgba(9,8,26,0.82)", transform: barra ? "translateY(0)" : "translateY(-110%)", opacity: barra ? 1 : 0 }}>
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
+          <div className="flex items-center gap-4">
+            <Image src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" width={52} height={32} className="h-7 w-auto object-contain" />
+            <span className="hidden md:flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: C.gold }}>
+              <span className="q-dot inline-block h-1.5 w-1.5 rounded-full" style={{ background: "#F87171", boxShadow: "0 0 10px #F87171" }} />
+              Ao vivo · 06/11 · 20h
+            </span>
+          </div>
+          <div className="flex items-center gap-5">
+            {agora !== null && INICIO > agora && (
+              <span className="hidden lg:flex items-baseline gap-3 tabular-nums" style={{ color: C.cream }}>
+                {partesAte(agora).map((p) => (
+                  <span key={p.l} className="text-base font-bold">{String(p.v).padStart(2, "0")}<span className="ml-0.5 text-[10px] font-semibold uppercase" style={{ color: C.muted }}>{p.l.slice(0, 1)}</span></span>
+                ))}
+              </span>
+            )}
+            <Link href={hrefCheckout} onClick={() => trackPixel("InitiateCheckout", { content_name: "webinar_credito_estruturado", currency: "BRL", value: 27 })}
+              className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-5 py-2.5 text-sm font-bold transition-all hover:brightness-110"
+              style={{ background: `linear-gradient(135deg, ${C.goldLight}, ${C.gold})`, color: C.bg }}>
+              Garantir minha vaga · R$ 27 <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </div>
+      </div>
 
       {/* Topo */}
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-5">
@@ -173,27 +333,45 @@ export function WebinarLp() {
         </div>
       </section>
 
-      {/* O que você vai ver */}
-      <section className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
-        <Revelar>
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.28em]" style={{ color: C.gold }}>O que vamos abrir ao vivo</p>
-          <h2 className={`${display.className} mt-4 max-w-2xl text-4xl sm:text-5xl font-semibold leading-[1.05]`}>As operações por dentro, do jeito que a V3 estrutura.</h2>
-        </Revelar>
-        <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {TOPICOS.map((t, i) => (
-            <Revelar key={t.titulo} delay={i * 90} className={i === 0 ? "lg:col-span-2" : ""}>
-              <div className="w-card h-full rounded-2xl border p-6 sm:p-7" style={{ borderColor: C.lineSoft, background: "rgba(22,39,68,0.45)" }}>
-                <div className="flex items-center justify-between">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-xl" style={{ background: `${C.gold}18`, color: C.gold }}>
-                    <t.icon className="w-5 h-5" />
-                  </span>
-                  <span className={`${display.className} text-3xl italic`} style={{ color: `${C.gold}55` }}>0{i + 1}</span>
-                </div>
-                <h3 className="mt-5 text-lg font-bold" style={{ color: C.cream }}>{t.titulo}</h3>
-                <p className="mt-2 text-sm leading-relaxed" style={{ color: C.muted }}>{t.texto}</p>
-              </div>
+      {/* O que você vai aprender */}
+      <section id="aprender" className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-32">
+        <div className="grid gap-14 lg:grid-cols-[0.85fr_1.15fr]">
+          <div className="lg:sticky lg:top-28 lg:self-start">
+            <Revelar>
+              <p className="text-[10.5px] font-bold uppercase tracking-[0.28em]" style={{ color: C.gold }}>O que você vai aprender</p>
+              <h2 className={`${display.className} mt-4 text-[40px] sm:text-6xl font-semibold leading-[1.02]`}>
+                Em uma noite, você sai sabendo o que{" "}
+                <em className="q-gold-text" style={{ backgroundImage: `linear-gradient(100deg, ${C.gold} 20%, ${C.goldLight} 45%, ${C.gold} 70%)`, backgroundSize: "200% 100%", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>poucos do mercado sabem</em>.
+              </h2>
+              <p className="mt-6 max-w-md text-base leading-relaxed" style={{ color: C.muted }}>
+                Não é teoria de crédito. É como a V3 Partners monta, na prática, as operações com garantia que ela estrutura todos os meses.
+              </p>
+              <div className="mt-8 hidden lg:block">{cta("Quero aprender isso")}</div>
             </Revelar>
-          ))}
+          </div>
+          <div>
+            <Aprendizados />
+            <p className="mt-10 pl-[76px] sm:pl-[84px] text-sm italic" style={{ color: C.muted }}>
+              + as outras modalidades do portfólio de crédito estruturado da V3.
+            </p>
+            <div className="mt-10 lg:hidden">{cta("Quero aprender isso")}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* A jornada de uma operação */}
+      <section className="relative z-10 border-y" style={{ borderColor: C.line, background: "linear-gradient(180deg, rgba(17,31,53,0.65), rgba(9,8,26,0.4))" }}>
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
+          <Revelar className="text-center">
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.28em]" style={{ color: C.gold }}>A jornada de uma operação</p>
+            <h2 className={`${display.className} mx-auto mt-4 max-w-3xl text-4xl sm:text-[56px] font-semibold leading-[1.04]`}>
+              Da primeira conversa ao <em style={{ color: C.gold }}>crédito na conta</em>.
+            </h2>
+            <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed" style={{ color: C.muted }}>
+              Ao vivo, você vê o que acontece em cada etapa, e onde a maioria das operações se perde por falta de estrutura.
+            </p>
+          </Revelar>
+          <div className="mt-14 sm:mt-20"><Jornada /></div>
         </div>
       </section>
 
@@ -226,6 +404,40 @@ export function WebinarLp() {
                 <p className="mt-3 text-[11px]" style={{ color: C.muted }}>Conforme o porte de cada operação.</p>
               </div>
             </div>
+          </div>
+        </Revelar>
+      </section>
+
+      {/* Chamada: tornar-se parceiro da V3 (sem comparar o ingresso com comissão, pedido do Hamilton) */}
+      <section className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
+        <Revelar>
+          <div className="relative overflow-hidden rounded-3xl border px-7 py-14 sm:px-14 sm:py-20 text-center"
+            style={{ borderColor: `${C.gold}55`, background: `radial-gradient(120% 140% at 50% 0%, rgba(201,168,76,0.18), rgba(17,31,53,0.7) 45%, rgba(9,8,26,0.95))`, boxShadow: `0 50px 140px -60px ${C.gold}` }}>
+            <span aria-hidden className="absolute inset-x-0 top-0 h-px" style={{ background: `linear-gradient(90deg, transparent, ${C.goldLight}, transparent)` }} />
+            <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border" style={{ borderColor: `${C.gold}88`, background: `${C.gold}14`, color: C.goldLight }}>
+              <Handshake className="h-7 w-7" />
+            </span>
+            <p className="mt-7 text-[10.5px] font-bold uppercase tracking-[0.28em]" style={{ color: C.gold }}>O próximo passo</p>
+            <h2 className={`${display.className} mx-auto mt-4 max-w-3xl text-4xl sm:text-[60px] font-semibold leading-[1.02]`}>
+              Esta noite pode ser o seu primeiro passo como <em className="q-gold-text" style={{ backgroundImage: `linear-gradient(100deg, ${C.gold} 20%, ${C.goldLight} 45%, ${C.gold} 70%)`, backgroundSize: "200% 100%", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>parceiro da V3</em>.
+            </h2>
+            <p className="mx-auto mt-6 max-w-2xl text-base sm:text-lg leading-relaxed" style={{ color: C.muted }}>
+              Você entende como as operações funcionam por dentro e conhece o caminho para se tornar Partner V3: indicar operações com a estrutura e a Mesa de Crédito da V3 por trás de cada uma.
+            </p>
+            <div className="mx-auto mt-9 grid max-w-3xl gap-3 sm:grid-cols-3 text-left">
+              {[
+                { icon: Route, t: "Entenda o mercado", d: "Como o crédito estruturado com garantia funciona na prática" },
+                { icon: Landmark, t: "Conheça a estrutura", d: "Quem faz o quê numa operação da V3" },
+                { icon: BadgeCheck, t: "Torne-se Partner", d: "O caminho do credenciamento" },
+              ].map((x) => (
+                <div key={x.t} className="rounded-2xl border p-4" style={{ borderColor: C.lineSoft, background: "rgba(9,8,26,0.5)" }}>
+                  <x.icon className="h-5 w-5" style={{ color: C.gold }} />
+                  <p className="mt-3 text-sm font-bold" style={{ color: C.cream }}>{x.t}</p>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: C.muted }}>{x.d}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-11 flex justify-center">{cta("Garantir minha vaga agora", true)}</div>
           </div>
         </Revelar>
       </section>
