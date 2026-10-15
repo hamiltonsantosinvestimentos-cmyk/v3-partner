@@ -1,5 +1,6 @@
 "use client";
 import { aviso } from "@/lib/aviso";
+import { statusAoReabrir } from "@/lib/credit-proposal-status";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { registrarOrigemModal } from "@/components/motion/origem-modal";
@@ -218,8 +219,10 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
     const prevStage = proposals.find(p => p.id === proposalId)?.stage;
-    setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, stage: newStage } : p));
-    if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, stage: newStage } : prev);
+    const reaberta = statusAoReabrir(newStage, proposals.find(p => p.id === proposalId)?.status);
+    const extra = reaberta ? { status: reaberta } : {};
+    setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, ...extra, stage: newStage } : p));
+    if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, ...extra, stage: newStage } : prev);
     fetch("/api/credit-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

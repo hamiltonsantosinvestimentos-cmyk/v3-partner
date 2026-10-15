@@ -1,5 +1,6 @@
 "use client";
 import { aviso } from "@/lib/aviso";
+import { statusAoReabrir } from "@/lib/credit-proposal-status";
 
 import React, { useState, useCallback, useEffect } from "react";
 import { Home as HomeIcon, LayoutGrid, List, Plus } from "lucide-react";
@@ -180,8 +181,10 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
 
   const handleStageChange = useCallback((proposalId: string, newStage: string) => {
     const prevStage = proposals.find(p => p.id === proposalId)?.stage;
-    setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, stage: newStage } : p));
-    if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, stage: newStage } : prev);
+    const reaberta = statusAoReabrir(newStage, proposals.find(p => p.id === proposalId)?.status);
+    const extra = reaberta ? { status: reaberta } : {};
+    setProposals(prev => prev.map(p => p.id === proposalId ? { ...p, ...extra, stage: newStage } : p));
+    if (detailProposal?.id === proposalId) setDetailProposal(prev => prev ? { ...prev, ...extra, stage: newStage } : prev);
     fetch("/api/credit-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
