@@ -8,7 +8,7 @@ import { formatCurrency, maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/l
 import { dataBR, type RecursoLiberado } from "@/lib/cobranca-mandato";
 
 // Recursos liberados (15/10/2026, pedido do Hamilton): a Mesa lança cada
-// liberação (tranche) da operação e gera, pelo Mandato de Crédito assinado,
+// liberação (tranche) da operação — uma proposta pode ter vários créditos liberados — e gera, pelo Mandato de Crédito assinado,
 // o PDF de cobrança da Remuneração de Sucesso para enviar ao cliente pagar
 // (ver /api/mesa-credito/cobranca-mandato/[proposalId]).
 
@@ -37,7 +37,6 @@ export function RecursosLiberados({
   const [form, setForm] = useState(false);
   const [valor, setValor] = useState("");
   const [data, setData] = useState(hojeISO());
-  const [instituicao, setInstituicao] = useState("");
   const [obs, setObs] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [gerando, setGerando] = useState<string | null>(null);
@@ -81,12 +80,11 @@ export function RecursosLiberados({
       const ok = await aplicar(await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ valor: v, data, instituicao, obs }),
+        body: JSON.stringify({ valor: v, data, obs }),
       }));
       if (ok) {
         setForm(false);
         setValor("");
-        setInstituicao("");
         setObs("");
         setData(hojeISO());
       }
@@ -175,7 +173,7 @@ export function RecursosLiberados({
               <div className="min-w-0">
                 <p className="text-xs text-white font-semibold">
                   {formatCurrency(r.valor)}
-                  <span className="text-[10px] font-normal text-muted-foreground"> · T{i + 1} · {dataBR(r.data)}{r.instituicao ? ` · ${r.instituicao}` : ""}</span>
+                  <span className="text-[10px] font-normal text-muted-foreground"> · T{i + 1} · {dataBR(r.data)}</span>
                 </p>
                 {r.remuneracao != null && (
                   <p className="text-[10px] text-muted-foreground">
@@ -245,10 +243,6 @@ export function RecursosLiberados({
               <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Data da liberação *</label>
               <input type="date" value={data} onChange={(e) => setData(e.target.value)} className={INPUT} />
             </div>
-          </div>
-          <div>
-            <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Instituição</label>
-            <input value={instituicao} onChange={(e) => setInstituicao(e.target.value)} placeholder="Banco, fundo, cooperativa…" className={INPUT} />
           </div>
           <div>
             <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Observação</label>

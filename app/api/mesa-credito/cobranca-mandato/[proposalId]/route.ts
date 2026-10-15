@@ -13,7 +13,7 @@ export const maxDuration = 120;
 // Recursos liberados + cobrança da Remuneração de Sucesso (15/10/2026).
 //   GET                    → { mandato, recursos } (mandato = Mandato de Crédito assinado ou null)
 //   GET ?liberacao=<id>    → PDF de cobrança daquela liberação
-//   POST { valor, data, instituicao?, obs? } → lança uma liberação
+//   POST { valor, data, obs? } → lança uma liberação
 //   DELETE ?liberacao=<id> → remove uma liberação
 // Lista em credit_desk_proposals.metadata.recursos_liberados.
 
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if ("erro" in ctx) return ctx.erro;
   const { db, user, profile } = ctx;
 
-  const body = (await req.json().catch(() => ({}))) as { valor?: unknown; data?: unknown; instituicao?: unknown; obs?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { valor?: unknown; data?: unknown; obs?: unknown };
   const valor = Math.round(Number(body.valor) * 100) / 100;
   const data = typeof body.data === "string" ? body.data.slice(0, 10) : "";
   if (!(valor > 0)) return NextResponse.json({ error: "Informe o valor liberado." }, { status: 422 });
@@ -141,7 +141,6 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     id: randomUUID(),
     valor,
     data,
-    ...(texto(body.instituicao) ? { instituicao: texto(body.instituicao) } : {}),
     ...(texto(body.obs) ? { obs: texto(body.obs) } : {}),
     criado_em: new Date().toISOString(),
     criado_por: (profile.full_name as string | null) ?? user.id,

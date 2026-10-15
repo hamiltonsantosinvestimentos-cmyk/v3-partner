@@ -24,7 +24,6 @@ export type RecursoLiberado = {
   valor: number;
   /** aaaa-mm-dd — Data da Concretização da tranche. */
   data: string;
-  instituicao?: string;
   obs?: string;
   criado_em: string;
   criado_por?: string;
@@ -232,7 +231,6 @@ export function htmlCobranca(opts: {
   <h2>Recurso liberado</h2>
   <table>
     ${linha("Data da liberação (Data da Concretização)", dataBR(r.data))}
-    ${r.instituicao ? linha("Instituição", esc(r.instituicao)) : ""}
     ${linha("Valor da Operação liberado", brl(r.valor), true)}
     ${linha("Remuneração de Sucesso (cláusula 3.1)", esc(percentualPorExtenso(m.percentual)) + " do Valor da Operação")}
     ${r.obs ? linha("Observação", esc(r.obs)) : ""}
