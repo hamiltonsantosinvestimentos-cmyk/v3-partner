@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
+import { createHash, randomUUID } from "crypto";
 import { coraFetch } from "@/lib/cora";
 import { isValidCPF } from "@/lib/validators/cpf-cnpj";
 import { WEBINAR, inscricoesAbertas, leadPorToken, salvarWebinar, webinarDe, type WebinarMeta } from "@/lib/webinar";
@@ -47,7 +48,11 @@ export async function POST(req: NextRequest) {
   const d2 = new Date(Date.now() + 2 * 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   const diaEvento = WEBINAR.inicioISO.slice(0, 10);
   const vencimento = d2 < diaEvento ? d2 : diaEvento;
-  const nomeServico = `Ingresso webinar ${WEBINAR.titulo} (${WEBINAR.dataLabel})`;
+  const nomeServico = "Ingresso Webinar V3 Partners 06/11";
+  // A Cora exige Idempotency-Key no formato UUID (texto livre dava 400, 15/10/2026). Derivado do
+  // token + CPF + vencimento: o mesmo pedido repetido não gera duas faturas.
+  const h = createHash("sha256").update(`webinar-${t}-${cpf}-${vencimento}`).digest("hex");
+  const idempotencyKey = `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
 
   let cora: {
     id?: string;
@@ -58,16 +63,17 @@ export async function POST(req: NextRequest) {
     const res = await coraFetch("/v2/invoices", {
       method: "POST",
       body: JSON.stringify({
-        code: `WEB-${t.slice(0, 8).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`,
+        code: randomUUID().slice(0, 8).toUpperCase(),
         customer: { name: (w.nome ?? lead.nome).trim(), document: { identity: cpf, type: "CPF" } },
         payment_terms: { due_date: vencimento, amount: WEBINAR.precoCents },
+        payment_options: { interest: { type: "MONTHLY_PERCENTAGE", value: 1 }, fine: { type: "PERCENTAGE", value: 2 } },
         payment_forms: ["BANK_SLIP", "PIX"],
         services: [{ name: nomeServico, amount: WEBINAR.precoCents }],
       }),
-      idempotencyKey: `webinar-${t}-${cpf}-${vencimento}`,
+      idempotencyKey,
     });
     if (!res.ok) {
-      console.error("Cora webinar:", res.status, await res.json().catch(() => ({})));
+      console.error("Cora webinar:", res.status, (await res.text().catch(() => "")).slice(0, 800));
       return NextResponse.json({ error: "Não foi possível gerar a cobrança. Tente novamente em instantes." }, { status: 502 });
     }
     cora = (await res.json()) as typeof cora;
