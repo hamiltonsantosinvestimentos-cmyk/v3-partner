@@ -1557,8 +1557,8 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets);
   const [proposals, setProposals] = useState<ProposalCard[]>(initialProposals);
 
-  // Busca dados frescos das propostas ao montar
-  useEffect(() => {
+  // Busca dados frescos das propostas (ao montar e depois de duplicar uma proposta)
+  const recarregarPropostas = () => {
     fetch("/api/credit-proposals")
       .then(r => r.json())
       .then(({ proposals: fresh }) => {
@@ -1601,8 +1601,9 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         }));
       })
       .catch(() => {});
+  };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  useEffect(() => { recarregarPropostas(); }, []);
 
   // Auto-refresh a cada 60 segundos
   useEffect(() => {
@@ -3074,6 +3075,8 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         canEditInstituicao={canChangeStage}
         canGenerateContract={["ADMIN", "GESTAO"].includes(currentUser?.role ?? "")}
         canSendMandato={["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "")}
+        canDuplicate={["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "")}
+        onDuplicated={() => recarregarPropostas()}
         isAdmin={currentUser?.role === "ADMIN"}
         showDocsChecklistConfirm
         canConfirmDocsChecklist={["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser?.role ?? "")}

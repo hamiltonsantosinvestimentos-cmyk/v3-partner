@@ -21,6 +21,7 @@ import { RecomendacaoLinha } from "./recomendacao-linha";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
 import { NdaVinculoProposta } from "@/components/mesa-credito/nda-vinculo-proposta";
 import { MandatoEnvio } from "@/components/mesa-credito/mandato-envio";
+import { DuplicarProposta, type PropostaDuplicada } from "@/components/mesa-credito/duplicar-proposta";
 import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
 import { pegarOrigemModal, recorteDe } from "@/components/motion/origem-modal";
 
@@ -252,6 +253,10 @@ interface PropostaDetailModalProps {
   /** 09/10/2026: botão "Mandato" (gera e envia o Mandato de Crédito PF/PJ da
    *  Central de Contratos com o % do campo Mandato). ADMIN/GESTAO/MESA_OPERACIONAL. */
   canSendMandato?: boolean;
+  /** 14/10/2026: botão "Duplicar" — cria proposta nova em outra linha com o mesmo
+   *  cadastro e cópia dos documentos. ADMIN/GESTAO/MESA_OPERACIONAL. */
+  canDuplicate?: boolean;
+  onDuplicated?: (nova: PropostaDuplicada) => void;
   /** 26/08/2026: estritamente role === "ADMIN" (nunca GESTAO/MESA_OPERACIONAL)
    *  -- libera o botão "Autorizar avanço sem Análise" no gate de Análise de
    *  Crédito. Mesmo critério exigido pelo backend em /api/credit-proposals. */
@@ -942,7 +947,7 @@ function TimelineOperacao({ proposal }: { proposal: ProposalFull }) {
   );
 }
 
-export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa, canGenerateContract, canSendMandato, isAdmin, showDocsChecklistConfirm, canConfirmDocsChecklist }: PropostaDetailModalProps) {
+export function PropostaDetailModal({ open, onClose, proposal, onStageChange, onProposalUpdate, canChangeStage, canEditValorSolicitado, canCompileDocuments, canEditInstituicao, pendingCrmReview, onConfirmSendToMesa, canGenerateContract, canSendMandato, canDuplicate, onDuplicated, isAdmin, showDocsChecklistConfirm, canConfirmDocsChecklist }: PropostaDetailModalProps) {
   // ── Gate Análise de Crédito (26/08/2026) ─────────────────────────────────
   // Status do pedido de Análise vinculado a esta proposta (?prop=<code> em
   // /analise-v2) -- alimenta a tarja grande na aba Detalhes e o bloqueio do
@@ -965,7 +970,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   }, [proposal?.id]);
 
   const analiseOverride = (proposal?.metadata as Record<string, unknown> | undefined)?.analise_gate_override as
-    { by_name?: string; at?: string } | undefined;
+    { by_name?: string; at?: string; herdado_de?: string } | undefined;
   const analisePaid = analiseOrder !== "loading" && analiseOrder?.status === "PAID";
   const analiseGateOpen = analisePaid || !!analiseOverride;
 
@@ -3116,12 +3121,14 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 <CheckCircle2 className="w-8 h-8 text-emerald-400 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-emerald-300">
-                    {analisePaid ? "Análise de Crédito paga" : "Avanço autorizado sem Análise de Crédito"}
+                    {analisePaid ? "Análise de Crédito paga" : analiseOverride?.herdado_de ? `Análise de Crédito da proposta ${analiseOverride.herdado_de}` : "Avanço autorizado sem Análise de Crédito"}
                     {analisePaid && typeof analiseOrder === "object" && analiseOrder?.paid_at ? ` em ${formatDate(analiseOrder.paid_at)}` : ""}
                   </p>
                   <p className="text-xs text-emerald-400/80 mt-0.5">
                     {analisePaid
                       ? "Liberado para avançar de etapa."
+                      : analiseOverride?.herdado_de
+                      ? `Proposta duplicada de ${analiseOverride.herdado_de}, que já tinha a análise liberada — mesmo cliente, liberado para avançar de etapa.`
                       : `Autorizado por ${analiseOverride?.by_name ?? "ADMIN"}${analiseOverride?.at ? ` em ${formatDate(analiseOverride.at)}` : ""} — a Análise de Crédito do cliente segue pendente de pagamento.`}
                   </p>
                 </div>
@@ -5394,6 +5401,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 percMandato={percMandato}
                 onMetadataUpdate={(metadata) => onProposalUpdate?.(proposal.id, { metadata: metadata as ProposalMeta })}
               />
+            )}
+            {canDuplicate && (
+              <DuplicarProposta proposal={proposal} onDuplicated={onDuplicated} />
             )}
           </div>
           {canChangeStage && activeIdx > 0 && prevStage && !isEmAprovacao && (
