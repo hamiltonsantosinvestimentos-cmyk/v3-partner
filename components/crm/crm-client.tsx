@@ -1,5 +1,6 @@
 "use client";
 import { aviso } from "@/lib/aviso";
+import { statusAoReabrir } from "@/lib/credit-proposal-status";
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -1535,7 +1536,11 @@ export function CRMClient({ userRole, userName, userId, initialLeads = [] }: { u
   }, []);
 
   const handleCrmStageChange = useCallback((proposalId: string, newStage: string) => {
-    setCrmProposal(prev => prev && prev.id === proposalId ? { ...prev, stage: newStage } : prev);
+    setCrmProposal(prev => {
+      if (!prev || prev.id !== proposalId) return prev;
+      const reaberta = statusAoReabrir(newStage, prev.status);
+      return { ...prev, ...(reaberta ? { status: reaberta } : {}), stage: newStage };
+    });
     fetch("/api/credit-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },

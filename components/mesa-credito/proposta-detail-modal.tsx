@@ -1,5 +1,6 @@
 "use client";
 import { aviso, confirmar } from "@/lib/aviso";
+import { etapaTerminal } from "@/lib/credit-proposal-status";
 
 import React, { useState, useEffect, useRef } from "react";
 import { filtrarChecklistPorImovel, imovelGarantiaDaProposta } from "@/lib/checklist-imovel";
@@ -3002,6 +3003,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   }
 
   const isFinished = activeIdx === PIPELINE_STAGES.length - 1;
+  // Reprovada/declinada só vale enquanto a proposta está na etapa terminal: se a Mesa devolveu
+  // para uma etapa ativa (antes do fix de 15/10/2026 o status ficava REJECTED), os botões voltam.
+  const reprovadaAgora = proposal?.status === "REJECTED" && etapaTerminal(proposal?.stage);
+  const declinadaAgora = proposal?.status === "CANCELLED" && etapaTerminal(proposal?.stage);
   const nextStage = !isFinished ? PIPELINE_STAGES[activeIdx + 1] : null;
   const prevStage = activeIdx > 0 ? PIPELINE_STAGES[activeIdx - 1] : null;
 
@@ -5460,21 +5465,21 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             </Button>
           )}
           {/* ── Botão Reprovar — disponível em qualquer estágio ── */}
-          {canChangeStage && !isFinished && proposal?.status !== "REJECTED" && (
+          {canChangeStage && !isFinished && !reprovadaAgora && (
             <Button size="sm" variant="outline" onClick={() => setShowReprovar(true)}
               className="gap-1.5 border-red-500/40 text-red-400 hover:bg-red-500/10">
               <X className="w-3.5 h-3.5" /> Reprovar
             </Button>
           )}
           {/* ── Botão Declinar (sem aderência) — disponível em qualquer estágio ── */}
-          {canChangeStage && !isFinished && proposal?.status !== "REJECTED" && proposal?.status !== "CANCELLED" && (
+          {canChangeStage && !isFinished && !reprovadaAgora && !declinadaAgora && (
             <Button size="sm" variant="outline" onClick={() => setShowDeclinar(true)}
               className="gap-1.5 border-slate-500/40 text-slate-400 hover:bg-slate-500/10">
               <X className="w-3.5 h-3.5" /> Declinar (sem aderência)
             </Button>
           )}
           {/* ── Botão Aprovar — disponível em qualquer estágio ── */}
-          {canChangeStage && !isFinished && proposal?.status !== "APPROVED" && proposal?.status !== "REJECTED" && (
+          {canChangeStage && !isFinished && proposal?.status !== "APPROVED" && !reprovadaAgora && (
             <div className="flex items-center gap-2 flex-wrap">
               {isEmAprovacao && proximosNiveis.length > 0 && (
                 <Button size="sm" variant="outline" onClick={() => setShowEscalar(true)}
@@ -5493,7 +5498,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <CheckCircle2 className="w-3 h-3 mr-1" /> Aprovada — {proposal.approved_value ? formatCurrency(proposal.approved_value) : "Finalizada"}
             </Badge>
           )}
-          {proposal?.status === "REJECTED" && (
+          {reprovadaAgora && (
             <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-xs px-3 py-1">
               ✗ Reprovada
             </Badge>

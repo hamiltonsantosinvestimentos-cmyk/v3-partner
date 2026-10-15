@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ehDaEquipe, idsDaEquipe } from "@/lib/enterprise";
 import { protegerMetadata } from "@/lib/credit-proposal-meta";
+import { statusAoReabrir } from "@/lib/credit-proposal-status";
 import { semAnaliseDoSite } from "@/lib/analise-site";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -457,13 +458,19 @@ export async function PATCH(req: NextRequest) {
   if (fields.stage || fields.metadata !== undefined) {
     const { data: current } = await serviceClient()
       .from("credit_desk_proposals")
-      .select("stage, metadata")
+      .select("stage, status, metadata")
       .eq("id", id)
       .single();
 
     if (current) {
       previousStage = current.stage as string | undefined;
       const existingMeta = (current.metadata as Record<string, unknown>) ?? {};
+
+      // Proposta reprovada/declinada que volta para etapa ativa deixa de ser REJECTED/CANCELLED.
+      if (fields.stage && !fields.status) {
+        const reaberta = statusAoReabrir(fields.stage, current.status as string | null);
+        if (reaberta) updateData.status = reaberta;
+      }
 
       // Gate Análise de Crédito (26/08/2026): avançar de etapa exige a
       // Análise de Crédito do cliente paga (partner_service_orders vinculado
@@ -472,7 +479,12 @@ export async function PATCH(req: NextRequest) {
       // verdade -- goBack() sempre manda um stage de índice menor, então
       // targetIdx > currentIdx já exclui retrocesso sem precisar de outro caso.
       if (fields.stage && current.stage !== fields.stage) {
-        const currentIdx = PIPELINE_STAGE_ORDER.indexOf(current.stage as string);
+        // Reaberta (saindo de Reprovado/Declinado): compara com a última etapa ativa do histórico.
+        const historico = (existingMeta.stage_history as Array<{ stage?: string }> | undefined) ?? [];
+        const etapaBase = PIPELINE_STAGE_ORDER.includes(current.stage as string)
+          ? (current.stage as string)
+          : [...historico].reverse().find((h) => PIPELINE_STAGE_ORDER.includes(h?.stage ?? ""))?.stage;
+        const currentIdx = etapaBase ? PIPELINE_STAGE_ORDER.indexOf(etapaBase) : -1;
         const targetIdx = PIPELINE_STAGE_ORDER.indexOf(fields.stage);
         const isAdvancePastTriagem = targetIdx > currentIdx && targetIdx >= PIPELINE_STAGE_ORDER.indexOf("ANALISE");
         if (isAdvancePastTriagem && !existingMeta.analise_gate_override) {

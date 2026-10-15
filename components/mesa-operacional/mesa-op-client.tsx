@@ -1,5 +1,6 @@
 "use client";
 import { aviso, confirmar } from "@/lib/aviso";
+import { statusAoReabrir } from "@/lib/credit-proposal-status";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
@@ -1774,10 +1775,12 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   async function handleConfirmProposalPending(proposal: ProposalCard, reason: string, responsible: string) {
     const now = new Date().toISOString();
     const updates = { stage: "PENDENCIA", pending_reason: reason, pending_responsible: responsible, pending_at: now };
-    setProposals(prev => prev.map(p => p.id === proposal.id ? { ...p, ...updates } : p));
+    const reaberta = statusAoReabrir("PENDENCIA", proposal.status);
+    const local = reaberta ? { ...updates, status: reaberta } : updates;
+    setProposals(prev => prev.map(p => p.id === proposal.id ? { ...p, ...local } : p));
     // Atualiza também o detailProposal se estiver aberto
     if (detailProposal?.id === proposal.id) {
-      setDetailProposal(prev => prev ? { ...prev, ...updates } : prev);
+      setDetailProposal(prev => prev ? { ...prev, ...local } : prev);
     }
     setPendingProposalTarget(null);
     showToast("Pendência registrada com sucesso.");
@@ -2153,13 +2156,16 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
       }
     }
     const now = new Date().toISOString();
+    // Reprovada/declinada voltando para etapa ativa: o status deixa de ser REJECTED/CANCELLED (a API faz o mesmo).
+    const reaberta = statusAoReabrir(newStage, proposals.find(p => p.id === proposalId)?.status);
+    const extra = reaberta ? { status: reaberta } : {};
     setProposals((prev) => prev.map((p) =>
       p.id === proposalId
-        ? { ...p, stage: newStage, metadata: { ...(p.metadata ?? {}), stage_changed_at: now } }
+        ? { ...p, ...extra, stage: newStage, metadata: { ...(p.metadata ?? {}), stage_changed_at: now } }
         : p
     ));
     if (detailProposal?.id === proposalId) {
-      setDetailProposal((prev) => prev ? { ...prev, stage: newStage, metadata: { ...(prev.metadata ?? {}), stage_changed_at: now } } : prev);
+      setDetailProposal((prev) => prev ? { ...prev, ...extra, stage: newStage, metadata: { ...(prev.metadata ?? {}), stage_changed_at: now } } : prev);
     }
     fetch("/api/credit-proposals", {
       method: "PATCH",
@@ -2610,7 +2616,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                           )}
 
                           {/* Botões de aprovação rápida — apenas em "Em Aprovação" */}
-                          {canChangeStage && p.stage === "APROVACAO" && p.status !== "APPROVED" && p.status !== "REJECTED" && (
+                          {canChangeStage && p.stage === "APROVACAO" && p.status !== "APPROVED" && (
                             <div className="mt-2 pt-2 border-t border-purple-500/20 flex gap-1.5" onClick={e => e.stopPropagation()}>
                               <button
                                 onClick={() => { setQuickAction({ type: "reprovar", proposal: p }); setQuickMotivo(""); }}
