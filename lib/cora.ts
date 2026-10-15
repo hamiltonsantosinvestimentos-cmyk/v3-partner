@@ -83,7 +83,7 @@ export async function getCoraToken(): Promise<string> {
 export async function coraFetch(
   path: string,
   options: { method?: string; body?: string; idempotencyKey?: string } = {}
-): Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }> {
+): Promise<{ ok: boolean; status: number; json: () => Promise<unknown>; text: () => Promise<string> }> {
   const token = await getCoraToken();
 
   const headers: Record<string, string | number> = {
@@ -116,6 +116,8 @@ export async function coraFetch(
     json: async () => {
       try { return JSON.parse(data); } catch { return {}; }
     },
+    /** Corpo cru da resposta (para log de erro: o 400 da Cora às vezes não é JSON). */
+    text: async () => data,
   };
 }
 
