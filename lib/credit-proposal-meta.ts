@@ -48,6 +48,9 @@ export function protegerMetadata(banco: Meta | null | undefined, recebido: Meta)
   const atual = (banco ?? {}) as Meta;
   const out: Meta = { ...atual, ...recebido };
   if (atual.ocr_resultados !== undefined) out.ocr_resultados = atual.ocr_resultados;
+  // Recursos liberados: só a rota /api/mesa-credito/cobranca-mandato grava.
+  if (atual.recursos_liberados !== undefined) out.recursos_liberados = atual.recursos_liberados;
+  else delete out.recursos_liberados;
   const imoveisBanco = Array.isArray(atual.imoveis) ? (atual.imoveis as Imovel[]) : [];
   if (Array.isArray(recebido.imoveis)) {
     out.imoveis = (recebido.imoveis as Imovel[]).map((im, i) =>
