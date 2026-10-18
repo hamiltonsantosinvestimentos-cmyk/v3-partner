@@ -355,6 +355,8 @@ export async function escreverParecer(ai: Anthropic, av: Omit<AvaliacaoTecnica, 
       content: `Você é o engenheiro avaliador responsável da V3 Partners. Com base na avaliação técnica abaixo (já calculada — NÃO recalcule valores), escreva o parecer técnico do imóvel em garantia, no tom dos laudos profissionais: objetivo e enxuto, citando matrícula, áreas, divergências e o que precisa ser regularizado. Cada item das listas = 1 frase curta (até 25 palavras), no máximo 5 itens por lista, os mais importantes primeiro. Português do Brasil, sem travessão.
 ${JSON.stringify(resumo)}
 
+O proprietário do imóvel pode ser diferente do proponente (terceiro garantidor): isso é permitido e NÃO é ressalva nem motivo para rebaixar o aceite — no máximo recomende a assinatura do proprietário como interveniente garantidor.
+
 Responda SOMENTE com JSON válido:
 {"resumo":"parágrafo de 3-5 frases","pontos_fortes":[""],"ressalvas":[""],"recomendacoes":["ações concretas antes de aceitar a garantia"],"aceite":"ACEITAR|ACEITAR_COM_RESSALVAS|NAO_RECOMENDADO"}`,
     }],

@@ -162,7 +162,8 @@ export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating" | "
       const pn = norm(p);
       return cli.length > 0 && cli.filter((t) => pn.includes(t)).length >= Math.min(2, cli.length);
     });
-    if (!bate) add("ATENCAO", "Registro", "Proprietário da matrícula diferente do cliente da proposta", `Matrícula: ${(av.identificacao.proprietarios ?? []).join(", ")}. Cliente: ${clienteNome}. Confirmar se o garantidor é terceiro (anuência/cônjuge).`);
+    // Imóvel de terceiro é permitido (garantidor ≠ proponente): só informa, não pesa no rating.
+    if (!bate) add("INFO", "Registro", "Imóvel de terceiro garantidor", `Matrícula: ${(av.identificacao.proprietarios ?? []).join(", ")}. Proponente: ${clienteNome}. O proprietário assina como interveniente garantidor (com anuência do cônjuge, se casado).`);
   }
 
   // ── Áreas ──
@@ -258,7 +259,7 @@ const ASSUNTOS: [string, RegExp][] = [
   ["falta_ccir", /\bccir\b.*(n[aã]o (apresent|encontr)|ausente|faltando)/i],
   ["falta_fotos", /fotos?.*(n[aã]o|ausente|sem|faltando)|(sem|aus[eê]ncia de) fotos?/i],
   ["falta_iptu", /iptu.*(n[aã]o (apresent|encontr)|ausente|faltando)/i],
-  ["proprietario", /propriet[aá]ri.*(difere|diferente|diverg|n[aã]o [eé] o cliente)/i],
+  ["proprietario", /propriet[aá]ri.*(difere|diferente|diverg|n[aã]o [eé] o (cliente|proponente))|terceiro garantidor|interveniente/i],
   ["geo_averbacao", /(geo|sigef|georref).*(n[aã]o averbad|sem averba|sem confirma|n[aã]o registrad)|averba.*(geo|sigef|georref)/i],
   ["servidao", /servid[aã]o de passagem/i],
   ["construcao_averbada", /(constru[cç]|edifica|benfeitor).*(n[aã]o averbad|sem averba)/i],
