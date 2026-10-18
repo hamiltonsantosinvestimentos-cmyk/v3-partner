@@ -129,7 +129,7 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
 const ONUS_CRITICO = /penhora|indisponib|arresto|sequestro|hipoteca|aliena[cç][aã]o fiduci|usufruto|bem de fam|cl[aá]usula de inalienab|a[cç][aã]o (real|reipersecut)/i;
 
 /** Alertas fixos + os que a IA apontou (sem repetir título). */
-export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating">, clienteNome?: string | null): Alerta[] {
+export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating" | "parecer">, clienteNome?: string | null): Alerta[] {
   const out: Alerta[] = [];
   const add = (nivel: NivelAlerta, categoria: string, titulo: string, detalhe?: string | null) => out.push({ nivel, categoria, titulo, detalhe: detalhe ?? null });
   const tipos = new Set(av.arquivos.map((a) => a.tipo));
