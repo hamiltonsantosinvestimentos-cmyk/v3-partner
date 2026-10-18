@@ -3,7 +3,7 @@ import { aviso, confirmar } from "@/lib/aviso";
 import { etapaTerminal } from "@/lib/credit-proposal-status";
 
 import React, { useState, useEffect, useRef } from "react";
-import { filtrarChecklistPorImovel, imovelGarantiaDaProposta } from "@/lib/checklist-imovel";
+import { filtrarChecklistPorImovel, garantiaPelasZonas, imovelGarantiaDaProposta } from "@/lib/checklist-imovel";
 import { DocumentosAssinatura } from "@/components/mesa-credito/documentos-assinatura";
 import {
   X, User, Building2, CheckCircle2, Clock, ArrowRight, ArrowLeft,
@@ -2235,6 +2235,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
       i === idx ? { ...im, ...patch } : im
     );
     meta.imoveis = imoveis;
+    // Trocou urbano/rural: a resposta "Possui imóvel em garantia?" acompanha (define o checklist).
+    if (patch.zona && meta.imovel_garantia !== "nao") {
+      const antes = meta.imovel_garantia === "rural" ? "RURAL" : meta.imovel_garantia === "urbano" ? "URBANO" : undefined;
+      meta.imovel_garantia = garantiaPelasZonas(imoveis.map((im) => im.zona ?? antes));
+    }
     const res = await fetch("/api/credit-proposals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -4251,6 +4256,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                           onAnexar={(file) => handleFileUpload(`avaliacao_imovel_${idx}`, file)}
                           onMetadata={atualizarMetaAvaliacao}
                           onUsarValor={(valor) => usarComoValorMedio(idx, valor)}
+                          onZona={async (z) => { await persistImovelPatch(idx, { zona: z }); }}
                         />
                       </div>
 

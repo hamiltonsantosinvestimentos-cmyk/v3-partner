@@ -40,6 +40,8 @@ interface Props {
   onAnexar: (file: File) => Promise<void>;
   onMetadata: (metadata: Record<string, unknown>) => void;
   onUsarValor: (valor: number) => void;
+  /** Troca o tipo do imóvel (urbano/rural) — grava no imóvel e ajusta o checklist da proposta. */
+  onZona?: (zona: "URBANO" | "RURAL") => Promise<void>;
 }
 
 const JOB_EXPIRA_MS = 6 * 60 * 1000;
@@ -118,11 +120,12 @@ function DesenhoPoligonal({ p }: { p: Poligonal }) {
   );
 }
 
-export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, itens, arquivosImovel, valorSolicitado, onAnexar, onMetadata, onUsarValor }: Props) {
+export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, itens, arquivosImovel, valorSolicitado, onAnexar, onMetadata, onUsarValor, onZona }: Props) {
   const [aba, setAba] = useState<"resumo" | "registro" | "areas" | "caracteristicas" | "geo" | "mercado" | "documentos">("resumo");
   const [iniciando, setIniciando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [anexando, setAnexando] = useState(false);
+  const [trocandoZona, setTrocandoZona] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const processando = job?.status === "PROCESSANDO" && !!job.iniciado_em && Date.now() - new Date(job.iniciado_em).getTime() < JOB_EXPIRA_MS;
@@ -180,8 +183,11 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, it
     URL.revokeObjectURL(url);
   }
 
-  const ehRural = (avaliacao?.zona ?? zona) === "RURAL";
-  const docsEsperados = ehRural ? "matrícula, GEO/memorial SIGEF, CCIR, ITR, CAR e fotos" : "matrícula, IPTU e fotos (internet para mercado e região)";
+  const zonaAtual: "URBANO" | "RURAL" = zona === "RURAL" ? "RURAL" : "URBANO";
+  // As abas seguem o tipo em que a avaliação foi feita; o seletor mostra o tipo atual do imóvel.
+  const ehRural = (avaliacao?.zona ?? zonaAtual) === "RURAL";
+  const zonaMudou = !!avaliacao && avaliacao.zona !== zonaAtual;
+  const docsEsperados = zonaAtual === "RURAL" ? "matrícula, GEO/memorial SIGEF, CCIR, ITR, CAR e fotos" : "matrícula, IPTU e fotos (internet para mercado e região)";
 
   // ── Cabeçalho e ações ──
   const cabecalho = (
@@ -189,8 +195,26 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, it
       <div className="min-w-0">
         <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#C9A84C] flex items-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5" /> Avaliação Técnica V3
-          <span className="px-1.5 py-0.5 rounded border border-[#C9A84C]/40 text-[8px] tracking-wider">{ehRural ? "RURAL · NBR 14653-3" : "URBANO · NBR 14653-2"}</span>
+          <span className="px-1.5 py-0.5 rounded border border-[#C9A84C]/40 text-[8px] tracking-wider">{zonaAtual === "RURAL" ? "NBR 14653-3" : "NBR 14653-2"}</span>
         </p>
+        <div className="mt-1.5 inline-flex rounded-md border border-[#243A66] bg-[#09081A]/40 p-0.5" role="radiogroup" aria-label="Tipo do imóvel">
+          {(["URBANO", "RURAL"] as const).map((z) => (
+            <button
+              key={z}
+              role="radio"
+              aria-checked={zonaAtual === z}
+              disabled={!onZona || trocandoZona || processando}
+              onClick={async () => {
+                if (!onZona || z === zonaAtual) return;
+                setTrocandoZona(true);
+                try { await onZona(z); } finally { setTrocandoZona(false); }
+              }}
+              className={`h-6 px-2.5 rounded text-[10px] font-bold tracking-wider transition-colors disabled:cursor-not-allowed ${zonaAtual === z ? "bg-[#C9A84C] text-[#09081A]" : "text-[#7A8FA8] hover:text-[#F0ECE4]"}`}
+            >
+              {trocandoZona && z !== zonaAtual ? <Loader2 className="w-3 h-3 animate-spin inline" /> : z === "URBANO" ? "Urbano" : "Rural"}
+            </button>
+          ))}
+        </div>
         <p className="text-[11px] text-[#7A8FA8] mt-1">
           {avaliacao
             ? <>Gerada em {new Date(avaliacao.gerado_em).toLocaleString("pt-BR")}{avaliacao.gerado_por ? ` por ${avaliacao.gerado_por}` : ""} · {avaliacao.arquivos.length} documento(s) lido(s)</>
@@ -221,6 +245,12 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, it
 
   const estado = (
     <>
+      {zonaMudou && !processando && (
+        <p className="rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/5 px-3 py-2 text-[11px] text-[#F0ECE4] flex items-center gap-1.5">
+          <Info className="w-3.5 h-3.5 text-[#C9A84C] shrink-0" />
+          A avaliação abaixo foi feita como imóvel {avaliacao?.zona === "RURAL" ? "rural" : "urbano"}. Clique em Reavaliar para refazer como {zonaAtual === "RURAL" ? "rural" : "urbano"}.
+        </p>
+      )}
       {processando && (
         <div className="rounded-lg border border-[#C9A84C]/30 bg-[#C9A84C]/5 p-3 flex items-center gap-2.5">
           <Loader2 className="w-4 h-4 animate-spin text-[#C9A84C] shrink-0" />
