@@ -1,0 +1,15 @@
+-- Rollback de 20261017a_originacao_etapa1.sql. Só rodar com "go" do João.
+-- Extensão .txt de propósito: não é migration para aplicar em sequência.
+-- Apaga fatos e nomes da Originação (dados da esteira, não do deal).
+begin;
+drop table if exists public.ma_origination_facts;
+drop table if exists public.ma_origination_names;
+drop function if exists public.ma_origination_fact_check();
+alter table public.ma_deals
+  drop column if exists origination_meeting_summary_id,
+  drop column if exists origination_decision,
+  drop column if exists origination_meeting_date,
+  drop column if exists origination_stage;
+drop type if exists public.ma_origination_label;
+drop table if exists public.ma_origination_units;
+commit;
