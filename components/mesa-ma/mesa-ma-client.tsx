@@ -8,7 +8,7 @@ import {
   Paperclip, Trash2, ExternalLink, Upload, Copy, CheckCheck,
   MessageSquare, Send, Zap, FileImage, FileSignature,
   ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp, Bot,
-  Link2, AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, Handshake, User, StickyNote,
+  Link2, AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, Handshake, User, StickyNote, Compass,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -34,6 +34,10 @@ const DealRoomPanel = dynamic(
 );
 const DealTimeline = dynamic(
   () => import("@/components/ma/deal-timeline").then(m => m.DealTimeline),
+  { ssr: false }
+);
+const OriginacaoPanel = dynamic(
+  () => import("@/components/ma/originacao-panel").then(m => m.OriginacaoPanel),
   { ssr: false }
 );
 const BusinessPlanContainer = dynamic(
@@ -309,7 +313,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
-  const [detailTab, setDetailTab] = useState<"detalhes" | "forja" | "criativos" | "contrato" | "matches" | "negociacao" | "clientes" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan" | "chat-ia" | "notas">("detalhes");
+  const [detailTab, setDetailTab] = useState<"detalhes" | "originacao" | "forja" | "criativos" | "contrato" | "matches" | "negociacao" | "clientes" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan" | "chat-ia" | "notas">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
@@ -1229,6 +1233,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               <div className="flex gap-0 overflow-x-auto flex-1">
                 {([
                   { id: "detalhes" as const, label: "Detalhes", icon: <FileText size={12} /> },
+                  { id: "originacao" as const, label: "Originação", icon: <Compass size={12} /> },
                   { id: "forja" as const, label: "FORJA", icon: <Zap size={12} /> },
                   { id: "analytics" as const, label: "Analytics", icon: <BarChart2 size={12} /> },
                   { id: "business-plan" as const, label: "Business Plan", icon: <TrendingUp size={12} /> },
@@ -1601,6 +1606,14 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                     sector={selectedCard.sector}
                     userRole={userRole}
                   />
+                </div>
+              );
+            }
+
+            if (detailTab === "originacao") {
+              return (
+                <div className="mt-2">
+                  <OriginacaoPanel dealId={selectedCard.id} />
                 </div>
               );
             }
