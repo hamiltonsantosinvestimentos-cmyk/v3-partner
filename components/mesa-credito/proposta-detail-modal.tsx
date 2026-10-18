@@ -25,6 +25,8 @@ import { MandatoEnvio } from "@/components/mesa-credito/mandato-envio";
 import { RecursosLiberados } from "@/components/mesa-credito/recursos-liberados";
 import { DuplicarProposta, type PropostaDuplicada } from "@/components/mesa-credito/duplicar-proposta";
 import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
+import { AvaliacaoTecnicaCard, type JobAvaliacaoTecnica } from "@/components/mesa-credito/avaliacao-tecnica-card";
+import type { AvaliacaoTecnica } from "@/lib/avaliacao-tecnica/tipos";
 import { pegarOrigemModal, recorteDe } from "@/components/motion/origem-modal";
 
 export type MesaComment = {
@@ -91,6 +93,9 @@ export interface ImovelMeta {
   padrao_construtivo?: PadraoConstrutivoMeta;
   /** Ajuste manual da Mesa; quando existe, vale no lugar do padrão das fotos. */
   padrao_manual?: PadraoNivel;
+  /** Avaliação Técnica V3 (documentos + internet) e o status do processamento — só o servidor grava. */
+  avaliacao_tecnica?: AvaliacaoTecnica;
+  avaliacao_tecnica_job?: JobAvaliacaoTecnica;
 }
 
 type PadraoNivel = "BAIXO" | "MEDIO" | "ALTO";
@@ -2297,6 +2302,27 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   })();
   const assinaturaFotos = fotosDoImovel.arquivos.join("|");
 
+  // Avaliação Técnica V3: itens do checklist (o servidor separa os do imóvel) e prévia dos
+  // arquivos de imóvel já anexados. Anexos feitos direto na aba vão para "avaliacao_imovel_<idx>".
+  const checklistParaAvaliacao = (() => {
+    if (!proposal) return { itens: [] as { doc_id: string; label: string }[], arquivos: [] as { doc_id: string; label: string; nome: string }[] };
+    const ct = ((proposal.metadata?.client_type ?? proposal.client_type) === "PJ" ? "PJ" : "PF") as "PF" | "PJ";
+    const lista = (portfolioDocs[proposal.credit_line?.toLowerCase()]?.[ct] ?? CHECKLISTS[proposal.credit_line]?.[ct] ?? DEFAULT_CHECKLIST[ct]) as { id: string; label: string }[];
+    const itens = lista.map((d) => ({ doc_id: d.id, label: d.label }));
+    const doImovel = /matr[ií]cula|iptu|foto|fachada|rural|ccir|\bitr\b|\bcar\b|geo|sigef|memorial|laudo|escritura|planta|habite|incra|im[oó]vel/i;
+    const pessoal = /\b(rg|cnh|cpf)\b|c[oô]njuge|identidade/i;
+    const arquivos = Object.entries(uploadedFiles).flatMap(([docId, files]) => {
+      const label = docId.startsWith("avaliacao_imovel") ? "Anexado na Avaliação de Imóvel" : itens.find((i) => i.doc_id === docId)?.label ?? "";
+      if (!docId.startsWith("avaliacao_imovel") && (!doImovel.test(label) || pessoal.test(label))) return [];
+      return files.map((f) => ({ doc_id: docId, label, nome: f.name }));
+    });
+    return { itens, arquivos };
+  })();
+  const proposalIdAtual = proposal?.id;
+  const atualizarMetaAvaliacao = React.useCallback((m: Record<string, unknown>) => {
+    if (proposalIdAtual) onProposalUpdate?.(proposalIdAtual, { metadata: m as ProposalMeta });
+  }, [proposalIdAtual, onProposalUpdate]);
+
   async function analisarPadrao(idx: number) {
     if (!proposal) return;
     setPadraoErro(null);
@@ -4209,6 +4235,23 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                             </button>
                           </div>
                         )}
+                      </div>
+
+                      {/* ── Avaliação Técnica V3 (documentos + internet, padrão dos laudos) ── */}
+                      <div className="col-span-2 pt-2">
+                        <AvaliacaoTecnicaCard
+                          proposalId={proposal.id}
+                          idx={idx}
+                          avaliacao={im.avaliacao_tecnica}
+                          job={im.avaliacao_tecnica_job}
+                          zona={im.zona ?? ((meta as { imovel_garantia?: string }).imovel_garantia === "rural" ? "RURAL" : "URBANO")}
+                          itens={checklistParaAvaliacao.itens}
+                          arquivosImovel={checklistParaAvaliacao.arquivos}
+                          valorSolicitado={proposal.requested_value}
+                          onAnexar={(file) => handleFileUpload(`avaliacao_imovel_${idx}`, file)}
+                          onMetadata={atualizarMetaAvaliacao}
+                          onUsarValor={(valor) => usarComoValorMedio(idx, valor)}
+                        />
                       </div>
 
                       <div className="col-span-2 pt-1.5 border-t border-amber-500/20">
