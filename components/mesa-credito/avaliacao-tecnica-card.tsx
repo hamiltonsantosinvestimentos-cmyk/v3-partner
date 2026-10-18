@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { gerarKml } from "@/lib/avaliacao-tecnica/geo";
-import { TIPO_DOC_LABEL, type Alerta, type AvaliacaoTecnica, type Poligonal } from "@/lib/avaliacao-tecnica/tipos";
+import { TIPO_DOC_LABEL, type Alerta, type AvaliacaoTecnica, type PdfAvaliacaoMeta, type Poligonal } from "@/lib/avaliacao-tecnica/tipos";
 import { diasDesde } from "@/lib/avaliacao-tecnica/analise";
 
 export interface JobAvaliacaoTecnica {
@@ -31,6 +31,8 @@ interface Props {
   idx: number;
   avaliacao?: AvaliacaoTecnica | null;
   job?: JobAvaliacaoTecnica | null;
+  /** Último laudo em PDF salvo deste imóvel. */
+  pdf?: PdfAvaliacaoMeta | null;
   zona?: string | null;
   /** Itens do checklist da proposta (doc_id + rótulo) — o servidor separa os do imóvel. */
   itens: { doc_id: string; label: string }[];
@@ -120,12 +122,14 @@ function DesenhoPoligonal({ p }: { p: Poligonal }) {
   );
 }
 
-export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, itens, arquivosImovel, valorSolicitado, onAnexar, onMetadata, onUsarValor, onZona }: Props) {
+export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zona, itens, arquivosImovel, valorSolicitado, onAnexar, onMetadata, onUsarValor, onZona }: Props) {
   const [aba, setAba] = useState<"resumo" | "registro" | "areas" | "caracteristicas" | "geo" | "mercado" | "documentos">("resumo");
   const [iniciando, setIniciando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [anexando, setAnexando] = useState(false);
   const [trocandoZona, setTrocandoZona] = useState(false);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+  const [abrindoPdf, setAbrindoPdf] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const processando = job?.status === "PROCESSANDO" && !!job.iniciado_em && Date.now() - new Date(job.iniciado_em).getTime() < JOB_EXPIRA_MS;
@@ -169,6 +173,51 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, it
     try { for (const f of Array.from(files)) await onAnexar(f); } finally {
       setAnexando(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  /** Gera o laudo em PDF, salva na proposta e baixa. */
+  async function salvarPdf() {
+    setErro(null);
+    setGerandoPdf(true);
+    try {
+      const r = await fetch("/api/credit-proposals/avaliacao-imovel/tecnica/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposalId, imovel_idx: idx }),
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        setErro(typeof j.error === "string" ? j.error : "Erro ao gerar o PDF.");
+        return;
+      }
+      const blob = await r.blob();
+      const nome = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") ?? "")?.[1] ?? "Avaliacao-Tecnica.pdf";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nome;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (r.headers.get("X-Pdf-Salvo") !== "1") setErro("PDF baixado, mas não foi possível salvar na proposta. Tente de novo.");
+      const m = await fetch(`/api/credit-proposals/avaliacao-imovel/tecnica?proposal_id=${proposalId}`).then((x) => x.json()).catch(() => null);
+      if (m?.metadata) onMetadata(m.metadata);
+    } catch {
+      setErro("Falha de conexão ao gerar o PDF.");
+    } finally {
+      setGerandoPdf(false);
+    }
+  }
+
+  async function abrirPdfSalvo() {
+    setAbrindoPdf(true);
+    try {
+      const r = await fetch(`/api/credit-proposals/avaliacao-imovel/tecnica/pdf?proposal_id=${proposalId}&imovel_idx=${idx}`);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.url) { setErro(typeof j.error === "string" ? j.error : "Não foi possível abrir o PDF."); return; }
+      window.open(j.url, "_blank", "noopener");
+    } finally {
+      setAbrindoPdf(false);
     }
   }
 
@@ -220,6 +269,16 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, it
             ? <>Gerada em {new Date(avaliacao.gerado_em).toLocaleString("pt-BR")}{avaliacao.gerado_por ? ` por ${avaliacao.gerado_por}` : ""} · {avaliacao.arquivos.length} documento(s) lido(s)</>
             : <>Lê {docsEsperados} e monta a avaliação no padrão dos laudos.</>}
         </p>
+        {avaliacao && pdf?.storage_path && (
+          <p className="text-[10px] text-[#7A8FA8] mt-0.5 flex items-center gap-1 flex-wrap">
+            <FileText className="w-3 h-3 text-[#C9A84C]" />
+            PDF salvo em {new Date(pdf.gerado_em).toLocaleString("pt-BR")}{pdf.gerado_por ? ` por ${pdf.gerado_por}` : ""}
+            {pdf.avaliacao_gerada_em !== avaliacao.gerado_em && <span className="text-[#E8C97A]">· de uma avaliação anterior</span>}
+            <button onClick={abrirPdfSalvo} disabled={abrindoPdf} className="text-[#C9A84C] hover:underline inline-flex items-center gap-0.5 disabled:opacity-50">
+              {abrindoPdf ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Download className="w-2.5 h-2.5" />} abrir
+            </button>
+          </p>
+        )}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <input ref={inputRef} type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.kml" className="hidden" onChange={(e) => anexar(e.target.files)} />
@@ -231,6 +290,16 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, it
         >
           {anexando ? <Loader2 className="w-3 h-3 animate-spin" /> : <Paperclip className="w-3 h-3" />} Anexar
         </button>
+        {avaliacao && (
+          <button
+            onClick={salvarPdf}
+            disabled={gerandoPdf || processando}
+            title="Gera o laudo da avaliação em PDF, salva na proposta e baixa"
+            className="h-7 px-2 rounded-md border border-[#C9A84C]/50 text-[#E8C97A] hover:bg-[#C9A84C]/10 text-[11px] font-semibold flex items-center gap-1 transition-colors disabled:opacity-40"
+          >
+            {gerandoPdf ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileText className="w-3 h-3" />} {gerandoPdf ? "Gerando PDF…" : "Salvar PDF"}
+          </button>
+        )}
         <button
           onClick={gerar}
           disabled={iniciando || processando}
@@ -504,6 +573,16 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, it
             <Linha rotulo="Cobertura" valor={txt(av.urbano.cobertura)} />
             <Linha rotulo="Esquadrias" valor={txt(av.urbano.esquadrias)} />
           </Bloco>
+          {av.urbano.condominio?.em_condominio != null && (
+            <Bloco titulo="Condomínio">
+              <Linha rotulo="Em condomínio" valor={av.urbano.condominio.em_condominio ? (av.urbano.condominio.tipo === "VERTICAL" ? "Sim · edifício" : av.urbano.condominio.tipo === "HORIZONTAL" ? "Sim · condomínio fechado" : "Sim") : "Não (imóvel de rua)"} destaque />
+              {av.urbano.condominio.em_condominio && <>
+                <Linha rotulo="Nome" valor={txt(av.urbano.condominio.nome ?? av.identificacao.denominacao)} />
+                <Linha rotulo="Taxa mensal" valor={av.urbano.condominio.taxa_mensal ? formatCurrency(av.urbano.condominio.taxa_mensal) : "—"} />
+                <Linha rotulo="Infraestrutura" valor={(av.urbano.condominio.infraestrutura ?? []).join(", ") || "—"} />
+              </>}
+            </Bloco>
+          )}
           <Bloco titulo="Terreno e entorno">
             <Linha rotulo="Situação" valor={txt(av.urbano.situacao)} />
             <Linha rotulo="Topografia / formato" valor={`${txt(av.urbano.topografia)} / ${txt(av.urbano.formato_terreno)}`} />
@@ -625,11 +704,14 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, it
                 ))}
               </div>
               <p className="text-[10px] text-[#7A8FA8]">
+                {v.amostra_criterio && <span className="text-[#E8C97A]">Recorte: {v.amostra_criterio} · </span>}
+                {typeof v.premio_condominio_pct === "number" && <span className="text-[#E8C97A]">em condomínio {v.premio_condominio_pct >= 0 ? "+" : ""}{n(v.premio_condominio_pct * 100, 0)}% sobre os de rua · </span>}
                 Anúncios × fator de oferta {n(v.fator_oferta)} · saneamento ±30% da média ({v.amostra_saneada} de {v.amostra_total} aceitos) · aplicado: {v.criterio} · confiança {av.mercado.confianca.toLowerCase()}
               </p>
               <div className="space-y-1">
                 {av.mercado.comparaveis.map((c, i) => {
-                  const ok = v.saneados[i] ?? true;
+                  const noRecorte = v.no_recorte?.[i] ?? true;
+                  const ok = noRecorte && (v.saneados?.[i] ?? true);
                   return (
                     <div key={i} className={`rounded-md border px-2 py-1.5 ${ok ? "border-[#243A66]/70" : "border-[#243A66]/30 opacity-50"}`}>
                       <div className="flex items-start justify-between gap-2">
@@ -637,7 +719,7 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, zona, it
                         <span className="text-[10px] font-semibold text-[#E8C97A] shrink-0">{formatCurrency(c.preco_unitario)}/{un}</span>
                       </div>
                       <p className="text-[10px] text-[#7A8FA8]">
-                        {formatCurrency(c.valor)} · {n(c.area, v.unidade === "ha" ? 2 : 0)} {un}{c.observacao ? ` · ${c.observacao}` : ""}{!ok ? " · descartado no saneamento" : ""}
+                        {formatCurrency(c.valor)} · {n(c.area, v.unidade === "ha" ? 2 : 0)} {un}{c.mesmo_condominio ? " · mesmo condomínio" : c.em_condominio === true ? " · em condomínio" : c.em_condominio === false ? " · de rua" : ""}{c.observacao ? ` · ${c.observacao}` : ""}{!noRecorte ? " · fora do recorte de condomínio" : !ok ? " · descartado no saneamento" : ""}
                       </p>
                       {c.fonte_url && <a href={c.fonte_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#C9A84C] hover:underline inline-flex items-center gap-0.5">{c.fonte_nome ?? "anúncio"} <ExternalLink className="w-2.5 h-2.5" /></a>}
                     </div>

@@ -26,7 +26,7 @@ import { RecursosLiberados } from "@/components/mesa-credito/recursos-liberados"
 import { DuplicarProposta, type PropostaDuplicada } from "@/components/mesa-credito/duplicar-proposta";
 import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
 import { AvaliacaoTecnicaCard, type JobAvaliacaoTecnica } from "@/components/mesa-credito/avaliacao-tecnica-card";
-import type { AvaliacaoTecnica } from "@/lib/avaliacao-tecnica/tipos";
+import type { AvaliacaoTecnica, PdfAvaliacaoMeta } from "@/lib/avaliacao-tecnica/tipos";
 import { pegarOrigemModal, recorteDe } from "@/components/motion/origem-modal";
 
 export type MesaComment = {
@@ -96,6 +96,7 @@ export interface ImovelMeta {
   /** Avaliação Técnica V3 (documentos + internet) e o status do processamento — só o servidor grava. */
   avaliacao_tecnica?: AvaliacaoTecnica;
   avaliacao_tecnica_job?: JobAvaliacaoTecnica;
+  avaliacao_tecnica_pdf?: PdfAvaliacaoMeta;
 }
 
 type PadraoNivel = "BAIXO" | "MEDIO" | "ALTO";
@@ -4249,6 +4250,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                           idx={idx}
                           avaliacao={im.avaliacao_tecnica}
                           job={im.avaliacao_tecnica_job}
+                          pdf={im.avaliacao_tecnica_pdf}
                           zona={im.zona ?? ((meta as { imovel_garantia?: string }).imovel_garantia === "rural" ? "RURAL" : "URBANO")}
                           itens={checklistParaAvaliacao.itens}
                           arquivosImovel={checklistParaAvaliacao.arquivos}

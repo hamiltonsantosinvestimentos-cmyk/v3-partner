@@ -172,7 +172,7 @@ function promptLeitura(ctx: ContextoImovel, hoje: string) {
   const comum = `"identificacao":{"matricula":"","cartorio":"","comarca":"","data_certidao":"yyyy-mm-dd","proprietarios":[""],"inscricao_municipal":"","lote_quadra":"","endereco":"","bairro":"","cidade":"","uf":"","cep":"","denominacao":""},
 "registro":{"onus":[{"tipo":"hipoteca|alienação fiduciária|penhora|indisponibilidade|usufruto|servidão|...","registro":"R-5","descricao":"","favorecido":"","ativo":true}],"construcao_averbada":"texto da averbação da construção ou null","cadeia_dominial":"última transmissão (quem, quando, como)","observacoes":""},`;
   const urbano = `"areas":{"privativa_m2":0,"terreno_matricula_m2":0,"terreno_iptu_m2":0,"construida_matricula_m2":0,"construida_iptu_m2":0,"construida_estimada_m2":0},
-"urbano":{"tipo":"casa|apartamento|sala comercial|galpão|terreno|...","padrao":"BAIXO|MEDIO|ALTO","padrao_descricao":"","idade_aparente_anos":0,"conservacao":"novo|entre novo e regular|regular|reparos simples|reparos importantes","pavimentos":0,"dormitorios":0,"suites":0,"vagas":0,"compartimentos":[""],"acabamentos":[{"ambiente":"","descricao":"piso / parede / teto"}],"estrutura":"","cobertura":"","esquadrias":"","lazer":[""],"topografia":"","formato_terreno":"","testada_m":0,"zoneamento":"","situacao":"isolado|condomínio|esquina|...","ocupacao":"","infraestrutura":["água","esgoto","energia","pavimentação",...],"vizinhanca":"","servicos_proximos":[""],"riscos":[""],"iptu":{"exercicio":0,"valor_venal_terreno":0,"valor_venal_construcao":0,"valor_venal_total":0,"valor_iptu_anual":0,"debitos":""}},
+"urbano":{"tipo":"casa|apartamento|sala comercial|galpão|terreno|...","padrao":"BAIXO|MEDIO|ALTO","padrao_descricao":"","idade_aparente_anos":0,"conservacao":"novo|entre novo e regular|regular|reparos simples|reparos importantes","pavimentos":0,"dormitorios":0,"suites":0,"vagas":0,"compartimentos":[""],"acabamentos":[{"ambiente":"","descricao":"piso / parede / teto"}],"estrutura":"","cobertura":"","esquadrias":"","lazer":[""],"topografia":"","formato_terreno":"","testada_m":0,"zoneamento":"","situacao":"isolado|condomínio|esquina|...","condominio":{"em_condominio":true,"tipo":"HORIZONTAL|VERTICAL","nome":"","taxa_mensal":0,"infraestrutura":["portaria 24h","segurança","lazer",...]},"ocupacao":"","infraestrutura":["água","esgoto","energia","pavimentação",...],"vizinhanca":"","servicos_proximos":[""],"riscos":[""],"iptu":{"exercicio":0,"valor_venal_terreno":0,"valor_venal_construcao":0,"valor_venal_total":0,"valor_iptu_anual":0,"debitos":""}},
 "rural":null,`;
   const rural = `"areas":{"matricula_ha":0,"ccir_ha":0,"itr_ha":0,"car_ha":0,"geo_declarada_ha":0},
 "urbano":null,
@@ -191,6 +191,7 @@ ${ctx.zona === "RURAL"
 - Fotos: uso do solo (lavoura, pasto, mata), cercas, água (açude, rio, poço), acesso, edificações (casa sede, galpão, curral…) com área estimada, idade aparente e conservação; marque averbada=false se a matrícula não averba.
 - Reserva Legal exigida conforme bioma/região (Amazônia Legal: 80% floresta, 35% cerrado; demais: 20%).`
     : `- Unidade em condomínio (apartamento, sala, casa em condomínio): privativa_m2 = área privativa/útil; construida_matricula_m2 = área total (privativa + comum); terreno_matricula_m2 = fração ideal em m² se houver. A construção de unidade em condomínio instituído já está averbada pela instituição do condomínio (não gere alerta de construção não averbada).
+- Condomínio: em_condominio=true se o imóvel é unidade de condomínio (matrícula com instituição/convenção de condomínio, fração ideal ou "unidade autônoma", nome de residencial/condomínio no endereço, boleto de condomínio, fotos com portaria/guarita/muro do condomínio). tipo HORIZONTAL = casas/lotes em condomínio fechado; VERTICAL = edifício. em_condominio=false só se for claramente imóvel de rua; sem base = null.
 - IPTU: inscrição, exercício, área do terreno, área construída cadastrada, valores venais (terreno, construção, total), valor do imposto, débitos.
 - Fotos: tipo, padrão construtivo (BAIXO/MEDIO/ALTO), idade aparente, conservação, compartimentos, acabamentos por ambiente (piso/parede/teto), estrutura, cobertura, esquadrias, lazer, vagas. Estime a área construída real (construida_estimada_m2) só se houver base (anúncio, planta, laudo, levantamento); senão null.`}
 - Se houver LAUDO de avaliação anexado: empresa, número, responsável, data-base, valor de mercado, valor de garantia/liquidez, graus de fundamentação e precisão, resumo do parecer.
@@ -278,16 +279,21 @@ async function pesquisarMercado(ai: Anthropic, zona: ZonaImovel, l: LeituraIa, c
   const uf = id.uf ?? ctx.estado;
   if (!cidade) return null;
   const rural = zona === "RURAL";
-  const area = rural ? (l.areas.matricula_ha ?? l.areas.ccir_ha ?? l.areas.car_ha) : (l.areas.construida_estimada_m2 ?? l.areas.construida_iptu_m2 ?? l.areas.construida_matricula_m2 ?? ctx.area_m2);
+  const cond = l.urbano?.condominio;
+  const area = rural ? (l.areas.matricula_ha ?? l.areas.ccir_ha ?? l.areas.car_ha) : (l.areas.privativa_m2 ?? l.areas.construida_estimada_m2 ?? l.areas.construida_iptu_m2 ?? l.areas.construida_matricula_m2 ?? ctx.area_m2);
   const descricao = rural
     ? `imóvel rural de ${area ?? "?"} ha em ${cidade}/${uf ?? ""}${l.rural?.aptidao ? `, aptidão ${l.rural.aptidao}` : ""}${l.rural?.uso_solo?.length ? `, uso: ${l.rural.uso_solo.join(", ")}` : ""}`
-    : `${l.urbano?.tipo ?? "imóvel"} de ${area ?? "?"} m² construídos${l.urbano?.dormitorios ? `, ${l.urbano.dormitorios} dormitórios` : ""}, padrão ${l.urbano?.padrao ?? "não definido"}, bairro ${id.bairro ?? "?"}, ${cidade}/${uf ?? ""}`;
+    : `${l.urbano?.tipo ?? "imóvel"} de ${area ?? "?"} m² construídos${l.urbano?.dormitorios ? `, ${l.urbano.dormitorios} dormitórios` : ""}, padrão ${l.urbano?.padrao ?? "não definido"}, bairro ${id.bairro ?? "?"}, ${cidade}/${uf ?? ""}${cond?.em_condominio ? `, EM CONDOMÍNIO ${cond.tipo === "VERTICAL" ? "(edifício)" : "FECHADO (horizontal)"}${cond.nome ? ` "${cond.nome}"` : id.denominacao ? ` "${id.denominacao}"` : ""}` : cond?.em_condominio === false ? ", imóvel de rua (fora de condomínio)" : ""}`;
+  // Condomínio fechado tem R$/m² maior que o de rua: pede o recorte certo e marca cada anúncio.
+  const regraCondominio = rural ? "" : cond?.em_condominio
+    ? ` O imóvel fica EM CONDOMÍNIO: busque primeiro anúncios no MESMO condomínio (pelo nome), depois em outros condomínios ${cond.tipo === "VERTICAL" ? "/edifícios" : "fechados"} de padrão parecido no bairro/região. Se der, inclua 1 ou 2 imóveis de rua só como referência.`
+    : cond?.em_condominio === false ? " O imóvel é de rua (fora de condomínio): prefira anúncios também fora de condomínio." : "";
 
   const system = `Você é pesquisador de mercado imobiliário da V3 Partners. Use a tool "web_search" para achar de 4 a 8 anúncios REAIS de VENDA ${rural ? "de fazendas/sítios/áreas rurais no mesmo município ou municípios vizinhos (mesma microrregião), de tamanho e aptidão parecidos" : "de imóveis do mesmo tipo e padrão, no mesmo bairro (ou bairros vizinhos de padrão parecido) da mesma cidade"}. Priorize anúncios recentes (ZAP, VivaReal, OLX, Imovelweb, Chaves na Mão, MGF Imóveis, imobiliárias locais).
-Pesquise também, em 1 ou 2 buscas, informações da região: ${rural ? "aptidão agrícola, principais culturas/pecuária, logística (rodovias), valor da terra nua de referência" : "infraestrutura, perfil do bairro, valorização, serviços"}.
+${regraCondominio.trim()}${regraCondominio ? "\n" : ""}Pesquise também, em 1 ou 2 buscas, informações da região: ${rural ? "aptidão agrícola, principais culturas/pecuária, logística (rodovias), valor da terra nua de referência" : "infraestrutura, perfil do bairro, valorização, serviços"}.
 Depois responda SOMENTE com JSON válido, sem markdown:
-{"comparaveis":[{"titulo":"","valor":0,"area":0,"fonte_nome":"","fonte_url":"https://...","observacao":"${rural ? "benfeitorias, distância, aptidão" : "padrão, conservação, diferenças"}"}],"resumo_regiao":"3-4 frases","confianca":"ALTA|MEDIA|BAIXA","observacoes":"qualidade dos comparáveis"}
-Regras: "valor" = preço de venda anunciado em reais; "area" = ${rural ? "área total em HECTARES (converta alqueires/tarefas/m² pela unidade da região e diga na observação)" : "área construída/privativa em m²"}. Nunca invente anúncio nem número; se achar poucos, devolva o que achou e confiança BAIXA.`;
+{"comparaveis":[{"titulo":"","valor":0,"area":0,"fonte_nome":"","fonte_url":"https://...","observacao":"${rural ? "benfeitorias, distância, aptidão" : "padrão, conservação, diferenças"}"${rural ? "" : `,"em_condominio":true,"mesmo_condominio":false`}}],"resumo_regiao":"3-4 frases","confianca":"ALTA|MEDIA|BAIXA","observacoes":"qualidade dos comparáveis"}
+Regras: "valor" = preço de venda anunciado em reais; "area" = ${rural ? "área total em HECTARES (converta alqueires/tarefas/m² pela unidade da região e diga na observação)" : "área construída/privativa em m²"}. ${rural ? "" : ` "em_condominio" = o anúncio é de imóvel em condomínio fechado/edifício (true), de rua (false) ou não dá para saber (null); "mesmo_condominio" = true só se for no mesmo condomínio do imóvel avaliado.`} Nunca invente anúncio nem número; se achar poucos, devolva o que achou e confiança BAIXA.`;
 
   const tools = [{
     name: "web_search",
@@ -311,11 +317,13 @@ Regras: "valor" = preço de venda anunciado em reais; "area" = ${rural ? "área 
     const r = await ai.messages.create({ model: MODELO, max_tokens: 3000, system, messages: [...msgs, { role: "user", content: "Responda AGORA só com o JSON final." }] });
     texto = textoDa(r);
   }
-  const j = jsonDe<{ comparaveis?: { titulo?: string; valor?: unknown; area?: unknown; fonte_nome?: string; fonte_url?: string; observacao?: string }[]; resumo_regiao?: string; confianca?: string; observacoes?: string }>(texto);
+  const j = jsonDe<{ comparaveis?: { titulo?: string; valor?: unknown; area?: unknown; fonte_nome?: string; fonte_url?: string; observacao?: string; em_condominio?: unknown; mesmo_condominio?: unknown }[]; resumo_regiao?: string; confianca?: string; observacoes?: string }>(texto);
   const comparaveis: Comparavel[] = (j.comparaveis ?? []).map((c) => {
     const valor = num(c.valor) ?? 0;
     const area = num(c.area) ?? 0;
-    return { titulo: String(c.titulo ?? "Anúncio"), valor, area, preco_unitario: area > 0 ? valor / area : 0, fonte_nome: c.fonte_nome ?? null, fonte_url: c.fonte_url ?? null, observacao: c.observacao ?? null };
+    return { titulo: String(c.titulo ?? "Anúncio"), valor, area, preco_unitario: area > 0 ? valor / area : 0, fonte_nome: c.fonte_nome ?? null, fonte_url: c.fonte_url ?? null, observacao: c.observacao ?? null,
+      em_condominio: typeof c.em_condominio === "boolean" ? c.em_condominio : null,
+      mesmo_condominio: c.mesmo_condominio === true ? true : null };
   }).filter((c) => c.valor > 0 && c.area > 0);
   const confianca = comparaveis.length < 3 ? "BAIXA" : ((["ALTA", "MEDIA", "BAIXA"] as const).find((x) => x === j.confianca) ?? "MEDIA");
   return { unidade: rural ? "ha" : "m2", comparaveis, resumo_regiao: j.resumo_regiao ?? null, confianca, observacoes: j.observacoes ?? null };
