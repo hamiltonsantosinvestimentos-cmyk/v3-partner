@@ -82,11 +82,44 @@ export function sanear(valores: number[]): boolean[] {
   return valores.map((_, i) => set.has(i));
 }
 
+/** Mínimo de comparáveis para a amostra ficar só no recorte do condomínio. */
+const MIN_RECORTE = 3;
+const mediaDe = (v: number[]) => v.reduce((s, x) => s + x, 0) / v.length;
+
+/**
+ * Recorte por condomínio (urbano): casa/lote em condomínio fechado vale mais por m² que o de
+ * rua, então misturar os dois distorce o valor. Ordem: mesmo condomínio → outros condomínios
+ * → amostra mista (com alerta). Imóvel fora de condomínio usa só os de fora, se houver 3.
+ */
+function recorteCondominio(av: Base, comps: Comparavel[]): { mask: boolean[]; criterio: string | null } {
+  const tudo = comps.map(() => true);
+  const em = av.urbano?.condominio?.em_condominio;
+  if (av.zona !== "URBANO" || typeof em !== "boolean" || comps.length === 0) return { mask: tudo, criterio: null };
+  const conta = (m: boolean[]) => m.filter(Boolean).length;
+  if (em) {
+    const mesmo = comps.map((c) => c.mesmo_condominio === true);
+    if (conta(mesmo) >= MIN_RECORTE) return { mask: mesmo, criterio: `só comparáveis do mesmo condomínio (${conta(mesmo)} de ${comps.length})` };
+    const cond = comps.map((c) => c.em_condominio === true || c.mesmo_condominio === true);
+    if (conta(cond) >= MIN_RECORTE) return { mask: cond, criterio: `só comparáveis em condomínio (${conta(cond)} de ${comps.length})` };
+    return { mask: tudo, criterio: `amostra mista: só ${conta(cond)} comparável(is) em condomínio` };
+  }
+  const fora = comps.map((c) => c.em_condominio === false && c.mesmo_condominio !== true);
+  if (conta(fora) >= MIN_RECORTE) return { mask: fora, criterio: `só comparáveis fora de condomínio (${conta(fora)} de ${comps.length})` };
+  return { mask: tudo, criterio: null };
+}
+
 export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined): Valores {
   const unidade = av.zona === "RURAL" ? "ha" : "m2";
   const { area, criterio: areaCriterio } = areaConsiderada(av);
-  const todos = (av.mercado?.comparaveis ?? []).map((c: Comparavel) => (pos(c.preco_unitario) ? c.preco_unitario * FATOR_OFERTA : 0));
+  const comps = av.mercado?.comparaveis ?? [];
+  const brutos = comps.map((c: Comparavel) => (pos(c.preco_unitario) ? c.preco_unitario * FATOR_OFERTA : 0));
+  const recorte = recorteCondominio(av, comps);
+  // Fora do recorte vira 0: não entra no saneamento nem no cálculo (a tela mostra o motivo).
+  const todos = brutos.map((v, i) => (recorte.mask[i] ? v : 0));
   const saneados = sanear(todos);
+  const emCond = brutos.filter((v, i) => pos(v) && (comps[i].em_condominio === true || comps[i].mesmo_condominio === true));
+  const foraCond = brutos.filter((v, i) => pos(v) && comps[i].em_condominio === false);
+  const premio = av.zona === "URBANO" && emCond.length >= 2 && foraCond.length >= 2 ? mediaDe(emCond) / mediaDe(foraCond) - 1 : null;
   const precos = todos.filter((_, i) => saneados[i]);
   const fatorLiq = FATOR_LIQUIDEZ[av.zona];
   const base: Valores = {
@@ -102,7 +135,10 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
     laudo_garantia: av.laudo_externo?.valor_garantia ?? null,
   };
   base.saneados = saneados;
-  base.amostra_total = todos.filter(pos).length;
+  base.no_recorte = recorte.mask;
+  base.amostra_criterio = recorte.criterio;
+  base.premio_condominio_pct = premio;
+  base.amostra_total = todos.filter(pos).length; // dentro do recorte
   base.amostra_saneada = precos.length;
   if (precos.length === 0) return base;
   const h = precos; // já homogeneizado: anúncio → negócio
@@ -232,6 +268,10 @@ export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating" | "
   }
 
   // ── Mercado e valores ──
+  const cond = av.urbano?.condominio;
+  if (av.zona === "URBANO" && cond?.em_condominio && /amostra mista/.test(av.valores.amostra_criterio ?? "")) {
+    add("ATENCAO", "Mercado", "Poucos comparáveis em condomínio: valor pode estar subavaliado", `O imóvel fica em condomínio${cond.nome ? ` (${cond.nome})` : ""}, mas a pesquisa achou menos de ${MIN_RECORTE} anúncios em condomínio; a amostra misturou imóveis de rua, que costumam ter R$/m² menor. Conferir com anúncios do próprio condomínio ou laudo.`);
+  }
   if (!av.mercado || av.mercado.comparaveis.length === 0) add("ATENCAO", "Mercado", "Sem comparáveis de mercado: valor de mercado não calculado");
   else if (av.valores.amostra_saneada < 3) add("ATENCAO", "Mercado", `Só ${av.valores.amostra_saneada} comparável(is) válido(s) após o saneamento`, "Confiança baixa do valor; a NBR 14653 pede no mínimo 3 a 5 dados.");
   else if (av.valores.amostra_total - av.valores.amostra_saneada >= Math.ceil(av.valores.amostra_total / 2)) add("INFO", "Mercado", `Amostra dispersa: ${av.valores.amostra_total - av.valores.amostra_saneada} de ${av.valores.amostra_total} comparáveis descartados no saneamento`, "Preços muito espalhados na região; conferir com corretor local ou laudo.");

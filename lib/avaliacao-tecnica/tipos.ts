@@ -108,6 +108,11 @@ export interface CaracteristicasUrbano {
   testada_m?: number | null;
   zoneamento?: string | null;
   situacao?: string | null;          // isolado, condomínio, esquina…
+  /**
+   * Condomínio (18/10/2026): imóvel em condomínio fechado costuma ter R$/m² maior que o de
+   * rua — a amostra de mercado usa só comparáveis do mesmo recorte (ver calcularValores).
+   */
+  condominio?: CondominioImovel | null;
   ocupacao?: string | null;          // ocupado pelo proprietário, locado, desocupado
   infraestrutura?: string[];         // água, esgoto, energia, pavimentação, iluminação, coleta…
   vizinhanca?: string | null;        // predominância e padrão do entorno
@@ -121,6 +126,15 @@ export interface CaracteristicasUrbano {
     valor_iptu_anual?: number | null;
     debitos?: string | null;
   };
+}
+
+export interface CondominioImovel {
+  em_condominio?: boolean | null;
+  tipo?: "HORIZONTAL" | "VERTICAL" | null;   // casas/lotes em condomínio fechado × edifício
+  nome?: string | null;
+  taxa_mensal?: number | null;
+  /** Portaria, segurança 24h, lazer, áreas comuns… */
+  infraestrutura?: string[];
 }
 
 export interface Edificacao {
@@ -181,6 +195,10 @@ export interface Comparavel {
   fonte_nome?: string | null;
   fonte_url?: string | null;
   observacao?: string | null;
+  /** Anúncio de imóvel em condomínio fechado/edifício (urbano). */
+  em_condominio?: boolean | null;
+  /** Anúncio no MESMO condomínio do imóvel avaliado. */
+  mesmo_condominio?: boolean | null;
 }
 
 export interface PesquisaMercadoTecnica {
@@ -217,6 +235,11 @@ export interface Valores {
   saneados: boolean[];
   amostra_total: number;
   amostra_saneada: number;
+  /** Recorte da amostra por condomínio: false = comparável fora do recorte (não entra no cálculo). */
+  no_recorte?: boolean[];
+  amostra_criterio?: string | null;
+  /** Diferença observada do R$/m² em condomínio sobre o de fora (média × média), quando há os dois. */
+  premio_condominio_pct?: number | null;
   valor_mercado: number | null;
   fator_liquidez: number;          // deságio p/ garantia (urbano 0,80 · rural 0,70)
   valor_liquidez: number | null;
@@ -245,6 +268,17 @@ export interface Parecer {
   ressalvas: string[];
   recomendacoes: string[];
   aceite: "ACEITAR" | "ACEITAR_COM_RESSALVAS" | "NAO_RECOMENDADO";
+}
+
+/** Último laudo em PDF salvo do imóvel (metadata.imoveis[i].avaliacao_tecnica_pdf — só o servidor grava). */
+export interface PdfAvaliacaoMeta {
+  storage_path: string;
+  bucket: string;
+  file_name: string;
+  gerado_em: string;
+  gerado_por: string | null;
+  /** gerado_em da avaliação que virou PDF — se reavaliar, o card avisa que o PDF ficou antigo. */
+  avaliacao_gerada_em: string;
 }
 
 export interface AvaliacaoTecnica {
