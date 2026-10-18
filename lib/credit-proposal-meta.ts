@@ -10,6 +10,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 type Meta = Record<string, unknown>;
 type Imovel = Record<string, unknown>;
 
+const CAMPOS_IMOVEL_DO_SERVIDOR = ["padrao_construtivo", "avaliacao_tecnica", "avaliacao_tecnica_job"] as const;
+
 export async function atualizarMetadata(
   db: SupabaseClient,
   proposalId: string,
@@ -53,9 +55,16 @@ export function protegerMetadata(banco: Meta | null | undefined, recebido: Meta)
   else delete out.recursos_liberados;
   const imoveisBanco = Array.isArray(atual.imoveis) ? (atual.imoveis as Imovel[]) : [];
   if (Array.isArray(recebido.imoveis)) {
-    out.imoveis = (recebido.imoveis as Imovel[]).map((im, i) =>
-      imoveisBanco[i]?.padrao_construtivo !== undefined ? { ...im, padrao_construtivo: imoveisBanco[i].padrao_construtivo } : im,
-    );
+    out.imoveis = (recebido.imoveis as Imovel[]).map((im, i) => {
+      const doBanco = imoveisBanco[i] ?? {};
+      const novo = { ...im };
+      // Gravados só pelo servidor: padrão das fotos e Avaliação Técnica V3 (com o status do processamento).
+      for (const k of CAMPOS_IMOVEL_DO_SERVIDOR) {
+        if (doBanco[k] !== undefined) novo[k] = doBanco[k];
+        else delete novo[k];
+      }
+      return novo;
+    });
   }
   return out;
 }
