@@ -394,7 +394,7 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
             ["Valor de mercado", v.valor_mercado !== null ? formatCurrency(v.valor_mercado) : "—", v.preco_unitario_aplicado ? `${formatCurrency(v.preco_unitario_aplicado)}/${un}${ehRural && v.valor_benfeitorias ? ` + benfeitorias ${formatCurrency(v.valor_benfeitorias)}` : ""}` : "sem comparáveis"],
-            ["Valor de liquidez", v.valor_liquidez !== null ? formatCurrency(v.valor_liquidez) : "—", `fator ${n(v.fator_liquidez)} (garantia)`],
+            ["Valor de liquidez", v.valor_liquidez !== null ? formatCurrency(v.valor_liquidez) : "—", v.piso_venal_aplicado && v.valor_liquidez !== null && v.valor_liquidez === v.piso_venal ? "piso: valor venal" : `fator ${n(v.fator_liquidez)} (garantia)`],
             ["LTV s/ liquidez", ltvLiq !== null ? `${n(ltvLiq * 100, 1)}%` : "—", ltvMerc !== null ? `${n(ltvMerc * 100, 1)}% s/ mercado` : "máx. 70%"],
             ["Área considerada", v.area_considerada ? `${n(v.area_considerada, v.unidade === "ha" ? 4 : 2)} ${un}` : "—", v.area_criterio],
           ].map(([rot, val, sub], i) => (
