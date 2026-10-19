@@ -53,6 +53,9 @@ export function protegerMetadata(banco: Meta | null | undefined, recebido: Meta)
   // Recursos liberados: só a rota /api/mesa-credito/cobranca-mandato grava.
   if (atual.recursos_liberados !== undefined) out.recursos_liberados = atual.recursos_liberados;
   else delete out.recursos_liberados;
+  // Cobranças da avaliação de engenharia: só a rota /api/mesa-credito/cobranca-avaliacao grava.
+  if (atual.cobrancas_avaliacao !== undefined) out.cobrancas_avaliacao = atual.cobrancas_avaliacao;
+  else delete out.cobrancas_avaliacao;
   const imoveisBanco = Array.isArray(atual.imoveis) ? (atual.imoveis as Imovel[]) : [];
   if (Array.isArray(recebido.imoveis)) {
     out.imoveis = (recebido.imoveis as Imovel[]).map((im, i) => {

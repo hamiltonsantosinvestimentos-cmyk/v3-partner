@@ -23,6 +23,7 @@ import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status
 import { NdaVinculoProposta } from "@/components/mesa-credito/nda-vinculo-proposta";
 import { MandatoEnvio } from "@/components/mesa-credito/mandato-envio";
 import { RecursosLiberados } from "@/components/mesa-credito/recursos-liberados";
+import { CobrancaAvaliacaoEngenharia } from "@/components/mesa-credito/cobranca-avaliacao";
 import { DuplicarProposta, type PropostaDuplicada } from "@/components/mesa-credito/duplicar-proposta";
 import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
 import { AvaliacaoTecnicaCard, type JobAvaliacaoTecnica } from "@/components/mesa-credito/avaliacao-tecnica-card";
@@ -4146,6 +4147,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 : [];
             return (
               <div className="space-y-3">
+                {/* ── Cobrança do laudo de engenharia (PDF com PIX da V3) ── */}
+                {canSendMandato && (
+                  <CobrancaAvaliacaoEngenharia
+                    proposalId={proposal.id}
+                    canEdit={!!canChangeStage}
+                    etapaAtual={proposal.stage === "AVALIACAO_IMOVEL"}
+                    imovelPadrao={imoveis.map((im) => [im.endereco, im.cidade && im.estado ? `${im.cidade}/${im.estado}` : im.cidade].filter(Boolean).join(", ")).filter(Boolean).join(" · ")}
+                  />
+                )}
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
                   <Home className="w-3.5 h-3.5" /> Imóveis em Garantia {imoveis.length > 0 ? `(${imoveis.length})` : ""}
                 </p>
