@@ -1390,6 +1390,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [motivoDeclinio, setMotivoDeclinio] = useState("");
   const [nivelEscalar, setNivelEscalar] = useState("");
   const [savingAprovacao, setSavingAprovacao] = useState(false);
+  // Aprovar e já mandar para a Avaliação de Imóvel (19/10/2026, pedido do Hamilton): quando o
+  // laudo de engenharia vem depois da aprovação da instituição.
+  const [enviarAvaliacao, setEnviarAvaliacao] = useState(false);
+  const temImovelGarantia = !!proposal && imovelGarantiaDaProposta(proposal.metadata) !== "nao"
+    && ((proposal.metadata?.imoveis?.length ?? 0) > 0 || !!proposal.imovel_endereco || !!proposal.imovel_cidade);
+  function abrirAprovar() {
+    setEnviarAvaliacao(temImovelGarantia && proposal?.stage !== "AVALIACAO_IMOVEL");
+    setShowAprovar(true);
+  }
 
   async function handleAprovar() {
     if (!proposal || !valorAprovado) return;
@@ -1405,6 +1414,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         body: JSON.stringify({ id: proposal.id, status: "APPROVED", approved_value: val }),
       });
       onProposalUpdate?.(proposal.id, { status: "APPROVED", approved_value: val });
+      const irParaAvaliacao = enviarAvaliacao && proposal.stage !== "AVALIACAO_IMOVEL";
+      if (irParaAvaliacao) {
+        onStageChange?.(proposal.id, "AVALIACAO_IMOVEL");
+        setModalTab("avaliacao_imovel");
+      }
       // Notifica o partner
       if (proposal.partner_id) {
         fetch("/api/notifications", {
@@ -1413,7 +1427,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           body: JSON.stringify({
             user_id: proposal.partner_id,
             title: `✅ Proposta ${proposal.code} Aprovada`,
-            message: `Sua proposta de crédito para ${proposal.client_name} foi aprovada no valor de ${val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.`,
+            message: `Sua proposta de crédito para ${proposal.client_name} foi aprovada no valor de ${val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}.${irParaAvaliacao ? " Próximo passo: avaliação do imóvel pela engenharia." : ""}`,
             type: "proposal",
             action_url: "/minhas-operacoes",
           }),
@@ -5548,7 +5562,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   <ArrowRight className="w-3.5 h-3.5" /> Escalar Nível
                 </Button>
               )}
-              <Button size="sm" onClick={() => setShowAprovar(true)}
+              <Button size="sm" onClick={abrirAprovar}
                 className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white border-0">
                 <CheckCircle2 className="w-3.5 h-3.5" /> Aprovar
               </Button>
@@ -5629,7 +5643,16 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                   className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
                 />
               </div>
-              <p className="text-[11px] text-muted-foreground">O partner será notificado automaticamente e a proposta será finalizada.</p>
+              {proposal?.stage !== "AVALIACAO_IMOVEL" && (
+                <label className="flex items-start gap-2 p-2.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 cursor-pointer">
+                  <input type="checkbox" checked={enviarAvaliacao} onChange={(e) => setEnviarAvaliacao(e.target.checked)} className="mt-0.5 accent-[#C9A84C]" />
+                  <span className="text-[11px] text-foreground">
+                    <span className="font-semibold">Enviar para Avaliação de Imóvel</span>
+                    <span className="block text-muted-foreground">Move a proposta para a etapa Avaliação de Imóvel e abre a aba de avaliação, com a cobrança da engenharia.{!temImovelGarantia && " (proposta sem imóvel em garantia cadastrado)"}</span>
+                  </span>
+                </label>
+              )}
+              <p className="text-[11px] text-muted-foreground">O partner será notificado automaticamente. {enviarAvaliacao && proposal?.stage !== "AVALIACAO_IMOVEL" ? "A proposta vai para Avaliação de Imóvel." : "A etapa da proposta não muda."}</p>
             </div>
             <div className="px-5 py-4 border-t border-border flex gap-2 justify-end">
               <Button size="sm" variant="outline" onClick={() => { setShowAprovar(false); setValorAprovado(""); }}>Cancelar</Button>
