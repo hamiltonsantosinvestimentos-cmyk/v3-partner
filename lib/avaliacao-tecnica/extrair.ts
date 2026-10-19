@@ -3,8 +3,11 @@
 //   1. separa os arquivos de imóvel da proposta (pelo item do checklist e pelo nome) e baixa;
 //   2. a IA lê tudo de uma vez — classifica cada arquivo pelo CONTEÚDO (na prática o cliente
 //      anexa ITR no campo do IPTU, CNH no da matrícula…) e extrai os parâmetros dos laudos;
-//   3. em paralelo: vértices do GEO (rural), pesquisa de mercado na internet e localização;
-//   4. regras fixas (analise.ts) calculam valores, alertas e rating;
+//   3. em paralelo: vértices do GEO (rural) → consultas públicas (CAR/SICAR, TI, UC, embargos,
+//      DETER, relevo SRTM) → classes de capacidade de uso; pesquisa de mercado com os atributos de
+//      cada comparável; CUB do estado; localização;
+//   4. regras fixas (analise.ts + normas.ts) homogeneízam por fatores (como os laudos de
+//      referência), calculam estatística, graus NBR, valores, alertas e rating;
 //   5. a IA escreve o parecer com tudo já calculado.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -12,9 +15,11 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { webSearch } from "@/lib/web-search";
 import { calcularRating, calcularValores, gerarAlertas, juntarAlertas } from "./analise";
 import { deUtm, medirPoligonal, verticesDoKml, verticesValidos } from "./geo";
+import { consultarImovelRural } from "./consultas";
+import { comPreservacao, estadoDe, indiceAgronomico, normalizarClasses, padraoDetalheDe, situacaoValida } from "./normas";
 import type {
-  Alerta, ArquivoLido, AvaliacaoTecnica, CaracteristicasRural, CaracteristicasUrbano, Comparavel, Identificacao,
-  LaudoExterno, PadraoNivel, Parecer, PesquisaMercadoTecnica, Poligonal, QuadroAreas, Registro, TipoDocumentoImovel,
+  Alerta, ArquivoLido, AvaliacaoTecnica, CaracteristicasRural, CaracteristicasUrbano, Comparavel, Consulta, CubRef, Identificacao,
+  LaudoExterno, PadraoNivel, Parecer, PesquisaMercadoTecnica, Poligonal, QuadroAreas, Registro, Relevo, Terras, TipoDocumentoImovel,
   VerticeGeo, ZonaImovel,
 } from "./tipos";
 
@@ -169,14 +174,14 @@ export interface ContextoImovel {
 }
 
 function promptLeitura(ctx: ContextoImovel, hoje: string) {
-  const comum = `"identificacao":{"matricula":"","cartorio":"","comarca":"","data_certidao":"yyyy-mm-dd","proprietarios":[""],"inscricao_municipal":"","lote_quadra":"","endereco":"","bairro":"","cidade":"","uf":"","cep":"","denominacao":""},
+  const comum = `"identificacao":{"matricula":"","cartorio":"","comarca":"","data_certidao":"yyyy-mm-dd","proprietarios":[""],"documentos_proprietarios":["CPF/CNPJ dos proprietários atuais, se constarem"],"inscricao_municipal":"","lote_quadra":"","endereco":"","bairro":"","cidade":"","uf":"","cep":"","denominacao":""},
 "registro":{"onus":[{"tipo":"hipoteca|alienação fiduciária|penhora|indisponibilidade|usufruto|servidão|...","registro":"R-5","descricao":"","favorecido":"","ativo":true}],"construcao_averbada":"texto da averbação da construção ou null","cadeia_dominial":"última transmissão (quem, quando, como)","observacoes":""},`;
   const urbano = `"areas":{"privativa_m2":0,"terreno_matricula_m2":0,"terreno_iptu_m2":0,"construida_matricula_m2":0,"construida_iptu_m2":0,"construida_estimada_m2":0},
-"urbano":{"tipo":"casa|apartamento|sala comercial|galpão|terreno|...","padrao":"BAIXO|MEDIO|ALTO","padrao_descricao":"","idade_aparente_anos":0,"conservacao":"novo|entre novo e regular|regular|reparos simples|reparos importantes","pavimentos":0,"dormitorios":0,"suites":0,"vagas":0,"compartimentos":[""],"acabamentos":[{"ambiente":"","descricao":"piso / parede / teto"}],"estrutura":"","cobertura":"","esquadrias":"","lazer":[""],"topografia":"","formato_terreno":"","testada_m":0,"zoneamento":"","situacao":"isolado|condomínio|esquina|...","condominio":{"em_condominio":true,"tipo":"HORIZONTAL|VERTICAL","nome":"","taxa_mensal":0,"infraestrutura":["portaria 24h","segurança","lazer",...]},"ocupacao":"","infraestrutura":["água","esgoto","energia","pavimentação",...],"vizinhanca":"","servicos_proximos":[""],"riscos":[""],"iptu":{"exercicio":0,"valor_venal_terreno":0,"valor_venal_construcao":0,"valor_venal_total":0,"valor_iptu_anual":0,"debitos":""}},
+"urbano":{"tipo":"casa|apartamento|sala comercial|galpão|terreno|...","padrao":"BAIXO|MEDIO|ALTO","padrao_detalhe":"BAIXO|MEDIO_BAIXO|MEDIO|MEDIO_ALTO|ALTO","padrao_descricao":"","idade_aparente_anos":0,"conservacao":"novo|entre novo e regular|regular|reparos simples|reparos importantes","pavimentos":0,"dormitorios":0,"suites":0,"vagas":0,"compartimentos":[""],"acabamentos":[{"ambiente":"","descricao":"piso / parede / teto"}],"estrutura":"","cobertura":"","esquadrias":"","lazer":[""],"topografia":"","formato_terreno":"","testada_m":0,"zoneamento":"","situacao":"isolado|condomínio|esquina|...","condominio":{"em_condominio":true,"tipo":"HORIZONTAL|VERTICAL","nome":"","taxa_mensal":0,"infraestrutura":["portaria 24h","segurança","lazer",...]},"ocupacao":"","infraestrutura":["água","esgoto","energia","pavimentação",...],"vizinhanca":"","servicos_proximos":[""],"riscos":[""],"iptu":{"exercicio":0,"valor_venal_terreno":0,"valor_venal_construcao":0,"valor_venal_total":0,"valor_iptu_anual":0,"debitos":""}},
 "rural":null,`;
   const rural = `"areas":{"matricula_ha":0,"ccir_ha":0,"itr_ha":0,"car_ha":0,"geo_declarada_ha":0},
 "urbano":null,
-"rural":{"denominacao":"","codigo_incra":"","ccir":{"numero":"","exercicio":"","situacao":"quitado|pendente|...","area_ha":0,"modulos_fiscais":0,"fracao_minima_ha":0,"classificacao":"minifúndio|pequena|média|grande propriedade"},"itr":{"nirf":"","exercicio":0,"area_ha":0,"vtn_declarado":0,"situacao":""},"car":{"codigo":"","situacao":"ativo|pendente|...","area_ha":0,"reserva_legal_ha":0,"app_ha":0,"vegetacao_nativa_ha":0,"area_consolidada_ha":0},"geo":{"certificado":true,"codigo_parcela":"","data_certificacao":"yyyy-mm-dd","averbado_na_matricula":true,"responsavel_tecnico":"","datum":"SIRGAS 2000","perimetro_m":0},"modulo_fiscal_ha":0,"porte":"","bioma":"","reserva_legal_exigida_pct":20,"aptidao":"","uso_solo":[""],"recursos_hidricos":[""],"cercas":"","acesso":"","servidao_passagem":"registrada (R-x) | sem servidão registrada, acesso por ... | não se aplica","edificacoes":[{"nome":"","area_m2":0,"idade_aparente_anos":0,"conservacao":"","averbada":false,"descricao":""}]},`;
+"rural":{"denominacao":"","codigo_incra":"","ccir":{"numero":"","exercicio":"","situacao":"quitado|pendente|...","area_ha":0,"modulos_fiscais":0,"fracao_minima_ha":0,"classificacao":"minifúndio|pequena|média|grande propriedade"},"itr":{"nirf":"","exercicio":0,"area_ha":0,"vtn_declarado":0,"situacao":""},"car":{"codigo":"","situacao":"ativo|pendente|...","area_ha":0,"reserva_legal_ha":0,"app_ha":0,"vegetacao_nativa_ha":0,"area_consolidada_ha":0},"geo":{"certificado":true,"codigo_parcela":"","data_certificacao":"yyyy-mm-dd","averbado_na_matricula":true,"responsavel_tecnico":"","datum":"SIRGAS 2000","perimetro_m":0},"modulo_fiscal_ha":0,"porte":"","bioma":"","reserva_legal_exigida_pct":20,"aptidao":"","topografia":"plana|suave ondulada|ondulada|forte ondulada|montanhosa (e % se houver)","solos":"tipo de solo se algum documento/laudo informar","uso_solo":[""],"recursos_hidricos":[""],"cercas":"","acesso":"","servidao_passagem":"registrada (R-x) | sem servidão registrada, acesso por ... | não se aplica","edificacoes":[{"nome":"","area_m2":0,"idade_aparente_anos":0,"conservacao":"","estado":"a|b|c|d|e|f|g|h","padrao_cub":"R1-B|R1-N|R1-A|PIS|GI","fator_cub":0.9,"averbada":false,"descricao":""}]},`;
 
   return `Você é engenheiro avaliador da V3 Partners (NBR 14653-${ctx.zona === "RURAL" ? "3, imóveis rurais" : "2, imóveis urbanos"}), montando a avaliação técnica de um imóvel ${ctx.zona === "RURAL" ? "RURAL" : "URBANO"} dado em garantia de crédito. Hoje é ${hoje}.
 Os arquivos acima foram anexados pelo cliente/partner. ATENÇÃO: muitas vezes estão no item errado do checklist (ITR no campo do IPTU, CNH no campo da matrícula). Classifique cada arquivo pelo CONTEÚDO, não pelo item nem pelo nome.
@@ -189,11 +194,12 @@ ${ctx.zona === "RURAL"
     ? `- CCIR: número, exercício, situação, área total, módulos fiscais, fração mínima, classificação fundiária. ITR: NIRF, exercício, área, VTN declarado. CAR: código, situação, área, Reserva Legal, APP, vegetação nativa, área consolidada.
 - GEO/SIGEF: certificação (código da parcela, data), se está averbado na matrícula, responsável técnico, datum, área e perímetro escritos no memorial. NÃO liste os vértices aqui (outra etapa lê).
 - Fotos: uso do solo (lavoura, pasto, mata), cercas, água (açude, rio, poço), acesso, edificações (casa sede, galpão, curral…) com área estimada, idade aparente e conservação; marque averbada=false se a matrícula não averba.
-- Reserva Legal exigida conforme bioma/região (Amazônia Legal: 80% floresta, 35% cerrado; demais: 20%).`
+- Reserva Legal exigida conforme bioma/região (Amazônia Legal: 80% floresta, 35% cerrado; demais: 20%).
+- Edificações (custo de reprodução, como nos laudos): padrao_cub = projeto-padrão do CUB mais parecido (R1-B casa simples, R1-N casa normal/sede, R1-A casa de alto padrão, PIS muito simples, GI galpão/depósito/cobertura); fator_cub = custo do m² dessa construção em relação ao de uma CASA DE PADRÃO NORMAL (R1-N) — casa sede normal 1,0; casa simples/de caseiro 0,8; alojamento 0,8; casa de alto padrão 1,3; galpão fechado 0,45; depósito simples 0,3; cobertura/telheiro aberto 0,15–0,25; curral/brete 0,1–0,2; estado de conservação de Heidecke (a novo … h quase sem valor).`
     : `- Unidade em condomínio (apartamento, sala, casa em condomínio): privativa_m2 = área privativa/útil; construida_matricula_m2 = área total (privativa + comum); terreno_matricula_m2 = fração ideal em m² se houver. A construção de unidade em condomínio instituído já está averbada pela instituição do condomínio (não gere alerta de construção não averbada).
 - Condomínio: em_condominio=true se o imóvel é unidade de condomínio (matrícula com instituição/convenção de condomínio, fração ideal ou "unidade autônoma", nome de residencial/condomínio no endereço, boleto de condomínio, fotos com portaria/guarita/muro do condomínio). tipo HORIZONTAL = casas/lotes em condomínio fechado; VERTICAL = edifício. em_condominio=false só se for claramente imóvel de rua; sem base = null.
 - IPTU: inscrição, exercício, área do terreno, área construída cadastrada, valores venais (terreno, construção, total), valor do imposto, débitos.
-- Fotos: tipo, padrão construtivo (BAIXO/MEDIO/ALTO), idade aparente, conservação, compartimentos, acabamentos por ambiente (piso/parede/teto), estrutura, cobertura, esquadrias, lazer, vagas. Estime a área construída real (construida_estimada_m2) só se houver base (anúncio, planta, laudo, levantamento); senão null.`}
+- Fotos: tipo, padrão construtivo (BAIXO/MEDIO/ALTO e o detalhe em 5 níveis), idade aparente, conservação, compartimentos, acabamentos por ambiente (piso/parede/teto), estrutura, cobertura, esquadrias, lazer, vagas. Estime a área construída real (construida_estimada_m2) só se houver base (anúncio, planta, laudo, levantamento); senão null.`}
 - Se houver LAUDO de avaliação anexado: empresa, número, responsável, data-base, valor de mercado, valor de garantia/liquidez, graus de fundamentação e precisão, resumo do parecer.
 - coordenadas_imovel: só se algum documento trouxer lat/long do imóvel (laudo, CAR, mapa).
 - alertas: SÓ problemas (nada positivo; pontos positivos não são alerta) que um analista de crédito precisa saber e que as regras automáticas da V3 NÃO cobrem. Já são verificados automaticamente, NÃO repita: validade da certidão da matrícula, documento faltando (matrícula, IPTU, fotos, CCIR, ITR, CAR, GEO), ônus ativos, proprietário diferente do cliente, divergência de ÁREA entre documentos, GEO não certificado ou não averbado, servidão de passagem, edificação não averbada, débitos de IPTU, riscos listados em urbano.riscos, LTV. Nível CRITICO só para impeditivos reais (penhora, indisponibilidade, ação sobre o imóvel, documento de outro imóvel ou adulterado); o resto é ATENCAO ou INFO. Transmissão recente só se houver menos de 12 meses (INFO). Exemplos do que cabe: CAFIR/CIB pendente, área certificada zerada no CCIR, divergência de perímetro, transmissão recente, documento ilegível, endereço divergente, uso irregular. categoria: Documentação | Registro | Áreas | GEO | Cadastros | Ambiental | Riscos.
@@ -273,6 +279,93 @@ Se não houver tabela de vértices, responda só: SEM_VERTICES`,
 
 // ─── 3. Mercado (internet) ──────────────────────────────────────────────────
 
+const TOOL_BUSCA = [{
+  name: "web_search",
+  description: "Busca na internet (anúncios de imóveis, CUB do Sinduscon, solos e informações da região).",
+  input_schema: { type: "object" as const, properties: { query: { type: "string", description: "Busca em português com cidade/UF" } }, required: ["query"] },
+}];
+
+/** Conversa com a IA deixando ela usar web_search; devolve o texto final. */
+/**
+ * Conversa com a IA deixando ela pesquisar na internet e devolve o texto final.
+ * Usa a busca nativa da Anthropic (web_search + web_fetch: lê o anúncio/tabela inteira); se a
+ * conta não tiver as ferramentas nativas, cai na busca simples (lib/web-search, só trechos).
+ */
+export async function comBusca(ai: Anthropic, system: string, pedido: string, buscas = 5, maxTokens = 4000): Promise<string> {
+  const sys = `Hoje é ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}.\n${system}`;
+  try {
+    return await comBuscaNativa(ai, sys, pedido, buscas, maxTokens);
+  } catch (e) {
+    const st = (e as { status?: number }).status;
+    if (st !== 400 && st !== 403 && st !== 404) throw e;
+    console.error("[avaliacao-tecnica] busca nativa indisponível, usando a simples:", (e as Error).message?.slice(0, 200));
+    return comBuscaSimples(ai, sys, pedido, buscas, maxTokens);
+  }
+}
+
+async function comBuscaNativa(ai: Anthropic, system: string, pedido: string, buscas: number, maxTokens: number): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tools: any[] = [
+    { type: "web_search_20250305", name: "web_search", max_uses: buscas, user_location: { type: "approximate", country: "BR", timezone: "America/Sao_Paulo" } },
+    { type: "web_fetch_20250910", name: "web_fetch", max_uses: Math.max(2, Math.ceil(buscas / 2)), max_content_tokens: 8000 },
+  ];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let msgs: any[] = [{ role: "user", content: pedido }];
+  for (let i = 0; i < 4; i++) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = await ai.messages.create({ model: MODELO, max_tokens: maxTokens, system, messages: msgs, tools } as any) as Anthropic.Messages.Message;
+    if (r.stop_reason === "pause_turn") { msgs = [...msgs, { role: "assistant", content: r.content }]; continue; }
+    const t = textoDa(r);
+    if (t.includes("{")) return t;
+    msgs = [...msgs, { role: "assistant", content: r.content }, { role: "user", content: "Responda agora SOMENTE com o JSON final (use null no que não encontrou)." }];
+  }
+  return "";
+}
+
+async function comBuscaSimples(ai: Anthropic, system: string, pedido: string, iteracoes: number, maxTokens: number): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const msgs: any[] = [{ role: "user", content: pedido }];
+  for (let i = 0; i < iteracoes; i++) {
+    const r = await ai.messages.create({ model: MODELO, max_tokens: maxTokens, system, messages: msgs, tools: TOOL_BUSCA });
+    if (r.stop_reason !== "tool_use") {
+      const t = textoDa(r);
+      if (t.includes("{")) return t;
+      msgs.push({ role: "assistant", content: r.content });
+      break;
+    }
+    msgs.push({ role: "assistant", content: r.content });
+    const resultados = await Promise.all(r.content.filter((b) => b.type === "tool_use").map(async (b) => {
+      const t = b as { id: string; input: { query: string } };
+      return { type: "tool_result" as const, tool_use_id: t.id, content: (await webSearch(t.input.query)) || "Sem resultados." };
+    }));
+    msgs.push({ role: "user", content: resultados });
+  }
+  const r = await ai.messages.create({
+    model: MODELO, max_tokens: maxTokens, system, tools: TOOL_BUSCA, tool_choice: { type: "none" },
+    messages: [...msgs, { role: "user", content: "Responda AGORA só com o JSON final, sem texto antes ou depois." }],
+  });
+  return textoDa(r);
+}
+
+/** Custo médio do m² (SINAPI — IBGE/Caixa) do estado, último mês publicado. Oficial e sem IA. */
+const UF_IBGE: Record<string, number> = {
+  RO: 11, AC: 12, AM: 13, RR: 14, PA: 15, AP: 16, TO: 17, MA: 21, PI: 22, CE: 23, RN: 24, PB: 25, PE: 26, AL: 27, SE: 28, BA: 29,
+  MG: 31, ES: 32, RJ: 33, SP: 35, PR: 41, SC: 42, RS: 43, MS: 50, MT: 51, GO: 52, DF: 53,
+};
+export async function buscarSinapi(uf: string): Promise<{ valor: number; mes: string } | null> {
+  const cod = UF_IBGE[uf.toUpperCase()];
+  if (!cod) return null;
+  try {
+    const r = await fetch(`https://apisidra.ibge.gov.br/values/t/2296/n3/${cod}/v/48/p/last%201`, { signal: AbortSignal.timeout(15000) });
+    const j = (await r.json()) as { V?: string; D3N?: string }[];
+    const v = Number(j?.[1]?.V);
+    return v > 0 ? { valor: v, mes: j[1].D3N ?? "" } : null;
+  } catch { return null; }
+}
+
+const CLASSES_TXT = "I (lavoura sem restrição), II (lavoura com práticas simples), III (lavoura com práticas intensivas), IV (lavoura ocasional), V (plana encharcável: pasto/floresta), VI (pasto/fruticultura/silvicultura), VII (pasto/floresta com restrição forte), VIII (preservação: APP, mata nativa, rocha, relevo excessivo)";
+const SITUACOES_TXT = "OTIMA (asfalto, perto), MUITO_BOA (estrada de 1ª classe não asfaltada, tráfego permanente), BOA (estrada de terra com tráfego permanente), DESFAVORAVEL (estradas e servidões; ruim na chuva), MA (fechos/servidões; problemas sérios na chuva), PESSIMA (córregos sem ponte; problemas até na seca)";
+
 async function pesquisarMercado(ai: Anthropic, zona: ZonaImovel, l: LeituraIa, ctx: ContextoImovel): Promise<PesquisaMercadoTecnica | null> {
   const id = l.identificacao;
   const cidade = id.cidade ?? ctx.cidade;
@@ -282,51 +375,156 @@ async function pesquisarMercado(ai: Anthropic, zona: ZonaImovel, l: LeituraIa, c
   const cond = l.urbano?.condominio;
   const area = rural ? (l.areas.matricula_ha ?? l.areas.ccir_ha ?? l.areas.car_ha) : (l.areas.privativa_m2 ?? l.areas.construida_estimada_m2 ?? l.areas.construida_iptu_m2 ?? l.areas.construida_matricula_m2 ?? ctx.area_m2);
   const descricao = rural
-    ? `imóvel rural de ${area ?? "?"} ha em ${cidade}/${uf ?? ""}${l.rural?.aptidao ? `, aptidão ${l.rural.aptidao}` : ""}${l.rural?.uso_solo?.length ? `, uso: ${l.rural.uso_solo.join(", ")}` : ""}`
-    : `${l.urbano?.tipo ?? "imóvel"} de ${area ?? "?"} m² construídos${l.urbano?.dormitorios ? `, ${l.urbano.dormitorios} dormitórios` : ""}, padrão ${l.urbano?.padrao ?? "não definido"}, bairro ${id.bairro ?? "?"}, ${cidade}/${uf ?? ""}${cond?.em_condominio ? `, EM CONDOMÍNIO ${cond.tipo === "VERTICAL" ? "(edifício)" : "FECHADO (horizontal)"}${cond.nome ? ` "${cond.nome}"` : id.denominacao ? ` "${id.denominacao}"` : ""}` : cond?.em_condominio === false ? ", imóvel de rua (fora de condomínio)" : ""}`;
-  // Condomínio fechado tem R$/m² maior que o de rua: pede o recorte certo e marca cada anúncio.
+    ? `imóvel rural de ${area ?? "?"} ha em ${cidade}/${uf ?? ""}${l.rural?.aptidao ? `, aptidão ${l.rural.aptidao}` : ""}${l.rural?.uso_solo?.length ? `, uso: ${l.rural.uso_solo.join(", ")}` : ""}${l.rural?.acesso ? `, acesso: ${l.rural.acesso}` : ""}`
+    : `${l.urbano?.tipo ?? "imóvel"} de ${area ?? "?"} m²${l.urbano?.dormitorios ? `, ${l.urbano.dormitorios} dormitórios` : ""}, padrão ${l.urbano?.padrao_detalhe ?? l.urbano?.padrao ?? "não definido"}${l.urbano?.idade_aparente_anos ? `, ~${l.urbano.idade_aparente_anos} anos` : ""}, bairro ${id.bairro ?? "?"}, ${cidade}/${uf ?? ""}${cond?.em_condominio ? `, EM CONDOMÍNIO ${cond.tipo === "VERTICAL" ? "(edifício)" : "FECHADO (horizontal)"}${cond.nome ? ` "${cond.nome}"` : id.denominacao ? ` "${id.denominacao}"` : ""}` : cond?.em_condominio === false ? ", imóvel de rua (fora de condomínio)" : ""}`;
   const regraCondominio = rural ? "" : cond?.em_condominio
-    ? ` O imóvel fica EM CONDOMÍNIO: busque primeiro anúncios no MESMO condomínio (pelo nome), depois em outros condomínios ${cond.tipo === "VERTICAL" ? "/edifícios" : "fechados"} de padrão parecido no bairro/região. Se der, inclua 1 ou 2 imóveis de rua só como referência.`
-    : cond?.em_condominio === false ? " O imóvel é de rua (fora de condomínio): prefira anúncios também fora de condomínio." : "";
+    ? `O imóvel fica EM CONDOMÍNIO: busque primeiro anúncios no MESMO condomínio (pelo nome), depois em outros condomínios ${cond.tipo === "VERTICAL" ? "/edifícios" : "fechados"} de padrão parecido no bairro/região. Se der, inclua 1 ou 2 imóveis de rua só como referência.\n`
+    : cond?.em_condominio === false ? "O imóvel é de rua (fora de condomínio): prefira anúncios também fora de condomínio.\n" : "";
 
-  const system = `Você é pesquisador de mercado imobiliário da V3 Partners. Use a tool "web_search" para achar de 4 a 8 anúncios REAIS de VENDA ${rural ? "de fazendas/sítios/áreas rurais no mesmo município ou municípios vizinhos (mesma microrregião), de tamanho e aptidão parecidos" : "de imóveis do mesmo tipo e padrão, no mesmo bairro (ou bairros vizinhos de padrão parecido) da mesma cidade"}. Priorize anúncios recentes (ZAP, VivaReal, OLX, Imovelweb, Chaves na Mão, MGF Imóveis, imobiliárias locais).
-${regraCondominio.trim()}${regraCondominio ? "\n" : ""}Pesquise também, em 1 ou 2 buscas, informações da região: ${rural ? "aptidão agrícola, principais culturas/pecuária, logística (rodovias), valor da terra nua de referência" : "infraestrutura, perfil do bairro, valorização, serviços"}.
+  const atributos = rural
+    ? `"municipio":"","distancia_km":0,"data_anuncio":"yyyy-mm ou null","benfeitorias_descricao":"casa sede, galpões, currais… ou 'terra nua'","benfeitorias_valor":0,"preservacao_pct":null,"classes_area_aberta":[{"classe":"III","pct":70},{"classe":"VI","pct":30}],"situacao":"OTIMA|MUITO_BOA|BOA|DESFAVORAVEL|MA|PESSIMA"`
+    : `"area_terreno":0,"padrao_detalhe":"BAIXO|MEDIO_BAIXO|MEDIO|MEDIO_ALTO|ALTO","idade":0,"estado":"a|b|c|d|e|f|g|h","indice_local":100,"local_justificativa":"","em_condominio":true,"mesmo_condominio":false`;
+  const regrasAtributos = rural
+    ? `Para CADA comparável, como faz o avaliador no tratamento por fatores (NBR 14653-3):
+- benfeitorias_valor: valor em reais das benfeitorias citadas no anúncio (custo de reprodução depreciado, conservador; 0 se terra nua). Será DESCONTADO do preço para chegar ao valor da terra nua.
+- distancia_km: distância aproximada por estrada entre o município do anúncio e o do avaliando (mesma região geoeconômica = até ~120 km).
+- preservacao_pct: % da área em mata/reserva/APP SÓ se o anúncio informar (senão null — a V3 aplica a Reserva Legal do bioma).
+- classes_area_aberta: classes de capacidade de uso da parte ABERTA/aproveitável (sem a mata/reserva), soma 100, pela descrição (relevo, % plano, lavoura, pasto, brejo, pedras). Classes: ${CLASSES_TXT}.
+- situacao: acesso pela descrição (asfalto, distância da cidade/rodovia). Escala: ${SITUACOES_TXT}.
+- Prefira áreas de 1/3 a 3 vezes o tamanho do avaliando, na mesma microrregião, anúncios recentes.`
+    : `Para CADA comparável (fatores do laudo Engebanc, NBR 14653-2):
+- padrao_detalhe pelo acabamento descrito/fotos do anúncio; idade aparente em anos; estado de conservação de Heidecke (a novo, b entre novo e regular, c regular, d entre regular e reparos simples, e reparos simples, f entre reparos simples e importantes, g reparos importantes, h entre importantes e sem valor).
+- indice_local: localização do anúncio em relação ao AVALIANDO = 100 (ex.: rua mais valorizada, frente para o mar, bairro nobre = 110–140; pior = 70–95). Justifique em 1 frase.
+- "area" = área construída (casa) ou privativa (apartamento/sala); area_terreno só para casa/terreno.
+- "em_condominio" = em condomínio fechado/edifício (true), de rua (false), não dá pra saber (null); "mesmo_condominio" = true só se for no mesmo condomínio do avaliando.`;
+
+  const system = `Você é pesquisador de mercado imobiliário de uma empresa de avaliação (V3 Partners). Use a tool "web_search" para achar de ${rural ? "6 a 10" : "5 a 10"} anúncios REAIS de VENDA ${rural ? "de fazendas/sítios/áreas rurais no mesmo município ou municípios vizinhos (mesma microrregião), de tamanho e aptidão parecidos" : "de imóveis do mesmo tipo e padrão, no mesmo bairro (ou bairros vizinhos de padrão parecido) da mesma cidade"}. Busque em portais (OLX, ZAP, VivaReal, Imovelweb, Chaves na Mão, MGF Imóveis, Fazenda Aberta, imobiliárias locais). Anote URL e fonte de cada um.
+${regraCondominio}Pesquise também, em 1 ou 2 buscas, informações da região: ${rural ? "aptidão agrícola, principais culturas/pecuária, logística (rodovias), valor da terra de referência (INCRA/PPR, VTN da prefeitura)" : "infraestrutura, perfil do bairro, valorização, serviços"}.
+${regrasAtributos}
 Depois responda SOMENTE com JSON válido, sem markdown:
-{"comparaveis":[{"titulo":"","valor":0,"area":0,"fonte_nome":"","fonte_url":"https://...","observacao":"${rural ? "benfeitorias, distância, aptidão" : "padrão, conservação, diferenças"}"${rural ? "" : `,"em_condominio":true,"mesmo_condominio":false`}}],"resumo_regiao":"3-4 frases","confianca":"ALTA|MEDIA|BAIXA","observacoes":"qualidade dos comparáveis"}
-Regras: "valor" = preço de venda anunciado em reais; "area" = ${rural ? "área total em HECTARES (converta alqueires/tarefas/m² pela unidade da região e diga na observação)" : "área construída/privativa em m²"}. ${rural ? "" : ` "em_condominio" = o anúncio é de imóvel em condomínio fechado/edifício (true), de rua (false) ou não dá para saber (null); "mesmo_condominio" = true só se for no mesmo condomínio do imóvel avaliado.`} Nunca invente anúncio nem número; se achar poucos, devolva o que achou e confiança BAIXA.`;
+{"comparaveis":[{"titulo":"","valor":0,"area":0,"fonte_nome":"","fonte_url":"https://...","observacao":"",${atributos}}],"resumo_regiao":"3-4 frases","referencias_oficiais":"VTN/PPR ou índices oficiais encontrados (com fonte) ou null","confianca":"ALTA|MEDIA|BAIXA","observacoes":"qualidade dos comparáveis"}
+Regras: "valor" = preço de venda anunciado em reais; "area" = ${rural ? "área total em HECTARES (converta alqueires/tarefas/m² pela unidade da região e diga na observação)" : "área construída/privativa em m²"}. Nunca invente anúncio nem número; se achar poucos, devolva o que achou e confiança BAIXA.`;
 
-  const tools = [{
-    name: "web_search",
-    description: "Busca na internet (anúncios de imóveis e informações da região).",
-    input_schema: { type: "object" as const, properties: { query: { type: "string", description: "Busca em português com cidade/UF" } }, required: ["query"] },
-  }];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const msgs: any[] = [{ role: "user", content: `Pesquise comparáveis para: ${descricao}.` }];
-  let texto = "";
-  for (let i = 0; i < 5; i++) {
-    const r = await ai.messages.create({ model: MODELO, max_tokens: 3000, system, messages: msgs, tools });
-    if (r.stop_reason !== "tool_use") { texto = textoDa(r); break; }
-    msgs.push({ role: "assistant", content: r.content });
-    const resultados = await Promise.all(r.content.filter((b) => b.type === "tool_use").map(async (b) => {
-      const t = b as { id: string; input: { query: string } };
-      return { type: "tool_result" as const, tool_use_id: t.id, content: (await webSearch(t.input.query)) || "Sem resultados." };
-    }));
-    msgs.push({ role: "user", content: resultados });
-  }
-  if (!texto) {
-    const r = await ai.messages.create({ model: MODELO, max_tokens: 3000, system, messages: [...msgs, { role: "user", content: "Responda AGORA só com o JSON final." }] });
-    texto = textoDa(r);
-  }
-  const j = jsonDe<{ comparaveis?: { titulo?: string; valor?: unknown; area?: unknown; fonte_nome?: string; fonte_url?: string; observacao?: string; em_condominio?: unknown; mesmo_condominio?: unknown }[]; resumo_regiao?: string; confianca?: string; observacoes?: string }>(texto);
+  const texto = await comBusca(ai, system, `Pesquise comparáveis para: ${descricao}.`, 7, 8000);
+  type Bruto = Record<string, unknown>;
+  const j = jsonDe<{ comparaveis?: Bruto[]; resumo_regiao?: string; referencias_oficiais?: string | null; confianca?: string; observacoes?: string }>(texto);
   const comparaveis: Comparavel[] = (j.comparaveis ?? []).map((c) => {
     const valor = num(c.valor) ?? 0;
-    const area = num(c.area) ?? 0;
-    return { titulo: String(c.titulo ?? "Anúncio"), valor, area, preco_unitario: area > 0 ? valor / area : 0, fonte_nome: c.fonte_nome ?? null, fonte_url: c.fonte_url ?? null, observacao: c.observacao ?? null,
+    const areaC = num(c.area) ?? 0;
+    const base: Comparavel = {
+      titulo: String(c.titulo ?? "Anúncio"), valor, area: areaC, preco_unitario: areaC > 0 ? valor / areaC : 0,
+      fonte_nome: (c.fonte_nome as string) ?? null, fonte_url: (c.fonte_url as string) ?? null, observacao: (c.observacao as string) ?? null,
+      municipio: (c.municipio as string) ?? null, data_anuncio: (c.data_anuncio as string) ?? null,
+      distancia_km: num(c.distancia_km) !== null && num(c.distancia_km)! >= 0 ? num(c.distancia_km) : null,
+    };
+    if (rural) {
+      // O índice do comparável é montado depois (orquestração), com a mesma reserva do avaliando.
+      const abertas = normalizarClasses((c.classes_area_aberta ?? c.classes) as { classe?: unknown; pct?: unknown }[]);
+      const pres = num(c.preservacao_pct);
+      const benf = num(c.benfeitorias_valor);
+      return {
+        ...base, classes_area_aberta: abertas, preservacao_pct: pres !== null && pres >= 0 && pres <= 100 ? pres : null,
+        situacao: situacaoValida(c.situacao),
+        benfeitorias_valor: benf !== null && benf > 0 && benf < valor ? benf : 0,
+        benfeitorias_descricao: (c.benfeitorias_descricao as string) ?? null,
+      };
+    }
+    const il = num(c.indice_local);
+    return {
+      ...base,
+      area_terreno: num(c.area_terreno) && num(c.area_terreno)! > 0 ? num(c.area_terreno) : null,
+      padrao_detalhe: padraoDetalheDe(c.padrao_detalhe),
+      idade: num(c.idade) !== null && num(c.idade)! >= 0 ? num(c.idade) : null,
+      estado: estadoDe(c.estado),
+      indice_local: il !== null && il >= 50 && il <= 200 ? il : null,
+      local_justificativa: (c.local_justificativa as string) ?? null,
       em_condominio: typeof c.em_condominio === "boolean" ? c.em_condominio : null,
-      mesmo_condominio: c.mesmo_condominio === true ? true : null };
+      mesmo_condominio: c.mesmo_condominio === true ? true : null,
+    };
   }).filter((c) => c.valor > 0 && c.area > 0);
   const confianca = comparaveis.length < 3 ? "BAIXA" : ((["ALTA", "MEDIA", "BAIXA"] as const).find((x) => x === j.confianca) ?? "MEDIA");
-  return { unidade: rural ? "ha" : "m2", comparaveis, resumo_regiao: j.resumo_regiao ?? null, confianca, observacoes: j.observacoes ?? null };
+  const obs = [j.observacoes, j.referencias_oficiais ? `Referências oficiais: ${j.referencias_oficiais}` : null].filter(Boolean).join(" ");
+  return { unidade: rural ? "ha" : "m2", comparaveis, resumo_regiao: j.resumo_regiao ?? null, confianca, observacoes: obs || null };
+}
+
+// ─── 3b. CUB do estado (custo de reprodução das construções) ────────────────
+
+/** CUB/m² mais recente do Sinduscon do estado. Nunca inventa: o que não achar fica de fora. */
+/** CUB/m² do Sinduscon (busca na internet) + SINAPI do IBGE (sempre). Nunca inventa número. */
+export async function buscarCub(ai: Anthropic, uf: string): Promise<CubRef | null> {
+  const system = `Você levanta o CUB/m² (Custo Unitário Básico, NBR 12721) mais recente publicado pelo Sinduscon do estado ${uf} (ou pelo cub.org.br). Use a tool "web_search". Quero os projetos-padrão residenciais R1-B, R1-N, R1-A (casa), R8-B, R8-N, R8-A (edifício), PIS (projeto de interesse social) e GI (galpão industrial), em R$/m², do mês mais recente que encontrar.
+Responda SOMENTE com JSON: {"mes_ref":"MM/AAAA","fonte_nome":"","fonte_url":"https://...","valores":{"R1-B":0,"R1-N":0,"R1-A":0,"R8-B":0,"R8-N":0,"R8-A":0,"PIS":0,"GI":0}}
+Nunca invente número: valor não encontrado = null. Se não achar o CUB de ${uf}, devolva {"valores":{}}.`;
+  const [sinapi, texto] = await Promise.all([buscarSinapi(uf), comBusca(ai, system, `CUB/m² mais recente do estado ${uf}.`, 4, 3000).catch(() => "")]);
+  let j: { mes_ref?: string; fonte_nome?: string; fonte_url?: string; valores?: Record<string, unknown> } = {};
+  try { j = jsonDe(texto); } catch { /* CUB não achado: fica só o SINAPI */ }
+  const valores: Record<string, number> = {};
+  for (const [k, v] of Object.entries(j.valores ?? {})) {
+    const n = num(v);
+    if (n !== null && n >= 500 && n <= 8000) valores[k.toUpperCase().replace(/ /g, "")] = Math.round(n * 100) / 100;
+  }
+  if (Object.keys(valores).length === 0 && !sinapi) return null;
+  return {
+    uf, mes_ref: Object.keys(valores).length ? j.mes_ref ?? null : null, fonte_nome: Object.keys(valores).length ? j.fonte_nome ?? "Sinduscon" : null, fonte_url: j.fonte_url ?? null, valores,
+    sinapi_m2: sinapi?.valor ?? null, sinapi_mes: sinapi?.mes ?? null,
+  };
+}
+
+// ─── 3c. Classes de capacidade de uso do avaliando (rural) ──────────────────
+
+/** Reserva Legal exigida (%) do imóvel — lida dos documentos; sem informação, 20% (regra geral do Código Florestal). */
+function reservaExigida(l: LeituraIa): number {
+  const v = Number(l.rural?.reserva_legal_exigida_pct);
+  return v > 0 && v <= 80 ? v : 20;
+}
+
+/** Índice agronômico de cada anúncio com a MESMA reserva do avaliando (o maior entre o informado e a exigida). */
+function indicesDosComparaveis(m: PesquisaMercadoTecnica | null, l: LeituraIa): PesquisaMercadoTecnica | null {
+  if (!m || m.unidade !== "ha") return m;
+  const rl = reservaExigida(l);
+  return {
+    ...m,
+    comparaveis: m.comparaveis.map((c) => {
+      const abertas = c.classes_area_aberta ?? [];
+      if (abertas.length === 0) return { ...c, classes: [], indice_agronomico: null };
+      const classes = comPreservacao(abertas, Math.max(rl, c.preservacao_pct ?? 0));
+      return { ...c, classes, indice_agronomico: indiceAgronomico(classes, c.situacao ?? "BOA") };
+    }),
+  };
+}
+
+async function classificarTerras(ai: Anthropic, l: LeituraIa, extra: { relevo: Relevo | null; area_ha: number | null; car: { area_ha: number | null; codigo: string } | null; cidade: string | null; uf: string | null }): Promise<Terras | null> {
+  const r = l.rural ?? {};
+  const dados = {
+    area_ha: extra.area_ha, municipio: `${extra.cidade ?? ""}/${extra.uf ?? ""}`,
+    aptidao: r.aptidao, uso_solo: r.uso_solo, topografia: r.topografia, solos: r.solos, recursos_hidricos: r.recursos_hidricos,
+    acesso: r.acesso, servidao: r.servidao_passagem, bioma: r.bioma,
+    car: { ...r.car, sicar: extra.car },
+    relevo_srtm: extra.relevo,
+    benfeitorias: (r.edificacoes ?? []).map((e) => e.nome),
+  };
+  const system = `Você é engenheiro agrônomo avaliador (NBR 14653-3). Classifique as terras do imóvel rural pelo Sistema de Capacidade de Uso (Lepsch) e a situação/acesso (escala de Mendes Sobrinho), como no cálculo da Nota Agronômica do INCRA. Se faltar informação de solo, use a tool "web_search" (1 ou 2 buscas: solos predominantes e aptidão agrícola do município).
+Classes: ${CLASSES_TXT}.
+Situação: ${SITUACOES_TXT}.
+Classifique SÓ a área ABERTA/aproveitável (fora da Reserva Legal e da APP): a V3 soma depois a preservação como classe VIII, com a mesma regra usada nos anúncios comparáveis. Relevo forte ondulado/montanhoso (SRTM) puxa para VI–VII; áreas planas mecanizáveis em solo bom = I–III; pastagem em relevo suave = III–IV; várzea encharcável = V; afloramento rochoso/relevo excessivo fora da APP = VIII. Use o relevo do SRTM como base objetiva. A soma das classes da área aberta deve dar 100.
+Responda SOMENTE com JSON: {"classes_area_aberta":[{"classe":"III","pct":70,"base":"lavoura em relevo suave (SRTM 70% plano/suave)"},{"classe":"IV","pct":30,"base":"pasto em baixada com drenagem imperfeita"}],"situacao":"BOA","situacao_descricao":"","justificativa":"2-3 frases"}`;
+  const j = jsonDe<{ classes_area_aberta?: { classe?: unknown; pct?: unknown; base?: unknown }[]; classes?: { classe?: unknown; pct?: unknown; base?: unknown }[]; situacao?: unknown; situacao_descricao?: string; justificativa?: string }>(
+    await comBusca(ai, system, `Dados do imóvel: ${JSON.stringify(dados)}`, 3, 2000),
+  );
+  const abertas = normalizarClasses(j.classes_area_aberta ?? j.classes);
+  if (abertas.length === 0) return null;
+  const situacao = situacaoValida(j.situacao) ?? "BOA";
+  // Preservação = maior entre a do CAR (RL + APP) e a Reserva Legal exigida no bioma.
+  const rlExigida = reservaExigida(l);
+  const areaCar = r.car?.area_ha ?? extra.car?.area_ha ?? extra.area_ha;
+  const doCar = areaCar && (r.car?.reserva_legal_ha || r.car?.app_ha) ? (((r.car?.reserva_legal_ha ?? 0) + (r.car?.app_ha ?? 0)) / areaCar) * 100 : null;
+  const pres = Math.max(rlExigida, doCar ?? 0);
+  const base = doCar !== null && doCar >= rlExigida ? `CAR: Reserva Legal + APP = ${doCar.toFixed(1)}%` : `Reserva Legal exigida no bioma (${rlExigida}%)${doCar !== null ? `; CAR declara ${doCar.toFixed(1)}%` : ""}`;
+  const classes = comPreservacao(abertas, pres);
+  return {
+    classes, preservacao_pct: pres, preservacao_base: base, situacao, situacao_descricao: j.situacao_descricao ?? null,
+    indice_agronomico: indiceAgronomico(classes, situacao), justificativa: j.justificativa ?? null, relevo: extra.relevo,
+  };
 }
 
 // ─── 4. Localização (OpenStreetMap/Nominatim) ───────────────────────────────
@@ -398,11 +596,12 @@ export async function gerarAvaliacaoTecnica(opts: {
   onEtapa?: (etapa: string) => Promise<unknown>;
 }): Promise<AvaliacaoTecnica> {
   const { ai, arquivos, contexto } = opts;
+  const inicio = Date.now();
   const zona = contexto.zona;
   const etapa = (e: string) => opts.onEtapa?.(e).catch(() => {});
   await etapa(`Lendo ${arquivos.length} documento(s) do imóvel`);
   const leitura = await lerDocumentos(ai, arquivos, contexto);
-  await etapa(zona === "RURAL" ? "Lendo os vértices do GEO e pesquisando o mercado" : "Pesquisando o mercado e a região na internet");
+  await etapa(zona === "RURAL" ? "GEO, consultas públicas (CAR, TI, UC, embargos), terras e mercado" : "Pesquisando o mercado, o CUB e a região na internet");
 
   const arquivosLidos: ArquivoLido[] = arquivos.map((a, i) => {
     const info = leitura.arquivos?.find((x) => Number(x.indice) === i + 1);
@@ -413,15 +612,50 @@ export async function gerarAvaliacaoTecnica(opts: {
   const indicesGeo = arquivosLidos.map((a, i) => (["GEO_MEMORIAL", "GEO_MAPA", "GEO_KML"].includes(a.tipo) ? i + 1 : 0)).filter(Boolean);
 
   const ident = leitura.identificacao ?? {};
-  const [geo, mercado, pontoEndereco] = await Promise.all([
-    zona === "RURAL" && indicesGeo.length > 0 ? lerVertices(ai, arquivos, indicesGeo).catch(() => null) : Promise.resolve(null),
-    pesquisarMercado(ai, zona, leitura, contexto).catch(() => null),
+  const ufImovel = (ident.uf ?? contexto.estado ?? "").toUpperCase().slice(0, 2) || null;
+  const areaRef = leitura.areas?.matricula_ha ?? leitura.areas?.ccir_ha ?? leitura.areas?.car_ha ?? null;
+  // Rural: GEO → consultas pela poligonal (+ relevo) → classes de capacidade de uso.
+  const cadeiaRural = async () => {
+    let g = indicesGeo.length > 0 ? await lerVertices(ai, arquivos, indicesGeo).catch(() => null) : null;
+    // A leitura de tabela longa às vezes pula vértices: se a área calculada fugir mais de 1% da
+    // escrita no memorial, lê de novo e fica com a mais próxima.
+    const desvio = (x: typeof g) => {
+      const mm = x ? medirPoligonal(x.vertices) : null;
+      const ref = x?.area_ha ?? leitura.areas?.geo_declarada_ha ?? leitura.areas?.matricula_ha ?? null;
+      return mm && ref ? Math.abs(mm.area_ha - ref) / ref : null;
+    };
+    const d1 = desvio(g);
+    // (só se ainda houver folga de tempo: a função tem 300 s no total)
+    if (g && d1 !== null && d1 > 0.01 && Date.now() - inicio < 140000) {
+      const g2 = await lerVertices(ai, arquivos, indicesGeo).catch(() => null);
+      const d2 = desvio(g2);
+      if (g2 && d2 !== null && d2 < d1) g = g2;
+    }
+    const m = g ? medirPoligonal(g.vertices) : null;
+    const cons = g && m
+      ? await consultarImovelRural(g.vertices, ufImovel, ident.documentos_proprietarios ?? []).catch((e) => { console.error("[avaliacao-tecnica] consultas:", e); return null; })
+      : null;
+    const terras = await classificarTerras(ai, leitura, {
+      relevo: cons?.relevo ?? null, area_ha: m?.area_ha ?? areaRef,
+      car: cons?.carPrincipal ? { area_ha: cons.carPrincipal.area_ha, codigo: cons.carPrincipal.codigo } : null,
+      cidade: ident.cidade ?? contexto.cidade ?? null, uf: ufImovel,
+    }).catch((e) => { console.error("[avaliacao-tecnica] terras:", e); return null; });
+    return { geo: g, cons, terras };
+  };
+  const [rur, mercado, cub, pontoEndereco] = await Promise.all([
+    zona === "RURAL" ? cadeiaRural() : Promise.resolve(null),
+    pesquisarMercado(ai, zona, leitura, contexto).catch((e) => { console.error("[avaliacao-tecnica] mercado:", e); return null; }),
+    ufImovel ? buscarCub(ai, ufImovel).catch((e) => { console.error("[avaliacao-tecnica] cub:", e); return null; }) : Promise.resolve(null),
     zona === "URBANO" && !leitura.coordenadas_imovel
       ? geocodificar([ident.endereco ?? contexto.endereco, ident.bairro, ident.cidade ?? contexto.cidade, ident.uf ?? contexto.estado].filter(Boolean).join(", "))
         .then((p) => p ?? (ident.cep ?? contexto.cep ? geocodificar(`${ident.cep ?? contexto.cep}, Brasil`) : null))
       : Promise.resolve(null),
   ]);
 
+  const mercadoFinal = zona === "RURAL" ? indicesDosComparaveis(mercado, leitura) : mercado;
+  const geo = rur?.geo ?? null;
+  const consultas: Consulta[] = rur?.cons?.consultas ?? [];
+  const terras: Terras | null = rur?.terras ?? null;
   let poligonal: Poligonal | null = null;
   if (geo) {
     const m = medirPoligonal(geo.vertices);
@@ -440,7 +674,15 @@ export async function gerarAvaliacaoTecnica(opts: {
   for (const k of Object.keys(areas) as (keyof QuadroAreas)[]) if (!(Number(areas[k]) > 0)) areas[k] = null;
 
   const urbano = zona === "URBANO" ? (leitura.urbano ?? {}) : null;
-  const rural = zona === "RURAL" ? (leitura.rural ?? {}) : null;
+  const rural = zona === "RURAL" ? { ...(leitura.rural ?? {}) } : null;
+  // CAR não anexado mas achado no SICAR pela poligonal: usa os dados públicos.
+  const carSicar = rur?.cons?.carPrincipal;
+  if (rural && carSicar && !rural.car?.codigo) {
+    rural.car = { ...(rural.car ?? {}), codigo: carSicar.codigo, area_ha: rural.car?.area_ha ?? carSicar.area_ha, situacao: rural.car?.situacao ?? [carSicar.status === "AT" ? "ativo" : carSicar.status, carSicar.condicao].filter(Boolean).join(" · ") + " (SICAR)" };
+    if (!areas.car_ha && carSicar.area_ha) areas.car_ha = carSicar.area_ha;
+  }
+  if (rural?.edificacoes) rural.edificacoes = rural.edificacoes.map((e) => ({ ...e, estado: estadoDe(e.estado) ?? estadoDe(e.conservacao) }));
+  if (urbano) urbano.padrao_detalhe = padraoDetalheDe(urbano.padrao_detalhe) ?? padraoDetalheDe(urbano.padrao);
   const padrao = urbano?.padrao ?? opts.padraoFotos ?? null;
   const coordDoc = leitura.coordenadas_imovel && Number.isFinite(leitura.coordenadas_imovel.lat) && Number.isFinite(leitura.coordenadas_imovel.lon)
     ? { lat: leitura.coordenadas_imovel.lat, lon: leitura.coordenadas_imovel.lon } : null;
@@ -452,7 +694,7 @@ export async function gerarAvaliacaoTecnica(opts: {
   const documentos_faltantes = FALTANTES[zona].filter(([ts]) => !ts.some((t) => tiposPresentes.has(t))).map(([, nome]) => nome);
 
   const base = {
-    versao: 1 as const,
+    versao: 2 as const,
     zona,
     gerado_em: new Date().toISOString(),
     gerado_por: opts.geradoPor ?? null,
@@ -465,13 +707,15 @@ export async function gerarAvaliacaoTecnica(opts: {
     rural,
     poligonal,
     localizacao,
-    mercado,
+    mercado: mercadoFinal,
     laudo_externo: leitura.laudo_externo && (leitura.laudo_externo.valor_mercado || leitura.laudo_externo.empresa) ? leitura.laudo_externo : null,
     ambiental: leitura.ambiental ?? null,
+    terras,
+    consultas,
     valor_solicitado: opts.valorSolicitado ?? null,
   };
   await etapa("Calculando valores, alertas e rating");
-  const valores = calcularValores(base, padrao);
+  const valores = calcularValores(base, padrao, { cub });
   const semAlertas = { ...base, valores, arquivos: relevantes };
   const iaAlertas = (Array.isArray(leitura.alertas) ? leitura.alertas : [])
     .filter((x) => x && x.titulo)

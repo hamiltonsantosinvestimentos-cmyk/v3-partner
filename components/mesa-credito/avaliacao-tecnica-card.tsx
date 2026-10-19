@@ -14,6 +14,7 @@ import { formatCurrency } from "@/lib/utils";
 import { gerarKml } from "@/lib/avaliacao-tecnica/geo";
 import { TIPO_DOC_LABEL, type Alerta, type AvaliacaoTecnica, type PdfAvaliacaoMeta, type Poligonal } from "@/lib/avaliacao-tecnica/tipos";
 import { diasDesde } from "@/lib/avaliacao-tecnica/analise";
+import { DESCRICAO_CLASSE, ESTADO_LABEL, INDICE_CLASSE, PADRAO_LABEL, SITUACAO_LABEL } from "@/lib/avaliacao-tecnica/normas";
 
 export interface JobAvaliacaoTecnica {
   status: "PROCESSANDO" | "CONCLUIDO" | "ERRO";
@@ -123,7 +124,7 @@ function DesenhoPoligonal({ p }: { p: Poligonal }) {
 }
 
 export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zona, itens, arquivosImovel, valorSolicitado, onAnexar, onMetadata, onUsarValor, onZona }: Props) {
-  const [aba, setAba] = useState<"resumo" | "registro" | "areas" | "caracteristicas" | "geo" | "mercado" | "documentos">("resumo");
+  const [aba, setAba] = useState<"resumo" | "registro" | "areas" | "caracteristicas" | "geo" | "terras" | "consultas" | "mercado" | "documentos">("resumo");
   const [iniciando, setIniciando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [anexando, setAnexando] = useState(false);
@@ -377,7 +378,9 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
     { id: "areas", label: "Áreas" },
     { id: "caracteristicas", label: ehRural ? "Cadastros e campo" : "Construção" },
     { id: "geo", label: ehRural ? "GEO" : "Localização" },
-    { id: "mercado", label: "Mercado" },
+    ...(ehRural && av.terras ? [{ id: "terras" as const, label: "Terras" }] : []),
+    ...(ehRural && (av.consultas?.length ?? 0) > 0 ? [{ id: "consultas" as const, label: `Consultas (${av.consultas!.length})` }] : []),
+    { id: "mercado", label: v.homog ? "Mercado e cálculo" : "Mercado" },
     { id: "documentos", label: `Documentos (${av.arquivos.length})` },
   ];
 
@@ -390,7 +393,7 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
       <div className="grid grid-cols-[1fr_auto] gap-3">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
-            ["Valor de mercado", v.valor_mercado !== null ? formatCurrency(v.valor_mercado) : "—", v.preco_unitario_aplicado ? `${formatCurrency(v.preco_unitario_aplicado)}/${un}` : "sem comparáveis"],
+            ["Valor de mercado", v.valor_mercado !== null ? formatCurrency(v.valor_mercado) : "—", v.preco_unitario_aplicado ? `${formatCurrency(v.preco_unitario_aplicado)}/${un}${ehRural && v.valor_benfeitorias ? ` + benfeitorias ${formatCurrency(v.valor_benfeitorias)}` : ""}` : "sem comparáveis"],
             ["Valor de liquidez", v.valor_liquidez !== null ? formatCurrency(v.valor_liquidez) : "—", `fator ${n(v.fator_liquidez)} (garantia)`],
             ["LTV s/ liquidez", ltvLiq !== null ? `${n(ltvLiq * 100, 1)}%` : "—", ltvMerc !== null ? `${n(ltvMerc * 100, 1)}% s/ mercado` : "máx. 70%"],
             ["Área considerada", v.area_considerada ? `${n(v.area_considerada, v.unidade === "ha" ? 4 : 2)} ${un}` : "—", v.area_criterio],
@@ -419,7 +422,7 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
           </div>
           <div className="flex justify-between text-[9px] text-[#7A8FA8]">
             <span>{formatCurrency(v.intervalo_inferior)}</span>
-            <span>intervalo da amostra saneada ({v.amostra_saneada} de {v.amostra_total})</span>
+            <span>{v.estatistica ? `intervalo de confiança 80% (±${n(v.estatistica.amplitude_pct / 2, 1)}%)` : `intervalo da amostra saneada (${v.amostra_saneada} de ${v.amostra_total})`}</span>
             <span>{formatCurrency(v.intervalo_superior)}</span>
           </div>
         </div>
@@ -431,6 +434,16 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
           {v.valor_venal_iptu ? <span className="px-2 py-0.5 rounded bg-[#243A66]/50 text-[#F0ECE4]">Venal IPTU {formatCurrency(v.valor_venal_iptu)}</span> : null}
           {v.vtn_itr ? <span className="px-2 py-0.5 rounded bg-[#243A66]/50 text-[#F0ECE4]">VTN ITR {formatCurrency(v.vtn_itr)}</span> : null}
           {v.laudo_mercado ? <span className="px-2 py-0.5 rounded bg-[#C9A84C]/15 text-[#E8C97A]">Laudo {av.laudo_externo?.empresa ?? ""}: mercado {formatCurrency(v.laudo_mercado)}{v.laudo_garantia ? ` · garantia ${formatCurrency(v.laudo_garantia)}` : ""}</span> : null}
+        </div>
+      )}
+
+      {/* ── Enquadramento NBR (v2) ── */}
+      {(v.grau_fundamentacao || v.grau_precisao) && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+          {v.grau_fundamentacao && <span className="px-2 py-0.5 rounded border border-[#C9A84C]/40 text-[#E8C97A] font-semibold" title={v.grau_fundamentacao.itens.map((i) => `${i.item}: ${i.atendido} (${i.grau})`).join("\n")}>Fundamentação {v.grau_fundamentacao.grau === "FORA" ? "abaixo do Grau I" : `Grau ${v.grau_fundamentacao.grau}`}</span>}
+          {v.grau_precisao && <span className="px-2 py-0.5 rounded border border-[#C9A84C]/40 text-[#E8C97A] font-semibold">Precisão {v.grau_precisao === "FORA" ? "abaixo do Grau I" : `Grau ${v.grau_precisao}`}</span>}
+          {v.estatistica && <span className="px-2 py-0.5 rounded bg-[#243A66]/50 text-[#F0ECE4]">{v.estatistica.n} dados · CV {n(v.estatistica.cv_pct, 1)}%</span>}
+          {typeof v.indice_agronomico === "number" && <span className="px-2 py-0.5 rounded bg-[#243A66]/50 text-[#F0ECE4]">Índice agronômico {n(v.indice_agronomico, 3)}</span>}
         </div>
       )}
 
@@ -652,6 +665,37 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
               </Bloco>
             </div>
           )}
+          {(v.benfeitorias ?? []).length > 0 && (
+            <div className="sm:col-span-2">
+              <Bloco titulo={`Custo de reprodução das benfeitorias · ${formatCurrency(v.valor_benfeitorias ?? 0)}`}>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr className="text-[8px] uppercase tracking-wider text-[#C9A84C]">
+                        <th className="text-left py-1">Benfeitoria</th><th className="text-right py-1">m²</th><th className="text-right py-1">CUB</th><th className="text-right py-1">Fator</th>
+                        <th className="text-right py-1">Idade/vida</th><th className="text-left py-1 pl-2">Estado</th><th className="text-right py-1">Coef.</th><th className="text-right py-1">Depreciado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {v.benfeitorias!.map((b, i) => (
+                        <tr key={i} className="border-t border-[#243A66]/40">
+                          <td className="py-1 text-[#F0ECE4]">{b.nome}{b.averbada === false && <span className="text-[#E8C97A]"> · não averbada</span>}</td>
+                          <td className="py-1 text-right text-[#F0ECE4]">{n(b.area_m2, 0)}</td>
+                          <td className="py-1 text-right text-[#7A8FA8] whitespace-nowrap">{b.padrao_cub} {formatCurrency(b.cub_m2)}</td>
+                          <td className="py-1 text-right text-[#7A8FA8]">{n(b.fator_cub, 2)}</td>
+                          <td className="py-1 text-right text-[#7A8FA8]">{b.idade}/{b.vida_util}</td>
+                          <td className="py-1 pl-2 text-[#7A8FA8]">{b.estado} · {ESTADO_LABEL[b.estado]}</td>
+                          <td className="py-1 text-right text-[#7A8FA8]">{n(b.coef_depreciacao, 3)}</td>
+                          <td className="py-1 text-right font-semibold text-[#E8C97A] whitespace-nowrap">{formatCurrency(b.custo_depreciado)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-[9px] text-[#7A8FA8] pt-1">Área × CUB {v.cub?.uf}{v.cub?.mes_ref ? ` ${v.cub.mes_ref}` : ""} × fator do tipo × depreciação Ross-Heidecke, como nos laudos de referência. Terra nua: {formatCurrency(v.valor_terra ?? 0)}.</p>
+              </Bloco>
+            </div>
+          )}
         </div>
       )}
 
@@ -691,6 +735,59 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
         </div>
       )}
 
+      {aba === "terras" && av.terras && (
+        <div className="space-y-2">
+          <Bloco titulo={`Capacidade de uso × situação · índice agronômico ${n(av.terras.indice_agronomico, 3)}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[10px]">
+                <thead><tr className="text-[8px] uppercase tracking-wider text-[#C9A84C]"><th className="text-left py-1">Classe</th><th className="text-right py-1">% área</th><th className="text-right py-1">Índice</th><th className="text-left py-1 pl-2">Base</th></tr></thead>
+                <tbody>
+                  {av.terras.classes.map((c) => (
+                    <tr key={c.classe} className="border-t border-[#243A66]/40">
+                      <td className="py-1 text-[#F0ECE4] font-semibold" title={DESCRICAO_CLASSE[c.classe]}>{c.classe}</td>
+                      <td className="py-1 text-right text-[#F0ECE4]">{n(c.pct, 1)}%</td>
+                      <td className="py-1 text-right text-[#7A8FA8]">{n(INDICE_CLASSE[c.classe], 3)}</td>
+                      <td className="py-1 pl-2 text-[#7A8FA8]">{c.base ?? DESCRICAO_CLASSE[c.classe]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {typeof av.terras.preservacao_pct === "number" && <Linha rotulo="Preservação (classe VIII)" valor={`${n(av.terras.preservacao_pct, 1)}% · ${av.terras.preservacao_base ?? ""}`} />}
+            <Linha rotulo="Situação / acesso" valor={`${SITUACAO_LABEL[av.terras.situacao]}${av.terras.situacao_descricao ? ` · ${av.terras.situacao_descricao}` : ""}`} destaque />
+            {av.terras.justificativa && <p className="text-[10px] text-[#7A8FA8] pt-1">{av.terras.justificativa}</p>}
+            <p className="text-[9px] text-[#7A8FA8] pt-1">Escala de Mendes Sobrinho/Kozma (classes de capacidade de uso × situação), a mesma da Nota Agronômica do INCRA e do fator classe-situação dos laudos. A preservação entra como classe VIII com a mesma regra no imóvel e nos anúncios.</p>
+          </Bloco>
+          {av.terras.relevo && (
+            <Bloco titulo="Relevo (SRTM)">
+              <Linha rotulo="Altitude" valor={`${av.terras.relevo.altitude_min} a ${av.terras.relevo.altitude_max} m (média ${av.terras.relevo.altitude_media} m)`} />
+              <Linha rotulo="Declividade média" valor={`${n(av.terras.relevo.declividade_media_pct, 1)}%`} />
+              <Linha rotulo="Classes de relevo (Embrapa)" valor={av.terras.relevo.classes.map((c) => `${c.classe} ${c.pct}%`).join(" · ") || "—"} />
+              <p className="text-[9px] text-[#7A8FA8] pt-1">{av.terras.relevo.pontos} pontos dentro da poligonal, espaçamento ~{av.terras.relevo.espacamento_m} m · {av.terras.relevo.fonte}</p>
+            </Bloco>
+          )}
+        </div>
+      )}
+
+      {aba === "consultas" && (av.consultas?.length ?? 0) > 0 && (
+        <div className="space-y-1.5">
+          {av.consultas!.map((c) => (
+            <div key={c.id} className={`rounded-lg border p-2.5 ${c.status === "ENCONTRADO" && c.id !== "CAR" ? "border-red-400/40 bg-red-500/5" : "border-[#243A66]/70 bg-[#09081A]/40"}`}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold text-[#F0ECE4]">{c.nome}</p>
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase shrink-0 ${c.status === "LIVRE" ? "bg-[#E8C97A]/15 text-[#E8C97A]" : c.status === "INDISPONIVEL" ? "bg-[#243A66]/60 text-[#7A8FA8]" : c.id === "CAR" ? "bg-[#C9A84C]/15 text-[#C9A84C]" : "bg-red-500/15 text-red-300"}`}>
+                  {c.status === "LIVRE" ? (c.id === "CAR" ? "Não localizado" : "Nada consta") : c.status === "INDISPONIVEL" ? "Indisponível" : c.id === "CAR" ? "Localizado" : "Encontrado"}
+                </span>
+              </div>
+              <p className="text-[10px] text-[#7A8FA8] mt-0.5">{c.detalhe}</p>
+              {(c.itens ?? []).length > 0 && <ul className="mt-1 space-y-0.5">{c.itens!.map((it, i) => <li key={i} className="text-[10px] text-[#F0ECE4] break-words">• {it}</li>)}</ul>}
+              <p className="text-[9px] text-[#7A8FA8] mt-1">{c.fonte} · {new Date(c.consultado_em).toLocaleString("pt-BR")}</p>
+            </div>
+          ))}
+          <p className="text-[9px] text-[#7A8FA8]">Consultas feitas pela poligonal do GEO nas bases públicas oficiais. Não substituem certidões (ex.: certidão negativa de embargos do IBAMA) quando a instituição exigir.</p>
+        </div>
+      )}
+
       {aba === "mercado" && (
         <div className="space-y-2">
           {av.mercado && av.mercado.comparaveis.length > 0 ? (
@@ -706,12 +803,76 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
               <p className="text-[10px] text-[#7A8FA8]">
                 {v.amostra_criterio && <span className="text-[#E8C97A]">Recorte: {v.amostra_criterio} · </span>}
                 {typeof v.premio_condominio_pct === "number" && <span className="text-[#E8C97A]">em condomínio {v.premio_condominio_pct >= 0 ? "+" : ""}{n(v.premio_condominio_pct * 100, 0)}% sobre os de rua · </span>}
-                Anúncios × fator de oferta {n(v.fator_oferta)} · saneamento ±30% da média ({v.amostra_saneada} de {v.amostra_total} aceitos) · aplicado: {v.criterio} · confiança {av.mercado.confianca.toLowerCase()}
+                Anúncios × fator de oferta {n(v.fator_oferta)} · saneamento ±30% do centro da amostra ({v.amostra_saneada} de {v.amostra_total} aceitos) · aplicado: {v.criterio} · confiança {av.mercado.confianca.toLowerCase()}
               </p>
+              {v.homog && (
+                <div className="space-y-2">
+                  <p className="text-[10px] text-[#7A8FA8]">{v.metodo}</p>
+                  <div className="overflow-x-auto rounded-md border border-[#243A66]/70">
+                    <table className="w-full text-[10px]">
+                      <thead>
+                        <tr className="text-[8px] uppercase tracking-wider text-[#C9A84C] border-b border-[#243A66]/70">
+                          <th className="text-left px-2 py-1.5">#</th>
+                          <th className="text-left px-2 py-1.5">{ehRural ? "Vu terra nua" : "Vu bruto"}</th>
+                          <th className="text-left px-2 py-1.5">Fatores</th>
+                          <th className="text-right px-2 py-1.5">Total</th>
+                          <th className="text-right px-2 py-1.5">Vu homog.</th>
+                          <th className="text-left px-2 py-1.5">Situação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {av.mercado.comparaveis.map((c, i) => {
+                          const h = v.homog?.[i];
+                          const ok = !!h && h.usado && (v.saneados?.[i] ?? true);
+                          return (
+                            <tr key={i} className={`border-b border-[#243A66]/40 last:border-0 ${ok ? "" : "opacity-50"}`}>
+                              <td className="px-2 py-1 text-[#7A8FA8]">{i + 1}</td>
+                              <td className="px-2 py-1 text-[#F0ECE4] whitespace-nowrap">{h ? formatCurrency(h.vu_bruto) : "—"}</td>
+                              <td className="px-2 py-1 text-[#7A8FA8]">{h && h.fatores.length ? h.fatores.map((f) => <span key={f.sigla} title={f.nome} className="mr-1.5 whitespace-nowrap">{f.sigla} {n(f.valor, 3)}</span>) : "—"}</td>
+                              <td className="px-2 py-1 text-right text-[#F0ECE4]">{h ? n(h.fator_total, 3) : "—"}</td>
+                              <td className="px-2 py-1 text-right font-semibold text-[#E8C97A] whitespace-nowrap">{h ? formatCurrency(h.vu_homogeneizado) : "—"}</td>
+                              <td className="px-2 py-1 text-[#7A8FA8]">{!h ? "sem dados" : !h.usado ? h.motivo : ok ? "aceito" : "saneado (±30%)"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {v.estatistica && (
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 text-center">
+                      {([
+                        ["Dados", String(v.estatistica.n)],
+                        ["Média saneada", formatCurrency(v.estatistica.media)],
+                        ["Desvio", formatCurrency(v.estatistica.desvio)],
+                        ["CV", `${n(v.estatistica.cv_pct, 1)}%`],
+                        ["t (80%)", n(v.estatistica.t, 3)],
+                        ["Amplitude IC", `${n(v.estatistica.amplitude_pct, 1)}%`],
+                      ] as const).map(([rot, val]) => (
+                        <div key={rot} className="rounded-md border border-[#243A66]/70 px-1 py-1.5">
+                          <p className="text-[8px] uppercase tracking-wider text-[#7A8FA8]">{rot}</p>
+                          <p className="text-[11px] font-semibold text-[#F0ECE4]">{val}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {v.grau_fundamentacao && (
+                    <Bloco titulo={`Enquadramento NBR · fundamentação ${v.grau_fundamentacao.grau === "FORA" ? "abaixo do Grau I" : `Grau ${v.grau_fundamentacao.grau}`} (${v.grau_fundamentacao.pontos} pontos) · precisão ${v.grau_precisao === "FORA" ? "abaixo do Grau I" : `Grau ${v.grau_precisao ?? "—"}`}`}>
+                      {v.grau_fundamentacao.itens.map((it) => <Linha key={it.item} rotulo={it.item} valor={`${it.atendido} · ${it.grau === "FORA" ? "não atinge" : `Grau ${it.grau}`}`} />)}
+                      <p className="text-[9px] text-[#7A8FA8] pt-1">Sem vistoria presencial a avaliação V3 não alcança o Grau III nos itens de caracterização e identificação. Enquadramento estimado: validar com o avaliador responsável.</p>
+                    </Bloco>
+                  )}
+                  {v.cub && (
+                    <p className="text-[10px] text-[#7A8FA8]">
+                      Custo de construção ({v.cub.uf}): {Object.keys(v.cub.valores).length > 0 && <>CUB{v.cub.mes_ref ? ` ${v.cub.mes_ref}` : ""} {Object.entries(v.cub.valores).map(([k, x]) => `${k} ${formatCurrency(x)}`).join(" · ")}{v.cub.fonte_url ? <> (<a href={v.cub.fonte_url} target="_blank" rel="noopener noreferrer" className="text-[#C9A84C] hover:underline">{v.cub.fonte_nome ?? "fonte"}</a>)</> : null}</>}
+                      {v.cub.sinapi_m2 ? <>{Object.keys(v.cub.valores).length > 0 ? " · " : ""}SINAPI/IBGE {v.cub.sinapi_mes} {formatCurrency(v.cub.sinapi_m2)}/m²</> : null}
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="space-y-1">
                 {av.mercado.comparaveis.map((c, i) => {
                   const noRecorte = v.no_recorte?.[i] ?? true;
-                  const ok = noRecorte && (v.saneados?.[i] ?? true);
+                  const ok = noRecorte && (v.saneados?.[i] ?? true) && (v.homog ? !!v.homog[i]?.usado : true);
                   return (
                     <div key={i} className={`rounded-md border px-2 py-1.5 ${ok ? "border-[#243A66]/70" : "border-[#243A66]/30 opacity-50"}`}>
                       <div className="flex items-start justify-between gap-2">
@@ -719,7 +880,7 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
                         <span className="text-[10px] font-semibold text-[#E8C97A] shrink-0">{formatCurrency(c.preco_unitario)}/{un}</span>
                       </div>
                       <p className="text-[10px] text-[#7A8FA8]">
-                        {formatCurrency(c.valor)} · {n(c.area, v.unidade === "ha" ? 2 : 0)} {un}{c.mesmo_condominio ? " · mesmo condomínio" : c.em_condominio === true ? " · em condomínio" : c.em_condominio === false ? " · de rua" : ""}{c.observacao ? ` · ${c.observacao}` : ""}{!noRecorte ? " · fora do recorte de condomínio" : !ok ? " · descartado no saneamento" : ""}
+                        {formatCurrency(c.valor)} · {n(c.area, v.unidade === "ha" ? 2 : 0)} {un}{c.mesmo_condominio ? " · mesmo condomínio" : c.em_condominio === true ? " · em condomínio" : c.em_condominio === false ? " · de rua" : ""}{c.municipio ? ` · ${c.municipio}` : ""}{typeof c.distancia_km === "number" ? ` (~${Math.round(c.distancia_km)} km)` : ""}{typeof c.indice_agronomico === "number" ? ` · índ. agronômico ${n(c.indice_agronomico, 3)}${c.situacao ? ` (${SITUACAO_LABEL[c.situacao]})` : ""}` : ""}{c.benfeitorias_valor ? ` · benfeitorias ${formatCurrency(c.benfeitorias_valor)}` : ""}{c.padrao_detalhe ? ` · padrão ${PADRAO_LABEL[c.padrao_detalhe]}` : ""}{typeof c.idade === "number" ? ` · ${c.idade} anos` : ""}{c.estado ? ` · ${ESTADO_LABEL[c.estado]}` : ""}{typeof c.indice_local === "number" ? ` · local ${c.indice_local}` : ""}{c.observacao ? ` · ${c.observacao}` : ""}{!noRecorte ? " · fora do recorte de condomínio" : !ok ? " · descartado no saneamento" : ""}
                       </p>
                       {c.fonte_url && <a href={c.fonte_url} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#C9A84C] hover:underline inline-flex items-center gap-0.5">{c.fonte_nome ?? "anúncio"} <ExternalLink className="w-2.5 h-2.5" /></a>}
                     </div>

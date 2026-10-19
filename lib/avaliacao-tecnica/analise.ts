@@ -9,8 +9,13 @@
 //    padrão construtivo das fotos, PR #184).
 
 import type {
-  Alerta, AvaliacaoTecnica, Comparavel, FatorRating, NivelAlerta, PadraoNivel, RatingGarantia, Valores, ZonaImovel,
+  Alerta, AvaliacaoTecnica, BenfeitoriaCalculo, CubRef, Edificacao, FatorAplicado, FatorRating, Homogeneizacao, NivelAlerta,
+  PadraoNivel, RatingGarantia, Valores, ZonaImovel, Comparavel,
 } from "./tipos";
+import {
+  FATOR_TOTAL_MAX, FATOR_TOTAL_MIN, cubDoPadrao, estadoDe, estatistica, fatorAreaAbunahman, grauFundamentacao, grauPrecisao,
+  padraoDetalheDe, rossHeidecke, vidaUtil,
+} from "./normas";
 
 export const FATOR_OFERTA = 0.9;
 /** Hipótese de rejeição da amostra: ±30% em torno da média (Eagle Consult). */
@@ -30,7 +35,7 @@ export function diasDesde(iso: string | null | undefined, hoje = new Date()) {
   return Math.floor((hoje.getTime() - d.getTime()) / 86400000);
 }
 
-type Base = Pick<AvaliacaoTecnica, "zona" | "areas" | "urbano" | "rural" | "mercado" | "laudo_externo">;
+type Base = Pick<AvaliacaoTecnica, "zona" | "areas" | "urbano" | "rural" | "mercado" | "laudo_externo"> & Partial<Pick<AvaliacaoTecnica, "terras">>;
 
 /** Área usada no cálculo e de onde veio. */
 function areaConsiderada(av: Base): { area: number | null; criterio: string } {
@@ -58,12 +63,18 @@ function areaConsiderada(av: Base): { area: number | null; criterio: string } {
 }
 
 /**
- * Saneamento da amostra: descarta quem fica fora de ±30% da média e recalcula até
- * estabilizar. Se sobrarem menos de 3, fica com os 3 mais próximos da mediana.
+ * Saneamento da amostra: descarta quem fica fora de ±30% do centro (mediana na 1ª passada,
+ * depois a média dos aceitos) e recalcula até estabilizar. Se sobrarem menos de 3, fica com os 3 mais próximos da mediana.
  */
 export function sanear(valores: number[]): boolean[] {
   const idx = valores.map((v, i) => (pos(v) ? i : -1)).filter((i) => i >= 0);
-  let aceitos = idx;
+  // 1ª passada centrada na mediana (um anúncio fora da curva não arrasta a média);
+  // depois recalcula pela média dos aceitos até estabilizar.
+  const ordem = [...idx].sort((a, b) => valores[a] - valores[b]);
+  const meio = ordem.length / 2;
+  const mediana0 = ordem.length === 0 ? 0 : ordem.length % 2 ? valores[ordem[Math.floor(meio)]] : (valores[ordem[meio - 1]] + valores[ordem[meio]]) / 2;
+  let aceitos = idx.filter((i) => Math.abs(valores[i] - mediana0) <= LIMITE_SANEAMENTO * mediana0);
+  if (aceitos.length === 0) aceitos = idx;
   for (let k = 0; k < 6; k++) {
     const media = aceitos.reduce((s, i) => s + valores[i], 0) / Math.max(1, aceitos.length);
     const novos = idx.filter((i) => Math.abs(valores[i] - media) <= LIMITE_SANEAMENTO * media);
@@ -108,25 +119,95 @@ function recorteCondominio(av: Base, comps: Comparavel[]): { mask: boolean[]; cr
   return { mask: tudo, criterio: null };
 }
 
-export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined): Valores {
+export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined, extra?: { cub?: CubRef | null }): Valores {
   const unidade = av.zona === "RURAL" ? "ha" : "m2";
+  const rural = av.zona === "RURAL";
   const { area, criterio: areaCriterio } = areaConsiderada(av);
-  const comps = av.mercado?.comparaveis ?? [];
-  const brutos = comps.map((c: Comparavel) => (pos(c.preco_unitario) ? c.preco_unitario * FATOR_OFERTA : 0));
+  const comps: Comparavel[] = av.mercado?.comparaveis ?? [];
+  const cub = extra?.cub ?? null;
   const recorte = recorteCondominio(av, comps);
-  // Fora do recorte vira 0: não entra no saneamento nem no cálculo (a tela mostra o motivo).
-  const todos = brutos.map((v, i) => (recorte.mask[i] ? v : 0));
-  const saneados = sanear(todos);
-  const emCond = brutos.filter((v, i) => pos(v) && (comps[i].em_condominio === true || comps[i].mesmo_condominio === true));
-  const foraCond = brutos.filter((v, i) => pos(v) && comps[i].em_condominio === false);
-  const premio = av.zona === "URBANO" && emCond.length >= 2 && foraCond.length >= 2 ? mediaDe(emCond) / mediaDe(foraCond) - 1 : null;
-  const precos = todos.filter((_, i) => saneados[i]);
   const fatorLiq = FATOR_LIQUIDEZ[av.zona];
+  // Rural: região geoeconômica — com 5+ anúncios até 120 km, os mais distantes saem.
+  const perto = comps.map((c) => typeof c.distancia_km === "number" && c.distancia_km <= RAIO_REGIAO_KM);
+  const usarRaio = rural && perto.filter(Boolean).length >= 5;
+  // Rural: semelhança de tamanho — com 5+ anúncios entre 1/3 e 3× a área, os demais saem
+  // (sítio pequeno tem R$/ha bem maior que fazenda grande).
+  const parecido = comps.map((c) => pos(area) && c.area >= area / 3 && c.area <= area * 3);
+  const usarTamanho = rural && pos(area) && parecido.filter((p, i) => p && (!usarRaio || perto[i])).length >= 5;
+
+  // ── Homogeneização (tratamento por fatores, como nos laudos de referência) ──
+  const iaAval = av.terras?.indice_agronomico ?? null;
+  const edificio = !rural && /apart|sala|flat|studio|kitnet|cobertura/i.test(av.urbano?.tipo ?? "");
+  const padraoAval = padraoDetalheDe(av.urbano?.padrao_detalhe ?? av.urbano?.padrao ?? padrao);
+  const vidaAval = vidaUtil(av.urbano?.tipo);
+  const focAval = rossHeidecke(av.urbano?.idade_aparente_anos ?? null, vidaAval, estadoDe(av.urbano?.conservacao));
+  const cubAval = padraoAval ? cubDoPadrao(cub?.valores, padraoAval, edificio) : null;
+  const avisos: string[] = [];
+
+  const homog: (Homogeneizacao | null)[] = comps.map((c, i) => {
+    if (!pos(c.valor) || !pos(c.area)) return null;
+    // Anúncio → negócio (fator oferta) e, no rural, sem as benfeitorias (avaliadas à parte).
+    const benf = rural && pos(c.benfeitorias_valor) ? c.benfeitorias_valor : 0;
+    const vuBruto = (c.valor * FATOR_OFERTA - benf) / c.area;
+    const fatores: FatorAplicado[] = [];
+    if (rural) {
+      if (pos(iaAval) && pos(c.indice_agronomico)) fatores.push({ sigla: "Fcs", nome: "Classe de capacidade de uso e situação", valor: arred(iaAval / c.indice_agronomico) });
+    } else {
+      const cubComp = c.padrao_detalhe ? cubDoPadrao(cub?.valores, c.padrao_detalhe, edificio) : null;
+      if (pos(cubAval) && pos(cubComp)) fatores.push({ sigla: "Fpc", nome: "Padrão construtivo (relação dos CUBs)", valor: arred(cubAval / cubComp) });
+      if (pos(c.indice_local)) fatores.push({ sigla: "Ftr", nome: "Transposição (localização)", valor: arred(100 / c.indice_local) });
+      const temIdade = typeof c.idade === "number" || !!c.estado;
+      const focComp = temIdade ? rossHeidecke(c.idade ?? null, vidaAval, c.estado ?? null) : null;
+      if (pos(focComp) && pos(focAval)) fatores.push({ sigla: "Foc", nome: "Obsolescência e conservação (Ross-Heidecke)", valor: arred(focAval / focComp) });
+      if (pos(area)) fatores.push({ sigla: "Fa", nome: "Área (Abunahman)", valor: fatorAreaAbunahman(c.area, area) });
+    }
+    const total = arred(fatores.reduce((p, f) => p * f.valor, 1));
+    let motivo: string | null = null;
+    if (!recorte.mask[i]) motivo = "fora do recorte de condomínio";
+    else if (usarRaio && !perto[i]) motivo = `fora da região geoeconômica (${typeof c.distancia_km === "number" ? `~${Math.round(c.distancia_km)} km` : "distância não informada"})`;
+    else if (usarTamanho && !parecido[i]) motivo = "área muito diferente do avaliando (fora de 1/3 a 3×)";
+    else if (!(vuBruto > 0)) motivo = "benfeitorias maiores que o preço";
+    else if (total < FATOR_TOTAL_MIN || total > FATOR_TOTAL_MAX) motivo = `fator total ${total.toFixed(2)} fora de ${FATOR_TOTAL_MIN.toFixed(2)}–${FATOR_TOTAL_MAX.toFixed(2)} (pouco semelhante)`;
+    return { vu_bruto: vuBruto, fatores, fator_total: total, vu_homogeneizado: vuBruto * total, usado: motivo === null, motivo };
+  });
+  if (rural && !pos(iaAval)) avisos.push("índice agronômico do imóvel não definido: terras não homogeneizadas por classe e situação");
+  if (!rural && !pos(cubAval)) avisos.push("CUB por padrão não localizado: padrão construtivo não homogeneizado");
+
+  const todos = homog.map((h) => (h && h.usado ? h.vu_homogeneizado : 0));
+  const saneados = sanear(todos);
+  const precos = todos.filter((v, i) => saneados[i] && pos(v));
+  const brutoCond = (cond: boolean) => homog
+    .map((h, i) => (h && pos(h.vu_bruto) && (cond ? comps[i].em_condominio === true || comps[i].mesmo_condominio === true : comps[i].em_condominio === false) ? h.vu_bruto : 0))
+    .filter(pos);
+  const emCond = brutoCond(true);
+  const foraCond = brutoCond(false);
+  const premio = !rural && emCond.length >= 2 && foraCond.length >= 2 ? mediaDe(emCond) / mediaDe(foraCond) - 1 : null;
+
+  // ── Benfeitorias do rural: custo de reprodução (CUB) × Ross-Heidecke ──
+  const benfeitorias = rural ? custoBenfeitorias(av.rural?.edificacoes ?? [], cub) : [];
+  if (rural && (av.rural?.edificacoes ?? []).some((e) => pos(e.area_m2)) && benfeitorias.length === 0) avisos.push("CUB/SINAPI não localizado: benfeitorias não avaliadas");
+  const valorBenf = benfeitorias.reduce((s, b) => s + b.custo_depreciado, 0);
+
+  const est = estatistica(precos, LIMITE_SANEAMENTO * 100);
+  const fts = homog.filter((h, i): h is Homogeneizacao => !!h && h.usado && saneados[i]).map((h) => h.fator_total);
+  const grauF = grauFundamentacao({
+    n: precos.length,
+    caracterizacaoCompleta: rural ? pos(iaAval) && pos(area) : pos(area) && !!padraoAval,
+    dadosIdentificados: comps.length > 0 && comps.every((c) => !!c.fonte_url || !!c.fonte_nome),
+    fatorMin: fts.length ? Math.min(...fts) : null,
+    fatorMax: fts.length ? Math.max(...fts) : null,
+  });
+
   const base: Valores = {
     unidade, area_considerada: area, area_criterio: areaCriterio,
     preco_unitario_min: null, preco_unitario_medio: null, preco_unitario_max: null, preco_unitario_aplicado: null,
     criterio: "sem comparáveis de mercado", fator_oferta: FATOR_OFERTA,
-    saneados: [], amostra_total: 0, amostra_saneada: 0,
+    saneados, amostra_total: todos.filter(pos).length, amostra_saneada: precos.length,
+    no_recorte: recorte.mask, amostra_criterio: recorte.criterio, premio_condominio_pct: premio,
+    metodo: `Comparativo direto de dados de mercado com tratamento por fatores (NBR 14653-${rural ? "3" : "2"})${rural ? " + custo de reprodução das benfeitorias" : ""}`,
+    estatistica: est, grau_fundamentacao: precos.length ? grauF : null, grau_precisao: est ? grauPrecisao(est.amplitude_pct) : null,
+    homog, cub, indice_agronomico: iaAval,
+    valor_terra: null, valor_benfeitorias: rural ? valorBenf : null, benfeitorias,
     valor_mercado: null, fator_liquidez: fatorLiq, valor_liquidez: null,
     intervalo_inferior: null, intervalo_superior: null,
     valor_venal_iptu: av.urbano?.iptu?.valor_venal_total ?? null,
@@ -134,32 +215,52 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
     laudo_mercado: av.laudo_externo?.valor_mercado ?? null,
     laudo_garantia: av.laudo_externo?.valor_garantia ?? null,
   };
-  base.saneados = saneados;
-  base.no_recorte = recorte.mask;
-  base.amostra_criterio = recorte.criterio;
-  base.premio_condominio_pct = premio;
-  base.amostra_total = todos.filter(pos).length; // dentro do recorte
-  base.amostra_saneada = precos.length;
-  if (precos.length === 0) return base;
-  const h = precos; // já homogeneizado: anúncio → negócio
-  const min = Math.min(...h);
-  const max = Math.max(...h);
-  const media = h.reduce((s, v) => s + v, 0) / h.length;
-  // Rural: o padrão construtivo não se aplica à terra — usa a média.
-  const p = av.zona === "RURAL" ? null : padrao;
-  const aplicado = p === "BAIXO" ? min : p === "ALTO" ? max : media;
-  const criterio = p === "BAIXO" ? "menor comparável (baixo padrão)" : p === "ALTO" ? "maior comparável (alto padrão)"
-    : p === "MEDIO" ? "média dos comparáveis (médio padrão)" : "média dos comparáveis";
-  const vm = pos(area) ? aplicado * area : null;
+  if (precos.length === 0 || !est) return { ...base, criterio: ["sem comparáveis válidos", ...avisos].join(" · ") };
+  const unit = est.media; // média saneada, como nos laudos de referência
+  const terra = pos(area) ? unit * area : null;
+  const extraBenf = rural ? valorBenf : 0;
+  const vm = terra !== null ? terra + extraBenf : null;
   return {
     ...base,
-    preco_unitario_min: min, preco_unitario_medio: media, preco_unitario_max: max, preco_unitario_aplicado: aplicado,
-    criterio,
+    preco_unitario_min: Math.min(...precos), preco_unitario_medio: unit, preco_unitario_max: Math.max(...precos), preco_unitario_aplicado: unit,
+    criterio: ["média saneada dos comparáveis homogeneizados", ...avisos].join(" · "),
+    valor_terra: rural ? terra : null,
     valor_mercado: vm,
     valor_liquidez: vm !== null ? vm * fatorLiq : null,
-    intervalo_inferior: pos(area) ? min * area : null,
-    intervalo_superior: pos(area) ? max * area : null,
+    intervalo_inferior: pos(area) ? est.ic_inferior * area + extraBenf : null,
+    intervalo_superior: pos(area) ? est.ic_superior * area + extraBenf : null,
   };
+}
+
+const arred = (v: number) => Math.round(v * 1000) / 1000;
+/** Raio da região geoeconômica para anúncios rurais (km por estrada). */
+const RAIO_REGIAO_KM = 120;
+
+/** Custo de reprodução das benfeitorias rurais (como a Eagle): área × custo do m² × fator do tipo × Ross-Heidecke. */
+export function custoBenfeitorias(eds: Edificacao[], cub: CubRef | null): BenfeitoriaCalculo[] {
+  if (!cub) return [];
+  // Base: CUB R1-N (casa padrão normal) do Sinduscon; sem ele, o custo médio SINAPI do IBGE.
+  const baseM2 = pos(cub.valores["R1-N"]) ? cub.valores["R1-N"] : pos(cub.sinapi_m2) ? cub.sinapi_m2 : null;
+  if (!pos(baseM2)) return [];
+  const baseNome = pos(cub.valores["R1-N"]) ? "CUB R1-N" : "SINAPI";
+  const out: BenfeitoriaCalculo[] = [];
+  for (const e of eds) {
+    if (!pos(e.area_m2)) continue;
+    const padraoCub = baseNome;
+    const cubM2 = baseM2;
+    const fator = pos(e.fator_cub) ? Math.min(1.5, e.fator_cub) : 1;
+    const vida = vidaUtil(e.nome);
+    const estado = e.estado ?? estadoDe(e.conservacao) ?? "c";
+    const idade = Math.max(0, e.idade_aparente_anos ?? 0);
+    const coef = rossHeidecke(idade, vida, estado);
+    const unitNovo = cubM2 * fator;
+    out.push({
+      nome: e.nome, area_m2: e.area_m2, padrao_cub: padraoCub, cub_m2: cubM2, fator_cub: fator, unitario_novo: unitNovo,
+      idade, vida_util: vida, estado, coef_depreciacao: coef,
+      custo_novo: unitNovo * e.area_m2, custo_depreciado: unitNovo * e.area_m2 * coef, averbada: e.averbada ?? null,
+    });
+  }
+  return out;
 }
 
 const ONUS_CRITICO = /penhora|indisponib|arresto|sequestro|hipoteca|aliena[cç][aã]o fiduci|usufruto|bem de fam|cl[aá]usula de inalienab|a[cç][aã]o (real|reipersecut)/i;
@@ -180,7 +281,11 @@ export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating" | "
   if (av.zona === "RURAL") {
     if (!tipos.has("CCIR")) add("ATENCAO", "Documentação", "CCIR não encontrado");
     if (!tipos.has("ITR") && !tipos.has("CND_ITR")) add("ATENCAO", "Documentação", "ITR não encontrado");
-    if (!tipos.has("CAR")) add("ATENCAO", "Documentação", "CAR não encontrado", "Sem CAR não há como verificar Reserva Legal e APP.");
+    const carSicar = av.consultas?.find((c) => c.id === "CAR");
+    if (!tipos.has("CAR")) {
+      if (carSicar?.status === "ENCONTRADO") add("INFO", "Documentação", "CAR não anexado, mas localizado no SICAR pela poligonal", carSicar.itens?.[0] ?? carSicar.detalhe);
+      else add("ATENCAO", "Documentação", "CAR não encontrado", carSicar?.status === "LIVRE" ? "Nenhum CAR cobre a poligonal no SICAR: imóvel possivelmente sem CAR." : "Sem CAR não há como verificar Reserva Legal e APP.");
+    }
     if (!tipos.has("GEO_MEMORIAL") && !tipos.has("GEO_MAPA") && !tipos.has("GEO_KML")) add("ATENCAO", "GEO", "Georreferenciamento (GEO/SIGEF) não encontrado", "Exigido pela Lei 10.267/2001 conforme o tamanho da área — validar com Robson.");
   }
 
@@ -261,6 +366,22 @@ export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating" | "
     }
   }
 
+  // ── Rural: consultas públicas pela poligonal ──
+  for (const c of av.consultas ?? []) {
+    if (c.status === "INDISPONIVEL") { add("INFO", "Ambiental", `Consulta indisponível: ${c.nome}`, c.detalhe); continue; }
+    if (c.status !== "ENCONTRADO") continue;
+    if (c.id === "CAR") {
+      const itens = c.itens ?? [];
+      if (itens.length > 1) add("ATENCAO", "Cadastros", `${itens.length} CARs ativos sobre a área (sobreposição)`, `${itens.slice(1, 4).join(" | ")}${itens.length > 4 ? ` | e mais ${itens.length - 4}` : ""}. Principal: ${itens[0]}.`);
+      continue;
+    }
+    const nivel: NivelAlerta = c.gravidade === "CRITICO" || c.id === "TI" ? "CRITICO" : "ATENCAO";
+    const titulo = c.id === "TI" ? "Área sobrepõe Terra Indígena" : c.id === "UC" ? "Área sobrepõe Unidade de Conservação" : c.id === "EMBARGO" ? (/sobre a área/.test(c.detalhe) ? "Embargo ambiental sobre a área" : "Proprietário com embargo ambiental em outro imóvel") : "Alerta de desmatamento (DETER) na área";
+    add(nivel, "Ambiental", titulo, `${(c.itens ?? []).slice(0, 4).join(" | ")}. Fonte: ${c.fonte}.`);
+  }
+  if (av.zona === "RURAL" && av.poligonal && !av.consultas?.length) add("INFO", "Ambiental", "Consultas ambientais não realizadas");
+  if (av.zona === "RURAL" && !av.poligonal) add("INFO", "Ambiental", "Sem poligonal: CAR, TI, UC, embargos e DETER não puderam ser consultados pela área");
+
   // ── Urbano: riscos e IPTU ──
   if (av.zona === "URBANO" && av.urbano) {
     for (const r of av.urbano.riscos ?? []) add("ATENCAO", "Riscos", r);
@@ -275,6 +396,10 @@ export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating" | "
   if (!av.mercado || av.mercado.comparaveis.length === 0) add("ATENCAO", "Mercado", "Sem comparáveis de mercado: valor de mercado não calculado");
   else if (av.valores.amostra_saneada < 3) add("ATENCAO", "Mercado", `Só ${av.valores.amostra_saneada} comparável(is) válido(s) após o saneamento`, "Confiança baixa do valor; a NBR 14653 pede no mínimo 3 a 5 dados.");
   else if (av.valores.amostra_total - av.valores.amostra_saneada >= Math.ceil(av.valores.amostra_total / 2)) add("INFO", "Mercado", `Amostra dispersa: ${av.valores.amostra_total - av.valores.amostra_saneada} de ${av.valores.amostra_total} comparáveis descartados no saneamento`, "Preços muito espalhados na região; conferir com corretor local ou laudo.");
+  if (av.valores.grau_precisao === "FORA") add("ATENCAO", "Mercado", `Amplitude do intervalo de confiança de ${fmtNum(av.valores.estatistica?.amplitude_pct ?? 0, 1)}% (acima de 50%)`, "Precisão abaixo do Grau I da NBR 14653: amostra muito dispersa, valor indicativo.");
+  if (av.valores.grau_fundamentacao?.grau === "FORA") add("ATENCAO", "Mercado", "Amostra não atinge o Grau I de fundamentação", "Poucos dados ou fatores fora do intervalo admissível; buscar mais comparáveis ou laudo.");
+  if (/CUB por padrão não localizado/.test(av.valores.criterio)) add("INFO", "Mercado", "CUB por padrão do estado não localizado", "O fator padrão construtivo não foi aplicado; os comparáveis foram buscados no mesmo padrão.");
+  if (/CUB\/SINAPI não localizado/.test(av.valores.criterio)) add("INFO", "Mercado", "Custo de construção do estado não localizado", "Benfeitorias sem custo de reprodução: valor só da terra nua.");
   if (pos(av.valores.valor_mercado) && pos(av.valores.laudo_mercado) && pct(av.valores.valor_mercado, av.valores.laudo_mercado) > 0.2) {
     add("INFO", "Mercado", "Valor V3 difere mais de 20% do laudo anexado", `V3 ${fmtNum(av.valores.valor_mercado, 0)} × laudo ${fmtNum(av.valores.laudo_mercado, 0)}.`);
   }

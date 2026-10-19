@@ -10,6 +10,9 @@
 // Fica gravada em metadata.imoveis[i].avaliacao_tecnica (só o servidor grava; ver
 // protegerMetadata em lib/credit-proposal-meta.ts).
 
+import type { ClasseArea, EstadoConservacao, Estatistica, GrauFundamentacao, Grau, PadraoDetalhe, SituacaoAcesso } from "./normas";
+export type { ClasseArea, EstadoConservacao, Estatistica, GrauFundamentacao, Grau, PadraoDetalhe, SituacaoAcesso } from "./normas";
+
 export type ZonaImovel = "URBANO" | "RURAL";
 export type NivelAlerta = "CRITICO" | "ATENCAO" | "INFO";
 export type Confianca = "ALTA" | "MEDIA" | "BAIXA";
@@ -58,6 +61,8 @@ export interface Identificacao {
   uf?: string | null;
   cep?: string | null;
   denominacao?: string | null;      // nome da fazenda/sítio/condomínio
+  /** CPF/CNPJ dos proprietários atuais (matrícula) — usado na consulta de embargos. */
+  documentos_proprietarios?: string[];
 }
 
 export interface Registro {
@@ -90,6 +95,8 @@ export interface AcabamentoItem { ambiente: string; descricao: string }
 export interface CaracteristicasUrbano {
   tipo?: string | null;              // casa, apartamento, sala comercial, galpão, terreno…
   padrao?: PadraoNivel | null;
+  /** Padrão em 5 níveis (baixo, médio-baixo, médio, médio-alto, alto) — base do fator padrão. */
+  padrao_detalhe?: PadraoDetalhe | null;
   padrao_descricao?: string | null;
   idade_aparente_anos?: number | null;
   conservacao?: string | null;       // novo, regular, reparos simples, reparos importantes…
@@ -144,6 +151,12 @@ export interface Edificacao {
   conservacao?: string | null;
   averbada?: boolean | null;
   descricao?: string | null;
+  /** Projeto-padrão do CUB usado no custo de reprodução (R1-B, R1-N, R1-A, GI, PIS…). */
+  padrao_cub?: string | null;
+  /** Fração do CUB para a benfeitoria (casa ~0,9; galpão aberto ~0,2–0,4) — como no laudo Eagle. */
+  fator_cub?: number | null;
+  /** Estado de conservação de Heidecke (a–i). */
+  estado?: EstadoConservacao | null;
 }
 
 export interface CaracteristicasRural {
@@ -166,6 +179,8 @@ export interface CaracteristicasRural {
   bioma?: string | null;
   reserva_legal_exigida_pct?: number | null;
   aptidao?: string | null;             // agricultura, pecuária, dupla aptidão…
+  topografia?: string | null;
+  solos?: string | null;
   uso_solo?: string[];
   recursos_hidricos?: string[];
   cercas?: string | null;
@@ -199,6 +214,37 @@ export interface Comparavel {
   em_condominio?: boolean | null;
   /** Anúncio no MESMO condomínio do imóvel avaliado. */
   mesmo_condominio?: boolean | null;
+  municipio?: string | null;
+  data_anuncio?: string | null;
+  /** Distância aproximada (km) do município do anúncio ao do avaliando. */
+  distancia_km?: number | null;
+  // Rural (tratamento por fatores, como a Eagle Consult)
+  benfeitorias_valor?: number | null;       // estimado a partir do anúncio, descontado do preço
+  benfeitorias_descricao?: string | null;
+  classes?: ClasseArea[];
+  /** Classes físicas da área aberta (sem a preservação) e % de mata/reserva/APP informado no anúncio. */
+  classes_area_aberta?: ClasseArea[];
+  preservacao_pct?: number | null;
+  situacao?: SituacaoAcesso | null;
+  indice_agronomico?: number | null;
+  // Urbano (fatores do laudo Engebanc)
+  area_terreno?: number | null;
+  padrao_detalhe?: PadraoDetalhe | null;
+  idade?: number | null;
+  estado?: EstadoConservacao | null;
+  /** Índice de localização relativo (avaliando = 100). */
+  indice_local?: number | null;
+  local_justificativa?: string | null;
+}
+
+export interface FatorAplicado { sigla: string; nome: string; valor: number }
+export interface Homogeneizacao {
+  vu_bruto: number;                 // R$/un. depois da oferta e do desconto das benfeitorias
+  fatores: FatorAplicado[];
+  fator_total: number;
+  vu_homogeneizado: number;
+  usado: boolean;
+  motivo?: string | null;           // por que ficou de fora
 }
 
 export interface PesquisaMercadoTecnica {
@@ -221,6 +267,34 @@ export interface LaudoExterno {
   parecer?: string | null;
 }
 
+export interface CubRef {
+  uf: string;
+  mes_ref?: string | null;
+  fonte_nome?: string | null;
+  fonte_url?: string | null;
+  /** R$/m² por projeto-padrão: "R1-B", "R1-N", "R1-A", "R8-B", "R8-N", "R8-A", "GI", "PIS"… */
+  valores: Record<string, number>;
+  /** Custo médio do m² SINAPI (IBGE/Caixa) do estado — base oficial quando o CUB não é achado. */
+  sinapi_m2?: number | null;
+  sinapi_mes?: string | null;
+}
+
+export interface BenfeitoriaCalculo {
+  nome: string;
+  area_m2: number;
+  padrao_cub: string;
+  cub_m2: number;
+  fator_cub: number;
+  unitario_novo: number;
+  idade: number;
+  vida_util: number;
+  estado: EstadoConservacao;
+  coef_depreciacao: number;
+  custo_novo: number;
+  custo_depreciado: number;
+  averbada?: boolean | null;
+}
+
 export interface Valores {
   unidade: "m2" | "ha";
   area_considerada: number | null;
@@ -240,6 +314,19 @@ export interface Valores {
   amostra_criterio?: string | null;
   /** Diferença observada do R$/m² em condomínio sobre o de fora (média × média), quando há os dois. */
   premio_condominio_pct?: number | null;
+  /** v2 (19/10/2026): tratamento por fatores + estatística + graus NBR. */
+  metodo?: string | null;
+  estatistica?: Estatistica | null;
+  grau_fundamentacao?: GrauFundamentacao | null;
+  grau_precisao?: Grau | null;
+  /** Rural: terra nua (VTN homogeneizado × área) + benfeitorias (custo de reprodução depreciado). */
+  valor_terra?: number | null;
+  valor_benfeitorias?: number | null;
+  benfeitorias?: BenfeitoriaCalculo[];
+  cub?: CubRef | null;
+  indice_agronomico?: number | null;
+  /** Homogeneização de cada comparável (mesma ordem de mercado.comparaveis). */
+  homog?: (Homogeneizacao | null)[];
   valor_mercado: number | null;
   fator_liquidez: number;          // deságio p/ garantia (urbano 0,80 · rural 0,70)
   valor_liquidez: number | null;
@@ -270,6 +357,41 @@ export interface Parecer {
   aceite: "ACEITAR" | "ACEITAR_COM_RESSALVAS" | "NAO_RECOMENDADO";
 }
 
+export interface Relevo {
+  pontos: number;
+  altitude_min: number;
+  altitude_max: number;
+  altitude_media: number;
+  declividade_media_pct: number;
+  espacamento_m: number;
+  classes: { classe: string; pct: number }[];
+  fonte: string;
+}
+
+/** Classificação das terras do avaliando (capacidade de uso × situação) → índice agronômico. */
+export interface Terras {
+  classes: ClasseArea[];
+  /** % da área em preservação (Reserva Legal + APP) aplicado como classe VIII, e de onde veio. */
+  preservacao_pct?: number | null;
+  preservacao_base?: string | null;
+  situacao: SituacaoAcesso;
+  situacao_descricao?: string | null;
+  indice_agronomico: number | null;
+  justificativa?: string | null;
+  relevo?: Relevo | null;
+}
+
+export interface Consulta {
+  id: "CAR" | "TI" | "UC" | "EMBARGO" | "DETER";
+  nome: string;
+  status: "LIVRE" | "ENCONTRADO" | "INDISPONIVEL";
+  detalhe: string;
+  itens?: string[];
+  gravidade?: "CRITICO" | "ATENCAO" | null;
+  fonte: string;
+  consultado_em: string;
+}
+
 /** Último laudo em PDF salvo do imóvel (metadata.imoveis[i].avaliacao_tecnica_pdf — só o servidor grava). */
 export interface PdfAvaliacaoMeta {
   storage_path: string;
@@ -282,7 +404,7 @@ export interface PdfAvaliacaoMeta {
 }
 
 export interface AvaliacaoTecnica {
-  versao: 1;
+  versao: 1 | 2;
   zona: ZonaImovel;
   gerado_em: string;
   gerado_por?: string | null;
@@ -298,6 +420,10 @@ export interface AvaliacaoTecnica {
   mercado?: PesquisaMercadoTecnica | null;
   laudo_externo?: LaudoExterno | null;
   ambiental?: string | null;
+  /** Rural v2: classes de capacidade de uso, situação, relevo. */
+  terras?: Terras | null;
+  /** Rural v2: consultas públicas pela poligonal (CAR, TI, UC, embargos, DETER). */
+  consultas?: Consulta[];
   valores: Valores;
   alertas: Alerta[];
   rating: RatingGarantia;
