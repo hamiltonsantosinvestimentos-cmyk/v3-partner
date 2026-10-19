@@ -265,7 +265,7 @@ export function htmlLaudoAvaliacao(opts: {
 
   <div class="faixa">
     <div class="box"><div class="l">Valor de mercado</div><div class="n">${brl(v.valor_mercado)}</div><div class="s">${v.preco_unitario_aplicado ? `${brl(v.preco_unitario_aplicado)}/${un}${rural && v.valor_benfeitorias ? ` + benf. ${brl(v.valor_benfeitorias)}` : ""}` : "sem comparáveis"}</div></div>
-    <div class="box"><div class="l">Valor de liquidez</div><div class="n">${brl(v.valor_liquidez)}</div><div class="s">fator ${num(v.fator_liquidez)} (garantia)</div></div>
+    <div class="box"><div class="l">Valor de liquidez</div><div class="n">${brl(v.valor_liquidez)}</div><div class="s">${v.piso_venal_aplicado && v.valor_liquidez !== null && v.valor_liquidez === v.piso_venal ? "piso: valor venal" : `fator ${num(v.fator_liquidez)} (garantia)`}</div></div>
     <div class="box"><div class="l">LTV s/ liquidez</div><div class="n">${ltv !== null ? `${num(ltv * 100, 1)}%` : "—"}</div><div class="s">${solicitado ? `solicitado ${brl(solicitado)}` : "máx. 70%"}</div></div>
     <div class="box"><div class="l">Área considerada</div><div class="n">${v.area_considerada ? `${num(v.area_considerada, v.unidade === "ha" ? 4 : 2)} ${un}` : "—"}</div><div class="s">${esc(v.area_criterio)}</div></div>
     <div class="rt"><div class="m">Rating</div><div class="nota">${esc(av.rating.nota)}</div><div class="m">${av.rating.pontos}/100</div></div>

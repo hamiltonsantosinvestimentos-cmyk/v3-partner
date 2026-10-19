@@ -222,7 +222,7 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
   if (precos.length === 0 || !est) {
     if (!pos(venal)) return { ...base, criterio: ["sem comparáveis válidos", ...avisos].join(" · ") };
     return {
-      ...base, piso_venal_aplicado: true, valor_mercado: venal, valor_liquidez: venal * fatorLiq,
+      ...base, piso_venal_aplicado: true, valor_mercado: venal, valor_liquidez: venal, // liquidez também não fica abaixo do venal
       criterio: [`sem comparáveis válidos: adotado o valor venal (${rural ? "VTN do ITR" : "IPTU"}) como piso`, ...avisos].join(" · "),
     };
   }
@@ -232,20 +232,26 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
   const terra = pos(area) ? unit * area : null;
   const extraBenf = rural ? valorBenf : 0;
   const vmCalc = terra !== null ? terra + extraBenf : null;
-  const pisoAplicado = pos(venal) && (vmCalc === null || venal > vmCalc);
-  const vm = pisoAplicado ? venal : vmCalc;
+  // Piso no mercado E na liquidez: nenhum dos dois fica abaixo do venal (Hamilton, 19/10/2026).
+  const pisoMercado = pos(venal) && (vmCalc === null || venal > vmCalc);
+  const vm = pisoMercado ? venal : vmCalc;
+  const liqCalc = vm !== null ? vm * fatorLiq : null;
+  const pisoLiquidez = pos(venal) && (liqCalc === null || venal > liqCalc);
+  const liq = pisoLiquidez ? venal : liqCalc;
+  const pisoAplicado = pisoMercado || pisoLiquidez;
   return {
     ...base,
     preco_unitario_min: Math.min(...precos), preco_unitario_medio: unit, preco_unitario_max: Math.max(...precos), preco_unitario_aplicado: unit,
     criterio: [
       rural ? "maior valor por hectare entre os comparáveis homogeneizados e saneados (critério V3)" : "média saneada dos comparáveis homogeneizados",
-      ...(pisoAplicado ? [`elevado ao valor venal (${rural ? "VTN do ITR + benfeitorias" : "IPTU"}), pois o calculado${vmCalc !== null ? ` (${fmtNum(vmCalc, 0)})` : ""} ficou abaixo`] : []),
+      ...(pisoMercado ? [`mercado elevado ao valor venal (${rural ? "VTN do ITR + benfeitorias" : "IPTU"}), pois o calculado${vmCalc !== null ? ` (${fmtNum(vmCalc, 0)})` : ""} ficou abaixo`] : []),
+      ...(pisoLiquidez ? [`liquidez elevada ao valor venal (${fmtNum(venal ?? 0, 0)}), pois ${fmtNum(fatorLiq, 2)} × mercado${liqCalc !== null ? ` (${fmtNum(liqCalc, 0)})` : ""} ficou abaixo`] : []),
       ...avisos,
     ].join(" · "),
     piso_venal_aplicado: pisoAplicado,
     valor_terra: rural ? terra : null,
     valor_mercado: vm,
-    valor_liquidez: vm !== null ? vm * fatorLiq : null,
+    valor_liquidez: liq,
     intervalo_inferior: pos(area) ? est.ic_inferior * area + extraBenf : null,
     intervalo_superior: pos(area) ? est.ic_superior * area + extraBenf : null,
   };
@@ -419,7 +425,7 @@ export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating" | "
   if (av.valores.grau_fundamentacao?.grau === "FORA") add("ATENCAO", "Mercado", "Amostra não atinge o Grau I de fundamentação", "Poucos dados ou fatores fora do intervalo admissível; buscar mais comparáveis ou laudo.");
   if (/CUB por padrão não localizado/.test(av.valores.criterio)) add("INFO", "Mercado", "CUB por padrão do estado não localizado", "O fator padrão construtivo não foi aplicado; os comparáveis foram buscados no mesmo padrão.");
   if (/CUB\/SINAPI não localizado/.test(av.valores.criterio)) add("INFO", "Mercado", "Custo de construção do estado não localizado", "Benfeitorias sem custo de reprodução: valor só da terra nua.");
-  if (av.valores.piso_venal_aplicado) add("INFO", "Valores", `Valor de mercado elevado ao valor venal (${av.zona === "RURAL" ? "VTN do ITR" : "IPTU"})`, `A pesquisa de mercado deu menos que o valor venal do próprio imóvel; por critério V3 a avaliação não fica abaixo dele (${fmtNum(av.valores.piso_venal ?? 0, 0)}).`);
+  if (av.valores.piso_venal_aplicado) add("INFO", "Valores", `Avaliação ajustada ao valor venal (${av.zona === "RURAL" ? "VTN do ITR" : "IPTU"})`, `Por critério V3, nem o valor de mercado nem o de liquidez ficam abaixo do valor venal do próprio imóvel (${fmtNum(av.valores.piso_venal ?? 0, 0)}).`);
   if (pos(av.valores.valor_mercado) && pos(av.valores.laudo_mercado) && pct(av.valores.valor_mercado, av.valores.laudo_mercado) > 0.2) {
     add("INFO", "Mercado", "Valor V3 difere mais de 20% do laudo anexado", `V3 ${fmtNum(av.valores.valor_mercado, 0)} × laudo ${fmtNum(av.valores.laudo_mercado, 0)}.`);
   }
