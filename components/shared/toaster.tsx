@@ -63,10 +63,13 @@ export function Toaster() {
     return () => window.removeEventListener("keydown", onKey);
   }, [atual]);
 
+  // pointer-events-auto no overlay de confirmação: dentro de um Dialog Radix modal o body fica com
+  // pointer-events:none e o overlay (renderizado fora do Dialog) herdava o bloqueio; os botões apareciam
+  // mas não recebiam clique (achado no teste da aba Originação, 18/10/2026; afetava também Clientes).
   return (
     <>
       {atual && (
-        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-black/75 p-4">
+        <div className="pointer-events-auto fixed inset-0 z-[210] flex items-center justify-center bg-black/75 p-4">
           <div role="dialog" aria-modal="true" aria-label="Confirmação" className="w-full max-w-md space-y-3 rounded-xl border border-[#C9A84C]/40 bg-[#09081A] p-4">
             <p className="whitespace-pre-line text-[13px] leading-snug text-[#F5F1E8]">{atual.message}</p>
             <div className="flex justify-end gap-2">
