@@ -325,6 +325,9 @@ export interface Valores {
   benfeitorias?: BenfeitoriaCalculo[];
   cub?: CubRef | null;
   indice_agronomico?: number | null;
+  /** Valor venal (IPTU no urbano; VTN do ITR + benfeitorias no rural) usado como piso do valor de mercado. */
+  piso_venal?: number | null;
+  piso_venal_aplicado?: boolean;
   /** Homogeneização de cada comparável (mesma ordem de mercado.comparaveis). */
   homog?: (Homogeneizacao | null)[];
   valor_mercado: number | null;
@@ -371,7 +374,7 @@ export interface Relevo {
 /** Classificação das terras do avaliando (capacidade de uso × situação) → índice agronômico. */
 export interface Terras {
   classes: ClasseArea[];
-  /** % da área em preservação (Reserva Legal + APP) aplicado como classe VIII, e de onde veio. */
+  /** % da área em Reserva Legal aplicado como classe VIII (APP não entra), e de onde veio. */
   preservacao_pct?: number | null;
   preservacao_base?: string | null;
   situacao: SituacaoAcesso;

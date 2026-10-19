@@ -188,7 +188,7 @@ Os arquivos acima foram anexados pelo cliente/partner. ATENÇÃO: muitas vezes e
 ${ctx.outros_imoveis && ctx.outros_imoveis > 0 ? `A proposta tem ${ctx.outros_imoveis + 1} imóveis. Avalie SÓ o imóvel abaixo; arquivos de outro imóvel = "NAO_RELACIONADO".\n` : ""}Dados do imóvel na proposta: ${[ctx.endereco, ctx.cidade && ctx.estado ? `${ctx.cidade}/${ctx.estado}` : ctx.cidade, ctx.cep ? `CEP ${ctx.cep}` : null, ctx.area_m2 ? `${ctx.area_m2} m²` : null].filter(Boolean).join(" · ") || "não informados"}. Cliente: ${ctx.cliente_nome ?? "não informado"}.
 
 O que extrair (parâmetros que os avaliadores usam nos laudos):
-- Matrícula: número, cartório/comarca, data de emissão da certidão, proprietários ATUAIS (só os nomes, após a última transmissão), descrição do imóvel, área, averbação de construção, cadeia dominial recente.
+- Matrícula: número, cartório/comarca, data de emissão da certidão (a V3 aceita certidão de até 90 dias; não gere alerta de validade), proprietários ATUAIS (só os nomes, após a última transmissão), descrição do imóvel, área, averbação de construção, cadeia dominial recente.
 - onus = SÓ gravames (hipoteca, alienação fiduciária, penhora, arresto, indisponibilidade, usufruto, servidão, cláusulas de inalienabilidade/impenhorabilidade, ações reais/reipersecutórias, bem de família), dizendo se estão ativos ou cancelados na própria matrícula. Averbação de casamento, pacto antenupcial, divórcio, óbito, nome, construção ou condomínio NÃO é ônus.
 ${ctx.zona === "RURAL"
     ? `- CCIR: número, exercício, situação, área total, módulos fiscais, fração mínima, classificação fundiária. ITR: NIRF, exercício, área, VTN declarado. CAR: código, situação, área, Reserva Legal, APP, vegetação nativa, área consolidada.
@@ -388,7 +388,7 @@ async function pesquisarMercado(ai: Anthropic, zona: ZonaImovel, l: LeituraIa, c
     ? `Para CADA comparável, como faz o avaliador no tratamento por fatores (NBR 14653-3):
 - benfeitorias_valor: valor em reais das benfeitorias citadas no anúncio (custo de reprodução depreciado, conservador; 0 se terra nua). Será DESCONTADO do preço para chegar ao valor da terra nua.
 - distancia_km: distância aproximada por estrada entre o município do anúncio e o do avaliando (mesma região geoeconômica = até ~120 km).
-- preservacao_pct: % da área em mata/reserva/APP SÓ se o anúncio informar (senão null — a V3 aplica a Reserva Legal do bioma).
+- preservacao_pct: % da área em Reserva Legal/mata preservada SÓ se o anúncio informar (senão null — a V3 aplica a Reserva Legal do bioma). Não some APP.
 - classes_area_aberta: classes de capacidade de uso da parte ABERTA/aproveitável (sem a mata/reserva), soma 100, pela descrição (relevo, % plano, lavoura, pasto, brejo, pedras). Classes: ${CLASSES_TXT}.
 - situacao: acesso pela descrição (asfalto, distância da cidade/rodovia). Escala: ${SITUACOES_TXT}.
 - Prefira áreas de 1/3 a 3 vezes o tamanho do avaliando, na mesma microrregião, anúncios recentes.`
@@ -506,7 +506,7 @@ async function classificarTerras(ai: Anthropic, l: LeituraIa, extra: { relevo: R
   const system = `Você é engenheiro agrônomo avaliador (NBR 14653-3). Classifique as terras do imóvel rural pelo Sistema de Capacidade de Uso (Lepsch) e a situação/acesso (escala de Mendes Sobrinho), como no cálculo da Nota Agronômica do INCRA. Se faltar informação de solo, use a tool "web_search" (1 ou 2 buscas: solos predominantes e aptidão agrícola do município).
 Classes: ${CLASSES_TXT}.
 Situação: ${SITUACOES_TXT}.
-Classifique SÓ a área ABERTA/aproveitável (fora da Reserva Legal e da APP): a V3 soma depois a preservação como classe VIII, com a mesma regra usada nos anúncios comparáveis. Relevo forte ondulado/montanhoso (SRTM) puxa para VI–VII; áreas planas mecanizáveis em solo bom = I–III; pastagem em relevo suave = III–IV; várzea encharcável = V; afloramento rochoso/relevo excessivo fora da APP = VIII. Use o relevo do SRTM como base objetiva. A soma das classes da área aberta deve dar 100.
+Classifique SÓ a área fora da Reserva Legal: a V3 soma depois a Reserva Legal como classe VIII, com a mesma regra usada nos anúncios comparáveis. A APP NÃO é descontada à parte (critério V3; o Código Florestal permite computá-la na Reserva Legal): classifique-a pela capacidade física da terra. Relevo forte ondulado/montanhoso (SRTM) puxa para VI–VII; áreas planas mecanizáveis em solo bom = I–III; pastagem em relevo suave = III–IV; várzea encharcável = V; afloramento rochoso/relevo excessivo fora da APP = VIII. Use o relevo do SRTM como base objetiva. A soma das classes da área aberta deve dar 100.
 Responda SOMENTE com JSON: {"classes_area_aberta":[{"classe":"III","pct":70,"base":"lavoura em relevo suave (SRTM 70% plano/suave)"},{"classe":"IV","pct":30,"base":"pasto em baixada com drenagem imperfeita"}],"situacao":"BOA","situacao_descricao":"","justificativa":"2-3 frases"}`;
   const j = jsonDe<{ classes_area_aberta?: { classe?: unknown; pct?: unknown; base?: unknown }[]; classes?: { classe?: unknown; pct?: unknown; base?: unknown }[]; situacao?: unknown; situacao_descricao?: string; justificativa?: string }>(
     await comBusca(ai, system, `Dados do imóvel: ${JSON.stringify(dados)}`, 3, 2000),
@@ -514,12 +514,13 @@ Responda SOMENTE com JSON: {"classes_area_aberta":[{"classe":"III","pct":70,"bas
   const abertas = normalizarClasses(j.classes_area_aberta ?? j.classes);
   if (abertas.length === 0) return null;
   const situacao = situacaoValida(j.situacao) ?? "BOA";
-  // Preservação = maior entre a do CAR (RL + APP) e a Reserva Legal exigida no bioma.
+  // Preservação = maior entre a Reserva Legal do CAR e a exigida no bioma. A APP não entra
+  // (critério V3 de 19/10/2026: área de APP não é obrigatória no cálculo).
   const rlExigida = reservaExigida(l);
   const areaCar = r.car?.area_ha ?? extra.car?.area_ha ?? extra.area_ha;
-  const doCar = areaCar && (r.car?.reserva_legal_ha || r.car?.app_ha) ? (((r.car?.reserva_legal_ha ?? 0) + (r.car?.app_ha ?? 0)) / areaCar) * 100 : null;
+  const doCar = areaCar && r.car?.reserva_legal_ha ? (r.car.reserva_legal_ha / areaCar) * 100 : null;
   const pres = Math.max(rlExigida, doCar ?? 0);
-  const base = doCar !== null && doCar >= rlExigida ? `CAR: Reserva Legal + APP = ${doCar.toFixed(1)}%` : `Reserva Legal exigida no bioma (${rlExigida}%)${doCar !== null ? `; CAR declara ${doCar.toFixed(1)}%` : ""}`;
+  const base = doCar !== null && doCar >= rlExigida ? `CAR: Reserva Legal = ${doCar.toFixed(1)}%` : `Reserva Legal exigida no bioma (${rlExigida}%)${doCar !== null ? `; CAR declara ${doCar.toFixed(1)}%` : ""}`;
   const classes = comPreservacao(abertas, pres);
   return {
     classes, preservacao_pct: pres, preservacao_base: base, situacao, situacao_descricao: j.situacao_descricao ?? null,
@@ -560,6 +561,8 @@ export async function escreverParecer(ai: Anthropic, av: Omit<AvaliacaoTecnica, 
       role: "user",
       content: `Você é o engenheiro avaliador responsável da V3 Partners. Com base na avaliação técnica abaixo (já calculada — NÃO recalcule valores), escreva o parecer técnico do imóvel em garantia, no tom dos laudos profissionais: objetivo e enxuto, citando matrícula, áreas, divergências e o que precisa ser regularizado. Cada item das listas = 1 frase curta (até 25 palavras), no máximo 5 itens por lista, os mais importantes primeiro. Português do Brasil, sem travessão.
 ${JSON.stringify(resumo)}
+
+Se o valor de mercado foi elevado ao valor venal (valores.piso_venal_aplicado), diga isso no resumo. A certidão da matrícula vale até 90 dias (critério V3): não trate certidão com menos de 90 dias como vencida ou desatualizada. Nos imóveis rurais o valor por hectare aplicado é o maior entre os comparáveis aceitos (critério V3) e a APP não é descontada.
 
 O proprietário do imóvel pode ser diferente do proponente (terceiro garantidor): isso é permitido e NÃO é ressalva nem motivo para rebaixar o aceite — no máximo recomende a assinatura do proprietário como interveniente garantidor.
 

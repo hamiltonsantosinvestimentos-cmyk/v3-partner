@@ -21,8 +21,8 @@ export const FATOR_OFERTA = 0.9;
 /** Hipótese de rejeição da amostra: ±30% em torno da média (Eagle Consult). */
 export const LIMITE_SANEAMENTO = 0.3;
 export const FATOR_LIQUIDEZ: Record<ZonaImovel, number> = { URBANO: 0.8, RURAL: 0.7 };
-/** Matrícula vale 30 dias (prática de cartório/financiamento; os laudos pedem o mesmo). */
-export const VALIDADE_MATRICULA_DIAS = 30;
+/** Certidão da matrícula aceita até 90 dias (critério V3, definido pelo Hamilton em 19/10/2026). */
+export const VALIDADE_MATRICULA_DIAS = 90;
 
 const pos = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const fmtNum = (v: number, casas = 2) => v.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -215,15 +215,34 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
     laudo_mercado: av.laudo_externo?.valor_mercado ?? null,
     laudo_garantia: av.laudo_externo?.valor_garantia ?? null,
   };
-  if (precos.length === 0 || !est) return { ...base, criterio: ["sem comparáveis válidos", ...avisos].join(" · ") };
-  const unit = est.media; // média saneada, como nos laudos de referência
+  // Piso: a avaliação nunca fica abaixo do valor venal do próprio imóvel (critério V3, 19/10/2026).
+  // Urbano: venal do IPTU. Rural: VTN declarado no ITR (terra nua) + benfeitorias.
+  const venal = rural ? (pos(base.vtn_itr) ? base.vtn_itr + (rural ? valorBenf : 0) : null) : (pos(base.valor_venal_iptu) ? base.valor_venal_iptu : null);
+  base.piso_venal = venal;
+  if (precos.length === 0 || !est) {
+    if (!pos(venal)) return { ...base, criterio: ["sem comparáveis válidos", ...avisos].join(" · ") };
+    return {
+      ...base, piso_venal_aplicado: true, valor_mercado: venal, valor_liquidez: venal * fatorLiq,
+      criterio: [`sem comparáveis válidos: adotado o valor venal (${rural ? "VTN do ITR" : "IPTU"}) como piso`, ...avisos].join(" · "),
+    };
+  }
+  // Urbano: média saneada (como os laudos). Rural: maior R$/ha entre os comparáveis aceitos no
+  // saneamento — critério V3 definido pelo Hamilton em 19/10/2026.
+  const unit = rural ? Math.max(...precos) : est.media;
   const terra = pos(area) ? unit * area : null;
   const extraBenf = rural ? valorBenf : 0;
-  const vm = terra !== null ? terra + extraBenf : null;
+  const vmCalc = terra !== null ? terra + extraBenf : null;
+  const pisoAplicado = pos(venal) && (vmCalc === null || venal > vmCalc);
+  const vm = pisoAplicado ? venal : vmCalc;
   return {
     ...base,
     preco_unitario_min: Math.min(...precos), preco_unitario_medio: unit, preco_unitario_max: Math.max(...precos), preco_unitario_aplicado: unit,
-    criterio: ["média saneada dos comparáveis homogeneizados", ...avisos].join(" · "),
+    criterio: [
+      rural ? "maior valor por hectare entre os comparáveis homogeneizados e saneados (critério V3)" : "média saneada dos comparáveis homogeneizados",
+      ...(pisoAplicado ? [`elevado ao valor venal (${rural ? "VTN do ITR + benfeitorias" : "IPTU"}), pois o calculado${vmCalc !== null ? ` (${fmtNum(vmCalc, 0)})` : ""} ficou abaixo`] : []),
+      ...avisos,
+    ].join(" · "),
+    piso_venal_aplicado: pisoAplicado,
     valor_terra: rural ? terra : null,
     valor_mercado: vm,
     valor_liquidez: vm !== null ? vm * fatorLiq : null,
@@ -400,6 +419,7 @@ export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating" | "
   if (av.valores.grau_fundamentacao?.grau === "FORA") add("ATENCAO", "Mercado", "Amostra não atinge o Grau I de fundamentação", "Poucos dados ou fatores fora do intervalo admissível; buscar mais comparáveis ou laudo.");
   if (/CUB por padrão não localizado/.test(av.valores.criterio)) add("INFO", "Mercado", "CUB por padrão do estado não localizado", "O fator padrão construtivo não foi aplicado; os comparáveis foram buscados no mesmo padrão.");
   if (/CUB\/SINAPI não localizado/.test(av.valores.criterio)) add("INFO", "Mercado", "Custo de construção do estado não localizado", "Benfeitorias sem custo de reprodução: valor só da terra nua.");
+  if (av.valores.piso_venal_aplicado) add("INFO", "Valores", `Valor de mercado elevado ao valor venal (${av.zona === "RURAL" ? "VTN do ITR" : "IPTU"})`, `A pesquisa de mercado deu menos que o valor venal do próprio imóvel; por critério V3 a avaliação não fica abaixo dele (${fmtNum(av.valores.piso_venal ?? 0, 0)}).`);
   if (pos(av.valores.valor_mercado) && pos(av.valores.laudo_mercado) && pct(av.valores.valor_mercado, av.valores.laudo_mercado) > 0.2) {
     add("INFO", "Mercado", "Valor V3 difere mais de 20% do laudo anexado", `V3 ${fmtNum(av.valores.valor_mercado, 0)} × laudo ${fmtNum(av.valores.laudo_mercado, 0)}.`);
   }
@@ -433,9 +453,12 @@ const ASSUNTOS: [string, RegExp][] = [
 ];
 export const assuntoDe = (a: Alerta) => ASSUNTOS.find(([, re]) => re.test(`${a.titulo} ${a.detalhe ?? ""}`.slice(0, 160)))?.[0] ?? null;
 
+/** Assuntos decididos só pelas regras V3 (ex.: validade da matrícula em 90 dias): a IA não opina. */
+const SO_REGRAS = new Set(["validade_matricula", "proprietario", "ltv"]);
+
 export function juntarAlertas(fixos: Alerta[], daIa: Alerta[]): Alerta[] {
   const vistos = new Set(fixos.map((x) => x.titulo.toLowerCase()));
-  const assuntos = new Set(fixos.map(assuntoDe).filter(Boolean));
+  const assuntos = new Set<string | null>([...fixos.map(assuntoDe).filter(Boolean), ...SO_REGRAS]);
   const extras = daIa.filter((x) => {
     if (!x.titulo || vistos.has(x.titulo.toLowerCase())) return false;
     const a = assuntoDe(x);

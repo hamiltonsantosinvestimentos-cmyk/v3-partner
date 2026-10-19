@@ -177,7 +177,7 @@ export function htmlLaudoAvaliacao(opts: {
     <h2>Terras: capacidade de uso e situação</h2>
     <table class="t"><tr><th>Classe</th><th>% da área</th><th>Índice</th><th>Base</th></tr>${av.terras.classes.map((c) => `<tr><td><b>${c.classe}</b></td><td>${num(c.pct, 1)}%</td><td>${num(INDICE_CLASSE[c.classe], 3)}</td><td>${esc(c.base ?? DESCRICAO_CLASSE[c.classe])}</td></tr>`).join("")}</table>
     ${linhas([
-      ...(typeof av.terras.preservacao_pct === "number" ? [["Preservação (classe VIII)", `${num(av.terras.preservacao_pct, 1)}% · ${esc(av.terras.preservacao_base ?? "")}`]] as [string, string][] : []),
+      ...(typeof av.terras.preservacao_pct === "number" ? [["Reserva Legal (classe VIII)", `${num(av.terras.preservacao_pct, 1)}% · ${esc(av.terras.preservacao_base ?? "")}`]] as [string, string][] : []),
       ["Situação / acesso", `${SITUACAO_LABEL[av.terras.situacao]}${av.terras.situacao_descricao ? ` · ${esc(av.terras.situacao_descricao)}` : ""}`],
       ["Índice agronômico", `<b>${num(av.terras.indice_agronomico, 3)}</b>`],
       ...(av.terras.relevo ? [
