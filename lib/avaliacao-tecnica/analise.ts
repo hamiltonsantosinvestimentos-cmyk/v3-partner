@@ -21,8 +21,8 @@ export const FATOR_OFERTA = 0.9;
 /** Hipótese de rejeição da amostra: ±30% em torno da média (Eagle Consult). */
 export const LIMITE_SANEAMENTO = 0.3;
 export const FATOR_LIQUIDEZ: Record<ZonaImovel, number> = { URBANO: 0.8, RURAL: 0.7 };
-/** Matrícula vale 30 dias (prática de cartório/financiamento; os laudos pedem o mesmo). */
-export const VALIDADE_MATRICULA_DIAS = 30;
+/** Certidão da matrícula aceita até 90 dias (critério V3, definido pelo Hamilton em 19/10/2026). */
+export const VALIDADE_MATRICULA_DIAS = 90;
 
 const pos = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const fmtNum = (v: number, casas = 2) => v.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
@@ -216,14 +216,16 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
     laudo_garantia: av.laudo_externo?.valor_garantia ?? null,
   };
   if (precos.length === 0 || !est) return { ...base, criterio: ["sem comparáveis válidos", ...avisos].join(" · ") };
-  const unit = est.media; // média saneada, como nos laudos de referência
+  // Urbano: média saneada (como os laudos). Rural: maior R$/ha entre os comparáveis aceitos no
+  // saneamento — critério V3 definido pelo Hamilton em 19/10/2026.
+  const unit = rural ? Math.max(...precos) : est.media;
   const terra = pos(area) ? unit * area : null;
   const extraBenf = rural ? valorBenf : 0;
   const vm = terra !== null ? terra + extraBenf : null;
   return {
     ...base,
     preco_unitario_min: Math.min(...precos), preco_unitario_medio: unit, preco_unitario_max: Math.max(...precos), preco_unitario_aplicado: unit,
-    criterio: ["média saneada dos comparáveis homogeneizados", ...avisos].join(" · "),
+    criterio: [rural ? "maior valor por hectare entre os comparáveis homogeneizados e saneados (critério V3)" : "média saneada dos comparáveis homogeneizados", ...avisos].join(" · "),
     valor_terra: rural ? terra : null,
     valor_mercado: vm,
     valor_liquidez: vm !== null ? vm * fatorLiq : null,
@@ -433,9 +435,12 @@ const ASSUNTOS: [string, RegExp][] = [
 ];
 export const assuntoDe = (a: Alerta) => ASSUNTOS.find(([, re]) => re.test(`${a.titulo} ${a.detalhe ?? ""}`.slice(0, 160)))?.[0] ?? null;
 
+/** Assuntos decididos só pelas regras V3 (ex.: validade da matrícula em 90 dias): a IA não opina. */
+const SO_REGRAS = new Set(["validade_matricula", "proprietario", "ltv"]);
+
 export function juntarAlertas(fixos: Alerta[], daIa: Alerta[]): Alerta[] {
   const vistos = new Set(fixos.map((x) => x.titulo.toLowerCase()));
-  const assuntos = new Set(fixos.map(assuntoDe).filter(Boolean));
+  const assuntos = new Set<string | null>([...fixos.map(assuntoDe).filter(Boolean), ...SO_REGRAS]);
   const extras = daIa.filter((x) => {
     if (!x.titulo || vistos.has(x.titulo.toLowerCase())) return false;
     const a = assuntoDe(x);

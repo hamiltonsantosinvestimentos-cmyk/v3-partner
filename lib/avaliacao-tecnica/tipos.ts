@@ -371,7 +371,7 @@ export interface Relevo {
 /** Classificação das terras do avaliando (capacidade de uso × situação) → índice agronômico. */
 export interface Terras {
   classes: ClasseArea[];
-  /** % da área em preservação (Reserva Legal + APP) aplicado como classe VIII, e de onde veio. */
+  /** % da área em Reserva Legal aplicado como classe VIII (APP não entra), e de onde veio. */
   preservacao_pct?: number | null;
   preservacao_base?: string | null;
   situacao: SituacaoAcesso;

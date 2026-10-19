@@ -58,7 +58,7 @@ export function normalizarClasses(cs: { classe?: unknown; pct?: unknown; base?: 
 }
 
 /**
- * Junta a área preservada (Reserva Legal + APP) como classe VIII às classes físicas da área
+ * Junta a área preservada (Reserva Legal; a APP não entra — critério V3) como classe VIII às classes físicas da área
  * aberta. A MESMA regra vale para o avaliando e para os anúncios — a preservação é o maior entre
  * o informado e a Reserva Legal exigida no bioma — para o fator classe-situação comparar igual.
  */
@@ -69,7 +69,7 @@ export function comPreservacao(fisicas: ClasseArea[], pctPreservacao: number): C
   if (p > 0) {
     const viii = out.find((c) => c.classe === "VIII");
     if (viii) viii.pct += p;
-    else out.push({ classe: "VIII", pct: p, base: "Reserva Legal + APP" });
+    else out.push({ classe: "VIII", pct: p, base: "Reserva Legal" });
   }
   return normalizarClasses(out);
 }

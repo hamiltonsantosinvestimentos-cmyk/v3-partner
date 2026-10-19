@@ -13,7 +13,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { gerarKml } from "@/lib/avaliacao-tecnica/geo";
 import { TIPO_DOC_LABEL, type Alerta, type AvaliacaoTecnica, type PdfAvaliacaoMeta, type Poligonal } from "@/lib/avaliacao-tecnica/tipos";
-import { diasDesde } from "@/lib/avaliacao-tecnica/analise";
+import { VALIDADE_MATRICULA_DIAS, diasDesde } from "@/lib/avaliacao-tecnica/analise";
 import { DESCRICAO_CLASSE, ESTADO_LABEL, INDICE_CLASSE, PADRAO_LABEL, SITUACAO_LABEL } from "@/lib/avaliacao-tecnica/normas";
 
 export interface JobAvaliacaoTecnica {
@@ -501,7 +501,7 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
           <div className="grid sm:grid-cols-2 gap-2">
             <Bloco titulo="Identificação">
               <Linha rotulo="Matrícula" valor={`${txt(av.identificacao.matricula)}${av.identificacao.cartorio ? ` · ${av.identificacao.cartorio}` : ""}`} />
-              <Linha rotulo="Certidão" valor={<>{data(av.identificacao.data_certidao)}{diasMatricula !== null && <span className={diasMatricula > 30 ? " text-red-300" : " text-[#7A8FA8]"}> ({diasMatricula} dias)</span>}</>} />
+              <Linha rotulo="Certidão" valor={<>{data(av.identificacao.data_certidao)}{diasMatricula !== null && <span className={diasMatricula > VALIDADE_MATRICULA_DIAS ? " text-red-300" : " text-[#7A8FA8]"}> ({diasMatricula} dias)</span>}</>} />
               <Linha rotulo="Proprietário(s)" valor={(av.identificacao.proprietarios ?? []).join(", ") || "—"} />
               {av.identificacao.denominacao && <Linha rotulo="Denominação" valor={av.identificacao.denominacao} />}
               <Linha rotulo="Localização" valor={[av.identificacao.endereco, av.identificacao.bairro, [av.identificacao.cidade, av.identificacao.uf].filter(Boolean).join("/")].filter(Boolean).join(" · ") || "—"} />
@@ -753,10 +753,10 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
                 </tbody>
               </table>
             </div>
-            {typeof av.terras.preservacao_pct === "number" && <Linha rotulo="Preservação (classe VIII)" valor={`${n(av.terras.preservacao_pct, 1)}% · ${av.terras.preservacao_base ?? ""}`} />}
+            {typeof av.terras.preservacao_pct === "number" && <Linha rotulo="Reserva Legal (classe VIII)" valor={`${n(av.terras.preservacao_pct, 1)}% · ${av.terras.preservacao_base ?? ""}`} />}
             <Linha rotulo="Situação / acesso" valor={`${SITUACAO_LABEL[av.terras.situacao]}${av.terras.situacao_descricao ? ` · ${av.terras.situacao_descricao}` : ""}`} destaque />
             {av.terras.justificativa && <p className="text-[10px] text-[#7A8FA8] pt-1">{av.terras.justificativa}</p>}
-            <p className="text-[9px] text-[#7A8FA8] pt-1">Escala de Mendes Sobrinho/Kozma (classes de capacidade de uso × situação), a mesma da Nota Agronômica do INCRA e do fator classe-situação dos laudos. A preservação entra como classe VIII com a mesma regra no imóvel e nos anúncios.</p>
+            <p className="text-[9px] text-[#7A8FA8] pt-1">Escala de Mendes Sobrinho/Kozma (classes de capacidade de uso × situação), a mesma da Nota Agronômica do INCRA e do fator classe-situação dos laudos. A Reserva Legal entra como classe VIII com a mesma regra no imóvel e nos anúncios; a APP não é descontada. No rural, o R$/ha aplicado é o maior entre os comparáveis aceitos (critério V3).</p>
           </Bloco>
           {av.terras.relevo && (
             <Bloco titulo="Relevo (SRTM)">
