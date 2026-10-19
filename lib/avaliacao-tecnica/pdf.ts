@@ -5,6 +5,7 @@
 
 import { TIPO_DOC_LABEL, type AvaliacaoTecnica, type Poligonal } from "./tipos";
 import { diasDesde } from "./analise";
+import { DESCRICAO_CLASSE, ESTADO_LABEL, INDICE_CLASSE, PADRAO_LABEL, SITUACAO_LABEL } from "./normas";
 
 const esc = (s: unknown) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -140,13 +141,63 @@ export function htmlLaudoAvaliacao(opts: {
   const mercado = comps.length
     ? `<table class="t"><tr><th>#</th><th>Comparável</th><th>Valor</th><th>Área</th><th>R$/${un}</th><th>Situação</th></tr>${comps.map((c, i) => {
         const noRecorte = v.no_recorte?.[i] ?? true;
-        const ok = noRecorte && (v.saneados?.[i] ?? true);
-        const tag = c.mesmo_condominio ? "mesmo condomínio" : c.em_condominio === true ? "em condomínio" : c.em_condominio === false ? "de rua" : "";
+        const ok = noRecorte && (v.saneados?.[i] ?? true) && (v.homog ? !!v.homog[i]?.usado : true);
+        const tag = [c.mesmo_condominio ? "mesmo condomínio" : c.em_condominio === true ? "em condomínio" : c.em_condominio === false ? "de rua" : "",
+          c.municipio ? `${c.municipio}${typeof c.distancia_km === "number" ? ` (~${Math.round(c.distancia_km)} km)` : ""}` : "", typeof c.indice_agronomico === "number" ? `índ. agron. ${num(c.indice_agronomico, 3)}${c.situacao ? ` (${SITUACAO_LABEL[c.situacao]})` : ""}` : "",
+          c.benfeitorias_valor ? `benfeitorias ${brl(c.benfeitorias_valor)}` : "", c.padrao_detalhe ? `padrão ${PADRAO_LABEL[c.padrao_detalhe]}` : "",
+          typeof c.idade === "number" ? `${c.idade} anos` : "", c.estado ? ESTADO_LABEL[c.estado] : "", typeof c.indice_local === "number" ? `local ${c.indice_local}` : ""].filter(Boolean).join(" · ");
         return `<tr class="${ok ? "" : "x"}"><td>${i + 1}</td><td>${esc(c.titulo)}${c.fonte_nome ? `<br><span class="m">${esc(c.fonte_nome)}${tag ? ` · ${tag}` : ""}</span>` : tag ? `<br><span class="m">${tag}</span>` : ""}</td><td>${brl(c.valor)}</td><td>${num(c.area, v.unidade === "ha" ? 2 : 0)} ${un}</td><td>${brl(c.preco_unitario)}</td><td>${ok ? "Aceito" : !noRecorte ? "Fora do recorte" : "Saneado"}</td></tr>`;
       }).join("")}</table>
-      <p class="m">Metodologia: comparativo direto de dados de mercado (NBR 14653). Anúncios × fator de oferta ${num(v.fator_oferta)}; saneamento ±30% da média${typeof v.amostra_saneada === "number" ? ` (${v.amostra_saneada} de ${v.amostra_total} aceitos)` : ""}${v.amostra_criterio ? `; recorte: ${esc(v.amostra_criterio)}` : ""}${typeof v.premio_condominio_pct === "number" ? `; R$/m² em condomínio ${v.premio_condominio_pct >= 0 ? "+" : ""}${num(v.premio_condominio_pct * 100, 0)}% sobre os de rua` : ""}. Unitário aplicado: ${esc(v.criterio)}. Confiança da amostra: ${esc(av.mercado?.confianca?.toLowerCase())}.</p>
+      <p class="m">Metodologia: comparativo direto de dados de mercado (NBR 14653). Anúncios × fator de oferta ${num(v.fator_oferta)}; saneamento ±30% em torno do centro da amostra (mediana, depois média)${typeof v.amostra_saneada === "number" ? ` (${v.amostra_saneada} de ${v.amostra_total} aceitos)` : ""}${v.amostra_criterio ? `; recorte: ${esc(v.amostra_criterio)}` : ""}${typeof v.premio_condominio_pct === "number" ? `; R$/m² em condomínio ${v.premio_condominio_pct >= 0 ? "+" : ""}${num(v.premio_condominio_pct * 100, 0)}% sobre os de rua` : ""}. Unitário aplicado: ${esc(v.criterio)}. Confiança da amostra: ${esc(av.mercado?.confianca?.toLowerCase())}.</p>
       ${av.mercado?.resumo_regiao ? `<p>${esc(av.mercado.resumo_regiao)}</p>` : ""}`
     : `<p class="m">Nenhum comparável encontrado na internet para a região.</p>`;
+
+  // ── v2: homogeneização, estatística, graus ──
+  const grauTxt = (g?: string | null) => (!g ? "—" : g === "FORA" ? "abaixo do Grau I" : `Grau ${g}`);
+  const homog = v.homog && comps.length ? `
+    <h3>Tratamento por fatores (homogeneização)</h3>
+    <p class="m">${esc(v.metodo)}. Fator oferta ${num(v.fator_oferta)}${rural ? "; benfeitorias do anúncio descontadas do preço; Fcs = índice agronômico do avaliando ÷ do comparável" : "; Fpc = relação dos CUBs; Ftr = 100 ÷ índice local; Foc = Ross-Heidecke; Fa = Abunahman"}.</p>
+    <table class="t"><tr><th>#</th><th>${rural ? "Vu terra nua" : "Vu bruto"}</th><th>Fatores</th><th>Total</th><th>Vu homog.</th><th>Situação</th></tr>${comps.map((c, i) => {
+      const h = v.homog?.[i];
+      const ok = !!h && h.usado && (v.saneados?.[i] ?? true);
+      return `<tr class="${ok ? "" : "x"}"><td>${i + 1}</td><td>${h ? brl(h.vu_bruto) : "—"}</td><td>${h && h.fatores.length ? h.fatores.map((f) => `${esc(f.sigla)} ${num(f.valor, 3)}`).join(" · ") : "—"}</td><td>${h ? num(h.fator_total, 3) : "—"}</td><td><b>${h ? brl(h.vu_homogeneizado) : "—"}</b></td><td>${!h ? "sem dados" : !h.usado ? esc(h.motivo) : ok ? "Aceito" : "Saneado (±30%)"}</td></tr>`;
+    }).join("")}</table>
+    ${v.estatistica ? `<h3>Estatística da amostra saneada</h3>${linhas([
+      ["Dados utilizados", String(v.estatistica.n)], ["Média saneada", `${brl(v.estatistica.media)}/${un}`], ["Desvio-padrão", brl(v.estatistica.desvio)],
+      ["Coeficiente de variação", `${num(v.estatistica.cv_pct, 1)}%`], ["t de Student (80%)", num(v.estatistica.t, 3)],
+      ["Intervalo de confiança 80%", `${brl(v.estatistica.ic_inferior)} a ${brl(v.estatistica.ic_superior)}/${un}`], ["Amplitude do intervalo", `${num(v.estatistica.amplitude_pct, 1)}%`],
+    ])}` : ""}
+    ${v.grau_fundamentacao ? `<h3>Enquadramento NBR 14653</h3><table class="t"><tr><th>Item</th><th>Atendido</th><th>Grau</th></tr>${v.grau_fundamentacao.itens.map((it) => `<tr><td>${esc(it.item)}</td><td>${esc(it.atendido)}</td><td>${grauTxt(it.grau)}</td></tr>`).join("")}<tr><td><b>Fundamentação</b></td><td>${v.grau_fundamentacao.pontos} pontos</td><td><b>${grauTxt(v.grau_fundamentacao.grau)}</b></td></tr><tr><td><b>Precisão</b></td><td>amplitude do IC 80% (≤30% III · ≤40% II · ≤50% I)</td><td><b>${grauTxt(v.grau_precisao)}</b></td></tr></table><p class="m">Sem vistoria presencial a avaliação V3 não alcança o Grau III nos itens de caracterização e identificação. Enquadramento estimado.</p>` : ""}
+    ${v.cub ? `<p class="m">Custo de construção (${esc(v.cub.uf)}): ${[
+      Object.keys(v.cub.valores).length ? `CUB${v.cub.mes_ref ? ` ${esc(v.cub.mes_ref)}` : ""} (${esc(v.cub.fonte_nome ?? "Sinduscon")}) ${Object.entries(v.cub.valores).map(([k, x]) => `${esc(k)} ${brl(x)}`).join(" · ")}` : "",
+      v.cub.sinapi_m2 ? `SINAPI/IBGE ${esc(v.cub.sinapi_mes ?? "")} ${brl(v.cub.sinapi_m2)}/m²` : "",
+    ].filter(Boolean).join(" · ")}</p>` : ""}` : "";
+
+  const terras = rural && av.terras ? `
+    <h2>Terras: capacidade de uso e situação</h2>
+    <table class="t"><tr><th>Classe</th><th>% da área</th><th>Índice</th><th>Base</th></tr>${av.terras.classes.map((c) => `<tr><td><b>${c.classe}</b></td><td>${num(c.pct, 1)}%</td><td>${num(INDICE_CLASSE[c.classe], 3)}</td><td>${esc(c.base ?? DESCRICAO_CLASSE[c.classe])}</td></tr>`).join("")}</table>
+    ${linhas([
+      ...(typeof av.terras.preservacao_pct === "number" ? [["Preservação (classe VIII)", `${num(av.terras.preservacao_pct, 1)}% · ${esc(av.terras.preservacao_base ?? "")}`]] as [string, string][] : []),
+      ["Situação / acesso", `${SITUACAO_LABEL[av.terras.situacao]}${av.terras.situacao_descricao ? ` · ${esc(av.terras.situacao_descricao)}` : ""}`],
+      ["Índice agronômico", `<b>${num(av.terras.indice_agronomico, 3)}</b>`],
+      ...(av.terras.relevo ? [
+        ["Altitude (SRTM)", `${av.terras.relevo.altitude_min} a ${av.terras.relevo.altitude_max} m (média ${av.terras.relevo.altitude_media} m)`],
+        ["Declividade média", `${num(av.terras.relevo.declividade_media_pct, 1)}%`],
+        ["Relevo (Embrapa)", esc(av.terras.relevo.classes.map((c) => `${c.classe} ${c.pct}%`).join(" · "))],
+      ] as [string, string][] : []),
+    ])}
+    ${av.terras.justificativa ? `<p class="m">${esc(av.terras.justificativa)}</p>` : ""}
+    <p class="m">Escala de Mendes Sobrinho/Kozma (classes de capacidade de uso × situação), a mesma da Nota Agronômica do INCRA.</p>` : "";
+
+  const consultas = rural && (av.consultas?.length ?? 0) > 0 ? `
+    <h2>Consultas públicas pela poligonal</h2>
+    <table class="t"><tr><th>Base</th><th>Resultado</th><th>Detalhe</th></tr>${av.consultas!.map((c) => `<tr><td>${esc(c.nome)}<br><span class="m">${esc(c.fonte)}</span></td><td><b>${c.status === "LIVRE" ? (c.id === "CAR" ? "Não localizado" : "Nada consta") : c.status === "INDISPONIVEL" ? "Indisponível" : c.id === "CAR" ? "Localizado" : "Encontrado"}</b></td><td>${esc(c.detalhe)}${(c.itens ?? []).length ? `<br><span class="m">${(c.itens ?? []).map(esc).join("<br>")}</span>` : ""}</td></tr>`).join("")}</table>
+    <p class="m">Consultado em ${dataBR(av.consultas![0].consultado_em)}. Não substitui as certidões oficiais quando a instituição exigir.</p>` : "";
+
+  const benf = rural && (v.benfeitorias ?? []).length ? `
+    <h3>Custo de reprodução das benfeitorias</h3>
+    <table class="t"><tr><th>Benfeitoria</th><th>m²</th><th>CUB</th><th>Fator</th><th>Idade/vida</th><th>Estado</th><th>Coef.</th><th>Depreciado</th></tr>${v.benfeitorias!.map((b) => `<tr><td>${esc(b.nome)}${b.averbada === false ? ' <span class="m">(não averbada)</span>' : ""}</td><td>${num(b.area_m2, 0)}</td><td>${esc(b.padrao_cub)} ${brl(b.cub_m2)}</td><td>${num(b.fator_cub, 2)}</td><td>${b.idade}/${b.vida_util}</td><td>${b.estado} · ${ESTADO_LABEL[b.estado]}</td><td>${num(b.coef_depreciacao, 3)}</td><td><b>${brl(b.custo_depreciado)}</b></td></tr>`).join("")}<tr><td colspan="7"><b>Total benfeitorias</b></td><td><b>${brl(v.valor_benfeitorias)}</b></td></tr></table>
+    <p class="m">Terra nua: ${brl(v.valor_terra)} · benfeitorias: ${brl(v.valor_benfeitorias)} · valor de mercado: ${brl(v.valor_mercado)}.</p>` : "";
 
   const alertas = av.alertas.length
     ? `<table class="t"><tr><th>Nível</th><th>Categoria</th><th>Ponto</th></tr>${av.alertas.map((x) => `<tr><td><span class="nv ${x.nivel.toLowerCase()}">${NIVEL[x.nivel]}</span></td><td>${esc(x.categoria)}</td><td><b>${esc(x.titulo)}</b>${x.detalhe ? `<br><span class="m">${esc(x.detalhe)}</span>` : ""}</td></tr>`).join("")}</table>`
@@ -213,14 +264,14 @@ export function htmlLaudoAvaliacao(opts: {
   <p class="sub">${rural ? "Imóvel rural · referência NBR 14653-3" : "Imóvel urbano · referência NBR 14653-2"}${opts.clienteNome ? ` · Proponente: <b>${esc(opts.clienteNome)}</b>` : ""}</p>
 
   <div class="faixa">
-    <div class="box"><div class="l">Valor de mercado</div><div class="n">${brl(v.valor_mercado)}</div><div class="s">${v.preco_unitario_aplicado ? `${brl(v.preco_unitario_aplicado)}/${un}` : "sem comparáveis"}</div></div>
+    <div class="box"><div class="l">Valor de mercado</div><div class="n">${brl(v.valor_mercado)}</div><div class="s">${v.preco_unitario_aplicado ? `${brl(v.preco_unitario_aplicado)}/${un}${rural && v.valor_benfeitorias ? ` + benf. ${brl(v.valor_benfeitorias)}` : ""}` : "sem comparáveis"}</div></div>
     <div class="box"><div class="l">Valor de liquidez</div><div class="n">${brl(v.valor_liquidez)}</div><div class="s">fator ${num(v.fator_liquidez)} (garantia)</div></div>
     <div class="box"><div class="l">LTV s/ liquidez</div><div class="n">${ltv !== null ? `${num(ltv * 100, 1)}%` : "—"}</div><div class="s">${solicitado ? `solicitado ${brl(solicitado)}` : "máx. 70%"}</div></div>
     <div class="box"><div class="l">Área considerada</div><div class="n">${v.area_considerada ? `${num(v.area_considerada, v.unidade === "ha" ? 4 : 2)} ${un}` : "—"}</div><div class="s">${esc(v.area_criterio)}</div></div>
     <div class="rt"><div class="m">Rating</div><div class="nota">${esc(av.rating.nota)}</div><div class="m">${av.rating.pontos}/100</div></div>
   </div>
   ${v.intervalo_inferior !== null && v.intervalo_superior !== null ? `<p class="m" style="margin-top:6px">Intervalo da amostra saneada: ${brl(v.intervalo_inferior)} a ${brl(v.intervalo_superior)}${v.valor_venal_iptu ? ` · venal IPTU ${brl(v.valor_venal_iptu)}` : ""}${v.vtn_itr ? ` · VTN ITR ${brl(v.vtn_itr)}` : ""}${v.laudo_mercado ? ` · laudo anexado ${brl(v.laudo_mercado)}` : ""}</p>` : ""}
-  <span class="aceite">Parecer: ${ACEITE[av.parecer.aceite]}</span>
+  <span class="aceite">Parecer: ${ACEITE[av.parecer.aceite]}</span>${v.grau_fundamentacao ? ` <span class="aceite">Fundamentação ${grauTxt(v.grau_fundamentacao.grau)} · Precisão ${grauTxt(v.grau_precisao)}</span>` : ""}${typeof v.indice_agronomico === "number" ? ` <span class="aceite">Índice agronômico ${num(v.indice_agronomico, 3)}</span>` : ""}
 
   <h2>Identificação</h2>
   <div class="g2">
@@ -245,12 +296,18 @@ export function htmlLaudoAvaliacao(opts: {
 
   <h2>Características</h2>
   ${caracteristicas || `<p class="m">—</p>`}
+  ${benf}
   ${av.ambiental ? `<h3>Ambiental</h3><p>${esc(av.ambiental)}</p>` : ""}
+
+  ${terras}
 
   ${geo}
 
+  ${consultas}
+
   <h2>Pesquisa de mercado</h2>
   ${mercado}
+  ${homog}
 
   <h2>Alertas</h2>
   ${alertas}
