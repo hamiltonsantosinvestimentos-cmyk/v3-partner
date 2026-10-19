@@ -130,6 +130,10 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
   // Rural: região geoeconômica — com 5+ anúncios até 120 km, os mais distantes saem.
   const perto = comps.map((c) => typeof c.distancia_km === "number" && c.distancia_km <= RAIO_REGIAO_KM);
   const usarRaio = rural && perto.filter(Boolean).length >= 5;
+  // Rural: semelhança de tamanho — com 5+ anúncios entre 1/3 e 3× a área, os demais saem
+  // (sítio pequeno tem R$/ha bem maior que fazenda grande).
+  const parecido = comps.map((c) => pos(area) && c.area >= area / 3 && c.area <= area * 3);
+  const usarTamanho = rural && pos(area) && parecido.filter((p, i) => p && (!usarRaio || perto[i])).length >= 5;
 
   // ── Homogeneização (tratamento por fatores, como nos laudos de referência) ──
   const iaAval = av.terras?.indice_agronomico ?? null;
@@ -161,6 +165,7 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
     let motivo: string | null = null;
     if (!recorte.mask[i]) motivo = "fora do recorte de condomínio";
     else if (usarRaio && !perto[i]) motivo = `fora da região geoeconômica (${typeof c.distancia_km === "number" ? `~${Math.round(c.distancia_km)} km` : "distância não informada"})`;
+    else if (usarTamanho && !parecido[i]) motivo = "área muito diferente do avaliando (fora de 1/3 a 3×)";
     else if (!(vuBruto > 0)) motivo = "benfeitorias maiores que o preço";
     else if (total < FATOR_TOTAL_MIN || total > FATOR_TOTAL_MAX) motivo = `fator total ${total.toFixed(2)} fora de ${FATOR_TOTAL_MIN.toFixed(2)}–${FATOR_TOTAL_MAX.toFixed(2)} (pouco semelhante)`;
     return { vu_bruto: vuBruto, fatores, fator_total: total, vu_homogeneizado: vuBruto * total, usado: motivo === null, motivo };
