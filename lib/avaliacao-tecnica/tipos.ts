@@ -325,6 +325,9 @@ export interface Valores {
   benfeitorias?: BenfeitoriaCalculo[];
   cub?: CubRef | null;
   indice_agronomico?: number | null;
+  /** Valor venal (IPTU no urbano; VTN do ITR + benfeitorias no rural) usado como piso do valor de mercado. */
+  piso_venal?: number | null;
+  piso_venal_aplicado?: boolean;
   /** Homogeneização de cada comparável (mesma ordem de mercado.comparaveis). */
   homog?: (Homogeneizacao | null)[];
   valor_mercado: number | null;
