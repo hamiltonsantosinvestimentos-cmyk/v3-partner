@@ -24,6 +24,16 @@ import type {
 } from "./tipos";
 
 const MODELO = "claude-sonnet-4-6";
+/** Etapas simples (CUB e VTN: achar e copiar uma tabela publicada) vão no Haiku, ~3× mais barato. */
+const MODELO_LEVE = "claude-haiku-4-5-20251001";
+
+type OpcoesBusca = {
+  modelo?: string;
+  /** Limite de tokens de cada página lida pelo web_fetch (o texto da página vira entrada da IA). */
+  leitura?: number;
+  /** Quantas páginas inteiras a IA pode ler (padrão: metade das buscas). */
+  paginas?: number;
+};
 const DEFAULT_BUCKET = "credit-documents";
 const GOVERNED_BUCKET = "v3-docs-publico";
 const MAX_PDF_BYTES = 9 * 1024 * 1024;
@@ -291,29 +301,30 @@ const TOOL_BUSCA = [{
  * Usa a busca nativa da Anthropic (web_search + web_fetch: lê o anúncio/tabela inteira); se a
  * conta não tiver as ferramentas nativas, cai na busca simples (lib/web-search, só trechos).
  */
-export async function comBusca(ai: Anthropic, system: string, pedido: string, buscas = 5, maxTokens = 4000): Promise<string> {
+export async function comBusca(ai: Anthropic, system: string, pedido: string, buscas = 5, maxTokens = 4000, opts: OpcoesBusca = {}): Promise<string> {
   const sys = `Hoje é ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}.\n${system}`;
   try {
-    return await comBuscaNativa(ai, sys, pedido, buscas, maxTokens);
+    return await comBuscaNativa(ai, sys, pedido, buscas, maxTokens, opts);
   } catch (e) {
     const st = (e as { status?: number }).status;
     if (st !== 400 && st !== 403 && st !== 404) throw e;
     console.error("[avaliacao-tecnica] busca nativa indisponível, usando a simples:", (e as Error).message?.slice(0, 200));
-    return comBuscaSimples(ai, sys, pedido, buscas, maxTokens);
+    return comBuscaSimples(ai, sys, pedido, buscas, maxTokens, opts.modelo ?? MODELO);
   }
 }
 
-async function comBuscaNativa(ai: Anthropic, system: string, pedido: string, buscas: number, maxTokens: number): Promise<string> {
+async function comBuscaNativa(ai: Anthropic, system: string, pedido: string, buscas: number, maxTokens: number, opts: OpcoesBusca): Promise<string> {
+  const modelo = opts.modelo ?? MODELO;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: any[] = [
     { type: "web_search_20250305", name: "web_search", max_uses: buscas, user_location: { type: "approximate", country: "BR", timezone: "America/Sao_Paulo" } },
-    { type: "web_fetch_20250910", name: "web_fetch", max_uses: Math.max(2, Math.ceil(buscas / 2)), max_content_tokens: 8000 },
+    { type: "web_fetch_20250910", name: "web_fetch", max_uses: opts.paginas ?? Math.max(2, Math.ceil(buscas / 2)), max_content_tokens: opts.leitura ?? 5000 },
   ];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let msgs: any[] = [{ role: "user", content: pedido }];
   for (let i = 0; i < 4; i++) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r = await ai.messages.create({ model: MODELO, temperature: 0, max_tokens: maxTokens, system, messages: msgs, tools } as any) as Anthropic.Messages.Message;
+    const r = await ai.messages.create({ model: modelo, temperature: 0, max_tokens: maxTokens, system, messages: msgs, tools } as any) as Anthropic.Messages.Message;
     if (r.stop_reason === "pause_turn") { msgs = [...msgs, { role: "assistant", content: r.content }]; continue; }
     const t = textoDa(r);
     if (t.includes("{")) return t;
@@ -322,11 +333,11 @@ async function comBuscaNativa(ai: Anthropic, system: string, pedido: string, bus
   return "";
 }
 
-async function comBuscaSimples(ai: Anthropic, system: string, pedido: string, iteracoes: number, maxTokens: number): Promise<string> {
+async function comBuscaSimples(ai: Anthropic, system: string, pedido: string, iteracoes: number, maxTokens: number, modelo: string): Promise<string> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const msgs: any[] = [{ role: "user", content: pedido }];
   for (let i = 0; i < iteracoes; i++) {
-    const r = await ai.messages.create({ model: MODELO, temperature: 0, max_tokens: maxTokens, system, messages: msgs, tools: TOOL_BUSCA });
+    const r = await ai.messages.create({ model: modelo, temperature: 0, max_tokens: maxTokens, system, messages: msgs, tools: TOOL_BUSCA });
     if (r.stop_reason !== "tool_use") {
       const t = textoDa(r);
       if (t.includes("{")) return t;
@@ -341,7 +352,7 @@ async function comBuscaSimples(ai: Anthropic, system: string, pedido: string, it
     msgs.push({ role: "user", content: resultados });
   }
   const r = await ai.messages.create({
-    model: MODELO, temperature: 0, max_tokens: maxTokens, system, tools: TOOL_BUSCA, tool_choice: { type: "none" },
+    model: modelo, temperature: 0, max_tokens: maxTokens, system, tools: TOOL_BUSCA, tool_choice: { type: "none" },
     messages: [...msgs, { role: "user", content: "Responda AGORA só com o JSON final, sem texto antes ou depois." }],
   });
   return textoDa(r);
@@ -405,7 +416,9 @@ Depois responda SOMENTE com JSON válido, sem markdown:
 {"comparaveis":[{"titulo":"","valor":0,"area":0,"fonte_nome":"","fonte_url":"https://...","observacao":"",${atributos}}],"resumo_regiao":"3-4 frases","referencias_oficiais":"VTN/PPR ou índices oficiais encontrados (com fonte) ou null","confianca":"ALTA|MEDIA|BAIXA","observacoes":"qualidade dos comparáveis"}
 Regras: "valor" = preço de venda anunciado em reais; "area" = ${rural ? "área total em HECTARES (converta alqueires/tarefas/m² pela unidade da região e diga na observação)" : "área construída/privativa em m²"}. Nunca invente anúncio nem número; se achar poucos, devolva o que achou e confiança BAIXA.`;
 
-  const texto = await comBusca(ai, system, `Pesquise comparáveis para: ${descricao}.`, 7, 8000);
+  // 3 páginas inteiras de até 5 mil tokens (antes 4 × 8 mil): cada página lida é reenviada a
+  // cada rodada da conversa, então é o que mais pesa no custo. As buscas seguem 7.
+  const texto = await comBusca(ai, system, `Pesquise comparáveis para: ${descricao}.`, 7, 8000, { paginas: 3, leitura: 5000 });
   type Bruto = Record<string, unknown>;
   const j = jsonDe<{ comparaveis?: Bruto[]; resumo_regiao?: string; referencias_oficiais?: string | null; confianca?: string; observacoes?: string }>(texto);
   const comparaveis: Comparavel[] = (j.comparaveis ?? []).map((c) => {
@@ -457,7 +470,7 @@ export async function buscarVtnMunicipal(ai: Anthropic, municipio: string, uf: s
 Responda SOMENTE com JSON: {"ano":"2026","fonte_nome":"","fonte_url":"https://...","valores":{"lavoura_boa":0,"lavoura_regular":0,"lavoura_restrita":0,"pastagem_plantada":0,"silvicultura_pastagem_natural":0,"preservacao":0}}
 Valores em R$/ha. Nunca invente: aptidão não encontrada = null. Se não achar a tabela do município, devolva {"valores":{}}.`;
   let j: { ano?: string; fonte_nome?: string; fonte_url?: string; valores?: Record<string, unknown> } = {};
-  try { j = jsonDe(await comBusca(ai, system, `VTN SIPT ${municipio}/${uf} por aptidão agrícola.`, 4, 2500)); } catch { return null; }
+  try { j = jsonDe(await comBusca(ai, system, `VTN SIPT ${municipio}/${uf} por aptidão agrícola.`, 4, 2500, { modelo: MODELO_LEVE, paginas: 2, leitura: 4000 })); } catch { return null; }
   const valores: Record<string, number> = {};
   for (const [k, v] of Object.entries(j.valores ?? {})) {
     const n = num(v);
@@ -471,7 +484,7 @@ export async function buscarCub(ai: Anthropic, uf: string): Promise<CubRef | nul
   const system = `Você levanta o CUB/m² (Custo Unitário Básico, NBR 12721) mais recente publicado pelo Sinduscon do estado ${uf} (ou pelo cub.org.br). Use a tool "web_search". Quero os projetos-padrão residenciais R1-B, R1-N, R1-A (casa), R8-B, R8-N, R8-A (edifício), PIS (projeto de interesse social) e GI (galpão industrial), em R$/m², do mês mais recente que encontrar.
 Responda SOMENTE com JSON: {"mes_ref":"MM/AAAA","fonte_nome":"","fonte_url":"https://...","valores":{"R1-B":0,"R1-N":0,"R1-A":0,"R8-B":0,"R8-N":0,"R8-A":0,"PIS":0,"GI":0}}
 Nunca invente número: valor não encontrado = null. Se não achar o CUB de ${uf}, devolva {"valores":{}}.`;
-  const [sinapi, texto] = await Promise.all([buscarSinapi(uf), comBusca(ai, system, `CUB/m² mais recente do estado ${uf}.`, 4, 3000).catch(() => "")]);
+  const [sinapi, texto] = await Promise.all([buscarSinapi(uf), comBusca(ai, system, `CUB/m² mais recente do estado ${uf}.`, 4, 3000, { modelo: MODELO_LEVE, paginas: 2, leitura: 4000 }).catch(() => "")]);
   let j: { mes_ref?: string; fonte_nome?: string; fonte_url?: string; valores?: Record<string, unknown> } = {};
   try { j = jsonDe(texto); } catch { /* CUB não achado: fica só o SINAPI */ }
   const valores: Record<string, number> = {};
@@ -525,7 +538,7 @@ Situação: ${SITUACOES_TXT}.
 Classifique SÓ a área fora da Reserva Legal: a V3 soma depois a Reserva Legal como classe VIII, com a mesma regra usada nos anúncios comparáveis. A APP NÃO é descontada à parte (critério V3; o Código Florestal permite computá-la na Reserva Legal): classifique-a pela capacidade física da terra. Relevo forte ondulado/montanhoso (SRTM) puxa para VI–VII; áreas planas mecanizáveis em solo bom = I–III; pastagem em relevo suave = III–IV; várzea encharcável = V; afloramento rochoso/relevo excessivo fora da APP = VIII. Use o relevo do SRTM como base objetiva. A soma das classes da área aberta deve dar 100.
 Responda SOMENTE com JSON: {"classes_area_aberta":[{"classe":"III","pct":70,"base":"lavoura em relevo suave (SRTM 70% plano/suave)"},{"classe":"IV","pct":30,"base":"pasto em baixada com drenagem imperfeita"}],"situacao":"BOA","situacao_descricao":"","justificativa":"2-3 frases"}`;
   const j = jsonDe<{ classes_area_aberta?: { classe?: unknown; pct?: unknown; base?: unknown }[]; classes?: { classe?: unknown; pct?: unknown; base?: unknown }[]; situacao?: unknown; situacao_descricao?: string; justificativa?: string }>(
-    await comBusca(ai, system, `Dados do imóvel: ${JSON.stringify(dados)}`, 3, 2000),
+    await comBusca(ai, system, `Dados do imóvel: ${JSON.stringify(dados)}`, 3, 2000, { paginas: 1, leitura: 3000 }),
   );
   const abertas = normalizarClasses(j.classes_area_aberta ?? j.classes);
   if (abertas.length === 0) return null;
