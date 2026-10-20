@@ -763,7 +763,7 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
             {typeof av.terras.preservacao_pct === "number" && <Linha rotulo="Reserva Legal (classe VIII)" valor={`${n(av.terras.preservacao_pct, 1)}% · ${av.terras.preservacao_base ?? ""}`} />}
             <Linha rotulo="Situação / acesso" valor={`${SITUACAO_LABEL[av.terras.situacao]}${av.terras.situacao_descricao ? ` · ${av.terras.situacao_descricao}` : ""}`} destaque />
             {av.terras.justificativa && <p className="text-[10px] text-[#7A8FA8] pt-1">{av.terras.justificativa}</p>}
-            <p className="text-[9px] text-[#7A8FA8] pt-1">Escala de Mendes Sobrinho/Kozma (classes de capacidade de uso × situação), a mesma da Nota Agronômica do INCRA e do fator classe-situação dos laudos. A Reserva Legal entra como classe VIII com a mesma regra no imóvel e nos anúncios; a APP não é descontada. No rural, o R$/ha aplicado é o maior entre os comparáveis aceitos (critério V3).</p>
+            <p className="text-[9px] text-[#7A8FA8] pt-1">Escala de Mendes Sobrinho/Kozma (classes de capacidade de uso × situação), a mesma da Nota Agronômica do INCRA e do fator classe-situação dos laudos. A Reserva Legal entra como classe VIII com a mesma regra no imóvel e nos anúncios; a APP não é descontada. No rural, o R$/ha aplicado é a média dos anúncios aceitos com a mesma metragem ou maiores (até 200 ha a menos), num raio de até 500 km (critério V3).</p>
           </Bloco>
           {av.terras.relevo && (
             <Bloco titulo="Relevo (SRTM)">

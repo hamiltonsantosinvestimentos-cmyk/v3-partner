@@ -387,11 +387,11 @@ async function pesquisarMercado(ai: Anthropic, zona: ZonaImovel, l: LeituraIa, c
   const regrasAtributos = rural
     ? `Para CADA comparável, como faz o avaliador no tratamento por fatores (NBR 14653-3):
 - benfeitorias_valor: valor em reais das benfeitorias citadas no anúncio (custo de reprodução depreciado, conservador; 0 se terra nua). Será DESCONTADO do preço para chegar ao valor da terra nua.
-- distancia_km: distância aproximada por estrada entre o município do anúncio e o do avaliando (mesma região geoeconômica = até ~120 km).
+- distancia_km: distância aproximada por estrada entre o município do anúncio e o do avaliando (aceita até ~500 km).
 - preservacao_pct: % da área em Reserva Legal/mata preservada SÓ se o anúncio informar (senão null — a V3 aplica a Reserva Legal do bioma). Não some APP.
 - classes_area_aberta: classes de capacidade de uso da parte ABERTA/aproveitável (sem a mata/reserva), soma 100, pela descrição (relevo, % plano, lavoura, pasto, brejo, pedras). Classes: ${CLASSES_TXT}.
 - situacao: acesso pela descrição (asfalto, distância da cidade/rodovia). Escala: ${SITUACOES_TXT}.
-- TAMANHO: busque fazendas de METADE ao DOBRO da área do avaliando (${area ? `de ${Math.round(area / 2).toLocaleString("pt-BR")} a ${Math.round(area * 2).toLocaleString("pt-BR")} ha` : "tamanho parecido"}), no próprio município e nos vizinhos (até ~120 km). Faça buscas por faixa de tamanho em cada município ("fazenda ${area ? Math.round(area / 100) * 100 : 1000} hectares <município>", "fazenda à venda <município> ha"). Só complete com tamanhos fora da faixa se não houver o suficiente, e diga isso nas observações.`
+- TAMANHO: só fazendas com a MESMA metragem do avaliando ou MAIORES; menores, no máximo 200 ha a menos (${area ? `ou seja, a partir de ${Math.max(0, Math.round(area - 200)).toLocaleString("pt-BR")} ha` : "tamanho parecido"}). Fazendas maiores valem (o R$/ha entra na média). Busque no próprio município e na região, até ~500 km, começando pelos mais próximos. Faça buscas por tamanho ("fazenda ${area ? Math.round(area / 100) * 100 : 1000} hectares <município ou região>", "fazenda à venda ${area ? Math.round((area * 1.5) / 100) * 100 : 1500} ha <estado>"). Não traga fazendas menores que esse limite.`
     : `Para CADA comparável (fatores do laudo Engebanc, NBR 14653-2):
 - padrao_detalhe pelo acabamento descrito/fotos do anúncio; idade aparente em anos; estado de conservação de Heidecke (a novo, b entre novo e regular, c regular, d entre regular e reparos simples, e reparos simples, f entre reparos simples e importantes, g reparos importantes, h entre importantes e sem valor).
 - indice_local: localização do anúncio em relação ao AVALIANDO = 100 (ex.: rua mais valorizada, frente para o mar, bairro nobre = 110–140; pior = 70–95). Justifique em 1 frase.
@@ -578,7 +578,7 @@ export async function escreverParecer(ai: Anthropic, av: Omit<AvaliacaoTecnica, 
       content: `Você é o engenheiro avaliador responsável da V3 Partners. Com base na avaliação técnica abaixo (já calculada — NÃO recalcule valores), escreva o parecer técnico do imóvel em garantia, no tom dos laudos profissionais: objetivo e enxuto, citando matrícula, áreas, divergências e o que precisa ser regularizado. Cada item das listas = 1 frase curta (até 25 palavras), no máximo 5 itens por lista, os mais importantes primeiro. Português do Brasil, sem travessão.
 ${JSON.stringify(resumo)}
 
-Se o valor de mercado foi elevado ao valor venal (valores.piso_venal_aplicado), diga isso no resumo. A certidão da matrícula vale até 90 dias (critério V3): não trate certidão com menos de 90 dias como vencida ou desatualizada. Nos imóveis rurais o valor por hectare aplicado é o maior entre os comparáveis aceitos (critério V3) e a APP não é descontada.
+Se o valor de mercado foi elevado ao valor venal (valores.piso_venal_aplicado), diga isso no resumo. A certidão da matrícula vale até 90 dias (critério V3): não trate certidão com menos de 90 dias como vencida ou desatualizada. Nos imóveis rurais o valor por hectare aplicado é a média dos anúncios aceitos com a mesma metragem ou maiores, até 200 ha a menos, num raio de até 500 km (critério V3), e a APP não é descontada.
 
 O proprietário do imóvel pode ser diferente do proponente (terceiro garantidor): isso é permitido e NÃO é ressalva nem motivo para rebaixar o aceite — no máximo recomende a assinatura do proprietário como interveniente garantidor.
 
