@@ -35,7 +35,7 @@ export function diasDesde(iso: string | null | undefined, hoje = new Date()) {
   return Math.floor((hoje.getTime() - d.getTime()) / 86400000);
 }
 
-type Base = Pick<AvaliacaoTecnica, "zona" | "areas" | "urbano" | "rural" | "mercado" | "laudo_externo"> & Partial<Pick<AvaliacaoTecnica, "terras">>;
+type Base = Pick<AvaliacaoTecnica, "zona" | "areas" | "urbano" | "rural" | "mercado" | "laudo_externo"> & Partial<Pick<AvaliacaoTecnica, "terras" | "vtn_municipal">>;
 
 /** Área usada no cálculo e de onde veio. */
 function areaConsiderada(av: Base): { area: number | null; criterio: string } {
@@ -132,8 +132,13 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
   const usarRaio = rural && perto.filter(Boolean).length >= 5;
   // Rural: semelhança de tamanho — com 5+ anúncios entre 1/3 e 3× a área, os demais saem
   // (sítio pequeno tem R$/ha bem maior que fazenda grande).
-  const parecido = comps.map((c) => pos(area) && c.area >= area / 3 && c.area <= area * 3);
-  const usarTamanho = rural && pos(area) && parecido.filter((p, i) => p && (!usarRaio || perto[i])).length >= 5;
+  // Prioriza fazendas de 1/2 a 2× a área (ex.: 1.750 ha → 875 a 3.500 ha); com poucas, abre para 1/3–3×.
+  const naFaixa = (lo: number, hi: number) => comps.map((c) => pos(area) && c.area >= area * lo && c.area <= area * hi);
+  const contar = (m: boolean[]) => m.filter((p, i) => p && (!usarRaio || perto[i])).length;
+  const faixa50 = naFaixa(0.5, 2), faixa33 = naFaixa(1 / 3, 3);
+  const parecido = contar(faixa50) >= 4 ? faixa50 : faixa33;
+  const faixaTxt = parecido === faixa50 ? "1/2 a 2×" : "1/3 a 3×";
+  const usarTamanho = rural && pos(area) && contar(parecido) >= (parecido === faixa50 ? 4 : 5);
 
   // ── Homogeneização (tratamento por fatores, como nos laudos de referência) ──
   const iaAval = av.terras?.indice_agronomico ?? null;
@@ -165,7 +170,7 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
     let motivo: string | null = null;
     if (!recorte.mask[i]) motivo = "fora do recorte de condomínio";
     else if (usarRaio && !perto[i]) motivo = `fora da região geoeconômica (${typeof c.distancia_km === "number" ? `~${Math.round(c.distancia_km)} km` : "distância não informada"})`;
-    else if (usarTamanho && !parecido[i]) motivo = "área muito diferente do avaliando (fora de 1/3 a 3×)";
+    else if (usarTamanho && !parecido[i]) motivo = `área muito diferente do avaliando (fora de ${faixaTxt})`;
     else if (!(vuBruto > 0)) motivo = "benfeitorias maiores que o preço";
     else if (total < FATOR_TOTAL_MIN || total > FATOR_TOTAL_MAX) motivo = `fator total ${total.toFixed(2)} fora de ${FATOR_TOTAL_MIN.toFixed(2)}–${FATOR_TOTAL_MAX.toFixed(2)} (pouco semelhante)`;
     return { vu_bruto: vuBruto, fatores, fator_total: total, vu_homogeneizado: vuBruto * total, usado: motivo === null, motivo };
@@ -217,18 +222,30 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
   };
   // Piso: a avaliação nunca fica abaixo do valor venal do próprio imóvel (critério V3, 19/10/2026).
   // Urbano: venal do IPTU. Rural: VTN declarado no ITR (terra nua) + benfeitorias.
-  const venal = rural ? (pos(base.vtn_itr) ? base.vtn_itr + (rural ? valorBenf : 0) : null) : (pos(base.valor_venal_iptu) ? base.valor_venal_iptu : null);
+  // Rural sem VTN no ITR: VTN municipal da Receita (SIPT) por aptidão × área — o método do próprio ITR.
+  const vtnMun = rural && !pos(base.vtn_itr) ? vtnPelaAptidao(av.vtn_municipal, av.terras?.classes ?? [], area) : null;
+  const venal = rural
+    ? (pos(base.vtn_itr) ? base.vtn_itr + valorBenf : pos(vtnMun) ? vtnMun + valorBenf : null)
+    : (pos(base.valor_venal_iptu) ? base.valor_venal_iptu : null);
   base.piso_venal = venal;
+  base.piso_venal_fonte = !pos(venal) ? null : !rural ? "IPTU" : pos(base.vtn_itr) ? "VTN declarado no ITR" : `VTN municipal ${av.vtn_municipal?.fonte_nome ?? "SIPT/Receita Federal"}${av.vtn_municipal?.ano ? ` ${av.vtn_municipal.ano}` : ""}`;
   if (precos.length === 0 || !est) {
     if (!pos(venal)) return { ...base, criterio: ["sem comparáveis válidos", ...avisos].join(" · ") };
     return {
       ...base, piso_venal_aplicado: true, valor_mercado: venal, valor_liquidez: venal, // liquidez também não fica abaixo do venal
-      criterio: [`sem comparáveis válidos: adotado o valor venal (${rural ? "VTN do ITR" : "IPTU"}) como piso`, ...avisos].join(" · "),
+      criterio: [`sem comparáveis válidos: adotado o valor venal (${base.piso_venal_fonte}) como piso`, ...avisos].join(" · "),
     };
   }
   // Urbano: média saneada (como os laudos). Rural: maior R$/ha entre os comparáveis aceitos no
   // saneamento — critério V3 definido pelo Hamilton em 19/10/2026.
-  const unit = rural ? Math.max(...precos) : est.media;
+  // Rural: maior R$/ha aceito, limitado ao teto do intervalo de confiança de 80% (NBR) — um
+  // anúncio fora da curva não puxa o valor sozinho.
+  const maiorAceito = Math.max(...precos);
+  const tetoIc = est.n >= 2 ? est.ic_superior : maiorAceito;
+  // Amostra fora do Grau I de precisão (amplitude > 50%): o "maior valor" não é confiável → média.
+  const precisaoFora = grauPrecisao(est.amplitude_pct) === "FORA";
+  const unit = rural && !precisaoFora ? Math.min(maiorAceito, tetoIc) : est.media;
+  const limitadoIc = rural && !precisaoFora && maiorAceito > tetoIc;
   const terra = pos(area) ? unit * area : null;
   const extraBenf = rural ? valorBenf : 0;
   const vmCalc = terra !== null ? terra + extraBenf : null;
@@ -243,8 +260,9 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
     ...base,
     preco_unitario_min: Math.min(...precos), preco_unitario_medio: unit, preco_unitario_max: Math.max(...precos), preco_unitario_aplicado: unit,
     criterio: [
-      rural ? "maior valor por hectare entre os comparáveis homogeneizados e saneados (critério V3)" : "média saneada dos comparáveis homogeneizados",
-      ...(pisoMercado ? [`mercado elevado ao valor venal (${rural ? "VTN do ITR + benfeitorias" : "IPTU"}), pois o calculado${vmCalc !== null ? ` (${fmtNum(vmCalc, 0)})` : ""} ficou abaixo`] : []),
+      rural && !precisaoFora ? `maior valor por hectare entre os comparáveis aceitos (critério V3)${limitadoIc ? ", limitado ao teto do intervalo de confiança de 80%" : ""}`
+        : rural ? "média saneada (amostra dispersa demais para usar o maior valor)" : "média saneada dos comparáveis homogeneizados",
+      ...(pisoMercado ? [`mercado elevado ao valor venal (${base.piso_venal_fonte}${rural ? " + benfeitorias" : ""}), pois o calculado${vmCalc !== null ? ` (${fmtNum(vmCalc, 0)})` : ""} ficou abaixo`] : []),
       ...(pisoLiquidez ? [`liquidez elevada ao valor venal (${fmtNum(venal ?? 0, 0)}), pois ${fmtNum(fatorLiq, 2)} × mercado${liqCalc !== null ? ` (${fmtNum(liqCalc, 0)})` : ""} ficou abaixo`] : []),
       ...avisos,
     ].join(" · "),
@@ -258,6 +276,24 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
 }
 
 const arred = (v: number) => Math.round(v * 1000) / 1000;
+
+/** Aptidão do SIPT/ITR para cada classe de capacidade de uso. */
+const APTIDAO_DA_CLASSE: Record<string, string[]> = {
+  I: ["lavoura_boa", "lavoura_regular"], II: ["lavoura_boa", "lavoura_regular"], III: ["lavoura_regular", "lavoura_restrita"],
+  IV: ["lavoura_restrita", "pastagem_plantada"], V: ["pastagem_plantada", "silvicultura_pastagem_natural"], VI: ["pastagem_plantada", "silvicultura_pastagem_natural"],
+  VII: ["silvicultura_pastagem_natural", "pastagem_plantada"], VIII: ["preservacao", "silvicultura_pastagem_natural"],
+};
+/** Σ (% da classe × VTN/ha da aptidão correspondente) × área. Null se faltar a tabela ou as classes. */
+export function vtnPelaAptidao(vtn: { valores: Record<string, number> } | null | undefined, classes: { classe: string; pct: number }[], area: number | null): number | null {
+  if (!vtn || !pos(area) || classes.length === 0) return null;
+  let total = 0;
+  for (const c of classes) {
+    const v = (APTIDAO_DA_CLASSE[c.classe] ?? []).map((k) => vtn.valores[k]).find(pos);
+    if (!pos(v)) return null;
+    total += (c.pct / 100) * area * v;
+  }
+  return total > 0 ? total : null;
+}
 /** Raio da região geoeconômica para anúncios rurais (km por estrada). */
 const RAIO_REGIAO_KM = 120;
 
@@ -425,7 +461,8 @@ export function gerarAlertas(av: Omit<AvaliacaoTecnica, "alertas" | "rating" | "
   if (av.valores.grau_fundamentacao?.grau === "FORA") add("ATENCAO", "Mercado", "Amostra não atinge o Grau I de fundamentação", "Poucos dados ou fatores fora do intervalo admissível; buscar mais comparáveis ou laudo.");
   if (/CUB por padrão não localizado/.test(av.valores.criterio)) add("INFO", "Mercado", "CUB por padrão do estado não localizado", "O fator padrão construtivo não foi aplicado; os comparáveis foram buscados no mesmo padrão.");
   if (/CUB\/SINAPI não localizado/.test(av.valores.criterio)) add("INFO", "Mercado", "Custo de construção do estado não localizado", "Benfeitorias sem custo de reprodução: valor só da terra nua.");
-  if (av.valores.piso_venal_aplicado) add("INFO", "Valores", `Avaliação ajustada ao valor venal (${av.zona === "RURAL" ? "VTN do ITR" : "IPTU"})`, `Por critério V3, nem o valor de mercado nem o de liquidez ficam abaixo do valor venal do próprio imóvel (${fmtNum(av.valores.piso_venal ?? 0, 0)}).`);
+  if (av.zona === "RURAL" && !pos(av.valores.piso_venal)) add("INFO", "Valores", "Sem valor venal de referência para o piso", "O ITR anexado não traz o VTN declarado (só CND) e o município não publica VTN no SIPT da Receita. Peça a DITR do último exercício para conferir o VTN declarado.");
+  if (av.valores.piso_venal_aplicado) add("INFO", "Valores", `Avaliação ajustada ao valor venal (${av.valores.piso_venal_fonte ?? (av.zona === "RURAL" ? "VTN" : "IPTU")})`, `Por critério V3, nem o valor de mercado nem o de liquidez ficam abaixo do valor venal do próprio imóvel (${fmtNum(av.valores.piso_venal ?? 0, 0)}).`);
   if (pos(av.valores.valor_mercado) && pos(av.valores.laudo_mercado) && pct(av.valores.valor_mercado, av.valores.laudo_mercado) > 0.2) {
     add("INFO", "Mercado", "Valor V3 difere mais de 20% do laudo anexado", `V3 ${fmtNum(av.valores.valor_mercado, 0)} × laudo ${fmtNum(av.valores.laudo_mercado, 0)}.`);
   }
@@ -453,6 +490,8 @@ const ASSUNTOS: [string, RegExp][] = [
   ["proprietario", /propriet[aá]ri.*(difere|diferente|diverg|n[aã]o [eé] o (cliente|proponente))|terceiro garantidor|interveniente/i],
   ["geo_averbacao", /(geo|sigef|georref).*(n[aã]o averbad|sem averba|sem confirma|n[aã]o registrad)|averba.*(geo|sigef|georref)/i],
   ["servidao", /servid[aã]o de passagem/i],
+  ["reserva_legal", /reserva legal/i],
+  ["cafir", /\bcafir\b/i],
   ["construcao_averbada", /(constru[cç]|edifica|benfeitor).*(n[aã]o averbad|sem averba)/i],
   ["ltv", /\bltv\b/i],
   ["debito_iptu", /iptu.*(aberto|vencid|d[eé]bito|atraso|n[aã]o pag|quita)/i],
@@ -484,16 +523,21 @@ const CATEGORIAS_RATING: { categoria: string; max: number; inclui: string[] }[] 
   { categoria: "Mercado e liquidez", max: 20, inclui: ["Mercado", "Valores"] },
 ];
 const PESO: Record<NivelAlerta, number> = { CRITICO: 10, ATENCAO: 4, INFO: 0 };
+/**
+ * Estabilidade (19/10/2026): a nota sai das regras fixas e das consultas públicas, que dão o mesmo
+ * resultado a cada reavaliação. Alerta da IA aparece na lista, mas só pesa se for CRÍTICO.
+ */
+const peso = (x: Alerta) => (x.origem === "IA" && x.nivel !== "CRITICO" ? 0 : PESO[x.nivel]);
 
 /** Rating da Garantia V3: 100 pontos em 5 categorias; cada alerta tira pontos da sua categoria. */
 export function calcularRating(alertas: Alerta[]): RatingGarantia {
   const fatores: FatorRating[] = CATEGORIAS_RATING.map(({ categoria, max, inclui }) => {
-    const perda = alertas.filter((x) => inclui.includes(x.categoria)).reduce((s, x) => s + PESO[x.nivel], 0);
+    const perda = alertas.filter((x) => inclui.includes(x.categoria)).reduce((s, x) => s + peso(x), 0);
     return { categoria, max, pontos: Math.max(0, max - perda) };
   });
   // Alerta de categoria fora da tabela pesa em "Ambiental e riscos".
   const conhecidas = new Set(CATEGORIAS_RATING.flatMap((c) => c.inclui));
-  const resto = alertas.filter((x) => !conhecidas.has(x.categoria)).reduce((s, x) => s + PESO[x.nivel], 0);
+  const resto = alertas.filter((x) => !conhecidas.has(x.categoria)).reduce((s, x) => s + peso(x), 0);
   if (resto > 0) fatores[3].pontos = Math.max(0, fatores[3].pontos - resto);
   let pontos = fatores.reduce((s, f) => s + f.pontos, 0);
   // Um crítico em registro (penhora, indisponibilidade…) limita a nota a D.
