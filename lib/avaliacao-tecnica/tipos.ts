@@ -428,6 +428,8 @@ export interface AvaliacaoTecnica {
   zona: ZonaImovel;
   gerado_em: string;
   gerado_por?: string | null;
+  /** Data da leitura dos documentos reaproveitada (mesmos arquivos); null = lidos nesta avaliação. */
+  leitura_reaproveitada_de?: string | null;
   arquivos: ArquivoLido[];
   documentos_faltantes: string[];
   identificacao: Identificacao;
