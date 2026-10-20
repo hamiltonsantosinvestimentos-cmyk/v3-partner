@@ -127,18 +127,17 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
   const cub = extra?.cub ?? null;
   const recorte = recorteCondominio(av, comps);
   const fatorLiq = FATOR_LIQUIDEZ[av.zona];
-  // Rural: região geoeconômica — com 5+ anúncios até 120 km, os mais distantes saem.
+  // Rural: região — com 5+ anúncios até 500 km, os mais distantes saem.
   const perto = comps.map((c) => typeof c.distancia_km === "number" && c.distancia_km <= RAIO_REGIAO_KM);
   const usarRaio = rural && perto.filter(Boolean).length >= 5;
   // Rural: semelhança de tamanho — com 5+ anúncios entre 1/3 e 3× a área, os demais saem
   // (sítio pequeno tem R$/ha bem maior que fazenda grande).
-  // Prioriza fazendas de 1/2 a 2× a área (ex.: 1.750 ha → 875 a 3.500 ha); com poucas, abre para 1/3–3×.
-  const naFaixa = (lo: number, hi: number) => comps.map((c) => pos(area) && c.area >= area * lo && c.area <= area * hi);
+  // Tamanho (Hamilton, 19/10/2026): mesma metragem ou no máximo 200 ha a menos; acima, qualquer
+  // tamanho (o R$/ha entra na média). Com menos de 3 nessa regra, não filtra (e o laudo avisa).
+  const parecido = comps.map((c) => pos(area) && c.area >= area - TOLERANCIA_MENOR_HA);
   const contar = (m: boolean[]) => m.filter((p, i) => p && (!usarRaio || perto[i])).length;
-  const faixa50 = naFaixa(0.5, 2), faixa33 = naFaixa(1 / 3, 3);
-  const parecido = contar(faixa50) >= 4 ? faixa50 : faixa33;
-  const faixaTxt = parecido === faixa50 ? "1/2 a 2×" : "1/3 a 3×";
-  const usarTamanho = rural && pos(area) && contar(parecido) >= (parecido === faixa50 ? 4 : 5);
+  const faixaTxt = pos(area) ? `menor que ${fmtNum(Math.max(0, area - TOLERANCIA_MENOR_HA), 0)} ha` : "";
+  const usarTamanho = rural && pos(area) && contar(parecido) >= 3;
 
   // ── Homogeneização (tratamento por fatores, como nos laudos de referência) ──
   const iaAval = av.terras?.indice_agronomico ?? null;
@@ -170,11 +169,12 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
     let motivo: string | null = null;
     if (!recorte.mask[i]) motivo = "fora do recorte de condomínio";
     else if (usarRaio && !perto[i]) motivo = `fora da região geoeconômica (${typeof c.distancia_km === "number" ? `~${Math.round(c.distancia_km)} km` : "distância não informada"})`;
-    else if (usarTamanho && !parecido[i]) motivo = `área muito diferente do avaliando (fora de ${faixaTxt})`;
+    else if (usarTamanho && !parecido[i]) motivo = `área pequena demais (${faixaTxt}; aceito até 200 ha a menos)`;
     else if (!(vuBruto > 0)) motivo = "benfeitorias maiores que o preço";
     else if (total < FATOR_TOTAL_MIN || total > FATOR_TOTAL_MAX) motivo = `fator total ${total.toFixed(2)} fora de ${FATOR_TOTAL_MIN.toFixed(2)}–${FATOR_TOTAL_MAX.toFixed(2)} (pouco semelhante)`;
     return { vu_bruto: vuBruto, fatores, fator_total: total, vu_homogeneizado: vuBruto * total, usado: motivo === null, motivo };
   });
+  if (rural && pos(area) && !usarTamanho) avisos.push("poucos anúncios com a metragem do imóvel (até 200 ha a menos): amostra sem filtro de tamanho");
   if (rural && !pos(iaAval)) avisos.push("índice agronômico do imóvel não definido: terras não homogeneizadas por classe e situação");
   if (!rural && !pos(cubAval)) avisos.push("CUB por padrão não localizado: padrão construtivo não homogeneizado");
 
@@ -240,12 +240,9 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
   // saneamento — critério V3 definido pelo Hamilton em 19/10/2026.
   // Rural: maior R$/ha aceito, limitado ao teto do intervalo de confiança de 80% (NBR) — um
   // anúncio fora da curva não puxa o valor sozinho.
-  const maiorAceito = Math.max(...precos);
-  const tetoIc = est.n >= 2 ? est.ic_superior : maiorAceito;
-  // Amostra fora do Grau I de precisão (amplitude > 50%): o "maior valor" não é confiável → média.
-  const precisaoFora = grauPrecisao(est.amplitude_pct) === "FORA";
-  const unit = rural && !precisaoFora ? Math.min(maiorAceito, tetoIc) : est.media;
-  const limitadoIc = rural && !precisaoFora && maiorAceito > tetoIc;
+  // Rural (Hamilton, 19/10/2026): média do R$/ha dos anúncios aceitos — os maiores que o imóvel
+  // entram pelo R$/ha. (O critério "maior valor do ha" de 19/10 foi substituído pela média.)
+  const unit = est.media;
   const terra = pos(area) ? unit * area : null;
   const extraBenf = rural ? valorBenf : 0;
   const vmCalc = terra !== null ? terra + extraBenf : null;
@@ -260,8 +257,7 @@ export function calcularValores(av: Base, padrao: PadraoNivel | null | undefined
     ...base,
     preco_unitario_min: Math.min(...precos), preco_unitario_medio: unit, preco_unitario_max: Math.max(...precos), preco_unitario_aplicado: unit,
     criterio: [
-      rural && !precisaoFora ? `maior valor por hectare entre os comparáveis aceitos (critério V3)${limitadoIc ? ", limitado ao teto do intervalo de confiança de 80%" : ""}`
-        : rural ? "média saneada (amostra dispersa demais para usar o maior valor)" : "média saneada dos comparáveis homogeneizados",
+      rural ? "média do R$/ha dos anúncios aceitos (mesma metragem ou maiores; até 200 ha a menos)" : "média saneada dos comparáveis homogeneizados",
       ...(pisoMercado ? [`mercado elevado ao valor venal (${base.piso_venal_fonte}${rural ? " + benfeitorias" : ""}), pois o calculado${vmCalc !== null ? ` (${fmtNum(vmCalc, 0)})` : ""} ficou abaixo`] : []),
       ...(pisoLiquidez ? [`liquidez elevada ao valor venal (${fmtNum(venal ?? 0, 0)}), pois ${fmtNum(fatorLiq, 2)} × mercado${liqCalc !== null ? ` (${fmtNum(liqCalc, 0)})` : ""} ficou abaixo`] : []),
       ...avisos,
@@ -295,7 +291,9 @@ export function vtnPelaAptidao(vtn: { valores: Record<string, number> } | null |
   return total > 0 ? total : null;
 }
 /** Raio da região geoeconômica para anúncios rurais (km por estrada). */
-const RAIO_REGIAO_KM = 120;
+const RAIO_REGIAO_KM = 500; // Hamilton, 19/10/2026 (antes 120 km)
+/** Rural: anúncio pode ser no máximo 200 ha MENOR que o avaliando; maior, qualquer tamanho (entra pelo R$/ha). */
+const TOLERANCIA_MENOR_HA = 200;
 
 /** Custo de reprodução das benfeitorias rurais (como a Eagle): área × custo do m² × fator do tipo × Ross-Heidecke. */
 export function custoBenfeitorias(eds: Edificacao[], cub: CubRef | null): BenfeitoriaCalculo[] {
