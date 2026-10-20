@@ -10,6 +10,7 @@
 //      referência), calculam estatística, graus NBR, valores, alertas e rating;
 //   5. a IA escreve o parecer com tudo já calculado.
 
+import { createHash } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { webSearch } from "@/lib/web-search";
@@ -159,7 +160,7 @@ const dec = (s: string | undefined): number | null => {
 
 const TIPOS: TipoDocumentoImovel[] = ["MATRICULA", "ESCRITURA", "IPTU", "CND_IPTU", "FOTO", "CCIR", "ITR", "CAR", "GEO_MEMORIAL", "GEO_MAPA", "GEO_KML", "CAFIR", "CND_ITR", "LAUDO", "PLANTA", "HABITE_SE", "OUTRO", "NAO_RELACIONADO"];
 
-interface LeituraIa {
+export interface LeituraIa {
   arquivos: { indice: number; tipo: string; resumo?: string }[];
   identificacao: Identificacao;
   registro: Registro;
@@ -170,6 +171,41 @@ interface LeituraIa {
   ambiental?: string | null;
   alertas?: Alerta[];
   coordenadas_imovel?: { lat: number; lon: number } | null;
+}
+
+// ─── Leitura guardada (20/10/2026, pedido do Hamilton) ──────────────────────
+// A leitura dos documentos (OCR da matrícula, IPTU, CCIR, ITR, CAR, fotos), os vértices do GEO e
+// a classificação das terras ficam guardados no imóvel (metadata.imoveis[i].avaliacao_leitura).
+// Reavaliar ou uma nova pesquisa de mercado reaproveitam enquanto os arquivos forem os mesmos
+// (comparados pelo conteúdo, sha256); anexou, trocou ou tirou arquivo, lê tudo de novo.
+
+/** Sobe quando o prompt de leitura mudar de forma que a leitura antiga não sirva mais. */
+const LEITURA_VERSAO = 1;
+
+export type GeoLido = { vertices: VerticeGeo[]; area_ha: number | null; fonte: string };
+
+export interface LeituraGuardada {
+  versao: number;
+  zona: ZonaImovel;
+  /** sha256 (32 primeiros) de cada arquivo, na ordem em que foram lidos. */
+  arquivos: string[];
+  lido_em: string;
+  leitura: LeituraIa;
+  geo: GeoLido | null;
+  terras: Terras | null;
+}
+
+function hashArquivo(a: ArquivoBaixado): string {
+  return createHash("sha256").update(a.texto ?? a.base64 ?? "").digest("hex").slice(0, 32);
+}
+
+/** Os arquivos na ordem da leitura guardada, se forem exatamente os mesmos; senão null. */
+function casarLeitura(arqs: ArquivoBaixado[], g: LeituraGuardada | null | undefined, zona: ZonaImovel): ArquivoBaixado[] | null {
+  if (!g || g.versao !== LEITURA_VERSAO || g.zona !== zona || !g.leitura || g.arquivos.length !== arqs.length) return null;
+  const porHash = new Map(arqs.map((a) => [hashArquivo(a), a]));
+  if (porHash.size !== arqs.length) return null;
+  const ordem = g.arquivos.map((h) => porHash.get(h));
+  return ordem.every(Boolean) ? (ordem as ArquivoBaixado[]) : null;
 }
 
 export interface ContextoImovel {
@@ -239,7 +275,7 @@ async function lerDocumentos(ai: Anthropic, arqs: ArquivoBaixado[], ctx: Context
 // ─── 2. Vértices do GEO ─────────────────────────────────────────────────────
 
 /** Lê a tabela de vértices do memorial/mapa SIGEF. Formato compacto pra caber muitos vértices. */
-async function lerVertices(ai: Anthropic, arqs: ArquivoBaixado[], indices: number[]): Promise<{ vertices: VerticeGeo[]; area_ha: number | null; fonte: string } | null> {
+async function lerVertices(ai: Anthropic, arqs: ArquivoBaixado[], indices: number[]): Promise<GeoLido | null> {
   // KML anexado: coordenadas exatas, sem IA.
   for (const i of indices) {
     const a = arqs[i - 1];
@@ -626,15 +662,24 @@ export async function gerarAvaliacaoTecnica(opts: {
   geradoPor?: string | null;
   /** Reavaliação: reaproveita os anúncios da avaliação anterior (mesmo valor se os documentos não mudarem). */
   mercadoAnterior?: PesquisaMercadoTecnica | null;
+  /** Leitura guardada da avaliação anterior: reaproveitada se os arquivos forem os mesmos. */
+  leituraGuardada?: LeituraGuardada | null;
+  /** Recebe a leitura feita agora, para guardar (só chamado quando houve leitura nova). */
+  onLeitura?: (g: LeituraGuardada) => Promise<unknown>;
   /** Progresso para a tela (grava a etapa no job). */
   onEtapa?: (etapa: string) => Promise<unknown>;
 }): Promise<AvaliacaoTecnica> {
-  const { ai, arquivos, contexto } = opts;
+  const { ai, contexto } = opts;
   const inicio = Date.now();
   const zona = contexto.zona;
   const etapa = (e: string) => opts.onEtapa?.(e).catch(() => {});
-  await etapa(`Lendo ${arquivos.length} documento(s) do imóvel`);
-  const leitura = await lerDocumentos(ai, arquivos, contexto);
+  const reuso = casarLeitura(opts.arquivos, opts.leituraGuardada, zona);
+  const guardada = reuso ? opts.leituraGuardada! : null;
+  const arquivos = reuso ?? opts.arquivos;
+  await etapa(guardada
+    ? `Reaproveitando a leitura de ${arquivos.length} documento(s) de ${new Date(guardada.lido_em).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
+    : `Lendo ${arquivos.length} documento(s) do imóvel`);
+  const leitura = guardada ? guardada.leitura : await lerDocumentos(ai, arquivos, contexto);
   await etapa(zona === "RURAL" ? "GEO, consultas públicas (CAR, TI, UC, embargos), terras e mercado" : "Pesquisando o mercado, o CUB e a região na internet");
 
   const arquivosLidos: ArquivoLido[] = arquivos.map((a, i) => {
@@ -650,7 +695,8 @@ export async function gerarAvaliacaoTecnica(opts: {
   const areaRef = leitura.areas?.matricula_ha ?? leitura.areas?.ccir_ha ?? leitura.areas?.car_ha ?? null;
   // Rural: GEO → consultas pela poligonal (+ relevo) → classes de capacidade de uso.
   const cadeiaRural = async () => {
-    let g = indicesGeo.length > 0 ? await lerVertices(ai, arquivos, indicesGeo).catch(() => null) : null;
+    const geoGuardado = guardada?.geo && guardada.geo.vertices?.length >= 3 ? guardada.geo : null;
+    let g = geoGuardado ?? (indicesGeo.length > 0 ? await lerVertices(ai, arquivos, indicesGeo).catch(() => null) : null);
     // A leitura de tabela longa às vezes pula vértices: se a área calculada fugir mais de 1% da
     // escrita no memorial, lê de novo e fica com a mais próxima.
     const desvio = (x: typeof g) => {
@@ -660,7 +706,7 @@ export async function gerarAvaliacaoTecnica(opts: {
     };
     const d1 = desvio(g);
     // (só se ainda houver folga de tempo: a função tem 300 s no total)
-    if (g && d1 !== null && d1 > 0.01 && Date.now() - inicio < 140000) {
+    if (!geoGuardado && g && d1 !== null && d1 > 0.01 && Date.now() - inicio < 140000) {
       const g2 = await lerVertices(ai, arquivos, indicesGeo).catch(() => null);
       const d2 = desvio(g2);
       if (g2 && d2 !== null && d2 < d1) g = g2;
@@ -669,7 +715,7 @@ export async function gerarAvaliacaoTecnica(opts: {
     const cons = g && m
       ? await consultarImovelRural(g.vertices, ufImovel, ident.documentos_proprietarios ?? []).catch((e) => { console.error("[avaliacao-tecnica] consultas:", e); return null; })
       : null;
-    const terras = await classificarTerras(ai, leitura, {
+    const terras = guardada?.terras ?? await classificarTerras(ai, leitura, {
       relevo: cons?.relevo ?? null, area_ha: m?.area_ha ?? areaRef,
       car: cons?.carPrincipal ? { area_ha: cons.carPrincipal.area_ha, codigo: cons.carPrincipal.codigo } : null,
       cidade: ident.cidade ?? contexto.cidade ?? null, uf: ufImovel,
@@ -692,6 +738,17 @@ export async function gerarAvaliacaoTecnica(opts: {
       ? buscarVtnMunicipal(ai, municipioImovel, ufImovel).catch((e) => { console.error("[avaliacao-tecnica] vtn:", e); return null; })
       : Promise.resolve(null),
   ]);
+
+  // Guarda o que foi lido agora (a leitura nova, ou o GEO/terras que faltavam na guardada).
+  const novoGeo = !guardada?.geo && rur?.geo;
+  const novasTerras = !guardada?.terras && rur?.terras;
+  if (opts.onLeitura && (!guardada || novoGeo || novasTerras)) {
+    await opts.onLeitura({
+      versao: LEITURA_VERSAO, zona, arquivos: arquivos.map(hashArquivo),
+      lido_em: guardada?.lido_em ?? new Date().toISOString(),
+      leitura, geo: rur?.geo ?? guardada?.geo ?? null, terras: rur?.terras ?? guardada?.terras ?? null,
+    }).catch((e) => console.error("[avaliacao-tecnica] guardar leitura:", e));
+  }
 
   const mercadoFinal = zona === "RURAL" ? indicesDosComparaveis(mercado, leitura) : mercado;
   const geo = rur?.geo ?? null;
@@ -739,6 +796,7 @@ export async function gerarAvaliacaoTecnica(opts: {
     zona,
     gerado_em: new Date().toISOString(),
     gerado_por: opts.geradoPor ?? null,
+    leitura_reaproveitada_de: guardada?.lido_em ?? null,
     arquivos: arquivosLidos,
     documentos_faltantes,
     identificacao: ident,

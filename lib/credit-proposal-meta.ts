@@ -10,7 +10,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 type Meta = Record<string, unknown>;
 type Imovel = Record<string, unknown>;
 
-const CAMPOS_IMOVEL_DO_SERVIDOR = ["padrao_construtivo", "avaliacao_tecnica", "avaliacao_tecnica_job", "avaliacao_tecnica_pdf"] as const;
+const CAMPOS_IMOVEL_DO_SERVIDOR = ["padrao_construtivo", "avaliacao_tecnica", "avaliacao_tecnica_job", "avaliacao_tecnica_pdf", "avaliacao_leitura"] as const;
 
 export async function atualizarMetadata(
   db: SupabaseClient,

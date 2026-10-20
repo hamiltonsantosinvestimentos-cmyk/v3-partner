@@ -149,14 +149,14 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
     return () => clearInterval(t);
   }, [processando, proposalId, onMetadata]);
 
-  async function gerar(novaPesquisa = false) {
+  async function gerar(novaPesquisa = false, relerDocumentos = false) {
     setErro(null);
     setIniciando(true);
     try {
       const r = await fetch("/api/credit-proposals/avaliacao-imovel/tecnica", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proposal_id: proposalId, imovel_idx: idx, itens, nova_pesquisa: novaPesquisa }),
+        body: JSON.stringify({ proposal_id: proposalId, imovel_idx: idx, itens, nova_pesquisa: novaPesquisa, reler_documentos: relerDocumentos }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(typeof j.error === "string" ? j.error : "Erro ao iniciar a avaliação."); return; }
@@ -267,7 +267,8 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
         </div>
         <p className="text-[11px] text-[#7A8FA8] mt-1">
           {avaliacao
-            ? <>Gerada em {new Date(avaliacao.gerado_em).toLocaleString("pt-BR")}{avaliacao.gerado_por ? ` por ${avaliacao.gerado_por}` : ""} · {avaliacao.arquivos.length} documento(s) lido(s) · <button onClick={() => gerar(true)} disabled={iniciando || processando} className="text-[#C9A84C] hover:underline disabled:opacity-40" title="Busca anúncios novos na internet (o valor pode mudar)">nova pesquisa de mercado</button></>
+            ? <>Gerada em {new Date(avaliacao.gerado_em).toLocaleString("pt-BR")}{avaliacao.gerado_por ? ` por ${avaliacao.gerado_por}` : ""} · {avaliacao.arquivos.length} documento(s) lido(s) · <button onClick={() => gerar(true)} disabled={iniciando || processando} className="text-[#C9A84C] hover:underline disabled:opacity-40" title="Busca anúncios novos na internet (o valor pode mudar)">nova pesquisa de mercado</button>
+              {" · "}{avaliacao.leitura_reaproveitada_de ? `leitura dos documentos de ${new Date(avaliacao.leitura_reaproveitada_de).toLocaleDateString("pt-BR")} (mesmos arquivos) · ` : ""}<button onClick={() => gerar(false, true)} disabled={iniciando || processando} className="text-[#C9A84C] hover:underline disabled:opacity-40" title="Lê de novo todos os documentos com a IA. Sem isso, a leitura guardada é reaproveitada enquanto os arquivos forem os mesmos.">ler documentos de novo</button></>
             : <>Lê {docsEsperados} e monta a avaliação no padrão dos laudos.</>}
         </p>
         {avaliacao && pdf?.storage_path && (
@@ -303,7 +304,7 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
         )}
         <button
           onClick={() => gerar(false)}
-          title={avaliacao ? "Reavalia com os documentos atuais, reaproveitando os anúncios da última pesquisa de mercado (até 30 dias)" : undefined}
+          title={avaliacao ? "Reavalia com os documentos atuais, reaproveitando a leitura dos documentos (se os arquivos forem os mesmos) e os anúncios da última pesquisa de mercado (até 30 dias)" : undefined}
           disabled={iniciando || processando}
           className="h-7 px-2.5 rounded-md bg-gradient-to-r from-[#C9A84C] to-[#E8C97A] text-[#09081A] text-[11px] font-bold flex items-center gap-1 hover:opacity-90 transition-opacity disabled:opacity-50"
         >
