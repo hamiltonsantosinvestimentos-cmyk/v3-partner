@@ -13,6 +13,8 @@ import { extractPlainVariables } from "@/lib/contract-render";
 import { PartyQualificationCardModal } from "./party-qualification-card";
 import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
 import { whatsappDigits } from "@/lib/phone";
+import { Dica } from "@/components/shared/dica";
+import { groupQualificationBatches, joinNamesPtBr, formatDateTimeBr, consumedContractStatus } from "@/lib/qualification-batch-groups";
 
 interface RiscoLaudo {
   resumo?: string;
@@ -80,8 +82,19 @@ interface QualParty {
 interface QualBatch {
   id: string;
   status: string;
+  created_at?: string | null;
+  parent_contract_id?: string | null;
   consumido_por_contract_id?: string | null;
-  consumido_contrato?: { contract_code: string | null } | null;
+  // Painel de Lotes da Minuta (BRIEF 20/10/2026): situação, data e autor do contrato
+  // que consumiu o lote, para a tela mostrar o andamento e abrir o contrato.
+  consumido_contrato?: {
+    id?: string;
+    contract_code: string | null;
+    status_signature?: string | null;
+    created_at?: string | null;
+    created_by_name?: string | null;
+    deleted_at?: string | null;
+  } | null;
   cm_party_qualifications: QualParty[];
 }
 
@@ -157,7 +170,7 @@ MULTI-VERTICAL (só minutas com vertical = "Multi-Vertical"):
 {{v:credito}}texto só do crédito{{/v}} -- vertical escolhida ao gerar o contrato,
 texto fora das tags vale pra todas`;
 
-export function ContractTemplatesClient() {
+export function ContractTemplatesClient({ onOpenContract }: { onOpenContract?: (contractId: string) => void } = {}) {
   const searchParams = useSearchParams();
   const initialVertical = searchParams.get("vertical") ?? "";
   const highlightTemplateId = searchParams.get("template_id");
@@ -419,10 +432,13 @@ export function ContractTemplatesClient() {
   // lote pendente nunca bloqueia (só informa), e quando há 2+ lotes prontos
   // ao mesmo tempo, a Mesa escolhe explicitamente qual contraparte está
   // gerando agora (seletor abaixo), nunca precisa apagar nada.
-  const completedUnconsumedBatches = qualBatches.filter(
-    (b) => !b.consumido_por_contract_id && b.status === "completo" && b.cm_party_qualifications.some((p) => p.status === "preenchido")
-  );
-  const pendingUnconsumedBatches = qualBatches.filter((b) => !b.consumido_por_contract_id && b.status !== "completo");
+  // Painel de Lotes da Minuta (BRIEF 20/10/2026): os três grupos saem de uma função
+  // só (lib/qualification-batch-groups.ts), que espelha o filtro do servidor.
+  const batchGroups = groupQualificationBatches(qualBatches);
+  const completedUnconsumedBatches = batchGroups.ready;
+  const pendingUnconsumedBatches = batchGroups.pending;
+  const pendingNamesOf = (b: QualBatch) =>
+    joinNamesPtBr(sortQualificationParties(b.cm_party_qualifications).filter((p) => p.status !== "preenchido").map((p) => p.full_name));
   const effectiveQualBatch = completedUnconsumedBatches.length === 1
     ? completedUnconsumedBatches[0]
     : completedUnconsumedBatches.find((b) => b.id === selectedQualBatchId);
@@ -436,7 +452,7 @@ export function ContractTemplatesClient() {
   // deliberado, decisão de João em 02/09: evita CPF/RG de um cliente
   // vazar pro próximo contrato gerado da mesma minuta). Só relevante como
   // dica quando não há nenhum lote vivo (pronto ou pendente) sobrando.
-  const mostRecentConsumedBatch = qualBatches.find((b) => !!b.consumido_por_contract_id);
+  const mostRecentConsumedBatch = batchGroups.consumed[0];
 
   const handleGenerateContract = async () => {
     if (!selected) return;
@@ -452,9 +468,12 @@ export function ContractTemplatesClient() {
     if (requiresCounterparty && !hasQualificationData) {
       const invalid = genParties.some((p) => !p.name.trim() || !p.email.trim());
       if (genParties.length === 0 || invalid) {
-        if (completedUnconsumedBatches.length === 0 && pendingUnconsumedBatches.length === 0 && mostRecentConsumedBatch) {
+        if (completedUnconsumedBatches.length === 0 && pendingUnconsumedBatches.length > 0) {
+          const pend = pendingUnconsumedBatches[0];
+          setGenError(`Nenhum lote pronto para esta minuta. Faltam preencher: ${pendingNamesOf(pend) || "envolvidos do lote"} (lote de ${formatDateTimeBr(pend.created_at)}). Ou preencha os Indicadores manualmente abaixo.`);
+        } else if (completedUnconsumedBatches.length === 0 && mostRecentConsumedBatch) {
           const codigo = mostRecentConsumedBatch.consumido_contrato?.contract_code ?? "outro contrato já gerado";
-          setGenError(`A Qualificação Antecipada mostrada acima já foi usada no contrato ${codigo} (single-use por desenho: evita CPF/RG de um cliente vazar para o próximo contrato gerado desta minuta). Clique em "Gerar Link de Qualificação Antecipada" para criar um lote novo para esta operação, ou preencha os Indicadores manualmente abaixo.`);
+          setGenError(`Os lotes desta minuta já viraram contrato (último: ${codigo}). Para um novo cliente, gere um Link de Qualificação Antecipada, ou preencha os Indicadores manualmente abaixo.`);
         } else {
           setGenError("Preencha nome e e-mail de todos os indicadores (ou aguarde algum lote de qualificação em andamento completar).");
         }
@@ -1298,29 +1317,67 @@ ${allParties.length > 0 ? `<div class="qualbox">
                 </div>
               )}
 
-              {selected && qualBatches.length > 0 && (
+              {selected && (batchGroups.ready.length + batchGroups.pending.length + batchGroups.consumed.length) > 0 && (
                 <div className="mb-4 bg-[#09081A] border border-[#9BAFC5]/10 rounded-lg p-4">
                   <h3 className="text-xs font-bold text-[#F5F1E8] mb-3 flex items-center gap-2">
                     <UserPlus size={13} className="text-[#C9A84C]" /> Qualificação Antecipada
                   </h3>
-                  <div className="space-y-3">
-                    {qualBatches.map((batch) => (
+                  {(() => {
+                    // Painel de Lotes da Minuta (BRIEF 20/10/2026): o mesmo cartão para os três
+                    // grupos; lote consumido mostra o contrato gerado e perde as ações de edição.
+                    const statusToneClass = {
+                      warn: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+                      pend: "bg-[#243A66] text-[#9BAFC5] border-[#9BAFC5]/20",
+                      ok: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+                      err: "bg-red-500/15 text-red-400 border-red-500/30",
+                    } as const;
+                    const renderBatch = (batch: QualBatch) => {
+                      const consumed = !!batch.consumido_por_contract_id;
+                      const contrato = batch.consumido_contrato;
+                      const situacao = consumedContractStatus(contrato);
+                      return (
                       <div key={batch.id} className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-[9px] font-bold text-[#C9A84C] uppercase">Lote de Qualificação</span>
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <span className="text-[9px] font-bold text-[#E8C97A] uppercase">
+                            {consumed && contrato?.contract_code ? contrato.contract_code : "Lote de Qualificação"}
+                            {!consumed && batch.created_at && <span className="ml-1.5 normal-case font-semibold text-[#9BAFC5]">criado em {formatDateTimeBr(batch.created_at)}</span>}
+                          </span>
                           <div className="flex items-center gap-1.5">
-                            {batch.consumido_por_contract_id && (
-                              <span className="text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border bg-[#243A66] text-amber-400 border-amber-500/30">
-                                Usado em {batch.consumido_contrato?.contract_code ?? "outro contrato"}
+                            {consumed ? (
+                              <span className="inline-flex items-center gap-1">
+                                <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border", statusToneClass[situacao.tone])}>
+                                  {situacao.label}
+                                </span>
+                                <Dica id="lote_situacao_contrato" />
+                              </span>
+                            ) : (
+                              <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border",
+                                batch.status === "completo" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-[#243A66] text-[#9BAFC5] border-[#9BAFC5]/15"
+                              )}>
+                                {batch.cm_party_qualifications.filter((p) => p.status === "preenchido").length} de {batch.cm_party_qualifications.length} qualificados
                               </span>
                             )}
-                            <span className={cn("text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border",
-                              batch.status === "completo" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-[#243A66] text-[#9BAFC5] border-[#9BAFC5]/15"
-                            )}>
-                              {batch.cm_party_qualifications.filter((p) => p.status === "preenchido").length}/{batch.cm_party_qualifications.length} qualificados
-                            </span>
                           </div>
                         </div>
+                        {consumed && (
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <p className="text-[10px] text-[#9BAFC5]">
+                              Gerado por <span className="text-[#F5F1E8] font-semibold">{contrato?.created_by_name ?? "equipe V3"}</span>
+                              {contrato?.created_at ? ` em ${formatDateTimeBr(contrato.created_at)}` : ""} <Dica id="lote_gerado_por" />
+                            </p>
+                            {contrato?.id && onOpenContract && (
+                              <button onClick={() => onOpenContract(contrato.id!)}
+                                className="flex items-center gap-1 text-[10px] font-bold text-[#C9A84C] px-2.5 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors">
+                                <FileText size={11} /> Abrir contrato
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {!consumed && pendingNamesOf(batch) && (
+                          <p className="mb-2 text-[10px] text-amber-400">
+                            Faltam: <span className="font-semibold">{pendingNamesOf(batch)}</span> <Dica id="lote_faltam" />
+                          </p>
+                        )}
                         <div className="space-y-1.5">
                           {sortQualificationParties(batch.cm_party_qualifications).map((p) => (
                             editingPartyId === p.id ? (
@@ -1379,12 +1436,12 @@ ${allParties.length > 0 ? `<div class="qualbox">
                                     className="text-[9px] font-semibold text-[#C9A84C] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors">
                                     <Eye size={10} />
                                   </button>
-                                  <button onClick={() => reopenQualification(p.id)} disabled={reopeningId === p.id}
-                                    className="text-[9px] font-semibold text-amber-400 px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-50">
-                                    {reopeningId === p.id ? "Reabrindo..." : "Corrigir"}
-                                  </button>
                                   {!batch.consumido_por_contract_id && (
                                     <>
+                                      <button onClick={() => reopenQualification(p.id)} disabled={reopeningId === p.id}
+                                        className="text-[9px] font-semibold text-amber-400 px-2 py-1 rounded border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-colors disabled:opacity-50">
+                                        {reopeningId === p.id ? "Reabrindo..." : "Corrigir"}
+                                      </button>
                                       <button onClick={() => startEditParty(p)}
                                         title="Editar nome/e-mail/telefone/papel"
                                         className="text-[9px] font-semibold text-[#9BAFC5] px-2 py-1 rounded border border-[#9BAFC5]/20 hover:text-[#F5F1E8] hover:border-[#9BAFC5]/40 transition-colors">
@@ -1432,11 +1489,9 @@ ${allParties.length > 0 ? `<div class="qualbox">
                             )
                           ))}
                         </div>
-                        {batch.status === "completo" && !batch.cm_party_qualifications.some((p) => p.status !== "preenchido") && (
+                        {!consumed && batch.status === "completo" && !batch.cm_party_qualifications.some((p) => p.status !== "preenchido") && (
                           <p className="mt-2 text-[9px] text-[#9BAFC5]">
-                            {batch.consumido_por_contract_id
-                              ? `Lote já consumido pelo contrato ${batch.consumido_contrato?.contract_code ?? "gerado"} (single-use, não reaproveitável). Para outra operação/cliente com esta minuta, clique em "Gerar Link de Qualificação Antecipada" para criar um lote novo.`
-                              : "Lote completo. Os dados serão herdados automaticamente no próximo contrato gerado a partir desta minuta (single-use: não reaproveitável em outro contrato depois disso)."}
+                            Lote completo. Os dados serão herdados automaticamente no próximo contrato gerado a partir desta minuta (single-use: não reaproveitável em outro contrato depois disso).
                           </p>
                         )}
 
@@ -1510,8 +1565,42 @@ ${allParties.length > 0 ? `<div class="qualbox">
                           </div>
                         )}
                       </div>
-                    ))}
-                  </div>
+                      );
+                    };
+                    const groupTitle = (label: string, count: number) => (
+                      <p className="text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-2">{label} ({count})</p>
+                    );
+                    const noOpenBatch = batchGroups.ready.length === 0 && batchGroups.pending.length === 0;
+                    return (
+                      <div className="space-y-4">
+                        {batchGroups.ready.length > 0 && (
+                          <div>
+                            {groupTitle("Prontos para gerar", batchGroups.ready.length)}
+                            <div className="space-y-3">{batchGroups.ready.map(renderBatch)}</div>
+                          </div>
+                        )}
+                        {batchGroups.pending.length > 0 && (
+                          <div>
+                            {groupTitle("Aguardando qualificação", batchGroups.pending.length)}
+                            <div className="space-y-3">{batchGroups.pending.map(renderBatch)}</div>
+                          </div>
+                        )}
+                        {noOpenBatch && (
+                          <p className="text-[10px] text-[#9BAFC5]">Nenhum lote em aberto. Para um novo cliente, use Gerar Link de Qualificação Antecipada.</p>
+                        )}
+                        {batchGroups.consumed.length > 0 && (
+                          <details className="group">
+                            <summary className="cursor-pointer list-none flex items-center gap-1.5">
+                              <ChevronDown size={12} className="text-[#E8C97A] -rotate-90 group-open:rotate-0 transition-transform" />
+                              <span className="text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider">Já viraram contrato ({batchGroups.consumed.length})</span>
+                              <Dica id="lote_ja_virou_contrato" />
+                            </summary>
+                            <div className="space-y-3 mt-2">{batchGroups.consumed.map(renderBatch)}</div>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 

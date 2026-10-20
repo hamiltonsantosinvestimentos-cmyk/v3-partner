@@ -96,6 +96,23 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Parado há mais de 30 dias",
     texto: "Conta quantos itens estão na mesma etapa há mais de 30 dias. Serve para achar onde o processo trava. Os números são só agregados e nunca mostram quem é o ativo ou o comprador.",
   },
+  // Painel de Lotes da Minuta (BRIEF 20/10/2026, seção 7).
+  lote_ja_virou_contrato: {
+    titulo: "Lote que já virou contrato",
+    texto: "Cada lote vale para um único contrato, para que os dados de um cliente nunca entrem no contrato de outro (LGPD). Para um novo cliente, gere um novo link de qualificação.",
+  },
+  lote_gerado_por: {
+    titulo: "Gerado por",
+    texto: "Mostra quem da equipe gerou o contrato a partir deste lote, para evitar duas pessoas trabalhando no mesmo cliente sem saber.",
+  },
+  lote_faltam: {
+    titulo: "Quem falta qualificar",
+    texto: "O contrato só pode ser gerado quando todos do lote preencherem. Reenvie o link para quem falta.",
+  },
+  lote_situacao_contrato: {
+    titulo: "Situação do contrato",
+    texto: "Andamento atual do contrato gerado a partir deste lote. Rascunho ainda não foi enviado para assinatura.",
+  },
 } as const satisfies Record<string, Nota>;
 
 export type NotaId = keyof typeof NOTAS_DO_PORQUE;

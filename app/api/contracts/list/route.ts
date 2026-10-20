@@ -48,6 +48,12 @@ export async function GET(req: NextRequest) {
   const status = url.searchParams.get("status");
   const search = url.searchParams.get("q");
   const ticketId = url.searchParams.get("ticket_id");
+  // "Abrir contrato" a partir do lote consumido na minuta (BRIEF 20/10/2026): busca
+  // um contrato pelo id, sempre dentro do mesmo escopo de vertical do perfil acima.
+  const contractId = url.searchParams.get("id");
+  if (contractId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(contractId)) {
+    return NextResponse.json({ error: "id inválido" }, { status: 422 });
+  }
 
   let query = svc()
     .from("operation_contracts")
@@ -60,6 +66,7 @@ export async function GET(req: NextRequest) {
   if (status) query = query.eq("status_signature", status);
   if (search) query = query.ilike("contract_title", `%${search}%`);
   if (ticketId) query = query.eq("ticket_id", ticketId);
+  if (contractId) query = query.eq("id", contractId);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

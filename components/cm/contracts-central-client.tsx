@@ -32,7 +32,12 @@ type TabId = (typeof TABS)[number]["id"];
 function ContractsCentralInner({ role }: { role: string }) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const [tab, setTab] = useState<TabId>(searchParams.get("vertical") || searchParams.get("template_id") ? "minutas" : "painel");
+  // "Abrir contrato" (BRIEF 20/10/2026): ?contrato=<id> abre a aba de contratos
+  // gerados com o contrato já selecionado; o parâmetro sai da URL depois de usado.
+  const [openContractId, setOpenContractId] = useState<string | null>(searchParams.get("contrato"));
+  const [tab, setTab] = useState<TabId>(
+    searchParams.get("contrato") ? "painel" : searchParams.get("vertical") || searchParams.get("template_id") ? "minutas" : "painel"
+  );
   const canConfig = ["ADMIN", "GESTAO"].includes(role);
   const visibleTabs = TABS.filter((t) => (t.id !== "config" && t.id !== "grade") || canConfig);
 
@@ -42,6 +47,16 @@ function ContractsCentralInner({ role }: { role: string }) {
   const openMinuta = (templateId: string) => {
     router.push(`/juridico/contratos?template_id=${templateId}`);
     setTab("minutas");
+  };
+
+  const openContract = (contractId: string) => {
+    router.push(`/juridico/contratos?contrato=${contractId}`);
+    setOpenContractId(contractId);
+    setTab("painel");
+  };
+  const clearOpenContract = () => {
+    setOpenContractId(null);
+    if (searchParams.get("contrato")) router.replace("/juridico/contratos");
   };
 
   return (
@@ -63,8 +78,8 @@ function ContractsCentralInner({ role }: { role: string }) {
         ))}
       </div>
 
-      {tab === "painel" && <ContractsPanelClient role={role} />}
-      {tab === "minutas" && <ContractTemplatesClient />}
+      {tab === "painel" && <ContractsPanelClient role={role} initialContractId={openContractId} onInitialContractHandled={clearOpenContract} />}
+      {tab === "minutas" && <ContractTemplatesClient onOpenContract={openContract} />}
       {tab === "pendencias" && <PendingQualificationsPanel onOpenMinuta={openMinuta} />}
       {tab === "grade" && canConfig && <CommissionGridsPanel />}
       {tab === "config" && canConfig && <EsignatureConfigClient />}

@@ -103,7 +103,7 @@ export async function GET(req: NextRequest) {
   // explicar o motivo real em vez de repetir o erro de validação cru.
   let query = svc()
     .from("cm_qualification_batches")
-    .select("*, cm_party_qualifications(id, full_name, email, phone, role_in_document, status, filled_at, qualification_token, cpf_cnpj, party_nature, company_name, cnpj_situacao_cadastral, cnpj_razao_social, cnpj_socios, cnpj_socio_informado_confere, cnpj_checado_em, cnpj_check_error), consumido_contrato:consumido_por_contract_id(contract_code)")
+    .select("*, cm_party_qualifications(id, full_name, email, phone, role_in_document, status, filled_at, qualification_token, cpf_cnpj, party_nature, company_name, cnpj_situacao_cadastral, cnpj_razao_social, cnpj_socios, cnpj_socio_informado_confere, cnpj_checado_em, cnpj_check_error), consumido_contrato:consumido_por_contract_id(id, contract_code, status_signature, created_at, created_by, deleted_at)")
     // Exclusão individual (11/09/2026): filtra envolvido soft-deletado do
     // array embutido -- sintaxe de filtro em recurso aninhado do PostgREST,
     // nunca exclui o lote em si, só quem foi excluído dele.
@@ -131,6 +131,23 @@ export async function GET(req: NextRequest) {
     console.error("[qualifications] erro do banco", { rota: "route.ts", code: error.code });
     return NextResponse.json({ error: "Não foi possível processar as qualificações. Tente novamente." }, { status: 500 });
   }
+
+  // Painel de Lotes da Minuta (BRIEF 20/10/2026): "gerado por" no lote já consumido.
+  // Só o nome do colaborador interno que gerou o contrato, nunca e-mail nem papel.
+  const creatorIds = Array.from(new Set(
+    (batches ?? []).map((b: any) => b.consumido_contrato?.created_by).filter((v: unknown): v is string => typeof v === "string")
+  ));
+  if (creatorIds.length > 0) {
+    const { data: creators } = await svc().from("profiles").select("id, full_name").in("id", creatorIds);
+    const nameById = new Map((creators ?? []).map((p: any) => [p.id, p.full_name as string | null]));
+    for (const b of batches as any[]) {
+      if (b.consumido_contrato) b.consumido_contrato.created_by_name = nameById.get(b.consumido_contrato.created_by) ?? null;
+    }
+  }
+  for (const b of (batches ?? []) as any[]) {
+    if (b.consumido_contrato) delete b.consumido_contrato.created_by;
+  }
+
   return NextResponse.json({ batches: batches ?? [] });
 }
 

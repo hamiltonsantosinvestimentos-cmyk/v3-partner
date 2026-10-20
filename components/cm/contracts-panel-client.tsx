@@ -107,7 +107,7 @@ interface QualBatch {
   cm_party_qualifications: QualParty[];
 }
 
-export function ContractsPanelClient({ role }: { role: string }) {
+export function ContractsPanelClient({ role, initialContractId, onInitialContractHandled }: { role: string; initialContractId?: string | null; onInitialContractHandled?: () => void }) {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Contract | null>(null);
@@ -457,6 +457,35 @@ export function ContractsPanelClient({ role }: { role: string }) {
   }, [filterVertical, filterStatus, searchQuery]);
 
   useEffect(() => { fetchContracts(); }, [fetchContracts]);
+
+  // "Abrir contrato" vindo do lote consumido na minuta (BRIEF 20/10/2026). Se o id
+  // não estiver na lista carregada (filtro ativo), limpa os filtros e busca pelo id
+  // antes de concluir que o contrato não existe ou está fora do acesso do perfil.
+  const [pendingOpenId, setPendingOpenId] = useState<string | null>(initialContractId ?? null);
+  useEffect(() => {
+    if (!pendingOpenId || loading) return;
+    const target = pendingOpenId;
+    setPendingOpenId(null);
+    const open = (c: Contract) => { setSelected(c); setShowPreview(false); loadQualifications(c.id); loadContractLinks(c.id); };
+    const inList = contracts.find((c) => c.id === target);
+    if (inList) { open(inList); onInitialContractHandled?.(); return; }
+    (async () => {
+      try {
+        const res = await fetch(`/api/contracts/list?id=${target}`);
+        const json = await res.json();
+        const found: Contract | undefined = (json.contracts ?? [])[0];
+        if (found) {
+          setFilterVertical(""); setFilterStatus(""); setSearchQuery("");
+          setContracts((prev) => (prev.some((c) => c.id === found.id) ? prev : [found, ...prev]));
+          open(found);
+        } else {
+          aviso("Contrato não encontrado ou sem acesso.");
+        }
+      } catch { aviso("Erro de conexão ao abrir o contrato."); }
+      finally { onInitialContractHandled?.(); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingOpenId, loading, contracts]);
 
   const handleRefreshSignatures = async () => {
     if (!selected) return;
