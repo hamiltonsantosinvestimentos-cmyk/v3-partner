@@ -270,7 +270,7 @@ export function htmlLaudoAvaliacao(opts: {
     <div class="box"><div class="l">Área considerada</div><div class="n">${v.area_considerada ? `${num(v.area_considerada, v.unidade === "ha" ? 4 : 2)} ${un}` : "—"}</div><div class="s">${esc(v.area_criterio)}</div></div>
     <div class="rt"><div class="m">Rating</div><div class="nota">${esc(av.rating.nota)}</div><div class="m">${av.rating.pontos}/100</div></div>
   </div>
-  ${v.intervalo_inferior !== null && v.intervalo_superior !== null ? `<p class="m" style="margin-top:6px">Intervalo da amostra saneada: ${brl(v.intervalo_inferior)} a ${brl(v.intervalo_superior)}${v.valor_venal_iptu ? ` · venal IPTU ${brl(v.valor_venal_iptu)}` : ""}${v.vtn_itr ? ` · VTN ITR ${brl(v.vtn_itr)}` : ""}${v.laudo_mercado ? ` · laudo anexado ${brl(v.laudo_mercado)}` : ""}</p>` : ""}
+  ${v.intervalo_inferior !== null && v.intervalo_superior !== null ? `<p class="m" style="margin-top:6px">Intervalo da amostra saneada: ${brl(v.intervalo_inferior)} a ${brl(v.intervalo_superior)}${v.valor_venal_iptu ? ` · venal IPTU ${brl(v.valor_venal_iptu)}` : ""}${v.vtn_itr ? ` · VTN ITR ${brl(v.vtn_itr)}` : ""}${v.piso_venal && !v.vtn_itr && !v.valor_venal_iptu ? ` · venal (${esc(v.piso_venal_fonte)}) ${brl(v.piso_venal)}` : ""}${v.laudo_mercado ? ` · laudo anexado ${brl(v.laudo_mercado)}` : ""}</p>` : ""}
   <span class="aceite">Parecer: ${ACEITE[av.parecer.aceite]}</span>${v.grau_fundamentacao ? ` <span class="aceite">Fundamentação ${grauTxt(v.grau_fundamentacao.grau)} · Precisão ${grauTxt(v.grau_precisao)}</span>` : ""}${typeof v.indice_agronomico === "number" ? ` <span class="aceite">Índice agronômico ${num(v.indice_agronomico, 3)}</span>` : ""}
 
   <h2>Identificação</h2>

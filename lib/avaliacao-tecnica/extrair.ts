@@ -20,7 +20,7 @@ import { comPreservacao, estadoDe, indiceAgronomico, normalizarClasses, padraoDe
 import type {
   Alerta, ArquivoLido, AvaliacaoTecnica, CaracteristicasRural, CaracteristicasUrbano, Comparavel, Consulta, CubRef, Identificacao,
   LaudoExterno, PadraoNivel, Parecer, PesquisaMercadoTecnica, Poligonal, QuadroAreas, Registro, Relevo, Terras, TipoDocumentoImovel,
-  VerticeGeo, ZonaImovel,
+  VerticeGeo, VtnMunicipal, ZonaImovel,
 } from "./tipos";
 
 const MODELO = "claude-sonnet-4-6";
@@ -219,7 +219,7 @@ ${ctx.zona === "RURAL" ? rural : urbano}
 async function lerDocumentos(ai: Anthropic, arqs: ArquivoBaixado[], ctx: ContextoImovel): Promise<LeituraIa> {
   const hoje = new Date().toISOString().slice(0, 10);
   const msg = await ai.messages.create({
-    model: MODELO,
+    model: MODELO, temperature: 0,
     max_tokens: 10000,
     messages: [{ role: "user", content: [...blocosDosArquivos(arqs), { type: "text", text: promptLeitura(ctx, hoje) }] }],
   });
@@ -241,7 +241,7 @@ async function lerVertices(ai: Anthropic, arqs: ArquivoBaixado[], indices: numbe
   const pdfs = indices.filter((i) => arqs[i - 1] && !arqs[i - 1].texto);
   if (pdfs.length === 0) return null;
   const msg = await ai.messages.create({
-    model: MODELO,
+    model: MODELO, temperature: 0,
     max_tokens: 16000,
     messages: [{
       role: "user",
@@ -313,7 +313,7 @@ async function comBuscaNativa(ai: Anthropic, system: string, pedido: string, bus
   let msgs: any[] = [{ role: "user", content: pedido }];
   for (let i = 0; i < 4; i++) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const r = await ai.messages.create({ model: MODELO, max_tokens: maxTokens, system, messages: msgs, tools } as any) as Anthropic.Messages.Message;
+    const r = await ai.messages.create({ model: MODELO, temperature: 0, max_tokens: maxTokens, system, messages: msgs, tools } as any) as Anthropic.Messages.Message;
     if (r.stop_reason === "pause_turn") { msgs = [...msgs, { role: "assistant", content: r.content }]; continue; }
     const t = textoDa(r);
     if (t.includes("{")) return t;
@@ -326,7 +326,7 @@ async function comBuscaSimples(ai: Anthropic, system: string, pedido: string, it
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const msgs: any[] = [{ role: "user", content: pedido }];
   for (let i = 0; i < iteracoes; i++) {
-    const r = await ai.messages.create({ model: MODELO, max_tokens: maxTokens, system, messages: msgs, tools: TOOL_BUSCA });
+    const r = await ai.messages.create({ model: MODELO, temperature: 0, max_tokens: maxTokens, system, messages: msgs, tools: TOOL_BUSCA });
     if (r.stop_reason !== "tool_use") {
       const t = textoDa(r);
       if (t.includes("{")) return t;
@@ -341,7 +341,7 @@ async function comBuscaSimples(ai: Anthropic, system: string, pedido: string, it
     msgs.push({ role: "user", content: resultados });
   }
   const r = await ai.messages.create({
-    model: MODELO, max_tokens: maxTokens, system, tools: TOOL_BUSCA, tool_choice: { type: "none" },
+    model: MODELO, temperature: 0, max_tokens: maxTokens, system, tools: TOOL_BUSCA, tool_choice: { type: "none" },
     messages: [...msgs, { role: "user", content: "Responda AGORA só com o JSON final, sem texto antes ou depois." }],
   });
   return textoDa(r);
@@ -391,7 +391,7 @@ async function pesquisarMercado(ai: Anthropic, zona: ZonaImovel, l: LeituraIa, c
 - preservacao_pct: % da área em Reserva Legal/mata preservada SÓ se o anúncio informar (senão null — a V3 aplica a Reserva Legal do bioma). Não some APP.
 - classes_area_aberta: classes de capacidade de uso da parte ABERTA/aproveitável (sem a mata/reserva), soma 100, pela descrição (relevo, % plano, lavoura, pasto, brejo, pedras). Classes: ${CLASSES_TXT}.
 - situacao: acesso pela descrição (asfalto, distância da cidade/rodovia). Escala: ${SITUACOES_TXT}.
-- Prefira áreas de 1/3 a 3 vezes o tamanho do avaliando, na mesma microrregião, anúncios recentes.`
+- TAMANHO: busque fazendas de METADE ao DOBRO da área do avaliando (${area ? `de ${Math.round(area / 2).toLocaleString("pt-BR")} a ${Math.round(area * 2).toLocaleString("pt-BR")} ha` : "tamanho parecido"}), no próprio município e nos vizinhos (até ~120 km). Faça buscas por faixa de tamanho em cada município ("fazenda ${area ? Math.round(area / 100) * 100 : 1000} hectares <município>", "fazenda à venda <município> ha"). Só complete com tamanhos fora da faixa se não houver o suficiente, e diga isso nas observações.`
     : `Para CADA comparável (fatores do laudo Engebanc, NBR 14653-2):
 - padrao_detalhe pelo acabamento descrito/fotos do anúncio; idade aparente em anos; estado de conservação de Heidecke (a novo, b entre novo e regular, c regular, d entre regular e reparos simples, e reparos simples, f entre reparos simples e importantes, g reparos importantes, h entre importantes e sem valor).
 - indice_local: localização do anúncio em relação ao AVALIANDO = 100 (ex.: rua mais valorizada, frente para o mar, bairro nobre = 110–140; pior = 70–95). Justifique em 1 frase.
@@ -451,6 +451,22 @@ Regras: "valor" = preço de venda anunciado em reais; "area" = ${rural ? "área 
 
 /** CUB/m² mais recente do Sinduscon do estado. Nunca inventa: o que não achar fica de fora. */
 /** CUB/m² do Sinduscon (busca na internet) + SINAPI do IBGE (sempre). Nunca inventa número. */
+/** VTN/ha por aptidão publicado pela Receita (SIPT) para o município — base do piso rural sem ITR. */
+export async function buscarVtnMunicipal(ai: Anthropic, municipio: string, uf: string): Promise<VtnMunicipal | null> {
+  const system = `Você levanta o VTN (Valor da Terra Nua) por hectare que a Receita Federal publica no SIPT para o município ${municipio}/${uf}, por aptidão agrícola (é a tabela que as prefeituras conveniadas informam para o ITR). Use a tool "web_search" e leia a página/PDF da prefeitura ou da Receita (web_fetch). Prefira o ano mais recente.
+Responda SOMENTE com JSON: {"ano":"2026","fonte_nome":"","fonte_url":"https://...","valores":{"lavoura_boa":0,"lavoura_regular":0,"lavoura_restrita":0,"pastagem_plantada":0,"silvicultura_pastagem_natural":0,"preservacao":0}}
+Valores em R$/ha. Nunca invente: aptidão não encontrada = null. Se não achar a tabela do município, devolva {"valores":{}}.`;
+  let j: { ano?: string; fonte_nome?: string; fonte_url?: string; valores?: Record<string, unknown> } = {};
+  try { j = jsonDe(await comBusca(ai, system, `VTN SIPT ${municipio}/${uf} por aptidão agrícola.`, 4, 2500)); } catch { return null; }
+  const valores: Record<string, number> = {};
+  for (const [k, v] of Object.entries(j.valores ?? {})) {
+    const n = num(v);
+    if (n !== null && n >= 10 && n <= 300000) valores[k] = n;
+  }
+  if (Object.keys(valores).length === 0 || !j.fonte_url) return null;
+  return { municipio, uf, ano: j.ano ?? null, fonte_nome: j.fonte_nome ?? "SIPT/Receita Federal", fonte_url: j.fonte_url, valores };
+}
+
 export async function buscarCub(ai: Anthropic, uf: string): Promise<CubRef | null> {
   const system = `Você levanta o CUB/m² (Custo Unitário Básico, NBR 12721) mais recente publicado pelo Sinduscon do estado ${uf} (ou pelo cub.org.br). Use a tool "web_search". Quero os projetos-padrão residenciais R1-B, R1-N, R1-A (casa), R8-B, R8-N, R8-A (edifício), PIS (projeto de interesse social) e GI (galpão industrial), em R$/m², do mês mais recente que encontrar.
 Responda SOMENTE com JSON: {"mes_ref":"MM/AAAA","fonte_nome":"","fonte_url":"https://...","valores":{"R1-B":0,"R1-N":0,"R1-A":0,"R8-B":0,"R8-N":0,"R8-A":0,"PIS":0,"GI":0}}
@@ -555,7 +571,7 @@ async function municipioDe(lat: number, lon: number): Promise<{ municipio: strin
 export async function escreverParecer(ai: Anthropic, av: Omit<AvaliacaoTecnica, "parecer">): Promise<Parecer> {
   const resumo = { ...av, poligonal: av.poligonal ? { ...av.poligonal, vertices: `${av.poligonal.vertices.length} vértices` } : null, arquivos: av.arquivos.map((a) => `${a.tipo}: ${a.file_name}`) };
   const msg = await ai.messages.create({
-    model: MODELO,
+    model: MODELO, temperature: 0,
     max_tokens: 5000,
     messages: [{
       role: "user",
@@ -595,6 +611,8 @@ export async function gerarAvaliacaoTecnica(opts: {
   valorSolicitado?: number | null;
   padraoFotos?: PadraoNivel | null;
   geradoPor?: string | null;
+  /** Reavaliação: reaproveita os anúncios da avaliação anterior (mesmo valor se os documentos não mudarem). */
+  mercadoAnterior?: PesquisaMercadoTecnica | null;
   /** Progresso para a tela (grava a etapa no job). */
   onEtapa?: (etapa: string) => Promise<unknown>;
 }): Promise<AvaliacaoTecnica> {
@@ -645,13 +663,20 @@ export async function gerarAvaliacaoTecnica(opts: {
     }).catch((e) => { console.error("[avaliacao-tecnica] terras:", e); return null; });
     return { geo: g, cons, terras };
   };
-  const [rur, mercado, cub, pontoEndereco] = await Promise.all([
+  const municipioImovel = ident.cidade ?? contexto.cidade ?? null;
+  const [rur, mercado, cub, pontoEndereco, vtnMunicipal] = await Promise.all([
     zona === "RURAL" ? cadeiaRural() : Promise.resolve(null),
-    pesquisarMercado(ai, zona, leitura, contexto).catch((e) => { console.error("[avaliacao-tecnica] mercado:", e); return null; }),
+    opts.mercadoAnterior?.comparaveis?.length
+      ? Promise.resolve(opts.mercadoAnterior)
+      : pesquisarMercado(ai, zona, leitura, contexto).catch((e) => { console.error("[avaliacao-tecnica] mercado:", e); return null; }),
     ufImovel ? buscarCub(ai, ufImovel).catch((e) => { console.error("[avaliacao-tecnica] cub:", e); return null; }) : Promise.resolve(null),
     zona === "URBANO" && !leitura.coordenadas_imovel
       ? geocodificar([ident.endereco ?? contexto.endereco, ident.bairro, ident.cidade ?? contexto.cidade, ident.uf ?? contexto.estado].filter(Boolean).join(", "))
         .then((p) => p ?? (ident.cep ?? contexto.cep ? geocodificar(`${ident.cep ?? contexto.cep}, Brasil`) : null))
+      : Promise.resolve(null),
+    // Rural sem VTN declarado no ITR: VTN municipal (SIPT) para o piso do valor venal.
+    zona === "RURAL" && municipioImovel && ufImovel && !(Number(leitura.rural?.itr?.vtn_declarado) > 0)
+      ? buscarVtnMunicipal(ai, municipioImovel, ufImovel).catch((e) => { console.error("[avaliacao-tecnica] vtn:", e); return null; })
       : Promise.resolve(null),
   ]);
 
@@ -715,6 +740,7 @@ export async function gerarAvaliacaoTecnica(opts: {
     ambiental: leitura.ambiental ?? null,
     terras,
     consultas,
+    vtn_municipal: vtnMunicipal,
     valor_solicitado: opts.valorSolicitado ?? null,
   };
   await etapa("Calculando valores, alertas e rating");
@@ -722,7 +748,7 @@ export async function gerarAvaliacaoTecnica(opts: {
   const semAlertas = { ...base, valores, arquivos: relevantes };
   const iaAlertas = (Array.isArray(leitura.alertas) ? leitura.alertas : [])
     .filter((x) => x && x.titulo)
-    .map((x) => ({ ...x, nivel: (["CRITICO", "ATENCAO", "INFO"] as const).find((n) => n === x.nivel) ?? "ATENCAO" }));
+    .map((x) => ({ ...x, origem: "IA" as const, nivel: (["CRITICO", "ATENCAO", "INFO"] as const).find((n) => n === x.nivel) ?? "ATENCAO" }));
   const alertas = juntarAlertas(gerarAlertas(semAlertas, contexto.cliente_nome), iaAlertas);
   const rating = calcularRating(alertas);
   const semParecer = { ...base, valores, alertas, rating };

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { atualizarMetadata } from "@/lib/credit-proposal-meta";
 import { baixarArquivosDoImovel, gerarAvaliacaoTecnica, type DocEntry, type ItemChecklist } from "@/lib/avaliacao-tecnica/extrair";
-import type { PadraoNivel, ZonaImovel } from "@/lib/avaliacao-tecnica/tipos";
+import type { AvaliacaoTecnica, PadraoNivel, ZonaImovel } from "@/lib/avaliacao-tecnica/tipos";
 
 // Avaliação Técnica V3 do imóvel em garantia (17/10/2026, pedido do Hamilton).
 // POST inicia (leva ~2-3 min: lê matrícula/IPTU/CCIR/ITR/CAR/GEO/fotos, pesquisa o mercado
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
   if (a.erro) return a.erro;
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ error: "ANTHROPIC_API_KEY não configurada no servidor" }, { status: 500 });
 
-  const body = (await req.json().catch(() => ({}))) as { proposal_id?: string; imovel_idx?: number; itens?: ItemChecklist[] };
+  const body = (await req.json().catch(() => ({}))) as { proposal_id?: string; imovel_idx?: number; itens?: ItemChecklist[]; nova_pesquisa?: boolean };
   const idx = Number(body.imovel_idx ?? 0);
   if (!body.proposal_id || !Number.isInteger(idx) || idx < 0) return NextResponse.json({ error: "proposal_id e imovel_idx obrigatórios" }, { status: 400 });
   const itens = (Array.isArray(body.itens) ? body.itens : []).filter((i) => i && typeof i.doc_id === "string").map((i) => ({ doc_id: i.doc_id, label: String(i.label ?? "") }));
@@ -82,6 +82,13 @@ export async function POST(req: NextRequest) {
     : meta.imovel_garantia === "rural" ? "RURAL" : "URBANO";
 
   const documentos = (Array.isArray(proposal.documents) ? proposal.documents : []) as DocEntry[];
+  // Reavaliar reaproveita a pesquisa de mercado da avaliação anterior (até 30 dias, mesma zona):
+  // o valor só muda se os documentos mudarem. "Nova pesquisa de mercado" busca anúncios de novo.
+  const anterior = im.avaliacao_tecnica as AvaliacaoTecnica | undefined;
+  const diasAnterior = anterior?.gerado_em ? (Date.now() - new Date(anterior.gerado_em).getTime()) / 86400000 : Infinity;
+  const mercadoAnterior = !body.nova_pesquisa && anterior?.versao === 2 && anterior.zona === zona && diasAnterior <= 30 && anterior.mercado?.comparaveis?.length
+    ? { ...anterior.mercado, observacoes: [anterior.mercado.observacoes, `Pesquisa reaproveitada da avaliação de ${new Date(anterior.gerado_em).toLocaleDateString("pt-BR")}.`].filter(Boolean).join(" ") }
+    : null;
   const iniciado = { status: "PROCESSANDO", iniciado_em: new Date().toISOString(), iniciado_por: a.nome, etapa: "Lendo os documentos" };
   const marcado = await gravarNoImovel(proposal.id, idx, legado, (x) => ({ ...x, avaliacao_tecnica_job: iniciado }));
   if (!marcado.ok) return NextResponse.json({ error: marcado.error }, { status: 500 });
@@ -105,6 +112,7 @@ export async function POST(req: NextRequest) {
           outros_imoveis: lista.length - 1,
         },
         valorSolicitado: Number(proposal.requested_value) || null,
+        mercadoAnterior,
         padraoFotos: ((im.padrao_manual ?? (im.padrao_construtivo as { padrao?: string } | undefined)?.padrao) as PadraoNivel | undefined) ?? null,
         geradoPor: a.nome,
         onEtapa: (etapa) => gravarNoImovel(proposal.id, idx, legado, (x) => ({ ...x, avaliacao_tecnica_job: { ...iniciado, etapa } })),

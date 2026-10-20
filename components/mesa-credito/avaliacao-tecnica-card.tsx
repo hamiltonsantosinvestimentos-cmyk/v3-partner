@@ -149,14 +149,14 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
     return () => clearInterval(t);
   }, [processando, proposalId, onMetadata]);
 
-  async function gerar() {
+  async function gerar(novaPesquisa = false) {
     setErro(null);
     setIniciando(true);
     try {
       const r = await fetch("/api/credit-proposals/avaliacao-imovel/tecnica", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proposal_id: proposalId, imovel_idx: idx, itens }),
+        body: JSON.stringify({ proposal_id: proposalId, imovel_idx: idx, itens, nova_pesquisa: novaPesquisa }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setErro(typeof j.error === "string" ? j.error : "Erro ao iniciar a avaliação."); return; }
@@ -267,7 +267,7 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
         </div>
         <p className="text-[11px] text-[#7A8FA8] mt-1">
           {avaliacao
-            ? <>Gerada em {new Date(avaliacao.gerado_em).toLocaleString("pt-BR")}{avaliacao.gerado_por ? ` por ${avaliacao.gerado_por}` : ""} · {avaliacao.arquivos.length} documento(s) lido(s)</>
+            ? <>Gerada em {new Date(avaliacao.gerado_em).toLocaleString("pt-BR")}{avaliacao.gerado_por ? ` por ${avaliacao.gerado_por}` : ""} · {avaliacao.arquivos.length} documento(s) lido(s) · <button onClick={() => gerar(true)} disabled={iniciando || processando} className="text-[#C9A84C] hover:underline disabled:opacity-40" title="Busca anúncios novos na internet (o valor pode mudar)">nova pesquisa de mercado</button></>
             : <>Lê {docsEsperados} e monta a avaliação no padrão dos laudos.</>}
         </p>
         {avaliacao && pdf?.storage_path && (
@@ -302,7 +302,8 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
           </button>
         )}
         <button
-          onClick={gerar}
+          onClick={() => gerar(false)}
+          title={avaliacao ? "Reavalia com os documentos atuais, reaproveitando os anúncios da última pesquisa de mercado (até 30 dias)" : undefined}
           disabled={iniciando || processando}
           className="h-7 px-2.5 rounded-md bg-gradient-to-r from-[#C9A84C] to-[#E8C97A] text-[#09081A] text-[11px] font-bold flex items-center gap-1 hover:opacity-90 transition-opacity disabled:opacity-50"
         >
@@ -429,8 +430,14 @@ export function AvaliacaoTecnicaCard({ proposalId, idx, avaliacao, job, pdf, zon
       )}
 
       {/* ── Referências oficiais e laudo ── */}
-      {(v.valor_venal_iptu || v.vtn_itr || v.laudo_mercado) && (
+      {(v.valor_venal_iptu || v.vtn_itr || v.laudo_mercado || v.piso_venal) && (
         <div className="flex flex-wrap gap-1.5 text-[10px]">
+          {v.piso_venal && !v.vtn_itr && !v.valor_venal_iptu ? (
+            <span className="px-2 py-0.5 rounded bg-[#243A66]/50 text-[#F0ECE4]">
+              Venal ({v.piso_venal_fonte}) {formatCurrency(v.piso_venal)}
+              {av.vtn_municipal?.fonte_url && <> · <a href={av.vtn_municipal.fonte_url} target="_blank" rel="noopener noreferrer" className="text-[#C9A84C] hover:underline">fonte</a></>}
+            </span>
+          ) : null}
           {v.valor_venal_iptu ? <span className="px-2 py-0.5 rounded bg-[#243A66]/50 text-[#F0ECE4]">Venal IPTU {formatCurrency(v.valor_venal_iptu)}</span> : null}
           {v.vtn_itr ? <span className="px-2 py-0.5 rounded bg-[#243A66]/50 text-[#F0ECE4]">VTN ITR {formatCurrency(v.vtn_itr)}</span> : null}
           {v.laudo_mercado ? <span className="px-2 py-0.5 rounded bg-[#C9A84C]/15 text-[#E8C97A]">Laudo {av.laudo_externo?.empresa ?? ""}: mercado {formatCurrency(v.laudo_mercado)}{v.laudo_garantia ? ` · garantia ${formatCurrency(v.laudo_garantia)}` : ""}</span> : null}

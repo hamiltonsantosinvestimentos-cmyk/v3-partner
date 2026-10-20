@@ -328,6 +328,8 @@ export interface Valores {
   /** Valor venal (IPTU no urbano; VTN do ITR + benfeitorias no rural) usado como piso do valor de mercado. */
   piso_venal?: number | null;
   piso_venal_aplicado?: boolean;
+  /** De onde veio o piso: "VTN do ITR", "VTN municipal SIPT/RFB 2026", "IPTU". */
+  piso_venal_fonte?: string | null;
   /** Homogeneização de cada comparável (mesma ordem de mercado.comparaveis). */
   homog?: (Homogeneizacao | null)[];
   valor_mercado: number | null;
@@ -342,7 +344,22 @@ export interface Valores {
   laudo_garantia?: number | null;
 }
 
-export interface Alerta { nivel: NivelAlerta; categoria: string; titulo: string; detalhe?: string | null }
+export interface Alerta {
+  nivel: NivelAlerta; categoria: string; titulo: string; detalhe?: string | null;
+  /** IA = apontado pela leitura dos documentos; só pesa no rating se for CRÍTICO (estabilidade). */
+  origem?: "REGRA" | "IA";
+}
+
+/** VTN por hectare publicado pela Receita Federal (SIPT) para o município, por aptidão agrícola. */
+export interface VtnMunicipal {
+  municipio: string;
+  uf: string;
+  ano?: string | null;
+  fonte_nome?: string | null;
+  fonte_url?: string | null;
+  /** R$/ha: lavoura_boa, lavoura_regular, lavoura_restrita, pastagem_plantada, silvicultura_pastagem_natural, preservacao. */
+  valores: Record<string, number>;
+}
 
 export interface FatorRating { categoria: string; pontos: number; max: number }
 
@@ -427,6 +444,8 @@ export interface AvaliacaoTecnica {
   terras?: Terras | null;
   /** Rural v2: consultas públicas pela poligonal (CAR, TI, UC, embargos, DETER). */
   consultas?: Consulta[];
+  /** Rural: VTN municipal da Receita (SIPT) — base do piso quando o ITR não traz o VTN declarado. */
+  vtn_municipal?: VtnMunicipal | null;
   valores: Valores;
   alertas: Alerta[];
   rating: RatingGarantia;
