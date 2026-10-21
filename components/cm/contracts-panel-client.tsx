@@ -120,7 +120,9 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
   // Atualizar status das assinaturas (21/09/2026): consulta o ClickSign pelo servidor e
   // preenche a timeline do contrato com as assinaturas que o webhook não registrou.
   const [refreshingSignatures, setRefreshingSignatures] = useState(false);
-  const [signatureRefreshMsg, setSignatureRefreshMsg] = useState<string | null>(null);
+  // A mensagem guarda o id do contrato consultado e só aparece nele (20/10/2026): o resultado
+  // do 0057 ficou exibido sobre a timeline do 0055 ao trocar de contrato.
+  const [signatureRefreshMsg, setSignatureRefreshMsg] = useState<{ contractId: string; text: string } | null>(null);
   const [sendingToSignature, setSendingToSignature] = useState(false);
   const [qualBatches, setQualBatches] = useState<QualBatch[]>([]);
   const [showQualModal, setShowQualModal] = useState(false);
@@ -489,22 +491,23 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
 
   const handleRefreshSignatures = async () => {
     if (!selected) return;
+    const contractId = selected.id;
     setRefreshingSignatures(true);
     setSignatureRefreshMsg(null);
     try {
-      const res = await fetch(`/api/contracts/${selected.id}/refresh-signature-status`, { method: "POST" });
+      const res = await fetch(`/api/contracts/${contractId}/refresh-signature-status`, { method: "POST" });
       const json = await res.json();
       if (res.ok) {
         const faltam: string[] = json.pendentes ?? [];
-        setSignatureRefreshMsg(
+        setSignatureRefreshMsg({ contractId, text:
           `${json.assinaram} de ${json.total} assinaram.${faltam.length > 0 ? ` Faltam: ${faltam.join(", ")}.` : ""}${json.contrato_marcado_como_assinado ? " Contrato marcado como assinado." : ""}`
-        );
+        });
         fetchContracts();
       } else {
-        setSignatureRefreshMsg(json.error ?? "Não foi possível consultar o ClickSign.");
+        setSignatureRefreshMsg({ contractId, text: json.error ?? "Não foi possível consultar o ClickSign." });
       }
     } catch {
-      setSignatureRefreshMsg("Erro de conexão ao consultar o ClickSign.");
+      setSignatureRefreshMsg({ contractId, text: "Erro de conexão ao consultar o ClickSign." });
     } finally {
       setRefreshingSignatures(false);
     }
@@ -1235,8 +1238,8 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
                     </button>
                   )}
                 </div>
-                {signatureRefreshMsg && (
-                  <p className="text-[11px] text-[#F5F1E8] bg-[#162744] border border-[#C9A84C]/30 rounded-lg p-2.5 mb-3">{signatureRefreshMsg}</p>
+                {signatureRefreshMsg?.contractId === selected.id && (
+                  <p className="text-[11px] text-[#F5F1E8] bg-[#162744] border border-[#C9A84C]/30 rounded-lg p-2.5 mb-3">{signatureRefreshMsg.text}</p>
                 )}
 
                 {timelineItems.length === 0 ? (
