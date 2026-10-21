@@ -65,7 +65,11 @@ async function escavador(doc: string, kind: DdKind): Promise<DdOutcome> {
   if (!token) return naoConsultado("Escavador não configurado");
   try {
     const r = await buscarProcessosEscavador(kind, doc, token);
-    return { status: r.total_processos > 0 ? "ok" : "sem_dados", summary: { total_processos: r.total_processos, exibidos: r.processos.length } };
+    // O Escavador pode devolver quantidade_processos=0 com a lista de processos preenchida (achado de
+    // 16/09/2026 na Mesa M&A e de novo em 21/10/2026 no NCBK). Nunca confiar so no contador: sem isso a
+    // parte com processo sai como "Nenhum processo encontrado".
+    const total = Math.max(r.total_processos ?? 0, r.processos.length);
+    return { status: total > 0 ? "ok" : "sem_dados", summary: { total_processos: total, exibidos: r.processos.length } };
   } catch (e) {
     return naoConsultado(`Escavador indisponível: ${(e as Error).message.slice(0, 120)}`);
   }
