@@ -140,8 +140,9 @@ async function fetchAsDataUri(url: string, mime: string): Promise<string | null>
   }
 }
 
-export async function htmlToPdfBase64(html: string, opts?: { letterhead?: string }): Promise<string> {
-  void opts; // mantido só por compatibilidade de assinatura; sem uso hoje
+// letterhead: mantido só por compatibilidade de assinatura, sem uso. headerNote e requireLetterhead
+// vêm da exportação para análise jurídica (BRIEF 21/10/2026); o envio real não passa nenhum dos dois.
+export async function htmlToPdfBase64(html: string, opts?: { letterhead?: string; headerNote?: string; requireLetterhead?: boolean }): Promise<string> {
   const browser = await launchBrowser();
   try {
     const page = await browser.newPage();
@@ -165,8 +166,12 @@ export async function htmlToPdfBase64(html: string, opts?: { letterhead?: string
       fetchAsDataUri("https://app.v3partners.com.br/contratos/timbrado-rodape.jpg", "image/jpeg"),
     ]);
     const displayHeaderFooter = !!(logoUri && rodapeUri);
+    if (opts?.requireLetterhead && !displayHeaderFooter) throw new Error("LETTERHEAD_UNAVAILABLE");
+    const note = opts?.headerNote
+      ? `<div style="position:absolute;left:2cm;top:0.15cm;font-family:Arial,sans-serif;font-size:7pt;color:#6B6B6B">${opts.headerNote.replace(/[<>&]/g, "")}</div>`
+      : "";
     const headerTemplate = logoUri
-      ? `<div style="position:relative;width:100%;height:100%"><img src="${logoUri}" style="position:absolute;left:8.06cm;top:0.73cm;width:4.89cm;height:2.33cm"></div>`
+      ? `<div style="position:relative;width:100%;height:100%">${note}<img src="${logoUri}" style="position:absolute;left:8.06cm;top:0.73cm;width:4.89cm;height:2.33cm"></div>`
       : "<div></div>";
     const footerTemplate = rodapeUri
       ? `<div style="position:relative;width:100%;height:100%"><img src="${rodapeUri}" style="position:absolute;left:2.85cm;top:0.60cm;width:15.98cm;height:2.01cm"></div>`

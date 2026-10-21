@@ -113,6 +113,15 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Situação do contrato",
     texto: "Andamento atual do contrato gerado a partir deste lote. Rascunho ainda não foi enviado para assinatura.",
   },
+  // Baixar minuta para análise jurídica (BRIEF 21/10/2026).
+  baixar_minuta_analise: {
+    titulo: "Baixar para análise jurídica",
+    texto: "Baixa o texto da minuta para o advogado de uma parte revisar antes da assinatura. O arquivo não traz dados das outras partes: só o texto do contrato e a qualificação da própria V3 que já consta da minuta (razão social, CNPJ e o sócio que assina). Cada download fica registrado com o seu nome, a minuta, a versão e para quem o arquivo vai. Sugestões que voltarem do advogado só valem depois de aplicadas na minuta e reaprovadas.",
+  },
+  baixar_minuta_destino: {
+    titulo: "Encaminhar para",
+    texto: "Registramos para quem o texto da minuta foi enviado, porque ele é confidencial e sai do sistema. Fica guardado junto com o registro do download.",
+  },
 } as const satisfies Record<string, Nota>;
 
 export type NotaId = keyof typeof NOTAS_DO_PORQUE;

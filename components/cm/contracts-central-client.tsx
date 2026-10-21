@@ -79,7 +79,7 @@ function ContractsCentralInner({ role }: { role: string }) {
       </div>
 
       {tab === "painel" && <ContractsPanelClient role={role} initialContractId={openContractId} onInitialContractHandled={clearOpenContract} />}
-      {tab === "minutas" && <ContractTemplatesClient onOpenContract={openContract} />}
+      {tab === "minutas" && <ContractTemplatesClient onOpenContract={openContract} role={role} />}
       {tab === "pendencias" && <PendingQualificationsPanel onOpenMinuta={openMinuta} />}
       {tab === "grade" && canConfig && <CommissionGridsPanel />}
       {tab === "config" && canConfig && <EsignatureConfigClient />}
