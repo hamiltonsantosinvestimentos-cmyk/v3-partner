@@ -16,7 +16,8 @@ export type AuditEntity =
   | "notifications"
   | "kyc"
   | "logistics_items"
-  | "partner_service_orders";
+  | "partner_service_orders"
+  | "contract_templates";
 
 interface AuditParams {
   userId: string;
@@ -58,4 +59,23 @@ export async function logAudit(params: AuditParams): Promise<void> {
   } catch {
     // Audit log não deve derrubar a operação principal
   }
+}
+
+/**
+ * Igual ao logAudit, mas devolve a falha em vez de engolir (BRIEF 21/10/2026, exportação de minuta).
+ * Para ações cuja entrega depende do registro: se não gravar, a ação não acontece. O supabase-js
+ * não lança erro de insert, devolve em `error`, por isso a conferência explícita.
+ */
+export async function logAuditStrict(params: AuditParams): Promise<void> {
+  const { error } = await serviceClient().from("audit_logs").insert({
+    user_id:    params.userId,
+    user_name:  params.userName ?? null,
+    action:     params.action,
+    entity:     params.entity,
+    entity_id:  params.entityId ?? null,
+    old_data:   params.oldData ?? null,
+    new_data:   params.newData ?? null,
+    ip_address: params.ipAddress ?? null,
+  });
+  if (error) throw new Error(`audit_logs: ${error.message}`);
 }

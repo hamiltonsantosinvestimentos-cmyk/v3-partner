@@ -4,11 +4,12 @@ import { aviso, confirmar } from "@/lib/aviso";
 import React, { useState, useEffect, useCallback } from "react";
 import { maskCpfCnpj } from "@/lib/qualification-mask";
 import { useSearchParams } from "next/navigation";
-import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil, Maximize2 } from "lucide-react";
+import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil, Maximize2, Download } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
 import { formatDocumentNumber } from "@/lib/legal-qualification";
-import { VERTICAL_LABELS, CONCRETE_VERTICALS } from "@/lib/contract-verticals";
+import { VERTICAL_LABELS, CONCRETE_VERTICALS, MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
+import { findRevokedContacts } from "@/lib/contract-revoked-contacts";
 import { extractPlainVariables } from "@/lib/contract-render";
 import { PartyQualificationCardModal } from "./party-qualification-card";
 import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
@@ -170,7 +171,7 @@ MULTI-VERTICAL (só minutas com vertical = "Multi-Vertical"):
 {{v:credito}}texto só do crédito{{/v}} -- vertical escolhida ao gerar o contrato,
 texto fora das tags vale pra todas`;
 
-export function ContractTemplatesClient({ onOpenContract }: { onOpenContract?: (contractId: string) => void } = {}) {
+export function ContractTemplatesClient({ onOpenContract, role }: { onOpenContract?: (contractId: string) => void; role?: string } = {}) {
   const searchParams = useSearchParams();
   const initialVertical = searchParams.get("vertical") ?? "";
   const highlightTemplateId = searchParams.get("template_id");
@@ -179,6 +180,13 @@ export function ContractTemplatesClient({ onOpenContract }: { onOpenContract?: (
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selected, setSelected] = useState<Template | null>(null);
+  // Baixar para análise jurídica (BRIEF 21/10/2026): texto da minuta no papel timbrado, sem dado
+  // das contrapartes, para o advogado de uma parte revisar antes da assinatura. Download registrado.
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormato, setExportFormato] = useState<"docx" | "pdf">("docx");
+  const [exportDestino, setExportDestino] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportErro, setExportErro] = useState<string | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [filterVertical, setFilterVertical] = useState(initialVertical);
 
@@ -814,6 +822,36 @@ export function ContractTemplatesClient({ onOpenContract }: { onOpenContract?: (
     loadTemplateQualifications(t.id);
   };
 
+  const handleExportMinuta = async () => {
+    if (!selected) return;
+    setExporting(true);
+    setExportErro(null);
+    try {
+      const qs = new URLSearchParams({ formato: exportFormato, destino: exportDestino.trim() });
+      const res = await fetch(`/api/contracts/templates/${selected.id}/export?${qs.toString()}`);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setExportErro(j.error ?? "Não foi possível gerar o arquivo. Tente de novo.");
+        return;
+      }
+      const blob = await res.blob();
+      const nome = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? `minuta.${exportFormato}`;
+      const href = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = href;
+      a.download = nome;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(href);
+      setShowExportModal(false);
+    } catch {
+      setExportErro("Erro de conexão ao gerar o arquivo. Tente de novo.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // Tela Cheia de leitura (11/09/2026, pedido de João): a janela pequena
   // dentro da grid do editor dificultava a leitura do Dr. Athaydes
   // (jurídico) na hora de revisar/aprovar. João pediu especificamente uma
@@ -1281,6 +1319,21 @@ ${allParties.length > 0 ? `<div class="qualbox">
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition">
                       <Maximize2 size={13} /> Tela Cheia
                     </button>
+                    {selected.is_active && (role !== "MESA_OPERACIONAL" || selected.vertical === "multi_vertical" || MESA_OPERACIONAL_VERTICALS.includes(selected.vertical)) && (() => {
+                      const revogados = findRevokedContacts(selected.body_text_raw);
+                      return (
+                        <span className="flex items-center gap-1">
+                          <button
+                            onClick={() => { setExportErro(null); setExportFormato("docx"); setShowExportModal(true); }}
+                            disabled={revogados.length > 0}
+                            title={revogados.length > 0 ? `A minuta cita contato que não faz mais parte da V3: ${revogados.join("; ")}` : "Baixar o texto da minuta para o advogado de uma parte revisar"}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Download size={13} /> Baixar para análise jurídica
+                          </button>
+                          <Dica id="baixar_minuta_analise" />
+                        </span>
+                      );
+                    })()}
                     {/* 10/09/2026, P0 real reportado por João: minutas são
                         reutilizáveis para múltiplas operações/clientes (ver
                         session-decisions 02/09), mas este botão só existia
@@ -1986,6 +2039,58 @@ ${allParties.length > 0 ? `<div class="qualbox">
           )}
         </div>
       </div>
+
+      {/* Modal Baixar para análise jurídica (BRIEF 21/10/2026): fecha só pelos botões. */}
+      {showExportModal && selected && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
+            <div className="p-4 border-b border-[#C9A84C]/20 text-sm font-bold text-[#F5F1E8] flex items-center gap-2">
+              <Download size={14} className="text-[#C9A84C]" /> Baixar para análise jurídica
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-[11px] text-[#9BAFC5]">
+                {selected.template_name}, versão {selected.version}. O arquivo sai no papel timbrado, sem dados das outras partes e marcado como sem validade para assinatura.
+              </p>
+              <div>
+                <div className="text-[11px] font-bold text-[#E8C97A] uppercase tracking-wide mb-2">Formato</div>
+                <div className="flex flex-col gap-2">
+                  {([["docx", "Word (.docx, editável)"], ["pdf", "PDF"]] as const).map(([v, label]) => (
+                    <label key={v} className="flex items-center gap-2 text-xs text-[#F5F1E8] cursor-pointer">
+                      <input type="radio" name="export-formato" checked={exportFormato === v} onChange={() => setExportFormato(v)} disabled={exporting} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label htmlFor="export-destino" className="text-[11px] font-bold text-[#E8C97A] uppercase tracking-wide mb-2 flex items-center gap-1">
+                  Encaminhar para <Dica id="baixar_minuta_destino" />
+                </label>
+                <input id="export-destino" value={exportDestino} maxLength={120} disabled={exporting}
+                  onChange={(e) => setExportDestino(e.target.value)}
+                  placeholder="Ex.: Jurídico NCBK"
+                  className="w-full px-3 py-2 bg-[#162744] border border-[#9BAFC5]/20 rounded-lg text-xs text-[#F5F1E8] placeholder:text-[#9BAFC5]/60 focus:outline-none focus:border-[#C9A84C]/50" />
+                {exportDestino.trim().length < 3 && (
+                  <p className="text-[11px] text-[#9BAFC5] mt-1">Informe para quem o arquivo será enviado.</p>
+                )}
+              </div>
+              {exportErro && (
+                <p className="text-[11px] text-[#F5F1E8] bg-[#162744] border border-[#F26D6D]/40 rounded-lg p-2.5">{exportErro}</p>
+              )}
+            </div>
+            <div className="p-4 border-t border-[#C9A84C]/20 flex justify-end gap-2">
+              <button onClick={() => setShowExportModal(false)} disabled={exporting}
+                className="px-3 py-1.5 text-xs font-bold text-[#9BAFC5] hover:text-[#F5F1E8] transition disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={handleExportMinuta} disabled={exporting || exportDestino.trim().length < 3}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50 disabled:cursor-not-allowed">
+                {exporting ? <><Loader2 size={12} className="animate-spin" /> {exportFormato === "docx" ? "Gerando Word..." : "Gerando PDF..."}</> : <><Download size={12} /> Baixar</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Analisar Contrato Recebido (Fast-Track, 30/08/2026): upload
           de um contrato já recebido (WhatsApp/e-mail) para o Agente

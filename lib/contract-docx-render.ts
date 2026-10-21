@@ -42,6 +42,7 @@ import {
   TextWrappingSide,
   LineRuleType,
   VerticalAlignTable,
+  FrameAnchorType,
 } from "docx";
 import { signatureRoleLabel, type ContractParty } from "./contract-render";
 
@@ -380,11 +381,20 @@ async function fetchImageBuffer(url: string): Promise<Buffer | null> {
 
 const CM = 360000; // EMU por centímetro
 
-async function buildLetterheadHeader(): Promise<Header> {
+// Opções da exportação para análise jurídica (BRIEF 21/10/2026): o envio real não passa nada.
+export interface DocxRenderOptions {
+  /** Linha curta repetida no topo de toda página (fora do fluxo do texto). */
+  headerNote?: string;
+  /** Falha em vez de gerar o documento sem papel timbrado. */
+  requireLetterhead?: boolean;
+}
+
+async function buildLetterheadHeader(opts?: DocxRenderOptions): Promise<Header> {
   const [logo, rodape] = await Promise.all([
     fetchImageBuffer("https://app.v3partners.com.br/contratos/timbrado-logo.jpg"),
     fetchImageBuffer("https://app.v3partners.com.br/contratos/timbrado-rodape.jpg"),
   ]);
+  if (opts?.requireLetterhead && (!logo || !rodape)) throw new Error("LETTERHEAD_UNAVAILABLE");
   const images: ImageRun[] = [];
   if (logo) {
     images.push(
@@ -420,7 +430,21 @@ async function buildLetterheadHeader(): Promise<Header> {
       }),
     );
   }
-  return new Header({ children: [new Paragraph({ children: images })] });
+  const children = [new Paragraph({ children: images })];
+  // Parágrafo com posição fixa na página (frame): acima da logo, sem empurrar o corpo do texto.
+  if (opts?.headerNote) {
+    children.push(new Paragraph({
+      frame: {
+        type: "absolute",
+        position: { x: 1134, y: 340 },
+        width: 9072,
+        height: 280,
+        anchor: { horizontal: FrameAnchorType.PAGE, vertical: FrameAnchorType.PAGE },
+      },
+      children: [new TextRun({ text: opts.headerNote, font: BODY_FONT, size: 14, color: "6B6B6B" })],
+    }));
+  }
+  return new Header({ children });
 }
 
 // Recebe o `rendered_html` COMPLETO (a mesma string que operation_contracts
@@ -431,7 +455,7 @@ async function buildLetterheadHeader(): Promise<Header> {
 // só serve pro PDF) + <div class="footer">. Aqui pulamos .header e .parties
 // -- o título vem do <h1> dentro do header, e o bloco de assinatura é
 // reconstruído do zero com as tags posicionadas em vez da linha.
-export async function renderContractDocx(fullHtml: string, parties?: ContractParty[], contractCode?: string | null): Promise<Buffer> {
+export async function renderContractDocx(fullHtml: string, parties?: ContractParty[], contractCode?: string | null, opts?: DocxRenderOptions): Promise<Buffer> {
   const root = parse(fullHtml);
   const body = root.querySelector("body") ?? root;
   // 21/09/2026 (BRIEF NCNDA): só existe <h1> no .header quando o corpo da minuta
@@ -484,7 +508,7 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
   // contractCode reservado pra uso futuro (o timbre oficial hoje é só imagem
   // estática, sem texto dinâmico -- ver comentário de buildLetterheadHeader).
   void contractCode;
-  const header = await buildLetterheadHeader();
+  const header = await buildLetterheadHeader(opts);
 
   const doc = new Document({
     // Margens reais de página (achado real 22/09/2026, mesma auditoria do
