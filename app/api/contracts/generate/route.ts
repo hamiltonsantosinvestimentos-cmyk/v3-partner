@@ -16,6 +16,10 @@ import {
 import { CONCRETE_VERTICALS } from "@/lib/contract-verticals";
 import { ADHESION_SERIES, validateAdhesionParent, dateExtensoBR, type AdhesionParent } from "@/lib/contract-adhesion";
 import { isMandatoTemplateName } from "@/lib/mandato-credito";
+import {
+  isContratoParceriaTemplateName, isPlanoContratoParceria, dadosDoCadastro, mesclarDados, camposFaltantes,
+  preencherContratoParceria, PLANO_LABEL, type DadosLicenciado, type PlanoContratoParceria,
+} from "@/lib/contrato-parceria-partner";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -39,7 +43,7 @@ export async function POST(req: NextRequest) {
   const caller = await requireRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data, avulso_parties, is_master_agreement, valor_operacao, loi_side, loi_matched_contract_id, loi_override_justification, vertical, parent_contract_id } = await req.json();
+  const { template_id, listing_id, bid_id, deal_id, credit_proposal_id, ticket_id, qualification_batch_id, commission_percent, extra_data, avulso_parties, is_master_agreement, valor_operacao, loi_side, loi_matched_contract_id, loi_override_justification, vertical, parent_contract_id, partner_registration_id } = await req.json();
 
   if (!template_id) return NextResponse.json({ error: "template_id obrigatório" }, { status: 422 });
 
@@ -117,6 +121,32 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Contrato de Parceria v2.2 (21/10/2026): só nasce do botão "Enviar
+  // contrato" de /admin-cadastros, com o cadastro aprovado. Os dados do
+  // LICENCIADO vêm do cadastro (lidos aqui, nunca do cliente), mais o que o
+  // ADMIN completou no formulário (RG, nº de módulos...).
+  let parceria: { plano: PlanoContratoParceria; dados: DadosLicenciado; registrationId: string } | null = null;
+  if (isContratoParceriaTemplateName(template.template_name)) {
+    if (caller.role !== "ADMIN") {
+      return NextResponse.json({ error: "Só ADMIN envia o Contrato de Parceria." }, { status: 403 });
+    }
+    if (typeof partner_registration_id !== "string" || !partner_registration_id) {
+      return NextResponse.json({ error: "O Contrato de Parceria sai pelo botão \"Enviar contrato\" do cadastro aprovado em Cadastros de Parceiros." }, { status: 422 });
+    }
+    const { data: reg } = await svc().from("partner_registrations").select("*").eq("id", partner_registration_id).maybeSingle();
+    if (!reg) return NextResponse.json({ error: "Cadastro não encontrado." }, { status: 404 });
+    if (reg.status !== "APROVADO") return NextResponse.json({ error: "Aprove o cadastro antes de enviar o contrato." }, { status: 422 });
+    if (!isPlanoContratoParceria(reg.plano)) {
+      return NextResponse.json({ error: `O Contrato de Parceria v2.2 cobre só Partner, Partner PRO e Enterprise (plano do cadastro: ${reg.plano}).` }, { status: 422 });
+    }
+    const dados = mesclarDados(dadosDoCadastro(reg), (extra_data as Record<string, unknown> | undefined)?.parceria);
+    const faltam = camposFaltantes(dados);
+    if (faltam.length > 0) {
+      return NextResponse.json({ error: `Faltam dados do licenciado: ${faltam.map((c) => c.label).join(", ")}.` }, { status: 422 });
+    }
+    parceria = { plano: reg.plano, dados, registrationId: reg.id };
+  }
+
   // Termo de Adesão (06/10/2026): travas no servidor. O Termo (série V3C-ADE) só nasce a partir de
   // um contrato de origem assinado e com natureza de Acordo Mestre, gerado por ADMIN ou GESTAO.
   // O contrato de origem nunca é alterado: aqui só é lido.
@@ -186,6 +216,19 @@ export async function POST(req: NextRequest) {
     data_geracao: new Date().toLocaleDateString("pt-BR"),
     data_geracao_extenso: new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }),
     ...(extra_data ?? {}),
+    // Contrato de Parceria: o LICENCIADO assina (representante, pessoa física,
+    // exigência do ClickSign) e a V3 assina como LICENCIANTE.
+    ...(parceria
+      ? {
+          nome_cedente: parceria.dados.representante,
+          cpf_cnpj_cedente: parceria.dados.cpf,
+          email_cedente: parceria.dados.email,
+          rotulo_assinatura_cedente: `Licenciado, ${parceria.dados.razao_social}`,
+          rotulo_assinatura_v3: "Licenciante, V3 Partners",
+          plano_contratado: PLANO_LABEL[parceria.plano],
+          partner_registration_id: parceria.registrationId,
+        }
+      : {}),
     // Termo de Adesão: código e data de assinatura do contrato de origem (datas por extenso,
     // data do registro de assinatura no fuso de Brasília). Sempre por último: extra_data não sobrescreve.
     ...(adhesionParent
@@ -455,7 +498,7 @@ export async function POST(req: NextRequest) {
   // Esses fluxos já trazem os dados da parte em extra_data; com o painel "NDA
   // para clientes" gerando vários lotes do MESMO template (um por cliente), a
   // busca automática poderia puxar a qualificação de outro cliente (LGPD).
-  if (!effectiveQualificationBatchId && !ticket_id && !credit_proposal_id) {
+  if (!effectiveQualificationBatchId && !ticket_id && !credit_proposal_id && !parceria) {
     // Termo de Adesão: só o lote dos aderentes DESTE contrato de origem; fora disso, nunca um lote de adesão.
     let earlyBatchQuery = svc()
       .from("cm_qualification_batches")
@@ -721,6 +764,13 @@ export async function POST(req: NextRequest) {
   // Em minuta comum (não multi_vertical) o corpo não tem essas tags, então
   // isso é um no-op idêntico ao comportamento de antes.
   let bodyAfterVerticalBlocks = resolveVerticalBlocks(template.body_text_raw, effectiveVertical);
+  if (parceria) {
+    try {
+      bodyAfterVerticalBlocks = preencherContratoParceria(bodyAfterVerticalBlocks, parceria.plano, parceria.dados);
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 422 });
+    }
+  }
 
   // Achado real 23/09/2026 (Dr. Athaydes, comparando V3C-NDA-2026-0043
   // real): a minuta digita {{party_qualifications_block}} dentro do seu
