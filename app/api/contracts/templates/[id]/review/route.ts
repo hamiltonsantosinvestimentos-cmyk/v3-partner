@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revokedContactsError } from "@/lib/contract-revoked-contacts";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 
@@ -66,6 +67,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Revisor pode editar o corpo direto na tela de revisão antes de decidir.
   const bodyEdited = typeof body_text_raw === "string" && body_text_raw.trim() && body_text_raw !== template.body_text_raw;
+  // Voto de aprovação nunca passa com contato desligado da V3 no texto (lib/contract-revoked-contacts.ts).
+  if (decision === "aprovado") {
+    const revokedError = revokedContactsError(bodyEdited ? body_text_raw : template.body_text_raw, "minuta");
+    if (revokedError) return NextResponse.json({ error: revokedError }, { status: 422 });
+  }
   if (bodyEdited) {
     const vars = (body_text_raw.match(/\{\{([^}]+)\}\}/g) || []).map((v: string) => v.replace(/\{\{|\}\}/g, "").trim());
     await db.from("contract_templates").update({

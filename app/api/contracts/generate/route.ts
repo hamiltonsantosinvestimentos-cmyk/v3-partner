@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revokedContactsError } from "@/lib/contract-revoked-contacts";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { resolveContractVariables, resolveVerticalBlocks, wrapContractInV3Html } from "@/lib/contract-render";
@@ -97,6 +98,10 @@ export async function POST(req: NextRequest) {
       { status: 422 }
     );
   }
+
+  // Minuta que cita contato desligado da V3 nunca gera contrato (lib/contract-revoked-contacts.ts).
+  const revokedError = revokedContactsError(template.body_text_raw as string | null, "minuta");
+  if (revokedError) return NextResponse.json({ error: revokedError }, { status: 422 });
 
   // Mandato de Crédito (09/10/2026): só nasce do botão "Mandato" do modal da
   // proposta, com a qualificação completa da CONTRATANTE e o % do mandato.

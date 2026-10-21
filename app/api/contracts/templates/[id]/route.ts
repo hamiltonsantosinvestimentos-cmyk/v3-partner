@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revokedContactsError } from "@/lib/contract-revoked-contacts";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { notifySociosMinutaEmRevisao } from "@/lib/socios-notify";
@@ -104,6 +105,9 @@ export async function PATCH(
   if (submit_for_review) {
     if (!["rascunho", "reprovado"].includes(updates.approval_status ?? current.approval_status))
       return NextResponse.json({ error: `Minuta não pode ser enviada para revisão no status atual (${current.approval_status})` }, { status: 409 });
+    // Minuta que cita contato desligado da V3 não vai para revisão (lib/contract-revoked-contacts.ts).
+    const revokedError = revokedContactsError((updates.body_text_raw as string | undefined) ?? current.body_text_raw, "minuta");
+    if (revokedError) return NextResponse.json({ error: revokedError }, { status: 422 });
     updates.approval_status = "em_revisao";
     // Reprovação seguida de reenvio sem edição de corpo também abre rodada
     // nova (comportamento original). Se o corpo já mudou nesta mesma
