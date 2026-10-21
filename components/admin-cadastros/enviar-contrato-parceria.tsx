@@ -185,11 +185,12 @@ export function EnviarContratoParceria({
               <label key={c.key} className={cn("block space-y-1", (c.key === "endereco" || c.key === "modulos") && "sm:col-span-2")}>
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{c.label}</span>
                 <input
+                  type={c.tipo ?? "text"}
                   value={dados[c.key]}
                   onChange={(e) => setDados((d) => ({ ...d, [c.key]: e.target.value }))}
                   disabled={c.key === "email"}
                   placeholder={c.placeholder}
-                  className={cn(INPUT, c.key === "email" && "opacity-60", tentou && faltamKeys.has(c.key) && "border-red-500/60")}
+                  className={cn(INPUT, c.key === "email" && "opacity-60", c.tipo === "date" && "[color-scheme:dark]", tentou && faltamKeys.has(c.key) && "border-red-500/60")}
                 />
               </label>
             ))}

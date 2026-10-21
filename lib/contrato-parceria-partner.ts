@@ -19,6 +19,13 @@ export const PLANO_LABEL: Record<PlanoContratoParceria, string> = {
   ENTERPRISE: "Enterprise",
 };
 
+// Anuidade de cada plano (Anexo III da minuta), impressa no item 3.1.
+export const PLANO_ANUIDADE: Record<PlanoContratoParceria, string> = {
+  PARTNER: "R$ 10.897,00",
+  PARTNER_PRO: "R$ 15.897,00",
+  ENTERPRISE: "R$ 49.897,00",
+};
+
 // Representante legal da LICENCIANTE (contrato social, 1ª alteração).
 const LICENCIANTE_RG = "11734474-7 IFP";
 const LICENCIANTE_EMAIL = "joao.lemos@v3partners.com.br";
@@ -54,9 +61,11 @@ export type DadosLicenciado = {
   email: string;
   telefone: string;
   modulos: string;
+  // Data prevista de pagamento (yyyy-mm-dd), digitada no envio; sai no item 3.1.
+  data_pagamento: string;
 };
 
-export type CampoLicenciado = { key: keyof DadosLicenciado; label: string; placeholder?: string };
+export type CampoLicenciado = { key: keyof DadosLicenciado; label: string; placeholder?: string; tipo?: "date" };
 
 export const CAMPOS_LICENCIADO: CampoLicenciado[] = [
   { key: "razao_social", label: "Razão social / nome" },
@@ -68,6 +77,7 @@ export const CAMPOS_LICENCIADO: CampoLicenciado[] = [
   { key: "email", label: "E-mail (recebe o contrato)" },
   { key: "telefone", label: "Telefone" },
   { key: "modulos", label: "Nº de módulos do Treinamento Técnico Avançado (Anexo II)", placeholder: "ex.: 12" },
+  { key: "data_pagamento", label: "Data prevista de pagamento", tipo: "date" },
 ];
 
 // O e-mail é o do cadastro (login do partner): não muda por aqui.
@@ -118,6 +128,7 @@ export function dadosDoCadastro(r: CadastroParaContrato): DadosLicenciado {
     email: t(r.email),
     telefone: t(r.telefone),
     modulos: "",
+    data_pagamento: "",
   };
 }
 
@@ -134,7 +145,16 @@ export function mesclarDados(base: DadosLicenciado, ajustes: unknown): DadosLice
 }
 
 export function camposFaltantes(d: DadosLicenciado): CampoLicenciado[] {
-  return CAMPOS_LICENCIADO.filter((c) => !d[c.key].trim());
+  return CAMPOS_LICENCIADO.filter((c) => !d[c.key].trim() || (c.key === "data_pagamento" && !dataBR(d.data_pagamento)));
+}
+
+/** "2026-10-25" → "25/10/2026" (null se não for uma data válida). */
+export function dataBR(iso: string): string | null {
+  const m = iso.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const dt = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (dt.getUTCMonth() !== +m[2] - 1 || dt.getUTCDate() !== +m[3]) return null;
+  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
 // ── Preenchimento da minuta ─────────────────────────────────────────────────
@@ -167,7 +187,13 @@ export function preencherContratoParceria(minuta: string, plano: PlanoContratoPa
 
   const planoLabel = PLANO_LABEL[plano];
   html = trocar(html, "Licenciamento [PLANO]", `Licenciamento ${esc(planoLabel)}`);
-  html = trocar(html, "Plano contratado: [plano]", `Plano contratado: ${esc(planoLabel)}`);
+  const pagamento = dataBR(d.data_pagamento);
+  if (!pagamento) throw new Error("Data prevista de pagamento inválida.");
+  html = trocar(
+    html,
+    "Plano contratado: [plano]",
+    `Plano contratado: ${esc(planoLabel)}, anuidade de ${PLANO_ANUIDADE[plano]} (Anexo III). Data prevista de pagamento: ${pagamento}.`,
+  );
   html = trocar(
     html,
     "JOÃO LEMOS NETTO, CPF nº 078.678.257-97, RG nº [RG], e-mail [e-mail].",
