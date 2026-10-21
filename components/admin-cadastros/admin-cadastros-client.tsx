@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cadastroStarterAntigo } from "@/lib/v3-access-rotulos";
+import { isPlanoContratoParceria } from "@/lib/contrato-parceria-partner";
+import { EnviarContratoParceria } from "./enviar-contrato-parceria";
 
 interface Registration {
   id: string;
@@ -122,6 +124,8 @@ function ModalDetalhe({
     setLoading(acao);
     await onAcao(reg.id, acao, obs, isCartaoRecorrente ? cartaoLink.trim() : undefined);
     setLoading(null);
+    // Aprovado num plano com Contrato de Parceria: o modal fica aberto, já com o botão "Enviar contrato".
+    if (acao === "APROVAR" && isPlanoContratoParceria(reg.plano)) return;
     onClose();
   };
 
@@ -385,6 +389,9 @@ function ModalDetalhe({
               Cadastro aprovado — acesso criado e convite enviado para <strong>{reg.email}</strong>
             </div>
           )}
+          {reg.status === "APROVADO" && isPlanoContratoParceria(reg.plano) && (
+            <EnviarContratoParceria registrationId={reg.id} plano={reg.plano} cadastro={reg} />
+          )}
         </div>
       </div>
     </div>
@@ -495,6 +502,7 @@ export function AdminCadastrosClient({
     if (res.ok) {
       const novoStatus = acao === "APROVAR" ? "APROVADO" : acao === "REPROVAR" ? "REPROVADO" : "EM_ANALISE";
       setRegs((prev) => prev.map((r) => r.id === id ? { ...r, status: novoStatus as Registration["status"], observacao: obs, ...(cartaoRecorrenteLink ? { cartao_recorrente_link: cartaoRecorrenteLink } : {}) } : r));
+      setSelecionado((prev) => prev?.id === id ? { ...prev, status: novoStatus as Registration["status"], observacao: obs } : prev);
     } else {
       const d = await res.json().catch(() => ({})) as { error?: string };
       aviso(d.error ?? "Erro ao processar ação.");
