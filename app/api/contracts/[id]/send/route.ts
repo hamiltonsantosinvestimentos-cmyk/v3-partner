@@ -1,4 +1,5 @@
 import { checkHeadInContract } from "@/lib/contract-head-gate";
+import { revokedContactsError } from "@/lib/contract-revoked-contacts";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -127,6 +128,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     rendered_html: (contract as { rendered_html?: string | null }).rendered_html ?? null,
   });
   if (headError) return NextResponse.json({ error: headError }, { status: 422 });
+
+  // Contato desligado da V3 nunca vai para assinatura (lib/contract-revoked-contacts.ts).
+  const revokedError = revokedContactsError((contract as { rendered_html?: string | null }).rendered_html, "contrato");
+  if (revokedError) return NextResponse.json({ error: revokedError }, { status: 422 });
 
   // Gate de signatário duplicado (21/09/2026, BRIEF NCNDA, problema 4): o
   // NCNDA V3C-NDA-2026-0036 saiu do gerador com o Head da Mesa duas vezes, mesmo
