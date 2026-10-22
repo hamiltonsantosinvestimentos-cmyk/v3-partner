@@ -682,7 +682,7 @@ export function OfertaLp() {
     if (id === "partner_pro") return abrir(id);
     trackPixel("InitiateCheckout", { content_name: "oferta_trial_30_dias", plano: id });
     const q = new URLSearchParams(tracking).toString();
-    window.location.href = `/cadastro-partner-${id}${q ? `?${q}` : ""}`;
+    window.location.href = `/cadastro-partner-oferta?plano=${id}${q ? `&${q}` : ""}`;
   };
 
   return (
