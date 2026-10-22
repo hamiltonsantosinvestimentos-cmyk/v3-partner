@@ -177,7 +177,8 @@ function Mostrador() {
         {Array.from({ length: 30 }, (_, i) => {
           const a = (i / 30) * Math.PI * 2;
           const on = i < acesos;
-          return <line key={i} x1={100 + Math.cos(a) * 72} y1={100 + Math.sin(a) * 72} x2={100 + Math.cos(a) * (on ? 64 : 67)} y2={100 + Math.sin(a) * (on ? 64 : 67)}
+          const r2 = (n: number) => Math.round(n * 100) / 100;
+          return <line key={i} x1={r2(100 + Math.cos(a) * 72)} y1={r2(100 + Math.sin(a) * 72)} x2={r2(100 + Math.cos(a) * (on ? 64 : 67))} y2={r2(100 + Math.sin(a) * (on ? 64 : 67))}
             stroke={on ? C.goldLight : "rgba(240,236,228,0.16)"} strokeWidth={on ? 1.8 : 1} strokeLinecap="round" style={{ transition: "all .4s" }} />;
         })}
       </svg>
@@ -188,7 +189,7 @@ function Mostrador() {
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
         <p className="text-[10px] font-bold uppercase tracking-[0.34em]" style={{ color: C.gold }}>Trial</p>
         <p className={`${display.className} text-[112px] sm:text-[132px] font-semibold leading-[0.85] tabular-nums`} style={{ color: C.cream }}>{acesos}</p>
-        <p className="mt-1 text-sm font-bold uppercase tracking-[0.3em]" style={{ color: C.cream }}>dias grátis</p>
+        <p className="mt-8 text-sm font-bold uppercase tracking-[0.3em]" style={{ color: C.cream }}>dias grátis</p>
         <p className="mt-2 text-[11px]" style={{ color: C.muted }}>sem cartão · sem fidelidade</p>
       </div>
     </div>
@@ -630,8 +631,8 @@ function Formulario({ aberto, plano, onFechar, tracking }: { aberto: boolean; pl
                 </div>
               </div>
               <label className="flex cursor-pointer items-start gap-3 text-xs leading-relaxed" style={{ color: C.muted }}>
-                <input type="checkbox" checked={aceite} onChange={(e) => setAceite(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#C9A84C]" />
-                Autorizo a V3 Partners a falar comigo por WhatsApp e e-mail sobre a oferta, conforme a <a href="/politica-privacidade" target="_blank" className="underline" style={{ color: C.goldLight }}>política de privacidade</a>.
+                <input type="checkbox" checked={aceite} onChange={(e) => setAceite(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-[#C9A84C]" />
+                <span>Autorizo a V3 Partners a falar comigo por WhatsApp e e-mail sobre a oferta, conforme a <a href="/politica-privacidade" target="_blank" className="underline" style={{ color: C.goldLight }}>política de privacidade</a>.</span>
               </label>
             </div>
             {erro && <p className="mt-4 rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "rgba(224,120,120,0.4)", color: "#E07878" }}>{erro}</p>}
@@ -753,7 +754,7 @@ export function OfertaLp() {
                 <span key={i} className="q-word mr-[0.22em]" style={{ animationDelay: `${1500 + i * 70}ms` }}>{w}</span>
               ))}
               <br />
-              <span className="q-word q-gold-text italic" style={{ animationDelay: `${1500 + HEADLINE_A.length * 70 + 80}ms`, ...GOLD_TXT }}>De graça.</span>
+              <span className="q-word" style={{ animationDelay: `${1500 + HEADLINE_A.length * 70 + 80}ms` }}><span className="q-gold-text italic" style={GOLD_TXT}>De graça.</span></span>
             </h1>
             <p className="q-rise mt-7 max-w-xl text-base sm:text-lg leading-relaxed" style={{ color: C.muted, animationDelay: "2150ms" }}>
               Suba suas propostas na Mesa de Crédito, use a análise, os contratos e o time da V3 por <strong style={{ color: C.cream }}>30 dias sem pagar nada</strong>. Depois, escolha o seu plano ou cancele. <strong style={{ color: C.cream }}>Sem fidelidade.</strong>
