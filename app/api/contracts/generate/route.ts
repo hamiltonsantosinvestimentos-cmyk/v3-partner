@@ -17,7 +17,7 @@ import { CONCRETE_VERTICALS } from "@/lib/contract-verticals";
 import { ADHESION_SERIES, validateAdhesionParent, dateExtensoBR, type AdhesionParent } from "@/lib/contract-adhesion";
 import { isMandatoTemplateName } from "@/lib/mandato-credito";
 import {
-  isContratoParceriaTemplateName, isPlanoContratoParceria, dadosDoCadastro, mesclarDados, camposFaltantes,
+  familiaDoTemplate, familiaDoPlano, isPlanoContratoParceria, dadosDoCadastro, mesclarDados, camposFaltantes,
   preencherContratoParceria, PLANO_LABEL, type DadosLicenciado, type PlanoContratoParceria,
 } from "@/lib/contrato-parceria-partner";
 
@@ -126,7 +126,9 @@ export async function POST(req: NextRequest) {
   // LICENCIADO vêm do cadastro (lidos aqui, nunca do cliente), mais o que o
   // ADMIN completou no formulário (RG, nº de módulos...).
   let parceria: { plano: PlanoContratoParceria; dados: DadosLicenciado; registrationId: string } | null = null;
-  if (isContratoParceriaTemplateName(template.template_name)) {
+  // Gold/Diamante (22/10/2026): a minuta deles só serve para GOLD/DIAMANTE, e a v2.3 nunca para eles.
+  const familiaTemplate = familiaDoTemplate(template.template_name);
+  if (familiaTemplate) {
     if (caller.role !== "ADMIN") {
       return NextResponse.json({ error: "Só ADMIN envia o Contrato de Parceria." }, { status: 403 });
     }
@@ -137,10 +139,17 @@ export async function POST(req: NextRequest) {
     if (!reg) return NextResponse.json({ error: "Cadastro não encontrado." }, { status: 404 });
     if (reg.status !== "APROVADO") return NextResponse.json({ error: "Aprove o cadastro antes de enviar o contrato." }, { status: 422 });
     if (!isPlanoContratoParceria(reg.plano)) {
-      return NextResponse.json({ error: `O Contrato de Parceria v2.2 cobre só Partner, Partner PRO e Enterprise (plano do cadastro: ${reg.plano}).` }, { status: 422 });
+      return NextResponse.json({ error: `O Contrato de Parceria cobre só Partner, Partner PRO, Enterprise, V3 Gold e V3 Diamante (plano do cadastro: ${reg.plano}).` }, { status: 422 });
+    }
+    if (familiaDoPlano(reg.plano) !== familiaTemplate) {
+      return NextResponse.json({
+        error: familiaTemplate === "oferta"
+          ? `A minuta Gold/Diamante só vale para os planos V3 Gold e V3 Diamante (plano do cadastro: ${reg.plano}).`
+          : `Os planos V3 Gold e V3 Diamante usam a minuta própria deles, não o Contrato de Parceria v2.3.`,
+      }, { status: 422 });
     }
     const dados = mesclarDados(dadosDoCadastro(reg), (extra_data as Record<string, unknown> | undefined)?.parceria);
-    const faltam = camposFaltantes(dados);
+    const faltam = camposFaltantes(dados, reg.plano);
     if (faltam.length > 0) {
       return NextResponse.json({ error: `Faltam dados do licenciado: ${faltam.map((c) => c.label).join(", ")}.` }, { status: 422 });
     }
@@ -223,8 +232,10 @@ export async function POST(req: NextRequest) {
           nome_cedente: parceria.dados.representante,
           cpf_cnpj_cedente: parceria.dados.cpf,
           email_cedente: parceria.dados.email,
-          rotulo_assinatura_cedente: `Licenciado, ${parceria.dados.razao_social}`,
-          rotulo_assinatura_v3: "Licenciante, V3 Partners",
+          rotulo_assinatura_cedente: familiaDoPlano(parceria.plano) === "oferta"
+            ? `Contratante, ${parceria.dados.razao_social}`
+            : `Licenciado, ${parceria.dados.razao_social}`,
+          rotulo_assinatura_v3: familiaDoPlano(parceria.plano) === "oferta" ? "Contratada, V3 Partners" : "Licenciante, V3 Partners",
           plano_contratado: PLANO_LABEL[parceria.plano],
           partner_registration_id: parceria.registrationId,
         }
