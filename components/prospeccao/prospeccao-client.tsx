@@ -103,6 +103,7 @@ const ORIGENS = [
   { value: "quiz_white_label",   label: "Quiz White Label" },
   { value: "landing_parceiro",   label: "Landing Parceiro" },
   { value: "webinar",            label: "Webinar" },
+  { value: "oferta_trial",       label: "Oferta 30 dias" },
   { value: "youtube",            label: "YouTube" },
   { value: "google",             label: "Google" },
   { value: "evento",             label: "Evento" },
@@ -123,7 +124,7 @@ function origemLabel(o: string) {
 function origemColor(o: string) {
   const map: Record<string, string> = {
     linkedin: "#0A66C2", instagram: "#E1306C", indicacao: GOLD, indicacao_partner: GOLD,
-    quiz_partner: "#34D399", quiz_white_label: "#E8C97A", landing_parceiro: "#60A5FA", webinar: "#C9A84C",
+    quiz_partner: "#34D399", quiz_white_label: "#E8C97A", landing_parceiro: "#60A5FA", webinar: "#C9A84C", oferta_trial: "#A78BFA",
     youtube: "#FF0000", google: "#4285F4", evento: "#A78BFA", outro: MUTED,
   };
   return map[o] ?? MUTED;
