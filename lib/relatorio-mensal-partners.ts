@@ -17,7 +17,7 @@ import { ehAnaliseDoSite } from "@/lib/analise-site";
  * antes e aprovado agora.
  */
 
-export const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"] as const;
+export const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] as const;
 
 // Mesmo ID de perfil usado em app/api/contracts/approve/route.ts (conta ADMIN real do Hamilton).
 export const SOCIOS_IDS = [

@@ -10,7 +10,7 @@ import { decryptSecret } from "@/lib/crypto/secret";
 import { formatQuickReplyBlock, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 import type { SdrCanal } from "@/lib/sdr-agent";
 
-const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] as const;
+const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);

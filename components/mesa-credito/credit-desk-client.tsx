@@ -167,7 +167,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
   const cfg = CONFIG[level];
   const isAdmin = ["MESA_OPERACIONAL", "ADMIN", "GESTAO"].includes(currentUser?.role ?? "");
   const canChangeStage = isAdmin;
-  const canEditValorSolicitado = isAdmin || currentUser?.role === "PARTNER" || currentUser?.role === "PARTNER_PRO" || currentUser?.role === "PARTNER_HE";
+  const canEditValorSolicitado = isAdmin || currentUser?.role === "PARTNER" || currentUser?.role === "PARTNER_PRO" || currentUser?.role === "GOLD" || currentUser?.role === "DIAMANTE" || currentUser?.role === "PARTNER_HE";
   const partnerName = currentUser?.full_name ?? "Partner";
   const partnerId   = currentUser?.id ?? "";
 

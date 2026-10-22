@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { MapPin, AlertTriangle, CheckCircle2, Loader2, X } from "lucide-react";
 import type { UserRole } from "@/lib/constants";
 
-const PARTNER_ROLES: UserRole[] = ["PARTNER", "PARTNER_PRO"];
+const PARTNER_ROLES: UserRole[] = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"];
 const STORAGE_KEY = "v3_location_asked";
 
 interface LocationGateProps {

@@ -4,7 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 
 export const maxDuration = 30;
 
-const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER_PRO"] as const;
+const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER_PRO", "GOLD", "DIAMANTE"] as const;
 type AllowedRole = typeof ALLOWED_ROLES[number];
 
 const SYSTEM_PROMPT = `

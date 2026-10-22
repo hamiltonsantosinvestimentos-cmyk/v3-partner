@@ -27,7 +27,7 @@ export async function GET() {
   const { data, error } = await svc
     .from("profiles")
     .select("id, full_name, email, role")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "GESTAO", "ADMIN"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE", "GESTAO", "ADMIN"])
     .order("full_name");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

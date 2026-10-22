@@ -34,7 +34,7 @@ export default async function CompliancePage() {
   ] = await Promise.all([
     svc.from("profiles")
       .select("id, full_name, role, kyc_status, created_at")
-      .in("role", ["PARTNER", "PARTNER_PRO"])
+      .in("role", ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"])
       .order("created_at", { ascending: false }),
     svc.from("credit_desk_proposals")
       .select("id, requested_value, approved_value, status, credit_level, created_at, partner_id")

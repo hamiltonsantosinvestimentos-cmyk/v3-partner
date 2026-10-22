@@ -4,6 +4,9 @@ export const USER_ROLES = {
   PARTNER: "PARTNER",
   PARTNER_PRO: "PARTNER_PRO",
   PARTNER_HE: "PARTNER_HE",
+  // Oferta única (22/10/2026): 30 dias grátis e depois mensal sem fidelidade. Ver lib/oferta-trial.ts.
+  GOLD: "GOLD",
+  DIAMANTE: "DIAMANTE",
   ENTERPRISE: "ENTERPRISE",
   MESA_OPERACIONAL: "MESA_OPERACIONAL",
   GESTAO: "GESTAO",
@@ -36,6 +39,9 @@ export const PLAN_COMMISSION_PCT: Partial<Record<UserRole, number>> = {
   PARTNER: 35,
   PARTNER_PRO: 50,
   PARTNER_HE: 50,
+  // Oferta única (22/10/2026): Gold R$ 397/mês e Diamante R$ 897/mês, sem fidelidade.
+  GOLD: 25,
+  DIAMANTE: 40,
   // Enterprise (24/09/2026): 55% sobre a líquida V3, pago ao master; ele repassa aos usuários.
   ENTERPRISE: 55,
 };
@@ -46,6 +52,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   PARTNER: "V3 Partner",
   PARTNER_PRO: "V3 Partner PRO",
   PARTNER_HE: "Partner HE",
+  GOLD: "V3 Gold",
+  DIAMANTE: "V3 Diamante",
   ENTERPRISE: "V3 Enterprise",
   MESA_OPERACIONAL: "Mesa Operacional",
   GESTAO: "Gestão",
@@ -62,6 +70,8 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   PARTNER: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   PARTNER_PRO: "bg-violet-500/20 text-violet-400 border-violet-500/30",
   PARTNER_HE: "bg-lime-500/20 text-lime-400 border-lime-500/30",
+  GOLD: "bg-amber-400/20 text-amber-300 border-amber-400/30",
+  DIAMANTE: "bg-slate-300/20 text-slate-200 border-slate-300/30",
   ENTERPRISE: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
   MESA_OPERACIONAL: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   GESTAO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
@@ -243,7 +253,7 @@ export const NAV_ITEMS = [
     href: "/dashboard",
     label: "Dashboard",
     icon: "LayoutDashboard",
-    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "MESA_OPERACIONAL", "GESTAO"],
   },
   {
     href: "/usuarios",
@@ -255,34 +265,34 @@ export const NAV_ITEMS = [
     href: "/ia-assistant",
     label: "IA Assistant",
     icon: "BrainCircuit",
-    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL", "GESTAO"],
+    roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "MESA_OPERACIONAL", "GESTAO"],
   },
   {
     href: "/ma",
     label: "M&A",
     icon: "Building2",
-    roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO"],
+    roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"],
   },
   {
     href: "/mesa-credito",
     label: "Mesa de Crédito",
     icon: "CreditCard",
-    roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO"],
+    roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"],
     children: [
       {
         href: "/mesa-credito/nivel-1",
         label: "Nível 1 — Crédito Varejo",
-        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO"],
+        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"],
       },
       {
         href: "/mesa-credito/nivel-2",
         label: "Nível 2 — Crédito Estruturado",
-        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO"],
+        roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"],
       },
       {
         href: "/mesa-credito/nivel-3",
         label: "Nível 3 — High Ticket",
-        roles: ["ADMIN", "GESTAO", "PARTNER_PRO"],
+        roles: ["ADMIN", "GESTAO", "PARTNER_PRO", "GOLD", "DIAMANTE"],
       },
     ],
   },

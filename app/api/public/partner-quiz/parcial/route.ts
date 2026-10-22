@@ -38,7 +38,7 @@ const schema = z.object({
   consentimento: z.literal(true),
 });
 
-const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE", "ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);

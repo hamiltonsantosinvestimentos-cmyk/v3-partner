@@ -413,7 +413,7 @@ function CardPlano({ p, delay, onEscolher }: { p: Plano; delay: number; onEscolh
             style={diamante
               ? { background: `linear-gradient(135deg, ${C.cream}, #CFC6B4 55%, ${C.goldLight})`, color: C.bg }
               : pro ? { background: `linear-gradient(135deg, ${C.goldLight}, ${C.gold})`, color: C.bg } : { borderColor: `${C.gold}66`, color: C.goldLight }}>
-            {pro ? "Quero o Partner PRO" : `Começar e seguir no ${cfg.nome}`}
+            {pro ? "Quero o Partner PRO" : `Cadastrar no ${cfg.nome}: 30 dias grátis`}
             <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
           </button>
         </div>
@@ -676,6 +676,14 @@ export function OfertaLp() {
     setForm({ aberto: true, plano });
   };
   const fechar = useCallback(() => setForm((f) => ({ ...f, aberto: false })), []);
+  // Gold e Diamante vão direto ao cadastro (sem pagamento, 30 dias grátis); o Partner PRO, anual,
+  // segue pelo formulário de contato.
+  const escolherPlano = (id: PlanoOferta) => {
+    if (id === "partner_pro") return abrir(id);
+    trackPixel("InitiateCheckout", { content_name: "oferta_trial_30_dias", plano: id });
+    const q = new URLSearchParams(tracking).toString();
+    window.location.href = `/cadastro-partner-oferta?plano=${id}${q ? `&${q}` : ""}`;
+  };
 
   return (
     <main className="relative min-h-screen overflow-x-clip" style={{ background: C.bg, color: C.cream }}>
@@ -820,7 +828,7 @@ export function OfertaLp() {
           </p>
         </Revelar>
         <div className="mt-14 grid gap-6 lg:grid-cols-3 lg:items-stretch">
-          {PLANOS.map((p, i) => <CardPlano key={p.id} p={p} delay={i * 140} onEscolher={(id) => abrir(id)} />)}
+          {PLANOS.map((p, i) => <CardPlano key={p.id} p={p} delay={i * 140} onEscolher={escolherPlano} />)}
         </div>
         <Revelar delay={200}>
           <div className="mx-auto mt-10 flex max-w-3xl items-start gap-4 rounded-2xl border p-5 sm:p-6" style={{ borderColor: `${C.gold}44`, background: `${C.gold}0D` }}>

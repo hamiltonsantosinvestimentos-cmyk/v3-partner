@@ -156,7 +156,7 @@ export async function GET(req: NextRequest) {
   const { data: allActivePartners } = await svc()
     .from("profiles")
     .select("id, full_name, email, role, cpf, cnpj, trial_expires_at, created_at")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"])
     .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
     .eq("is_active", true);
 

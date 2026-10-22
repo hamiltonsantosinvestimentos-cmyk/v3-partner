@@ -44,6 +44,8 @@ const PLANO_LABEL: Record<string, string> = {
   STARTER: "V3 Access — R$ 1.447/ano",
   PARTNER: "V3 Partner — R$ 908,08/mês",
   PARTNER_HE: "Partner HE — R$ 97/mês",
+  GOLD: "V3 Gold — 30 dias grátis, depois R$ 397/mês",
+  DIAMANTE: "V3 Diamante — 30 dias grátis, depois R$ 897/mês",
   PARTNER_PRO: "V3 Partner PRO — R$ 1.324,75/mês",
   ENTERPRISE: "V3 Enterprise — R$ 4.158,08/mês",
 };

@@ -5,7 +5,7 @@ import { randomBytes } from "crypto";
 import { getMe, setTelegramWebhook, deleteTelegramWebhook } from "@/lib/telegram-dm";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/secret";
 
-const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"] as const;
+const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);

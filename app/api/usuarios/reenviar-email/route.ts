@@ -13,8 +13,8 @@ async function enviarBoasVindas(email: string, nome: string, role: string, start
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return { ok: false, motivo: "RESEND_API_KEY não configurada" };
 
-  const planoLabel = role === "ENTERPRISE" ? "V3 Enterprise" : role === "PARTNER_PRO" ? "V3 Partner PRO" : role === "STARTER" ? rotuloStarter(starterAntigo) : "V3 Partner";
-  const comissao   = role === "ENTERPRISE" ? "55%" : role === "PARTNER_PRO" ? "50%" : role === "STARTER" ? "20%" : "35%";
+  const planoLabel = role === "ENTERPRISE" ? "V3 Enterprise" : role === "PARTNER_PRO" ? "V3 Partner PRO" : role === "GOLD" ? "V3 Gold" : role === "DIAMANTE" ? "V3 Diamante" : role === "STARTER" ? rotuloStarter(starterAntigo) : "V3 Partner";
+  const comissao   = role === "ENTERPRISE" ? "55%" : role === "PARTNER_PRO" ? "50%" : role === "GOLD" ? "25%" : role === "DIAMANTE" ? "40%" : role === "STARTER" ? "20%" : "35%";
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">

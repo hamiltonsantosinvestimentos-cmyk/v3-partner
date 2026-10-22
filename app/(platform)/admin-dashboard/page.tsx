@@ -33,7 +33,7 @@ export default async function AdminDashboardPage() {
   ] = await Promise.allSettled([
     svc.from("profiles")
       .select("id, full_name, email, role, created_at, is_active")
-      .in("role", ["PARTNER", "PARTNER_PRO"])
+      .in("role", ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"])
       .eq("is_active", true)
       .order("created_at", { ascending: false }),
 

@@ -40,7 +40,7 @@ const schema = z.object({
   session_id: z.string().max(80).optional().nullable(),
 });
 
-const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE", "ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE", "ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 const LABEL: Record<string, Record<string, string>> = {
   objetivo: Object.fromEntries(OBJETIVO.map((o) => [o.value, o.label])),

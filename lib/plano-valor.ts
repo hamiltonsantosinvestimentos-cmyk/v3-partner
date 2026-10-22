@@ -6,6 +6,9 @@ export const PLANO_VALOR: Record<string, number> = {
   STARTER: 12058, // R$ 120,58 = R$ 1.447,00 / 12
   PARTNER: 90808, // R$ 908,08
   PARTNER_PRO: 132475, // R$ 1.324,75
+  // Oferta única (22/10/2026): mensais, cobrados depois dos 30 dias grátis.
+  GOLD: 39700, // R$ 397,00/mês
+  DIAMANTE: 89700, // R$ 897,00/mês
   PARTNER_HE: 9700, // R$ 97,00/mês — plano enxuto Home Equity (só as 4 linhas HE na Mesa de Crédito)
   ENTERPRISE: 415808, // R$ 4.158,08
 };

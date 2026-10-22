@@ -119,7 +119,7 @@ function getDaysLeft(createdAt: string): number {
 }
 
 function TrialBanner({ createdAt, role }: { createdAt: string; role: string }) {
-  const partnerRoles = ["PARTNER", "PARTNER_PRO"];
+  const partnerRoles = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"];
   if (!partnerRoles.includes(role)) return null;
 
   const daysLeft = getDaysLeft(createdAt);
@@ -328,7 +328,7 @@ export function DashboardClient({
 
   // "New" partner: created within 14 days OR no commissions yet
   const isNewPartner = (() => {
-    if (!["PARTNER", "PARTNER_PRO"].includes(role)) return false;
+    if (!["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(role)) return false;
     if (comissoesAPagar === 0) return true;
     if (!userCreatedAt) return true;
     const daysSince = Math.floor((Date.now() - new Date(userCreatedAt).getTime()) / 86400000);
@@ -355,7 +355,7 @@ export function DashboardClient({
       {partnerAccess && <AccessLinkCard />}
 
       {/* Próximos Passos — apenas para partners */}
-      {["PARTNER", "PARTNER_PRO"].includes(role) && (
+      {["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(role) && (
         <div className="rounded-xl border border-[#243A66] bg-[#111F35] p-4">
           <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest mb-3">Comece por aqui</p>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -455,7 +455,7 @@ export function DashboardClient({
       </div>
 
       {/* KPI extra — Marketplace + Comissões (partners) */}
-      {["PARTNER", "PARTNER_PRO"].includes(role) && (
+      {["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(role) && (
         <div className="grid grid-cols-2 gap-4">
           <KpiCard
             title="Leads Marketplace"
@@ -537,7 +537,7 @@ export function DashboardClient({
       )}
 
       {/* Widget de Metas do Mês — partners */}
-      {metaMes && ["PARTNER", "PARTNER_PRO"].includes(role) && (
+      {metaMes && ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(role) && (
         <div className="rounded-xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-4">
           <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-widest mb-3 flex items-center gap-1.5">
             <Target className="w-3.5 h-3.5" /> Metas do Mês
@@ -577,7 +577,7 @@ export function DashboardClient({
       )}
 
       {/* Benchmark de Performance — apenas para partners */}
-      {benchmarkData && ["PARTNER", "PARTNER_PRO"].includes(role) && (
+      {benchmarkData && ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(role) && (
         <PerformanceBenchmark benchmarkData={benchmarkData} />
       )}
 

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
   const { data: partners, error: pErr } = await svc()
     .from("profiles")
     .select("id, full_name, role")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
     .order("full_name", { ascending: true });
 
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });

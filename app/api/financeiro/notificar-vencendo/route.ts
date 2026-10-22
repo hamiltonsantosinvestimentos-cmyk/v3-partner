@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   const { data: partners } = await svc
     .from("profiles")
     .select("id, full_name, trial_expires_at, is_active")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
     .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
     .eq("is_active", true)
     .not("trial_expires_at", "is", null);
