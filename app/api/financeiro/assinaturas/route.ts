@@ -70,10 +70,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ subs, manual });
   }
 
+  // ?grupo=oferta → aba "Assinaturas Oferta" (Gold/Diamante, lib/oferta-trial.ts). Sem o
+  // parâmetro, a aba Assinaturas lista os demais planos, sem Gold/Diamante.
+  const grupoOferta = searchParams.get("grupo") === "oferta";
+  const ROLES_GRUPO = grupoOferta ? ["GOLD", "DIAMANTE"] : ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"];
+
   const { data: partners, error } = await svc()
     .from("profiles")
     .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
+    .in("role", ROLES_GRUPO)
     .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
     .order("created_at", { ascending: false });
 
@@ -83,7 +88,7 @@ export async function GET(req: NextRequest) {
     const { data: partnersFallback } = await svc()
       .from("profiles")
       .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
-      .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
+      .in("role", ROLES_GRUPO)
     .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
       .order("created_at", { ascending: false });
     finalPartners = partnersFallback;
@@ -96,6 +101,8 @@ export async function GET(req: NextRequest) {
     .in("type", ["RENEWAL_REQUEST", "UPGRADE_REQUEST"])
     .eq("read", false)
     .order("created_at", { ascending: false });
+
+  const idsGrupo = new Set((finalPartners ?? []).map((p: { id: string }) => p.id));
 
   // Histórico de pagamentos (tabela pode não existir ainda)
   let payments: unknown[] = [];
@@ -136,8 +143,9 @@ export async function GET(req: NextRequest) {
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     const { data: paidSubs } = await svc()
       .from("partner_subscriptions")
-      .select("amount_cents, paid_at, due_date, created_at")
+      .select("partner_id, amount_cents, paid_at, due_date, created_at")
       .eq("status", "PAID")
+      .in("partner_id", [...idsGrupo])
       .gte("created_at", sixMonthsAgo.toISOString())
       .order("paid_at", { ascending: false });
     coraPaidHistory = (paidSubs ?? []).map((s: { amount_cents: number; paid_at?: string; due_date?: string; created_at: string }) => ({
@@ -149,10 +157,18 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     partners: await (async () => {
       const antigos = await idsStarterAntigo(svc());
-      return (finalPartners ?? []).map((p: { id: string }) => ({ ...p, starter_antigo: antigos.has(p.id) }));
+      // Gold/Diamante: já pagou alguma mensalidade = saiu do período grátis.
+      const pagantes = new Set<string>();
+      if (grupoOferta && idsGrupo.size > 0) {
+        const { data: pagas } = await svc().from("partner_subscriptions")
+          .select("partner_id").eq("status", "PAID").in("partner_id", [...idsGrupo]);
+        for (const r of pagas ?? []) pagantes.add((r as { partner_id: string }).partner_id);
+      }
+      return (finalPartners ?? []).map((p: { id: string }) => ({ ...p, starter_antigo: antigos.has(p.id), ja_pagou: pagantes.has(p.id) }));
     })(),
-    pendingNotifs: pendingNotifs ?? [],
-    payments,
+    // Solicitações de renovação/upgrade não trazem o partner; ficam só na aba principal.
+    pendingNotifs: grupoOferta ? [] : pendingNotifs ?? [],
+    payments: (payments as { data?: { partnerId?: string } }[]).filter((r) => !r.data?.partnerId || idsGrupo.has(r.data.partnerId)),
     coraByPartner,
     coraPaidHistory,
   });

@@ -7,7 +7,7 @@ import {
   CreditCard, Receipt, ChevronLeft, ChevronRight,
   ArrowUpRight, ArrowDownRight, CheckCircle2, Clock,
   AlertCircle, RefreshCw, Plus, Download, Eye, Trash2, Pencil,
-  Crown, ShieldCheck, XCircle, Loader2, Ban, RotateCcw, Building2, X, History,
+  Crown, ShieldCheck, XCircle, Loader2, Ban, RotateCcw, Building2, X, History, Gem,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ExportButton } from "@/components/financeiro/export-button";
@@ -26,7 +26,7 @@ import {
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-type Tab = "metricas" | "visao-geral" | "folha" | "despesas" | "comissoes" | "dre" | "fluxo" | "impostos" | "assinaturas" | "cora";
+type Tab = "metricas" | "visao-geral" | "folha" | "despesas" | "comissoes" | "dre" | "fluxo" | "impostos" | "assinaturas" | "assinaturas-oferta" | "cora";
 
 interface Props {
   role: string;
@@ -2776,6 +2776,8 @@ interface PartnerRow {
   created_at: string;
   trial_expires_at: string | null;
   is_active: boolean;
+  /** Gold/Diamante: já pagou alguma mensalidade (saiu do período grátis). */
+  ja_pagou?: boolean;
 }
 
 interface CoraSubRow {
@@ -2825,6 +2827,12 @@ function calcStatus(p: PartnerRow): { label: string; color: string; dias: number
 }
 
 function PlanBadge({ role }: { role: string }) {
+  if (role === "GOLD" || role === "DIAMANTE")
+    return (
+      <span className={`flex items-center gap-1 text-[10px] font-semibold border px-2 py-0.5 rounded-full ${role === "GOLD" ? "bg-amber-400/15 text-amber-300 border-amber-400/30" : "bg-slate-300/15 text-slate-200 border-slate-300/30"}`}>
+        {role === "GOLD" ? <Crown className="w-3 h-3" /> : <Gem className="w-3 h-3" />} {role === "GOLD" ? "Gold" : "Diamante"}
+      </span>
+    );
   if (role === "PARTNER_PRO")
     return (
       <span className="flex items-center gap-1 text-[10px] font-semibold border px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border-amber-500/30">
@@ -2838,7 +2846,9 @@ function PlanBadge({ role }: { role: string }) {
   );
 }
 
-function AssinaturasTab() {
+// grupo="oferta": aba Assinaturas Oferta (só Gold/Diamante, com o período grátis à parte).
+function AssinaturasTab({ grupo }: { grupo?: "oferta" }) {
+  const oferta = grupo === "oferta";
   const [partners, setPartners] = useState<PartnerRow[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [pendingNotifs, setPendingNotifs] = useState<PendingNotif[]>([]);
@@ -2893,7 +2903,7 @@ function AssinaturasTab() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/financeiro/assinaturas");
+      const res = await fetch(`/api/financeiro/assinaturas${oferta ? "?grupo=oferta" : ""}`);
       if (res.ok) {
         const d = await res.json();
         setPartners(d.partners ?? []);
@@ -2905,7 +2915,7 @@ function AssinaturasTab() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [oferta]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -2928,10 +2938,11 @@ function AssinaturasTab() {
   }
 
   async function handleGerarCobraLote() {
-    // Gera cobranças Cora para todos partners sem cobrança pendente
+    // Gera cobranças Cora para todos partners sem cobrança pendente. Na oferta, quem está no
+    // período grátis fica de fora: a 1ª mensalidade sai pelo cron no D-5 do fim dos 30 dias.
     const semCobranca = partners.filter(p => {
       const sub = coraByPartner[p.id];
-      return !sub || !["PENDING", "OPEN"].includes(sub.status);
+      return (!sub || !["PENDING", "OPEN"].includes(sub.status)) && !emTrial(p);
     });
     if (semCobranca.length === 0) return;
     setGerandoLote(true); setLoteResult(null);
@@ -3041,6 +3052,14 @@ function AssinaturasTab() {
   const vencendo = partners.filter(p => { const s = calcStatus(p); return s.dias > 0 && s.dias <= 15; }).length;
   const inadimplentes = partners.filter(p => { const s = calcStatus(p); return !p.is_active || s.dias === 0; }).length;
 
+  // Oferta: período grátis (aprovado, ainda sem nenhuma mensalidade paga e dentro dos 30 dias).
+  const emTrial = (p: PartnerRow) => oferta && !p.ja_pagou && p.is_active && calcStatus(p).dias > 0;
+  const ofertaTrial = partners.filter(emTrial);
+  const ofertaPagantes = partners.filter(p => p.ja_pagou && p.is_active && calcStatus(p).dias > 0);
+  const ofertaMrr = ofertaPagantes.reduce((s, p) => s + getValorPartner(p), 0);
+  const ofertaPotencial = ofertaTrial.reduce((s, p) => s + getValorPartner(p), 0);
+  const ofertaEncerrados = partners.filter(p => !p.is_active || calcStatus(p).dias === 0).length;
+
   // Gráfico MRR mensal (últimos 6 meses — pagamentos manuais + cobranças Cora pagas)
   const mrrChart = useMemo(() => {
     const now = new Date();
@@ -3090,12 +3109,21 @@ function AssinaturasTab() {
     <div className="space-y-5">
 
       {/* KPIs */}
+      {oferta ? (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard label="MRR (pagantes)" value={formatMoeda(ofertaMrr)} sub={`${ofertaPagantes.length} pagando`} icon={DollarSign} color="#C9A84C" />
+        <KpiCard label="Em período grátis" value={String(ofertaTrial.length)} sub={`${formatMoeda(ofertaPotencial)}/mês se converterem`} icon={Gem} color="#A78BFA" />
+        <KpiCard label="Gold · Diamante" value={`${partners.filter(p => p.role === "GOLD").length} · ${partners.filter(p => p.role === "DIAMANTE").length}`} sub={`${partners.length} na oferta`} icon={Crown} color="#F59E0B" />
+        <KpiCard label="Não renovaram" value={String(ofertaEncerrados)} sub="vencidos ou suspensos" icon={AlertCircle} color="#6B7280" />
+      </div>
+      ) : (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="MRR" value={formatMoeda(mrr)} sub={`${ativos.length} ativos`} icon={DollarSign} color="#C9A84C" />
         <KpiCard label="Partners PRO" value={String(totalPRO)} sub={`de ${totalPartners} total`} icon={Crown} color="#F59E0B" />
         <KpiCard label="Vencendo em 15d" value={String(vencendo)} sub="necessitam renovação" icon={Clock} color="#EF4444" />
         <KpiCard label="Inadimplentes" value={String(inadimplentes)} sub="vencidos ou suspensos" icon={AlertCircle} color="#6B7280" />
       </div>
+      )}
 
       {/* Alertas de pendências */}
       {pendingNotifs.length > 0 && (
@@ -3216,7 +3244,9 @@ function AssinaturasTab() {
                   </tr>
                 )}
                 {filtered.map(p => {
-                  const status = calcStatus(p);
+                  const status = emTrial(p)
+                    ? { ...calcStatus(p), label: `Grátis · ${calcStatus(p).dias}d`, color: "text-violet-300" }
+                    : calcStatus(p);
                   const valor = getValorPartner(p);
                   const expDate = p.trial_expires_at
                     ? new Date(p.trial_expires_at).toLocaleDateString("pt-BR")
@@ -3713,6 +3743,8 @@ const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "fluxo", label: "Fluxo de Caixa", icon: DollarSign },
   { id: "impostos", label: "Impostos", icon: Receipt },
   { id: "assinaturas", label: "Assinaturas", icon: Crown },
+  // Oferta única (Gold/Diamante, 30 dias grátis): controle separado das demais assinaturas.
+  { id: "assinaturas-oferta", label: "Assinaturas Oferta", icon: Gem },
   { id: "cora", label: "Cora Bank", icon: Building2 },
 ];
 
@@ -3729,7 +3761,8 @@ export function FinanceiroClient({ role, userName }: Props) {
       case "dre": return <DRETab />;
       case "fluxo": return <FluxoCaixaTab />;
       case "impostos": return <ImpostosTab />;
-      case "assinaturas": return <AssinaturasTab />;
+      case "assinaturas": return <AssinaturasTab key="assinaturas" />;
+      case "assinaturas-oferta": return <AssinaturasTab key="assinaturas-oferta" grupo="oferta" />;
       case "cora": return <CoraPanel />;
     }
   };
