@@ -183,7 +183,9 @@ export function preencherContratoParceria(minuta: string, plano: PlanoContratoPa
   html = html.replace(/<div class="header">[\s\S]*?<h1/i, "<h1");
   // Rodapé "Minuta sujeita a ajustes até a formalização final."
   html = html.replace(/<div class="footer">[\s\S]*$/i, "");
-  html = html.replace(/<p class="subtitle">[^<]*<\/p>/i, `<p class="subtitle" style="text-align:center;font-weight:700;letter-spacing:.12em">VERSÃO 2.2</p>`);
+  // Versão impressa = a da própria minuta ("Minuta v2.3 · Para análise..." → "VERSÃO 2.3").
+  const versao = html.match(/<p class="subtitle">[^<]*?v(\d+(?:\.\d+)*)/i)?.[1];
+  html = html.replace(/<p class="subtitle">[^<]*<\/p>/i, versao ? `<p class="subtitle" style="text-align:center;font-weight:700;letter-spacing:.12em">VERSÃO ${versao}</p>` : "");
 
   const planoLabel = PLANO_LABEL[plano];
   html = trocar(html, "Licenciamento [PLANO]", `Licenciamento ${esc(planoLabel)}`);
