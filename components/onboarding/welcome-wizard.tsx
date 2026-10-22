@@ -31,7 +31,7 @@ export function WelcomeWizard({ userName, role }: WelcomeWizardProps) {
 
   useEffect(() => {
     const done = localStorage.getItem(STORAGE_KEY);
-    if (!done && ["PARTNER", "PARTNER_PRO"].includes(role)) {
+    if (!done && ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(role)) {
       // Pequeno delay para não bloquear o carregamento inicial
       const t = setTimeout(() => setOpen(true), 800);
       return () => clearTimeout(t);

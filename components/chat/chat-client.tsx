@@ -397,7 +397,7 @@ export function ChatClient({ roomId, profile, isAdmin, rooms = [] }: ChatClientP
 
                 {group.messages.map((msg) => {
                   const isOwn = msg.sender_id === profile.id;
-                  const isPartnerMsg = ["PARTNER", "PARTNER_PRO"].includes(msg.sender_role);
+                  const isPartnerMsg = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(msg.sender_role);
 
                   return (
                     <div

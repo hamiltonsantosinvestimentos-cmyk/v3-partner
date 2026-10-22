@@ -99,7 +99,10 @@ export async function POST(req: NextRequest) {
     const planoRecorrenciaRaw = formData.get("plano_recorrencia") as string | null;
     // Partner HE é mensal (R$ 97/mês). Os outros planos são anuidade paga à vista
     // (12x o mensal, à vista no Pix/boleto) ou 12x no cartão.
-    const isMensal = plano === "PARTNER_HE";
+    // Gold/Diamante (oferta única, lib/oferta-trial.ts): mensais, mas o cadastro NÃO gera cobrança.
+    // São 30 dias grátis a partir da aprovação; a 1ª mensalidade sai pelo cron assinaturas-vencendo.
+    const trialOferta = plano === "GOLD" || plano === "DIAMANTE";
+    const isMensal = plano === "PARTNER_HE" || trialOferta;
     const planoRecorrencia = isMensal
       ? "MENSAL"
       : planoRecorrenciaRaw === "ANUAL_CARTAO" ? "ANUAL_CARTAO" : "ANUAL_PIX_BOLETO";
@@ -108,7 +111,7 @@ export async function POST(req: NextRequest) {
     if (!plano || !tipoPessoa || !email || !telefone) {
       return NextResponse.json({ error: "Campos obrigatórios faltando" }, { status: 400 });
     }
-    if (!["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"].includes(plano)) {
+    if (!["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"].includes(plano)) {
       return NextResponse.json({ error: "Plano inválido" }, { status: 400 });
     }
     if (!["PF", "PJ"].includes(tipoPessoa)) {
@@ -240,7 +243,7 @@ export async function POST(req: NextRequest) {
 
     // Cartão recorrente (InfinitePay) é configurado manualmente pelo admin na
     // aprovação — não gera cobrança Cora nesse caso.
-    const cora = planoRecorrencia === "ANUAL_CARTAO"
+    const cora = planoRecorrencia === "ANUAL_CARTAO" || trialOferta
       ? {}
       : await gerarCobrancaCora({ regId, plano, nome, documento, email, valor: valorFinal });
 
@@ -261,7 +264,7 @@ export async function POST(req: NextRequest) {
 
     // Envia e-mail com dados de pagamento (#6) — não se aplica ao cartão recorrente
     // (o link de assinatura é enviado à parte pelo admin após configurar no InfinitePay)
-    if (planoRecorrencia !== "ANUAL_CARTAO") try {
+    if (planoRecorrencia !== "ANUAL_CARTAO" && !trialOferta) try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
       const valorFmt = (valorFinal / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -323,6 +326,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       id: regId,
+      trial: trialOferta,
       cobranca: {
         invoiceId:    cora.invoiceId,
         pixEmv:       cora.pixEmv,

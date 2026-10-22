@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { cadastroStarterAntigo, rotuloStarter } from "@/lib/v3-access-rotulos";
+import { OFERTA } from "@/lib/oferta-trial";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -14,8 +15,8 @@ async function enviarBoasVindas(email: string, nome: string, plano: string, cart
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return; // sem chave, ignora silenciosamente
 
-  const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise" : plano === "PARTNER_PRO" ? "V3 Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : plano === "STARTER" ? rotuloStarter(starterAntigo) : "V3 Partner";
-  const comissao   = plano === "ENTERPRISE" ? "55%" : plano === "PARTNER_PRO" ? "50%" : plano === "PARTNER_HE" ? "50%" : plano === "STARTER" ? "20%" : "35%";
+  const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise" : plano === "PARTNER_PRO" ? "V3 Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : plano === "GOLD" ? "V3 Gold" : plano === "DIAMANTE" ? "V3 Diamante" : plano === "STARTER" ? rotuloStarter(starterAntigo) : "V3 Partner";
+  const comissao   = plano === "ENTERPRISE" ? "55%" : plano === "PARTNER_PRO" ? "50%" : plano === "PARTNER_HE" ? "50%" : plano === "GOLD" ? "25%" : plano === "DIAMANTE" ? "40%" : plano === "STARTER" ? "20%" : "35%";
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -37,6 +38,13 @@ async function enviarBoasVindas(email: string, nome: string, plano: string, cart
         Seu cadastro como <strong style="color:#C9A84C;">${planoLabel}</strong> foi aprovado.
         Você já pode acessar a plataforma e começar a gerar operações com até <strong style="color:#C9A84C;">${comissao}</strong> de comissionamento.
       </p>
+      ${plano === "GOLD" || plano === "DIAMANTE" ? `
+      <div style="background:#C9A84C10;border:1px solid #C9A84C35;border-radius:12px;padding:16px;margin:0 0 24px;">
+        <p style="font-size:13px;color:#F0ECE4;margin:0;line-height:1.6;">
+          <strong style="color:#C9A84C;">Seus ${OFERTA.trialDias} dias grátis começam hoje.</strong> Depois, a mensalidade é de
+          <strong style="color:#C9A84C;">${plano === "GOLD" ? "R$ 397" : "R$ 897"}/mês</strong>, sem fidelidade: você pode interromper quando quiser.
+        </p>
+      </div>` : ""}
 
       <!-- Credenciais -->
       <div style="background:#0A1628;border:1px solid #243A66;border-radius:12px;padding:20px;margin-bottom:24px;">
@@ -158,7 +166,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ─── APROVAR: criar usuário no Supabase Auth + profile ───────────────────
-  const planoRole = reg.plano === "ENTERPRISE" ? "ENTERPRISE" : reg.plano === "PARTNER_PRO" ? "PARTNER_PRO" : reg.plano === "PARTNER_HE" ? "PARTNER_HE" : reg.plano === "STARTER" ? "STARTER" : "PARTNER";
+  const planoRole = reg.plano === "ENTERPRISE" ? "ENTERPRISE" : reg.plano === "PARTNER_PRO" ? "PARTNER_PRO" : reg.plano === "PARTNER_HE" ? "PARTNER_HE" : reg.plano === "GOLD" ? "GOLD" : reg.plano === "DIAMANTE" ? "DIAMANTE" : reg.plano === "STARTER" ? "STARTER" : "PARTNER";
   const email     = reg.email;
   const nome      = reg.nome_completo ?? reg.razao_social ?? "Parceiro";
 
@@ -192,6 +200,9 @@ export async function POST(req: NextRequest) {
       // à vista, ou brigando com a cobrança recorrente que o InfinitePay já
       // está fazendo por fora pra quem escolheu cartão.
       const compromissoDe12Meses = reg.plano_recorrencia === "ANUAL_PIX_BOLETO" || reg.plano_recorrencia === "ANUAL_CARTAO";
+      // Gold/Diamante (oferta única): 30 dias grátis a partir da aprovação. No vencimento o cron gera
+      // a mensalidade (D-5) e, se não for paga, o SubscriptionGuard trava o acesso: sem fidelidade.
+      const trialOferta = planoRole === "GOLD" || planoRole === "DIAMANTE";
       await svc.from("profiles").upsert({
         id:         newUser.user.id,
         full_name:  nome,
@@ -200,6 +211,7 @@ export async function POST(req: NextRequest) {
         kyc_status: "APROVADO",
         updated_at: new Date().toISOString(),
         ...(compromissoDe12Meses ? { trial_expires_at: new Date(Date.now() + 365 * 86400000).toISOString() } : {}),
+        ...(trialOferta ? { trial_expires_at: new Date(Date.now() + OFERTA.trialDias * 86400000).toISOString() } : {}),
         ...(reg.referred_by_partner_id ? { referred_by_partner_id: reg.referred_by_partner_id } : {}),
       }, { onConflict: "id" });
     }

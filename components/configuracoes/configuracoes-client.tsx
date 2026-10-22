@@ -48,7 +48,7 @@ interface Props {
 
 type Tab = "captacao" | "notificacoes" | "sistema" | "integracoes" | "cobranding" | "regras-credito" | "portfolio" | "comissoes-config";
 
-const IS_PARTNER = (role: string) => ["PARTNER", "PARTNER_PRO", "ADMIN", "GESTAO"].includes(role);
+const IS_PARTNER = (role: string) => ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ADMIN", "GESTAO"].includes(role);
 const IS_ADMIN   = (role: string) => ["ADMIN", "GESTAO"].includes(role);
 const IS_ADMIN_ONLY = (role: string) => role === "ADMIN";
 const IS_FINANCEIRO = (role: string) => ["ADMIN", "GESTAO", "FINANCEIRO"].includes(role);

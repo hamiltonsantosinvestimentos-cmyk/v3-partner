@@ -7,7 +7,7 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const ALLOWED_ROLES = ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "MESA_OPERACIONAL"];
+const ALLOWED_ROLES = ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "MESA_OPERACIONAL"];
 
 // GET — lista links do partner autenticado
 export async function GET() {

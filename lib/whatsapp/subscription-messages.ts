@@ -43,6 +43,8 @@ export async function resolvePartnerPhone(db: SupabaseClient, partnerId: string)
 
 export function planoLabel(plano: string): string {
   return plano === "PARTNER_PRO" ? "Partner PRO"
+    : plano === "GOLD" ? "V3 Gold"
+    : plano === "DIAMANTE" ? "V3 Diamante"
     : plano === "STARTER" ? "Starter"
     : plano === "ENTERPRISE" ? "Enterprise"
     : "Partner";

@@ -36,7 +36,7 @@ export function OnboardingBanner({ role, hasFullName }: OnboardingBannerProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!["PARTNER", "PARTNER_PRO"].includes(role)) {
+    if (!["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(role)) {
       setLoading(false);
       return;
     }
@@ -55,7 +55,7 @@ export function OnboardingBanner({ role, hasFullName }: OnboardingBannerProps) {
       .catch(() => setLoading(false));
   }, [role]);
 
-  if (!["PARTNER", "PARTNER_PRO"].includes(role) || hidden || loading) return null;
+  if (!["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(role) || hidden || loading) return null;
 
   const steps: StepData[] = [
     {

@@ -61,7 +61,7 @@ async function gerarProximaCobranca(db: ReturnType<typeof svc>, partnerId: strin
           fine: { type: "PERCENTAGE", value: 2 },
         },
         payment_forms: ["BANK_SLIP", "PIX"],
-        services: [{ name: `V3 Partners — Mensalidade ${plano === "PARTNER_PRO" ? "Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : "Partner"}${temDesconto ? ` (${descontoPercent}% desc. indicação)` : ""}`, amount: valor }],
+        services: [{ name: `V3 Partners — Mensalidade ${plano === "PARTNER_PRO" ? "Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : plano === "GOLD" ? "V3 Gold" : plano === "DIAMANTE" ? "V3 Diamante" : "Partner"}${temDesconto ? ` (${descontoPercent}% desc. indicação)` : ""}`, amount: valor }],
         notifications: { formats: ["EMAIL"], by_email: { should_notify: true } },
       }),
       idempotencyKey: randomUUID(),
@@ -226,8 +226,22 @@ export async function POST(req: NextRequest) {
         read: false,
       }).then(null, () => {});
 
-      // Gera cobrança do mês seguinte automaticamente (#8)
-      await gerarProximaCobranca(db, sub.partner_id, sub.plano);
+      // Gold/Diamante (oferta única, sem fidelidade): o acesso vale até trial_expires_at, que o
+      // SubscriptionGuard usa para travar e o cron assinaturas-vencendo usa para cobrar no D-5.
+      // Pagou: estende 1 mês a partir do vencimento (ou de hoje, se pagou depois de vencer). A
+      // próxima fatura fica com o cron; não gera aqui para não cobrar em dobro.
+      const { data: perfilPlano } = await db.from("profiles")
+        .select("role, trial_expires_at").eq("id", sub.partner_id).single();
+      const roleOferta = (perfilPlano as { role?: string } | null)?.role;
+      if (roleOferta === "GOLD" || roleOferta === "DIAMANTE") {
+        const atual = (perfilPlano as { trial_expires_at?: string | null }).trial_expires_at;
+        const base = new Date(Math.max(atual ? new Date(atual).getTime() : 0, Date.now()));
+        base.setMonth(base.getMonth() + 1);
+        await db.from("profiles").update({ trial_expires_at: base.toISOString() }).eq("id", sub.partner_id);
+      } else {
+        // Gera cobrança do mês seguinte automaticamente (#8)
+        await gerarProximaCobranca(db, sub.partner_id, sub.plano);
+      }
     }
 
     // 3. Pagamento de serviço vendido por partner (partner_service_orders)

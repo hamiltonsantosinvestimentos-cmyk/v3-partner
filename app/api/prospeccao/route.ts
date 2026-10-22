@@ -56,7 +56,7 @@ export async function GET() {
   const { data: partners } = await db
     .from("profiles")
     .select("id, full_name, email")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
     .order("full_name")
     .limit(1000);
 

@@ -34,7 +34,7 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   ncnda_ma: "NCNDA Mesa M&A",
 };
 
-const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "STARTER", "ENTERPRISE"];
 
 // "Cadastrar outros parceiros" (pedido de Joao, 13/08/2026): o Partner que originou o ativo
 // ou o comprador pode indicar finder/intermediario/mandatario do proprio card, mas nunca

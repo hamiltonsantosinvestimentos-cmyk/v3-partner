@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
   const { data: partners, error } = await svc()
     .from("profiles")
     .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
     .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
     .order("created_at", { ascending: false });
 
@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
     const { data: partnersFallback } = await svc()
       .from("profiles")
       .select("id, full_name, email, role, created_at, is_active, trial_expires_at")
-      .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+      .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
     .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
       .order("created_at", { ascending: false });
     finalPartners = partnersFallback;

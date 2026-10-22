@@ -6,7 +6,7 @@ import Image from "next/image";
 import {
   User, Building2, CheckCircle2, ChevronRight, ChevronLeft,
   Upload, X, Star, Zap, Shield, ArrowRight, Phone,
-  MapPin, FileText, Loader2, Home,
+  MapPin, FileText, Loader2, Home, Crown, Gem,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -26,13 +26,15 @@ function fmtCEP(v: string) {
   return v.replace(/\D/g, "").replace(/(\d{5})(\d{3})/, "$1-$2");
 }
 
-type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "PARTNER_HE" | "ENTERPRISE";
+type Plano = "STARTER" | "PARTNER" | "PARTNER_PRO" | "GOLD" | "DIAMANTE" | "PARTNER_HE" | "ENTERPRISE";
 type TipoPessoa = "PF" | "PJ";
 type Step = 1 | 2 | 3 | 4 | 5;
 type PlanoRecorrencia = "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
 
 const PLANOS: Array<{
   id: Plano; nome: string; mensal: boolean; preco: string; periodo: string; precoAnual: string;
+  // Oferta única (lib/oferta-trial.ts): 30 dias grátis, sem cobrança no cadastro.
+  trial?: boolean;
   parcelas?: number; cor: string; icone: React.ReactNode; comissao: string; destaque?: boolean;
   descricao: string; beneficios: string[];
 }> = [
@@ -76,6 +78,48 @@ const PLANOS: Array<{
       "Consórcio e Cartas Contempladas",
       "V3 IA Partner",
       "Ranking e Metas",
+    ],
+  },
+  // Oferta única (22/10/2026): Gold e Diamante, só pelos links /cadastro-partner-gold e
+  // /cadastro-partner-diamante. Sem pagamento no cadastro: 30 dias grátis a partir da aprovação.
+  {
+    id: "GOLD" as Plano,
+    nome: "V3 Gold",
+    mensal: true,
+    trial: true,
+    preco: "R$ 397,00",
+    periodo: "/mês",
+    precoAnual: "R$ 397,00",
+    cor: "#E8C97A",
+    icone: <Crown className="w-6 h-6" />,
+    comissao: "25%",
+    descricao: "30 dias grátis com toda a estrutura da V3. Depois, R$ 397/mês sem fidelidade.",
+    beneficios: [
+      "30 dias grátis, sem cartão",
+      "Toda a estrutura da V3: Mesa de Crédito N1, N2 e N3",
+      "25% de comissionamento por operação liberada",
+      "CRM, simuladores, M&A, Academy e V3 IA",
+      "Sem fidelidade: interrompa quando quiser",
+    ],
+  },
+  {
+    id: "DIAMANTE" as Plano,
+    nome: "V3 Diamante",
+    mensal: true,
+    trial: true,
+    preco: "R$ 897,00",
+    periodo: "/mês",
+    precoAnual: "R$ 897,00",
+    cor: "#F0ECE4",
+    icone: <Gem className="w-6 h-6" />,
+    comissao: "40%",
+    descricao: "30 dias grátis com toda a estrutura da V3. Depois, R$ 897/mês sem fidelidade.",
+    beneficios: [
+      "30 dias grátis, sem cartão",
+      "Toda a estrutura da V3: Mesa de Crédito N1, N2 e N3",
+      "40% de comissionamento por operação liberada",
+      "CRM, simuladores, M&A, Academy e V3 IA",
+      "Sem fidelidade: interrompa quando quiser",
     ],
   },
   {
@@ -411,7 +455,7 @@ export function CadastroPartnerForm({ forcePlano }: { forcePlano?: Plano }) {
       const res = await fetch("/api/cadastro-partner", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erro ao enviar");
-      if (data.cobranca) setCobranca(data.cobranca);
+      if (data.cobranca && !data.trial) setCobranca(data.cobranca);
       setSucesso(true);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Erro desconhecido");
@@ -421,6 +465,42 @@ export function CadastroPartnerForm({ forcePlano }: { forcePlano?: Plano }) {
   };
 
   // ─── Sucesso ──────────────────────────────────────────────────────────────
+  // Gold/Diamante (oferta única): sem cobrança, só a confirmação e os próximos passos.
+  const planoTrial = PLANOS.find((p) => p.id === plano && p.trial) ?? null;
+  if (sucesso && planoTrial) {
+    return (
+      <div className="min-h-screen bg-[#09081A] py-8 px-4">
+        <div className="max-w-lg w-full mx-auto space-y-6">
+          <div className="text-center space-y-3">
+            <div className="w-16 h-16 rounded-full bg-[#C9A84C]/20 border-2 border-[#C9A84C] flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-8 h-8 text-[#C9A84C]" />
+            </div>
+            <h1 className="text-2xl font-bold text-[#F0ECE4]">Cadastro Recebido!</h1>
+            <p className="text-[#7A8FA8] text-sm">
+              Seu cadastro no plano <strong className="text-[#C9A84C]">{planoTrial.nome}</strong> foi enviado. <strong className="text-[#F0ECE4]">Nenhum pagamento agora</strong>: seus 30 dias grátis começam na aprovação.
+            </p>
+          </div>
+          <div className="bg-[#111F35] border border-[#243A66] rounded-xl p-4 space-y-2">
+            <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wide mb-3">Próximos passos</p>
+            {[
+              "Nossa equipe analisa sua documentação (1 a 2 dias úteis)",
+              "Acesso liberado e credenciais enviadas por e-mail: começam os 30 dias grátis",
+              "Suba suas propostas com toda a estrutura da V3",
+              `No fim dos 30 dias, mensalidade de ${planoTrial.preco}, ou interrompa sem custo`,
+            ].map((s, i) => (
+              <div key={i} className="flex items-center gap-2 text-xs text-[#7A8FA8]">
+                <div className="w-5 h-5 rounded-full bg-[#C9A84C]/20 text-[#C9A84C] text-[10px] font-bold flex items-center justify-center flex-shrink-0">{i + 1}</div>
+                {s}
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-xs text-[#7A8FA8]">
+            Dúvidas? <strong className="text-[#F0ECE4]">contato@v3partners.com.br</strong>
+          </p>
+        </div>
+      </div>
+    );
+  }
   if (sucesso) {
     const planoInfo = PLANOS.find((p) => p.id === plano);
     const valorFmt = cobranca?.valor
@@ -620,7 +700,12 @@ export function CadastroPartnerForm({ forcePlano }: { forcePlano?: Plano }) {
                         </div>
                         <h3 className="font-bold text-[#F0ECE4] text-base">{p.nome}</h3>
                         <p className="text-xs text-[#7A8FA8] mt-1 mb-3">{p.descricao}</p>
-                        {p.mensal ? (
+                        {p.trial ? (
+                          <div className="mb-3">
+                            <span className="text-2xl font-bold text-[#C9A84C]">30 dias grátis</span>
+                            <p className="text-[11px] text-[#7A8FA8] mt-0.5">depois {p.preco}/mês, sem fidelidade</p>
+                          </div>
+                        ) : p.mensal ? (
                           <div className="flex items-baseline gap-1 mb-3">
                             <span className="text-2xl font-bold text-[#C9A84C]">{p.preco}</span>
                             <span className="text-xs text-[#7A8FA8]">/mês</span>
@@ -653,7 +738,7 @@ export function CadastroPartnerForm({ forcePlano }: { forcePlano?: Plano }) {
                 <p className="text-sm text-[#7A8FA8] mt-1">Selecione o plano que melhor se adapta ao seu perfil</p>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                {PLANOS.filter((p) => p.id !== "PARTNER_HE" && p.id !== "STARTER").map((p) => (
+                {PLANOS.filter((p) => p.id !== "PARTNER_HE" && p.id !== "STARTER" && !p.trial).map((p) => (
                   <button
                     key={p.id}
                     onClick={() => setPlano(p.id)}
@@ -731,7 +816,11 @@ export function CadastroPartnerForm({ forcePlano }: { forcePlano?: Plano }) {
               {/* Forma de pagamento */}
               <div className="pt-2">
                 <h3 className="text-sm font-bold text-[#F0ECE4]">Forma de pagamento</h3>
-                {PLANOS.find((pl) => pl.id === plano)?.mensal ? (
+                {PLANOS.find((pl) => pl.id === plano)?.trial ? (
+                  <p className="text-xs text-[#7A8FA8] mt-1">
+                    <strong className="text-[#F0ECE4]">Nenhum pagamento agora.</strong> Os 30 dias grátis começam quando seu cadastro for aprovado. Depois, a mensalidade é de <strong className="text-[#F0ECE4]">{PLANOS.find((pl) => pl.id === plano)?.preco}/mês</strong> via Pix ou Boleto, sem fidelidade: você pode interromper quando quiser.
+                  </p>
+                ) : PLANOS.find((pl) => pl.id === plano)?.mensal ? (
                   <p className="text-xs text-[#7A8FA8] mt-1">
                     Plano mensal de <strong className="text-[#F0ECE4]">R$ 97,00/mês</strong> via Pix ou Boleto. A primeira mensalidade é gerada agora; as seguintes vencem todo mês, sem fidelidade.
                   </p>
@@ -1021,7 +1110,9 @@ export function CadastroPartnerForm({ forcePlano }: { forcePlano?: Plano }) {
                 {[
                   ["Plano", PLANOS.find((p) => p.id === plano)
                     ? `${PLANOS.find((p) => p.id === plano)!.nome} — ${
-                        PLANOS.find((p) => p.id === plano)!.mensal
+                        PLANOS.find((p) => p.id === plano)!.trial
+                          ? `30 dias grátis, depois ${PLANOS.find((p) => p.id === plano)!.preco}/mês`
+                          : PLANOS.find((p) => p.id === plano)!.mensal
                           ? `${PLANOS.find((p) => p.id === plano)!.preco}/mês`
                           : planoRecorrencia === "ANUAL_PIX_BOLETO"
                           ? `${PLANOS.find((p) => p.id === plano)!.precoAnual}/ano à vista`

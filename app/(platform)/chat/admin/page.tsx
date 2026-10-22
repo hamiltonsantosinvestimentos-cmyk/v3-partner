@@ -48,7 +48,7 @@ export default async function ChatAdminPage({ searchParams }: PageProps) {
   const { data: partners } = await db
     .from("profiles")
     .select("id, full_name, role")
-    .in("role", ["PARTNER", "PARTNER_PRO"])
+    .in("role", ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"])
     .order("full_name", { ascending: true });
 
   const partnerRooms: ChatRoom[] = await Promise.all(

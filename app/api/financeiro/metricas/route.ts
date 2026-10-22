@@ -28,7 +28,7 @@ export async function GET() {
   const { data: allPartners } = await db
     .from("profiles")
     .select("id, full_name, email, role, is_active, trial_expires_at, created_at")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
     .is("enterprise_id", null) // usuário de Enterprise não tem assinatura própria
     .order("created_at", { ascending: true });
 

@@ -176,7 +176,7 @@ export default async function DashboardPage({
   if (["ADMIN", "GESTAO", "FINANCEIRO"].includes(role)) {
     try {
       const [partnersRes, comissoesRes] = await Promise.allSettled([
-        svc.from("profiles").select("id, role, trial_expires_at, created_at, is_active").in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "PARTNER_HE", "ENTERPRISE"]).is("enterprise_id", null),
+        svc.from("profiles").select("id, role, trial_expires_at, created_at, is_active").in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"]).is("enterprise_id", null),
         svc.from("commissions").select("commission_value, status").eq("status", "A_PAGAR"),
       ]);
 
@@ -184,7 +184,7 @@ export default async function DashboardPage({
       const comissoes = comissoesRes.status === "fulfilled" ? (comissoesRes.value.data ?? []) : [];
 
       // Preços contratados reais por partner (partner_subscriptions)
-      const PLANO_PADRAO: Record<string, number> = { STARTER: 297, PARTNER: 497, PARTNER_PRO: 897, ENTERPRISE: 2500 };
+      const PLANO_PADRAO: Record<string, number> = { STARTER: 297, PARTNER: 497, PARTNER_PRO: 897, GOLD: 397, DIAMANTE: 897, ENTERPRISE: 2500 };
       const subMapDash: Record<string, number> = {};
       try {
         const partnerIds = partners.map((p: { id: string }) => p.id);
@@ -400,7 +400,7 @@ export default async function DashboardPage({
 
   // Benchmark de Performance — para partners, calcula médias da plataforma
   let benchmarkData: Parameters<typeof DashboardClient>[0]["benchmarkData"] = null;
-  if (!isAdmin && ["PARTNER", "PARTNER_PRO", "PARTNER_HE"].includes(role)) {
+  if (!isAdmin && ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE"].includes(role)) {
     try {
       const [allDealsRes, allLeadsRes, allComissRes] = await Promise.allSettled([
         // Todos os deals de todos os partners no mês atual

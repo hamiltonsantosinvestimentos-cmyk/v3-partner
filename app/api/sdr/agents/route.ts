@@ -6,7 +6,7 @@ import { encryptSecret, secretHint } from "@/lib/crypto/secret";
 import { AI_MODELS, isValidModel, type AiProvider } from "@/lib/ai/registry";
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO"];
-const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"];
+const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"];
 const SDR_INTERNO_OWNER = "00000000-0000-0000-0000-000000000000";
 
 function svc() {

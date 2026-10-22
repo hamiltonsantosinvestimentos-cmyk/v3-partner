@@ -435,7 +435,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         if (!Array.isArray(data)) return;
         setPartners(
           data
-            .filter(u => ["PARTNER", "PARTNER_PRO", "ADMIN", "GESTAO"].includes(u.role))
+            .filter(u => ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ADMIN", "GESTAO"].includes(u.role))
             .map(u => ({ id: u.id, name: u.full_name ?? u.id, role: u.role }))
         );
       })

@@ -12,7 +12,7 @@ const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 // Partner originador (originator_profile_id) so ve os proprios ativos -- achado 13/08/2026:
 // esta rota nunca liberou leitura pra Partner nenhum, mesmo tabela ja tendo originator_profile_id
 // desde 07/07 (espelha ma_deals). Mesmo padrao ja usado em GET /api/cm/investor-demands.
-const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "STARTER", "ENTERPRISE"];
 
 async function getCallerRole(req: NextRequest) {
   const supabase = await createClient();

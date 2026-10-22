@@ -64,6 +64,8 @@ const PLANO_LABEL: Record<string, string> = {
   STARTER: "Starter",
   PARTNER: "Partner",
   PARTNER_HE: "Partner HE",
+  GOLD: "V3 Gold",
+  DIAMANTE: "V3 Diamante",
   PARTNER_PRO: "Partner PRO",
   ENTERPRISE: "Enterprise",
 };
@@ -72,6 +74,8 @@ const COMISSAO_PCT: Record<string, string> = {
   STARTER: "20%",
   PARTNER: "35%",
   PARTNER_HE: "50%",
+  GOLD: "25%",
+  DIAMANTE: "40%",
   PARTNER_PRO: "50%",
   ENTERPRISE: "55%",
 };

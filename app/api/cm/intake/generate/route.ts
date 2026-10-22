@@ -29,7 +29,7 @@ const INTERNAL_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 // nunca grava direto em cm_asset_listings). Partner so pode criar um link
 // NOVO para si mesmo, nunca reutilizar/gerar link de um listing_id existente
 // (esse branch fica restrito a role interna, ver abaixo).
-const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "STARTER", "ENTERPRISE"];
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

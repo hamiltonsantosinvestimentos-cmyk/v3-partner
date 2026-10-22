@@ -15,7 +15,7 @@ import { EnviarContratoParceria } from "./enviar-contrato-parceria";
 
 interface Registration {
   id: string;
-  plano: "STARTER" | "PARTNER" | "PARTNER_PRO" | "PARTNER_HE" | "ENTERPRISE";
+  plano: "STARTER" | "PARTNER" | "PARTNER_PRO" | "GOLD" | "DIAMANTE" | "PARTNER_HE" | "ENTERPRISE";
   tipo_pessoa: "PF" | "PJ";
   email: string;
   telefone: string;
@@ -177,11 +177,14 @@ function ModalDetalhe({
                   : reg.plano === "PARTNER" ? "V3 Partner — R$ 497/mês"
                   : reg.plano === "PARTNER_PRO" ? "V3 Partner PRO — R$ 897/mês"
                   : reg.plano === "PARTNER_HE" ? "Partner HE — R$ 97/mês"
+                  : reg.plano === "GOLD" ? "V3 Gold — 30 dias grátis, depois R$ 397/mês"
+                  : reg.plano === "DIAMANTE" ? "V3 Diamante — 30 dias grátis, depois R$ 897/mês"
                   : "V3 Enterprise — R$ 2.500+/mês"}
               </p>
               <p className="text-[11px] text-muted-foreground mt-0.5">
                 {reg.plano_recorrencia === "ANUAL_PIX_BOLETO" ? "Anual à vista via Pix/Boleto (10% off)"
                   : reg.plano_recorrencia === "ANUAL_CARTAO" ? (reg.plano === "STARTER" ? "Anual em até 10x no cartão" : "Anual em até 12x no cartão")
+                  : reg.plano === "GOLD" || reg.plano === "DIAMANTE" ? "Trial de 30 dias sem pagamento; depois mensal, sem fidelidade"
                   : "Mensal, sem fidelidade (legado)"}
               </p>
             </div>
@@ -610,9 +613,10 @@ export function AdminCadastrosClient({
                     "text-[9px] font-bold px-1.5 py-0.5 rounded",
                     reg.plano === "PARTNER_PRO" ? "bg-[#E8C97A]/20 text-[#E8C97A]"
                       : reg.plano === "PARTNER_HE" ? "bg-[#A3E635]/20 text-[#A3E635]"
+                      : reg.plano === "DIAMANTE" ? "bg-[#F0ECE4]/15 text-[#F0ECE4]"
                       : "bg-[#C9A84C]/20 text-[#C9A84C]"
                   )}>
-                    {reg.plano === "PARTNER_PRO" ? "PRO" : reg.plano === "PARTNER_HE" ? "HE" : "PARTNER"}
+                    {reg.plano === "PARTNER_PRO" ? "PRO" : reg.plano === "PARTNER_HE" ? "HE" : reg.plano === "GOLD" ? "GOLD" : reg.plano === "DIAMANTE" ? "DIAMANTE" : "PARTNER"}
                   </span>
                   <PagamentoBadge status={reg.cora_invoice_status} />
                 </div>

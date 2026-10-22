@@ -96,6 +96,8 @@ const PLANO_LABEL_CADASTRO: Record<string, string> = {
   PARTNER: "V3 Partner",
   PARTNER_PRO: "V3 Partner PRO",
   PARTNER_HE: "Partner HE",
+  GOLD: "V3 Gold (30 dias grátis)",
+  DIAMANTE: "V3 Diamante (30 dias grátis)",
   ENTERPRISE: "V3 Enterprise",
 };
 

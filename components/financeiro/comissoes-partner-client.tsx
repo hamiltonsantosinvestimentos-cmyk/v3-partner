@@ -187,7 +187,7 @@ export function ComissoesPartnerClient({ partnerId, partnerName, role, taxPercen
   const MKT_PAGE_SIZE = 5;
 
   const isAdmin = ["ADMIN", "GESTAO", "FINANCEIRO"].includes(role);
-  const isPartner = ["PARTNER", "PARTNER_PRO"].includes(role);
+  const isPartner = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"].includes(role);
 
   // ── Nova comissão ──
   const [modalAberto, setModalAberto] = useState(false);

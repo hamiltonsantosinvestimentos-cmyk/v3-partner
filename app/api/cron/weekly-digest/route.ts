@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   const { data: partners } = await supabase
     .from("profiles")
     .select("id, full_name, email, role")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"])
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
     .eq("is_active", true);
 
   if (!partners?.length) return NextResponse.json({ ok: true, sent: 0 });

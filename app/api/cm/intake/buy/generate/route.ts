@@ -20,7 +20,7 @@ const INTERNAL_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 // CRM (17/09/2026, mesmo BRIEF do fix de /api/cm/intake/generate): partner
 // usa o CRM pra converter os proprios leads em Bolsa de Ativos tambem, entao
 // esta rota precisa aceitar partner do mesmo jeito, sempre auto-atribuindo.
-const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "STARTER", "ENTERPRISE"];
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

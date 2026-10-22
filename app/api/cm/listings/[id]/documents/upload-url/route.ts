@@ -16,7 +16,7 @@ function sanitizeAscii(name: string): string {
 }
 
 const ALLOWED_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
-const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "STARTER", "ENTERPRISE"];
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "STARTER", "ENTERPRISE"];
 
 // GET — gera signed upload URL para upload direto do browser ao Supabase Storage.
 // Contorna o limite de body do Vercel serverless (~4.5MB) para documentos grandes

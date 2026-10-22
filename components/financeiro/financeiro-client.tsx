@@ -3022,7 +3022,7 @@ function AssinaturasTab() {
   }
 
   // Preço efetivo por partner: usa amount_cents da última cobrança Cora (preço contratado) ou fallback do plano
-  const PLANO_PADRAO: Record<string, number> = { STARTER: 297, PARTNER: 497, PARTNER_PRO: 897, ENTERPRISE: 2500 };
+  const PLANO_PADRAO: Record<string, number> = { STARTER: 297, PARTNER: 497, PARTNER_PRO: 897, GOLD: 397, DIAMANTE: 897, ENTERPRISE: 2500 };
   function getValorPartner(p: PartnerRow): number {
     const sub = coraByPartner[p.id];
     if (sub?.amount_cents && sub.amount_cents > 0) return sub.amount_cents / 100;
@@ -3030,7 +3030,7 @@ function AssinaturasTab() {
   }
 
   // KPIs
-  const ROLES_PAGANTES = ["STARTER", "PARTNER", "PARTNER_PRO", "ENTERPRISE"];
+  const ROLES_PAGANTES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"];
   const totalPartners = partners.filter(p => ROLES_PAGANTES.includes(p.role)).length;
   const totalPRO = partners.filter(p => p.role === "PARTNER_PRO").length;
   const ativos = partners.filter(p => {
