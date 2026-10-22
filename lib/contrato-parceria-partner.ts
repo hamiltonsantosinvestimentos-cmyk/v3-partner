@@ -7,23 +7,48 @@
 // v2.2", série V3C-PAR, vertical clientes. O texto da minuta usa marcadores
 // entre colchetes ([razão social], [CPF], [plano]...), não {{variáveis}}; eles
 // são preenchidos aqui, sem tocar nas cláusulas.
+//
+// Gold/Diamante (22/10/2026): o mesmo botão envia, só para os planos GOLD e
+// DIAMANTE, a minuta própria deles ("Contrato de Prestação de Serviços,
+// Mentoria + Licença de Uso da Plataforma V3, Planos V3 Gold e V3 Diamante").
+// Cada família de plano só aceita a sua minuta (familiaDoPlano).
 
 export const PARCERIA_TEMPLATE_MARCA = "licenciamento partner / partner pro / enterprise";
+export const OFERTA_TEMPLATE_MARCA = "planos v3 gold e v3 diamante";
 
-export const PLANOS_CONTRATO_PARCERIA = ["PARTNER", "PARTNER_PRO", "ENTERPRISE"] as const;
+export const PLANOS_CONTRATO_PARCERIA = ["PARTNER", "PARTNER_PRO", "ENTERPRISE", "GOLD", "DIAMANTE"] as const;
 export type PlanoContratoParceria = (typeof PLANOS_CONTRATO_PARCERIA)[number];
 
 export const PLANO_LABEL: Record<PlanoContratoParceria, string> = {
   PARTNER: "Partner",
   PARTNER_PRO: "Partner PRO",
   ENTERPRISE: "Enterprise",
+  GOLD: "V3 Gold",
+  DIAMANTE: "V3 Diamante",
 };
 
-// Anuidade de cada plano (Anexo III da minuta), impressa no item 3.1.
-export const PLANO_ANUIDADE: Record<PlanoContratoParceria, string> = {
+// Anuidade de cada plano (Anexo III da minuta v2.3), impressa no item 3.1.
+export const PLANO_ANUIDADE: Partial<Record<PlanoContratoParceria, string>> = {
   PARTNER: "R$ 10.897,00",
   PARTNER_PRO: "R$ 15.897,00",
   ENTERPRISE: "R$ 49.897,00",
+};
+
+// Gold/Diamante: mensalidade e comissão (item 3.2 da minuta deles), impressas no item 3.1.
+const PLANO_MENSAL: Partial<Record<PlanoContratoParceria, { mensalidade: string; comissao: string }>> = {
+  GOLD: { mensalidade: "R$ 397,00", comissao: "25%" },
+  DIAMANTE: { mensalidade: "R$ 897,00", comissao: "40%" },
+};
+
+export type FamiliaContrato = "parceria" | "oferta";
+
+export function familiaDoPlano(plano: PlanoContratoParceria): FamiliaContrato {
+  return plano === "GOLD" || plano === "DIAMANTE" ? "oferta" : "parceria";
+}
+
+export const TITULO_CONTRATO: Record<FamiliaContrato, string> = {
+  parceria: "Contrato de Parceria v2.3",
+  oferta: "Contrato V3 Gold / V3 Diamante",
 };
 
 // Representante legal da LICENCIANTE (contrato social, 1ª alteração).
@@ -38,11 +63,23 @@ export function isContratoParceriaTemplateName(name: string | null | undefined):
   return !!name && name.toLowerCase().includes(PARCERIA_TEMPLATE_MARCA);
 }
 
+export function isContratoOfertaTemplateName(name: string | null | undefined): boolean {
+  return !!name && name.toLowerCase().includes(OFERTA_TEMPLATE_MARCA);
+}
+
+/** Família da minuta (null = não é contrato de partner). */
+export function familiaDoTemplate(name: string | null | undefined): FamiliaContrato | null {
+  if (isContratoParceriaTemplateName(name)) return "parceria";
+  if (isContratoOfertaTemplateName(name)) return "oferta";
+  return null;
+}
+
 export type ParceriaTemplate = { id: string; template_name: string; approval_status?: string | null; version?: number | null; created_at?: string | null };
 
-/** Minuta ativa mais recente do Contrato de Parceria (aprovada primeiro). */
-export function pickContratoParceriaTemplate<T extends ParceriaTemplate>(templates: T[]): T | null {
-  const candidatas = templates.filter((t) => isContratoParceriaTemplateName(t.template_name));
+/** Minuta ativa mais recente da família do plano (aprovada primeiro). */
+export function pickContratoParceriaTemplate<T extends ParceriaTemplate>(templates: T[], plano: PlanoContratoParceria): T | null {
+  const familia = familiaDoPlano(plano);
+  const candidatas = templates.filter((t) => familiaDoTemplate(t.template_name) === familia);
   candidatas.sort((a, b) =>
     Number(b.approval_status === "aprovado") - Number(a.approval_status === "aprovado")
     || (b.created_at ?? "").localeCompare(a.created_at ?? ""));
@@ -79,6 +116,14 @@ export const CAMPOS_LICENCIADO: CampoLicenciado[] = [
   { key: "modulos", label: "Nº de módulos do Treinamento Técnico Avançado (Anexo II)", placeholder: "ex.: 12" },
   { key: "data_pagamento", label: "Data prevista de pagamento", tipo: "date" },
 ];
+
+// Gold/Diamante: sem Treinamento Técnico (nº de módulos) e sem data de
+// pagamento no 3.1 (a mensalidade vence a cada 30 dias depois do período grátis).
+export function camposDoPlano(plano: PlanoContratoParceria): CampoLicenciado[] {
+  return familiaDoPlano(plano) === "oferta"
+    ? CAMPOS_LICENCIADO.filter((c) => c.key !== "modulos" && c.key !== "data_pagamento")
+    : CAMPOS_LICENCIADO;
+}
 
 // O e-mail é o do cadastro (login do partner): não muda por aqui.
 export const CAMPOS_EDITAVEIS = CAMPOS_LICENCIADO.filter((c) => c.key !== "email").map((c) => c.key);
@@ -144,8 +189,8 @@ export function mesclarDados(base: DadosLicenciado, ajustes: unknown): DadosLice
   return out;
 }
 
-export function camposFaltantes(d: DadosLicenciado): CampoLicenciado[] {
-  return CAMPOS_LICENCIADO.filter((c) => !d[c.key].trim() || (c.key === "data_pagamento" && !dataBR(d.data_pagamento)));
+export function camposFaltantes(d: DadosLicenciado, plano: PlanoContratoParceria): CampoLicenciado[] {
+  return camposDoPlano(plano).filter((c) => !d[c.key].trim() || (c.key === "data_pagamento" && !dataBR(d.data_pagamento)));
 }
 
 /** "2026-10-25" → "25/10/2026" (null se não for uma data válida). */
@@ -187,6 +232,8 @@ export function preencherContratoParceria(minuta: string, plano: PlanoContratoPa
   const versao = html.match(/<p class="subtitle">[^<]*?v(\d+(?:\.\d+)*)/i)?.[1];
   html = html.replace(/<p class="subtitle">[^<]*<\/p>/i, versao ? `<p class="subtitle" style="text-align:center;font-weight:700;letter-spacing:.12em">VERSÃO ${versao}</p>` : "");
 
+  if (familiaDoPlano(plano) === "oferta") return preencherOferta(html, plano, d);
+
   const planoLabel = PLANO_LABEL[plano];
   html = trocar(html, "Licenciamento [PLANO]", `Licenciamento ${esc(planoLabel)}`);
   const pagamento = dataBR(d.data_pagamento);
@@ -196,11 +243,7 @@ export function preencherContratoParceria(minuta: string, plano: PlanoContratoPa
     "Plano contratado: [plano]",
     `Plano contratado: ${esc(planoLabel)}, anuidade de ${PLANO_ANUIDADE[plano]} (Anexo III). Data prevista de pagamento: ${pagamento}.`,
   );
-  html = trocar(
-    html,
-    "JOÃO LEMOS NETTO, CPF nº 078.678.257-97, RG nº [RG], e-mail [e-mail].",
-    `JOÃO LEMOS NETTO, CPF nº 078.678.257-97, RG nº ${LICENCIANTE_RG}, e-mail ${LICENCIANTE_EMAIL}.`,
-  );
+  html = trocarLicenciante(html);
   html = trocar(
     html,
     "[razão social], CNPJ/CPF nº [documento], com sede em [endereço], representado por [nome do representante], CPF nº [CPF], RG nº [RG], e-mail [e-mail], telefone [telefone].",
@@ -208,7 +251,37 @@ export function preencherContratoParceria(minuta: string, plano: PlanoContratoPa
   );
   html = trocar(html, "([nº] módulos)", `(${esc(d.modulos)} módulos)`);
 
-  const sobra = html.match(/\[(?:PLANO|plano|RG|e-mail|razão social|documento|endereço|nome do representante|CPF|telefone|nº)\]/);
-  if (sobra) throw new Error(`Marcador ${sobra[0]} ficou sem preencher no Contrato de Parceria.`);
+  return semMarcadores(html);
+}
+
+function semMarcadores(html: string): string {
+  const sobra = html.match(/\[(?:PLANO|plano|RG|e-mail|razão social(?: \/ nome)?|documento|endereço|nome do representante|CPF|telefone|nº)\]/);
+  if (sobra) throw new Error(`Marcador ${sobra[0]} ficou sem preencher no contrato.`);
   return html.trim();
+}
+
+function trocarLicenciante(html: string): string {
+  return trocar(
+    html,
+    "JOÃO LEMOS NETTO, CPF nº 078.678.257-97, RG nº [RG], e-mail [e-mail].",
+    `JOÃO LEMOS NETTO, CPF nº 078.678.257-97, RG nº ${LICENCIANTE_RG}, e-mail ${LICENCIANTE_EMAIL}.`,
+  );
+}
+
+// Minuta Gold/Diamante: CONTRATADA (V3) e CONTRATANTE (Partner).
+function preencherOferta(html: string, plano: PlanoContratoParceria, d: DadosLicenciado): string {
+  const mensal = PLANO_MENSAL[plano];
+  if (!mensal) throw new Error(`Plano ${plano} não usa a minuta Gold/Diamante.`);
+  html = trocar(
+    html,
+    "[plano].",
+    `${esc(PLANO_LABEL[plano])}, mensalidade de ${mensal.mensalidade}, comissão de ${mensal.comissao} do Resultado Líquido, após o período gratuito de 30 (trinta) dias (Cláusula 5).`,
+  );
+  html = trocarLicenciante(html);
+  html = trocar(
+    html,
+    "[razão social / nome], CNPJ/CPF nº [documento], com sede/domicílio em [endereço], representado por [nome do representante], CPF nº [CPF], RG nº [RG], e-mail [e-mail], telefone [telefone].",
+    `${esc(d.razao_social.toUpperCase())}, CNPJ/CPF nº ${esc(d.documento)}, com sede/domicílio em ${esc(d.endereco)}, representado por ${esc(d.representante.toUpperCase())}, CPF nº ${esc(d.cpf)}, RG nº ${esc(d.rg)}, e-mail ${esc(d.email)}, telefone ${esc(d.telefone)}.`,
+  );
+  return semMarcadores(html);
 }

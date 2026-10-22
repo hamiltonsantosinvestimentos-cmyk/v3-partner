@@ -5,13 +5,14 @@ import Link from "next/link";
 import { FileSignature, Loader2, Send, CheckCircle2, AlertTriangle, ExternalLink, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  CAMPOS_LICENCIADO, PLANO_LABEL, camposFaltantes, dadosDoCadastro, pickContratoParceriaTemplate,
+  PLANO_LABEL, TITULO_CONTRATO, camposDoPlano, camposFaltantes, dadosDoCadastro, familiaDoPlano, pickContratoParceriaTemplate,
   type CadastroParaContrato, type DadosLicenciado, type ParceriaTemplate, type PlanoContratoParceria,
 } from "@/lib/contrato-parceria-partner";
 
 // Botão "Enviar contrato" do cadastro aprovado (21/10/2026, pedido do
 // Hamilton): gera o Contrato de Parceria v2.2 com os dados do cadastro, envia
 // para assinatura no ClickSign e o contrato fica na Central de Contratos.
+// V3 Gold e V3 Diamante usam a minuta própria deles (lib/contrato-parceria-partner.ts).
 
 type Contrato = {
   id: string;
@@ -60,12 +61,14 @@ export function EnviarContratoParceria({
     carregarContratos();
     fetch("/api/contracts/templates?vertical=clientes")
       .then((r) => r.json())
-      .then((j) => setTemplate(pickContratoParceriaTemplate((j.templates ?? []) as ParceriaTemplate[])))
+      .then((j) => setTemplate(pickContratoParceriaTemplate((j.templates ?? []) as ParceriaTemplate[], plano)))
       .catch(() => setTemplate(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registrationId]);
 
-  const faltam = camposFaltantes(dados);
+  const familia = familiaDoPlano(plano);
+  const campos = camposDoPlano(plano);
+  const faltam = camposFaltantes(dados, plano);
   const faltamKeys = new Set(faltam.map((c) => c.key));
   const templateAprovado = template?.approval_status === "aprovado";
   const ativo = (contratos ?? []).find((c) => c.status_signature === "enviado" || c.status_signature === "assinado");
@@ -115,9 +118,9 @@ export function EnviarContratoParceria({
         <div className="flex items-start gap-2">
           <FileSignature className="w-4 h-4 text-[#C9A84C] mt-0.5" />
           <div>
-            <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wide">Contrato de Parceria v2.2</p>
+            <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wide">{TITULO_CONTRATO[familia]}</p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Licenciamento {PLANO_LABEL[plano]}. Sai com os dados do cadastro, vai para assinatura no ClickSign e fica na Central de Contratos.
+              {familia === "oferta" ? `Plano ${PLANO_LABEL[plano]}, mentoria + plataforma, sem fidelidade` : `Licenciamento ${PLANO_LABEL[plano]}`}. Sai com os dados do cadastro, vai para assinatura no ClickSign e fica na Central de Contratos.
             </p>
           </div>
         </div>
@@ -134,7 +137,7 @@ export function EnviarContratoParceria({
       </div>
 
       {template === null && (
-        <p className="text-[11px] text-amber-400">Minuta do Contrato de Parceria v2.2 não encontrada (ou inativa) na Central de Contratos.</p>
+        <p className="text-[11px] text-amber-400">Minuta do {TITULO_CONTRATO[familia]} não encontrada (ou inativa) na Central de Contratos.</p>
       )}
       {template && !templateAprovado && (
         <p className="text-[11px] text-amber-400">A minuta ainda não está aprovada em Central de Contratos › Minutas (status: {template.approval_status}).</p>
@@ -179,9 +182,9 @@ export function EnviarContratoParceria({
               Este cadastro já tem o contrato {ativo.contract_code} ({STATUS[ativo.status_signature]?.label.toLowerCase()}). Enviar de novo gera um contrato novo.
             </p>
           )}
-          <p className="text-[11px] text-muted-foreground">Confira os dados do LICENCIADO. O que veio do cadastro já está preenchido; complete o que faltar.</p>
+          <p className="text-[11px] text-muted-foreground">Confira os dados do {familia === "oferta" ? "CONTRATANTE" : "LICENCIADO"}. O que veio do cadastro já está preenchido; complete o que faltar.</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {CAMPOS_LICENCIADO.map((c) => (
+            {campos.map((c) => (
               <label key={c.key} className={cn("block space-y-1", (c.key === "endereco" || c.key === "modulos") && "sm:col-span-2")}>
                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{c.label}</span>
                 <input

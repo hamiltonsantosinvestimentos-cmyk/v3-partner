@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { isContratoParceriaTemplateName } from "@/lib/contrato-parceria-partner";
+import { familiaDoTemplate } from "@/lib/contrato-parceria-partner";
 
 // GET /api/cadastro-partner/contrato?registration_id=… — Contratos de Parceria
 // já gerados para o cadastro (botão "Enviar contrato" de /admin-cadastros).
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
   if (!reg?.email) return NextResponse.json({ contratos: [] });
 
   const { data: templates } = await db.from("contract_templates").select("id, template_name").eq("contract_series", "V3C-PAR");
-  const templateIds = (templates ?? []).filter((t) => isContratoParceriaTemplateName(t.template_name)).map((t) => t.id);
+  const templateIds = (templates ?? []).filter((t) => familiaDoTemplate(t.template_name) !== null).map((t) => t.id);
   if (templateIds.length === 0) return NextResponse.json({ contratos: [] });
 
   const { data, error } = await db
