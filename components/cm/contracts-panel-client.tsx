@@ -9,7 +9,7 @@ import {
   Upload, Link2, Crown, Download, ShieldCheck, RefreshCw, Info,
 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
-import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
+import { ROLE_HELP, ROLE_LABELS, roleOptionsSorted, sortQualificationParties } from "@/lib/qualification-roles";
 import { PartyQualificationCardModal } from "./party-qualification-card";
 import { AdhesionSection } from "./adhesion-section";
 import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
@@ -1178,10 +1178,11 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                                 <select value={addPartyForm.role_in_document} onChange={(e) => setAddPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
-                                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                                  {roleOptionsSorted().map(([value, label]) => (
                                     <option key={value} value={value}>{label}</option>
                                   ))}
                                 </select>
+                                {ROLE_HELP[addPartyForm.role_in_document] && <p className="text-[10px] text-[#9BAFC5] leading-snug">{ROLE_HELP[addPartyForm.role_in_document]}</p>}
                                 <div className="flex gap-2">
                                   <button onClick={() => submitAddParty(batch.id)} disabled={addPartySubmitting}
                                     className="flex-1 px-3 py-1.5 bg-[#C9A84C] text-[#09081A] rounded text-[10px] font-bold hover:bg-[#E8C97A] transition disabled:opacity-40">
@@ -1391,10 +1392,11 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
-                      {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                      {roleOptionsSorted().map(([value, label]) => (
                         <option key={value} value={value}>{label}</option>
                       ))}
                     </select>
+                    {ROLE_HELP[row.role_in_document] && <p className="text-[10px] text-[#9BAFC5] leading-snug">{ROLE_HELP[row.role_in_document]}</p>}
                   </div>
                 ))}
               </div>

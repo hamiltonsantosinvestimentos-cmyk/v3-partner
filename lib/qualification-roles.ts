@@ -49,7 +49,29 @@ export const ROLE_LABELS: Record<string, string> = {
   intermediario_8: "Intermediário 8",
   intermediario_9: "Intermediário 9",
   intermediario_10: "Intermediário 10",
+  // Figuras do NCNDA da Mesa M&A (23/10/2026, Projeto Roda Gigante): parceiro estratégico
+  // externo e interveniente que se obriga pessoalmente ao sigilo. Não são papéis da
+  // plataforma (sem login nem plano). Ver migration 20261023a.
+  partner_externo: "Partner Externo",
+  interveniente_anuente: "Interveniente Anuente",
 };
+
+/** "Nota do porquê" dos papéis que precisam de explicação ao escolher (texto abaixo do seletor). */
+export const ROLE_HELP: Record<string, string> = {
+  partner_externo:
+    "Parceiro estratégico externo à V3, pessoa jurídica ou o seu representante. Não tem login nem plano na plataforma. Os dados de qualificação são pedidos pelo link; dado bancário só é pedido quando houver remuneração, no FPA e no Termo de Negócio. Prazo de guarda: a confirmar.",
+  interveniente_anuente:
+    "Pessoa que comparece ao contrato só para concordar e se obrigar pessoalmente ao sigilo e à não circunvenção, sem assumir obrigação financeira da parte principal. Não tem login. A qualificação civil é pedida pelo link. Prazo de guarda: a confirmar, com validação do Robson pendente.",
+};
+
+/**
+ * Opções dos seletores de papel, em ordem alfabética pelo rótulo (pt-BR), com números em
+ * ordem numérica ("Intermediário 2" antes de "Intermediário 10"). Fonte única dos seletores
+ * da Central de Contratos: nunca percorrer ROLE_LABELS direto, que está na ordem de inserção.
+ */
+export function roleOptionsSorted(): Array<[string, string]> {
+  return Object.entries(ROLE_LABELS).sort(([, a], [, b]) => a.localeCompare(b, "pt-BR", { numeric: true }));
+}
 
 export interface QualificationPartyForProse {
   role_in_document: string;
@@ -125,6 +147,8 @@ export function partyRoleSortKey(role: string): [number, number] {
   if (role === "estruturador" || role === "v3_partners") return [ROLE_GROUP_ESTRUTURADOR, 0];
   if (role === "head_mesa") return [ROLE_GROUP_HEAD, 0];
   if (role === "partner" || role === "parte_principal") return [ROLE_GROUP_PARTNER, 0];
+  if (role === "partner_externo") return [ROLE_GROUP_PARTNER, 1];
+  if (role === "interveniente_anuente") return [ROLE_GROUP_PARTNER, 2];
   if (role === "mandatario" || /^mandatario_\d+$/.test(role)) return [ROLE_GROUP_MANDATARIO, roleNumericSuffix(role)];
   if (/^intermediario_\d+$/.test(role)) return [ROLE_GROUP_INTERMEDIARIO, roleNumericSuffix(role)];
   if (LEGACY_INTERMEDIARY_ROLES.has(role)) return [ROLE_GROUP_INTERMEDIARIO_LEGADO, 0];
