@@ -61,7 +61,7 @@ export const ROLE_HELP: Record<string, string> = {
   partner_externo:
     "Parceiro estratégico externo à V3, pessoa jurídica ou o seu representante. Não tem login nem plano na plataforma. Os dados de qualificação são pedidos pelo link; dado bancário só é pedido quando houver remuneração, no FPA e no Termo de Negócio. Prazo de guarda: a confirmar.",
   interveniente_anuente:
-    "Pessoa que comparece ao contrato só para concordar e se obrigar pessoalmente ao sigilo e à não circunvenção, sem assumir obrigação financeira da parte principal. Não tem login. A qualificação civil é pedida pelo link. Prazo de guarda: a confirmar, com validação do Robson pendente.",
+    "Pessoa que comparece ao contrato só para concordar e se obrigar pessoalmente ao sigilo e à não circunvenção, respondendo apenas pelo seu próprio descumprimento. Não assume garantia, solidariedade nem obrigação financeira da parte principal, nem responsabilidade técnica por projetos ou pareceres. Não tem login. A qualificação civil é pedida pelo link. Prazo de guarda: a confirmar, com validação do Robson pendente.",
 };
 
 /**
