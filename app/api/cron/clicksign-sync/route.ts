@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { getProvider } from "@/lib/esignature";
+import { detectExternalCancel } from "@/lib/contract-envelope-cancel";
 
 // GET /api/cron/clicksign-sync: sincronização real de status de assinatura
 // (19/08/2026, item 2 dos ajustes de governança pedidos por João).
@@ -38,6 +39,7 @@ interface PendingContract {
   contract_code: string | null;
   contract_title: string;
   external_envelope_id: string;
+  external_document_id: string | null;
   parties: Array<{ role: string; name: string }> | null;
   deal_id: string | null;
   esignature_provider: "clicksign" | "certone" | null;
@@ -53,7 +55,7 @@ export async function GET(req: NextRequest) {
 
   const { data: pending, error: fetchErr } = await db
     .from("operation_contracts")
-    .select("id, contract_code, contract_title, external_envelope_id, parties, deal_id, esignature_provider")
+    .select("id, contract_code, contract_title, external_envelope_id, external_document_id, parties, deal_id, esignature_provider")
     .eq("status_signature", "enviado_assinatura")
     .not("external_envelope_id", "is", null);
 
@@ -63,6 +65,7 @@ export async function GET(req: NextRequest) {
 
   const contracts = (pending ?? []) as PendingContract[];
   const updated: string[] = [];
+  const canceledExternally: string[] = [];
   const errors: Array<{ contract_id: string; error: string }> = [];
 
   for (const contract of contracts) {
@@ -74,7 +77,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (statusRes.status !== "closed" && statusRes.status !== "auto_closed") {
-      continue; // ainda pendente de assinatura, nada a fazer
+      // Ainda pendente. Antes de seguir, vê se alguém cancelou o documento direto na ClickSign
+      // (BRIEF 22/10/2026): nesse caso o contrato volta a rascunho. Envelope vencido só avisa.
+      const ext = await detectExternalCancel(db, { id: contract.id, contract_code: contract.contract_code, contract_title: contract.contract_title, external_envelope_id: contract.external_envelope_id, external_document_id: contract.external_document_id, esignature_provider: contract.esignature_provider });
+      if (ext === "cancelado") canceledExternally.push(contract.id);
+      if (ext === "erro") errors.push({ contract_id: contract.id, error: "falha ao verificar cancelamento externo" });
+      continue;
     }
 
     const signedAt = new Date().toISOString();
@@ -144,6 +152,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     checked: contracts.length,
     updated,
+    canceled_externally: canceledExternally,
     errors,
   });
 }

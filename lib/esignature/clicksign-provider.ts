@@ -598,6 +598,31 @@ export async function cancelClickSignDocument(envelopeId: string, documentId: st
   }
 }
 
+export type ClickSignDocumentStatusResult =
+  | { ok: true; status: string }
+  | { ok: false; error: string; status: number };
+
+// Status do DOCUMENTO (running, canceled, closed...) dentro de um envelope v3. O cancelamento
+// é por documento, então a decisão de cancelar (e a detecção de cancelamento feito direto no
+// painel da ClickSign) lê este status, nunca o do envelope. Somente leitura.
+export async function getClickSignDocumentStatus(envelopeId: string, documentId: string): Promise<ClickSignDocumentStatusResult> {
+  const accessToken = process.env.CLICKSIGN_ACCESS_TOKEN;
+  const baseUrl = process.env.CLICKSIGN_BASE_URL ?? "https://sandbox.clicksign.com";
+  if (!accessToken) return { ok: false, error: "CLICKSIGN_ACCESS_TOKEN não configurado", status: 500 };
+
+  try {
+    const res = await fetch(`${baseUrl}/api/v3/envelopes/${envelopeId}/documents/${documentId}`, {
+      headers: { Accept: "application/json", Authorization: accessToken },
+    });
+    if (!res.ok) return { ok: false, error: `ClickSign getDocument: ${await res.text()}`, status: res.status };
+    const body = await res.json();
+    const status: string = body.data?.attributes?.status ?? "desconhecido";
+    return { ok: true, status };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro desconhecido", status: 500 };
+  }
+}
+
 // Fluxo v1 (legado, depreciado pelo ClickSign) — mantido só para "nda" e
 // "mandato" até serem migrados também. O passo /finish está confirmadamente
 // quebrado na conta de produção mesmo com documento+signatário vinculados

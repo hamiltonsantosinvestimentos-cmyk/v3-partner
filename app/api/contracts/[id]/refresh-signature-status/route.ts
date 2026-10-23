@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { listClickSignSignEvents } from "@/lib/esignature/clicksign-provider";
 import { applyEnvelopeClosed, recordSignatureNote } from "@/lib/contract-signature-timeline";
+import { detectExternalCancel } from "@/lib/contract-envelope-cancel";
 import { MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
 
 function svc() {
@@ -13,9 +14,9 @@ async function requireRole() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
+  const { data: profile } = await svc().from("profiles").select("role, full_name").eq("id", user.id).single();
   if (!profile || !["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role as string)) return null;
-  return { userId: user.id, role: profile.role as string };
+  return { userId: user.id, role: profile.role as string, name: (profile as { full_name?: string | null }).full_name ?? "Usuário" };
 }
 
 // POST /api/contracts/[id]/refresh-signature-status (21/09/2026)
@@ -35,7 +36,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: contract } = await db
     .from("operation_contracts")
-    .select("id, vertical, status_signature, external_envelope_id, esignature_provider, parties")
+    .select("id, contract_code, contract_title, vertical, status_signature, external_envelope_id, external_document_id, esignature_provider, parties")
     .eq("id", id)
     .single();
   if (!contract) return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
@@ -51,6 +52,19 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const result = await listClickSignSignEvents(contract.external_envelope_id);
   if (!result.ok) return NextResponse.json({ error: `Falha ao consultar o ClickSign: ${result.error}` }, { status: 502 });
+
+  // Cancelamento feito direto na ClickSign (BRIEF 22/10/2026): a checagem só reflete um fato que
+  // já ocorreu; o ator gravado é o Sistema e a nota registra quem acionou a verificação.
+  if (contract.status_signature === "enviado_assinatura") {
+    const ext = await detectExternalCancel(db, {
+      id: contract.id, contract_code: contract.contract_code, contract_title: contract.contract_title,
+      external_envelope_id: contract.external_envelope_id, external_document_id: contract.external_document_id,
+      esignature_provider: contract.esignature_provider,
+    }, caller.name);
+    if (ext === "cancelado") {
+      return NextResponse.json({ ok: true, cancelado_na_clicksign: true, mensagem: "O envio foi cancelado direto na ClickSign. O contrato voltou a rascunho." });
+    }
+  }
 
   const parties = (contract.parties as Array<{ email?: string | null; name?: string | null }> | null) ?? [];
   let novas = 0;
