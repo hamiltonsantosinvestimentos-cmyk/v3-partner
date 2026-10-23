@@ -10,7 +10,7 @@ import { aviso, confirmar } from "@/lib/aviso";
 // no BRIEF: risco desnecessário pra esta fase).
 import { useState, useEffect, useCallback } from "react";
 import { UserPlus, Copy, Share2, CheckCircle2, FileText, Loader2, X, Trash2, Pencil, Save, Eye } from "lucide-react";
-import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
+import { ROLE_HELP, ROLE_LABELS, roleOptionsSorted, sortQualificationParties } from "@/lib/qualification-roles";
 import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
 import { isValidEmail } from "@/lib/utils";
 import { PartyQualificationCardModal } from "./party-qualification-card";
@@ -165,10 +165,11 @@ export function QualificationBatchesPanel({ listingId, demandId, cardLabel }: Pr
                       className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <select value={editPartyForm.role_in_document} onChange={(e) => setEditPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
                       className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
-                      {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                      {roleOptionsSorted().map(([value, label]) => (
                         <option key={value} value={value}>{label}</option>
                       ))}
                     </select>
+                    {ROLE_HELP[editPartyForm.role_in_document] && <p className="text-[10px] text-[#9BAFC5] leading-snug">{ROLE_HELP[editPartyForm.role_in_document]}</p>}
                     <div className="flex gap-2">
                       <button onClick={() => submitEditParty(p.id)} disabled={editPartySubmitting}
                         className="flex-1 flex items-center justify-center gap-1 text-[9px] font-bold text-[#09081A] bg-[#C9A84C] px-2 py-1.5 rounded hover:bg-[#E8C97A] transition-colors disabled:opacity-50">

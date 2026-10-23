@@ -2037,10 +2037,10 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
-                      <option value="parte_principal">Parte Principal</option>
-                      <option value="intermediario_finder_venda">Intermediário/Finder Venda</option>
                       <option value="intermediario_finder_compra">Intermediário/Finder Compra</option>
+                      <option value="intermediario_finder_venda">Intermediário/Finder Venda</option>
                       <option value="mandatario">Mandatário</option>
+                      <option value="parte_principal">Parte Principal</option>
                       <option value="testemunha">Testemunha</option>
                     </select>
                   </div>

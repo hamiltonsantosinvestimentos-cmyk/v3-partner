@@ -6,7 +6,7 @@ import { maskCpfCnpj } from "@/lib/qualification-mask";
 import { useSearchParams } from "next/navigation";
 import { Plus, Save, Trash2, Loader2, FileText, Eye, ChevronDown, Upload, Send, CheckCircle2, XCircle, Scale, Users, X, FilePlus2, UserPlus, Copy, Share2, RotateCcw, Pencil, Maximize2, Download } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
-import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
+import { ROLE_HELP, ROLE_LABELS, roleOptionsSorted, sortQualificationParties } from "@/lib/qualification-roles";
 import { formatDocumentNumber } from "@/lib/legal-qualification";
 import { VERTICAL_LABELS, CONCRETE_VERTICALS, MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
 import { findRevokedContacts } from "@/lib/contract-revoked-contacts";
@@ -1443,10 +1443,11 @@ ${allParties.length > 0 ? `<div class="qualbox">
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                                 <select value={editPartyForm.role_in_document} onChange={(e) => setEditPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
-                                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                                  {roleOptionsSorted().map(([value, label]) => (
                                     <option key={value} value={value}>{label}</option>
                                   ))}
                                 </select>
+                                {ROLE_HELP[editPartyForm.role_in_document] && <p className="text-[10px] text-[#9BAFC5] leading-snug">{ROLE_HELP[editPartyForm.role_in_document]}</p>}
                                 <div className="flex gap-2">
                                   <button onClick={() => submitEditParty(p.id)} disabled={editPartySubmitting}
                                     className="flex-1 flex items-center justify-center gap-1 text-[9px] font-bold text-[#09081A] bg-[#C9A84C] px-2 py-1.5 rounded hover:bg-[#E8C97A] transition-colors disabled:opacity-50">
@@ -1576,10 +1577,11 @@ ${allParties.length > 0 ? `<div class="qualbox">
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                                 <select value={addPartyForm.role_in_document} onChange={(e) => setAddPartyForm((f) => ({ ...f, role_in_document: e.target.value }))}
                                   className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
-                                  {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                                  {roleOptionsSorted().map(([value, label]) => (
                                     <option key={value} value={value}>{label}</option>
                                   ))}
                                 </select>
+                                {ROLE_HELP[addPartyForm.role_in_document] && <p className="text-[10px] text-[#9BAFC5] leading-snug">{ROLE_HELP[addPartyForm.role_in_document]}</p>}
                                 <div className="flex gap-2">
                                   <button onClick={() => submitAddParty(batch.id)} disabled={addPartySubmitting}
                                     className="flex-1 px-3 py-1.5 bg-[#C9A84C] text-[#09081A] rounded text-[10px] font-bold hover:bg-[#E8C97A] transition disabled:opacity-40">
@@ -2317,10 +2319,11 @@ ${allParties.length > 0 ? `<div class="qualbox">
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]" />
                     <select value={row.role_in_document} onChange={(e) => updateQualPartyRow(i, "role_in_document", e.target.value)}
                       className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
-                      {Object.entries(ROLE_LABELS).map(([value, label]) => (
+                      {roleOptionsSorted().map(([value, label]) => (
                         <option key={value} value={value}>{label}</option>
                       ))}
                     </select>
+                    {ROLE_HELP[row.role_in_document] && <p className="text-[10px] text-[#9BAFC5] leading-snug">{ROLE_HELP[row.role_in_document]}</p>}
                   </div>
                 ))}
               </div>
