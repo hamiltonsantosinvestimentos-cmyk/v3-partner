@@ -6,7 +6,7 @@ import {
   FileText, Search, Filter, Clock, CheckCircle2, XCircle,
   Send, Eye, MessageSquare, Loader2, ChevronDown, User,
   AlertTriangle, Shield, UserPlus, Plus, X, Copy, Share2, Pencil,
-  Upload, Link2, Crown, Download, ShieldCheck, RefreshCw,
+  Upload, Link2, Crown, Download, ShieldCheck, RefreshCw, Info,
 } from "lucide-react";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS, sortQualificationParties } from "@/lib/qualification-roles";
@@ -55,6 +55,7 @@ interface Contract {
   loi_matching_status?: "casada" | "nao_casada" | null;
   loi_override_justification?: string | null;
   valor_operacao?: number | null;
+  esignature_provider?: "clicksign" | "certone" | null;
 }
 
 interface ContractLink {
@@ -324,6 +325,58 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [cancelDone, setCancelDone] = useState<string | null>(null);
 
+  // Cancelar envio para assinatura (BRIEF 22/10/2026): volta o contrato a rascunho, sem excluir.
+  // Modal V3 próprio, só fecha por botão explícito. Só ADMIN e GESTAO (a API também recusa).
+  type EnvSigned = { name: string; email: string; signed_at: string | null };
+  const [showCancelEnv, setShowCancelEnv] = useState(false);
+  const [envLoading, setEnvLoading] = useState(false);
+  const [envError, setEnvError] = useState<string | null>(null);
+  const [envSigned, setEnvSigned] = useState<EnvSigned[]>([]);
+  const [envReason, setEnvReason] = useState("");
+  const [envAck, setEnvAck] = useState(false);
+  const [envPartialAck, setEnvPartialAck] = useState(false);
+  const [envCode, setEnvCode] = useState("");
+  const [envBusy, setEnvBusy] = useState(false);
+  const [envRetryDbOnly, setEnvRetryDbOnly] = useState(false);
+  const [envDone, setEnvDone] = useState<{ title: string; warning: string | null } | null>(null);
+
+  const fmtBr = (iso: string | null) =>
+    iso ? new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(iso)).replace(",", "") : "data não informada";
+
+  const openCancelEnvelope = async (c: Contract) => {
+    setShowCancelEnv(true);
+    setEnvLoading(true); setEnvError(null); setEnvSigned([]); setEnvReason(""); setEnvAck(false);
+    setEnvPartialAck(false); setEnvCode(""); setEnvRetryDbOnly(false);
+    try {
+      const res = await fetch(`/api/contracts/${c.id}/cancel-envelope`);
+      const json = await res.json();
+      if (!res.ok) setEnvError(json.error ?? "Não foi possível verificar as assinaturas.");
+      else setEnvSigned(json.signed ?? []);
+    } catch { setEnvError("Erro de conexão ao verificar as assinaturas."); }
+    finally { setEnvLoading(false); }
+  };
+
+  const handleCancelEnvelope = async (c: Contract) => {
+    setEnvBusy(true); setEnvError(null);
+    try {
+      const res = await fetch(`/api/contracts/${c.id}/cancel-envelope`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: envReason.trim(), confirm_partial_signatures: envPartialAck }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setShowCancelEnv(false);
+        setEnvDone({ title: c.contract_title, warning: json.note_warning ?? null });
+        fetchContracts();
+      } else {
+        setEnvError(json.error ?? "Não foi possível cancelar o envio.");
+        if (json.retry_database_only) setEnvRetryDbOnly(true);
+      }
+    } catch { setEnvError("Erro de conexão ao cancelar o envio."); }
+    finally { setEnvBusy(false); }
+  };
+
   const handleCancelDraft = async (contractId: string) => {
     if (cancelReason.trim().length < 5) { setCancelError("Motivo obrigatório: mínimo 5 caracteres"); return; }
     setCancellingDraft(true);
@@ -499,7 +552,7 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
       const json = await res.json();
       if (res.ok) {
         const faltam: string[] = json.pendentes ?? [];
-        setSignatureRefreshMsg({ contractId, text:
+        setSignatureRefreshMsg({ contractId, text: json.cancelado_na_clicksign ? json.mensagem :
           `${json.assinaram} de ${json.total} assinaram.${faltam.length > 0 ? ` Faltam: ${faltam.join(", ")}.` : ""}${json.contrato_marcado_como_assinado ? " Contrato marcado como assinado." : ""}`
         });
         fetchContracts();
@@ -982,6 +1035,17 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
                     </button>
                   )}
 
+                  {selected.status_signature === "enviado_assinatura" && ["ADMIN", "GESTAO"].includes(role) && (
+                    <button
+                      onClick={() => openCancelEnvelope(selected)}
+                      disabled={selected.esignature_provider === "certone"}
+                      title={selected.esignature_provider === "certone" ? "Cancelamento de envio ainda não disponível para o CertOne" : "Cancela o envio na ClickSign e volta o contrato a rascunho. Não exclui o contrato."}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent text-red-300 border border-red-500/50 rounded-lg text-xs hover:bg-red-500/10 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <XCircle size={13} /> Cancelar envio para assinatura
+                    </button>
+                  )}
+
                   {selected.status_signature === "rascunho" && (
                     <>
                       <button
@@ -1211,7 +1275,7 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
               {showEdit && (
                 <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-4 space-y-2">
                   <p className="text-[10px] text-[#9BAFC5]">
-                    Edite o HTML do contrato diretamente. {selected.status_signature === "enviado_assinatura" && "Este contrato já foi enviado ao ClickSign — ao salvar, ele volta para Rascunho e você precisa cancelar o envelope antigo manualmente no painel da ClickSign antes de reenviar."}
+                    Edite o HTML do contrato diretamente. {selected.status_signature === "enviado_assinatura" && "Este contrato já foi enviado ao ClickSign — ao salvar, o sistema cancela o envelope antigo na ClickSign e o contrato volta para Rascunho. Se o cancelamento automático falhar, o aviso aparece após salvar e o envelope deve ser cancelado manualmente no painel da ClickSign antes de reenviar. Para cancelar sem editar o texto, use Cancelar envio para assinatura."}
                   </p>
                   <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)}
                     className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-[11px] text-[#F5F1E8] font-mono min-h-[280px] resize-y" />
@@ -1482,6 +1546,100 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
                 {linking ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Vincular
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showCancelEnv && selected && (() => {
+        const hasSigned = envSigned.length > 0;
+        const blockedByRole = hasSigned && role !== "ADMIN";
+        const codeOk = !!selected.contract_code && envCode.trim().toUpperCase() === selected.contract_code.toUpperCase();
+        const canSubmit = !envLoading && !envBusy && !blockedByRole && envReason.trim().length >= 5 && envAck && codeOk && (!hasSigned || envPartialAck);
+        return (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-3">
+            <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-[#09081A] border border-red-500/40 rounded-xl">
+              <div className="p-4 border-b border-red-500/30 flex items-center justify-between">
+                <div className="text-sm font-bold text-red-400 flex items-center gap-2"><XCircle size={14} /> Cancelar envio para assinatura</div>
+                <button onClick={() => setShowCancelEnv(false)} disabled={envBusy} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+              </div>
+              <div className="p-4 space-y-3">
+                <p className="text-xs text-[#F5F1E8] leading-relaxed">
+                  <span className="font-bold">{selected.contract_code ?? selected.contract_title}</span>: o envio na ClickSign é cancelado e o contrato volta a <span className="font-bold">Rascunho</span>. O contrato não é excluído e o lote de qualificação não muda.
+                </p>
+
+                <div className="bg-[#162744] border border-[#9BAFC5]/15 rounded-lg p-3 text-xs">
+                  {envLoading ? (
+                    <span className="flex items-center gap-2 text-[#9BAFC5]"><Loader2 size={12} className="animate-spin" /> Verificando assinaturas...</span>
+                  ) : hasSigned ? (
+                    <div>
+                      <p className="text-amber-400 font-bold mb-1">Já assinaram:</p>
+                      <ul className="space-y-0.5 text-[#F5F1E8]">
+                        {envSigned.map((s) => <li key={s.email}>{s.name} ({s.email}) em {fmtBr(s.signed_at)}</li>)}
+                      </ul>
+                    </div>
+                  ) : (
+                    <span className="text-[#9BAFC5]">{envError ? "Não foi possível verificar." : "Ninguém assinou até agora."}</span>
+                  )}
+                </div>
+
+                {blockedByRole && <p className="text-[11px] text-amber-400">Há assinatura neste envelope. Só o ADMIN pode cancelar com assinatura parcial.</p>}
+
+                <div>
+                  <label className="flex items-center gap-1.5 text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-1">
+                    Motivo *
+                    <span tabIndex={0} title="Registrado na linha do tempo e na auditoria, visível a quem acessa a linha do tempo do contrato (ADMIN, GESTAO e mesa operacional nas suas verticais). Guardado junto do contrato. O motivo é obrigatório para que a decisão possa ser explicada depois." className="text-[#9BAFC5] normal-case cursor-help"><Info size={12} /></span>
+                  </label>
+                  <textarea value={envReason} onChange={(e) => setEnvReason(e.target.value)} disabled={envBusy}
+                    placeholder="Ex: contraparte pediu ajustes no texto"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] min-h-[60px] resize-y" />
+                </div>
+
+                <label className="flex items-start gap-2 text-[11px] text-[#F5F1E8] cursor-pointer">
+                  <input type="checkbox" checked={envAck} onChange={(e) => setEnvAck(e.target.checked)} disabled={envBusy} className="mt-0.5" />
+                  Entendo que o link de assinatura já enviado deixa de valer.
+                </label>
+                {hasSigned && role === "ADMIN" && (
+                  <label className="flex items-start gap-2 text-[11px] text-amber-300 cursor-pointer">
+                    <input type="checkbox" checked={envPartialAck} onChange={(e) => setEnvPartialAck(e.target.checked)} disabled={envBusy} className="mt-0.5" />
+                    Confirmo o cancelamento mesmo com assinatura já colhida de: {envSigned.map((s) => s.name).join(", ")}.
+                  </label>
+                )}
+
+                <div>
+                  <label className="block text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-1">Digite o código do contrato para confirmar *</label>
+                  <input value={envCode} onChange={(e) => setEnvCode(e.target.value)} disabled={envBusy}
+                    placeholder={selected.contract_code ?? ""}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]" />
+                </div>
+
+                {envError && <p className="text-[11px] text-red-400">{envError}</p>}
+                {envRetryDbOnly && <p className="text-[11px] text-amber-400">O documento já foi cancelado na ClickSign. Use o botão abaixo para concluir só o banco.</p>}
+
+                <div className="flex gap-2">
+                  <button onClick={() => setShowCancelEnv(false)} disabled={envBusy}
+                    className="flex-1 px-3 py-2 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs font-bold hover:bg-[#243A66] transition">Voltar</button>
+                  <button onClick={() => handleCancelEnvelope(selected)} disabled={!canSubmit}
+                    className="flex-1 px-3 py-2 bg-red-500/20 text-red-300 border border-red-500/40 rounded-lg text-xs font-bold hover:bg-red-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {envBusy && <Loader2 size={13} className="animate-spin" />} {envRetryDbOnly ? "Concluir cancelamento (só o banco)" : "Cancelar envio"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {envDone && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/60 p-3">
+          <div className="w-full max-w-md bg-[#09081A] border border-[#C9A84C]/30 rounded-xl p-5 space-y-3">
+            <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 size={16} /> <span className="text-sm font-bold">Envio cancelado</span></div>
+            <p className="text-xs text-[#9BAFC5] leading-relaxed">O contrato voltou a Rascunho. Para trocar uma parte, use Cancelar rascunho e requalificar.</p>
+            {envDone.warning && <p className="text-[11px] text-amber-400">{envDone.warning}</p>}
+            <p className="text-[11px] text-[#9BAFC5]">Texto pronto para avisar os signatários:</p>
+            <textarea readOnly rows={4} value={`O envio do documento ${envDone.title} foi cancelado. O link de assinatura que você recebeu deixou de valer. Enviaremos uma nova versão em breve.`}
+              className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]" />
+            <button onClick={() => setEnvDone(null)}
+              className="w-full px-3 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition">Entendi</button>
           </div>
         </div>
       )}
