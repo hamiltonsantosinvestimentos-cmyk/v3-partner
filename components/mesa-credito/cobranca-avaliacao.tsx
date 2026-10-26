@@ -6,11 +6,15 @@ import { Button } from "@/components/ui/button";
 import { confirmar } from "@/lib/aviso";
 import { formatCurrency, maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
 import { dataBR, somarDiasUteis } from "@/lib/cobranca-mandato";
-import { DESCRICAO_PADRAO, type CobrancaAvaliacao } from "@/lib/cobranca-avaliacao";
+import {
+  BANCOS, DESCRICAO_PADRAO, ROTULO_PIX, formatarChavePix, validarContaRecebimento, type CobrancaAvaliacao, type TipoChavePix,
+} from "@/lib/cobranca-avaliacao";
 
 // Cobrança da avaliação de engenharia (19/10/2026, pedido do Hamilton): na etapa Avaliação de
 // Imóvel a Mesa informa o valor do laudo e gera o PDF para o cliente pagar por PIX na conta da V3
-// (ver /api/mesa-credito/cobranca-avaliacao/[proposalId]).
+// (ver /api/mesa-credito/cobranca-avaliacao/[proposalId]). Desde 26/10/2026 a Mesa escolhe se o
+// pagamento vai para a conta da V3 ou para a conta de um terceiro (banco, agência, conta, PIX e
+// razão social impressos no PDF).
 
 const INPUT = "w-full bg-background border border-border rounded-lg px-3 py-2 text-xs text-white placeholder:text-muted-foreground/50 focus:outline-none focus:border-[#C9A84C]/60";
 const hojeISO = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
@@ -31,6 +35,17 @@ export function CobrancaAvaliacaoEngenharia({ proposalId, canEdit, etapaAtual, i
   const [vencimento, setVencimento] = useState(somarDiasUteis(hojeISO(), 2));
   const [descricao, setDescricao] = useState(DESCRICAO_PADRAO);
   const [imovel, setImovel] = useState(imovelPadrao ?? "");
+  const [contaTipo, setContaTipo] = useState<"v3" | "terceiro">("v3");
+  const [terc, setTerc] = useState({ banco_codigo: "", banco_nome: "", agencia: "", conta: "", pix_tipo: "cnpj" as TipoChavePix, pix_chave: "", razao_social: "" });
+  const mudarTerc = (campo: keyof typeof terc, valor: string) => setTerc((t) => {
+    const novo = { ...t, [campo]: valor };
+    // Número de banco conhecido completa o nome (se o nome ainda não foi digitado à mão)
+    if (campo === "banco_codigo") {
+      const nome = BANCOS[valor.replace(/\D/g, "").padStart(3, "0")];
+      if (nome && (!t.banco_nome || Object.values(BANCOS).includes(t.banco_nome))) novo.banco_nome = nome;
+    }
+    return novo;
+  });
   const [salvando, setSalvando] = useState(false);
   const [gerando, setGerando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -73,17 +88,30 @@ export function CobrancaAvaliacaoEngenharia({ proposalId, canEdit, etapaAtual, i
     }
   }
 
+  // Nova cobrança: já vem com a última conta de terceiro usada nesta proposta, se houver
+  function abrirForm() {
+    setForm(true);
+    setErro(null);
+    const ultima = [...lista].reverse().find((c) => c.conta?.tipo === "terceiro")?.conta;
+    if (ultima?.tipo === "terceiro") {
+      setContaTipo("terceiro");
+      setTerc({ ...ultima, pix_chave: formatarChavePix(ultima.pix_tipo, ultima.pix_chave) });
+    }
+  }
+
   async function gerar() {
     const v = parseCurrencyBRLInput(valor);
     if (!(v > 0)) { setErro("Informe o valor da avaliação."); return; }
     if (!vencimento) { setErro("Informe o vencimento."); return; }
+    const contaOk = validarContaRecebimento(contaTipo === "v3" ? { tipo: "v3" } : { tipo: "terceiro", ...terc });
+    if ("erro" in contaOk) { setErro(contaOk.erro); return; }
     setSalvando(true);
     setErro(null);
     try {
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ valor: v, vencimento, descricao, imovel }),
+        body: JSON.stringify({ valor: v, vencimento, descricao, imovel, conta: contaOk.conta }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || j.error) { setErro(typeof j.error === "string" ? j.error : "Não foi possível salvar."); return; }
@@ -123,12 +151,12 @@ export function CobrancaAvaliacaoEngenharia({ proposalId, canEdit, etapaAtual, i
           {etapaAtual && <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#C9A84C]/20 text-[#E8C97A]">etapa atual</span>}
         </p>
         {canEdit && !form && (
-          <button onClick={() => { setForm(true); setErro(null); }} className="flex items-center gap-1 text-[11px] font-semibold text-[#C9A84C] hover:text-[#E8C97A]">
+          <button onClick={abrirForm} className="flex items-center gap-1 text-[11px] font-semibold text-[#C9A84C] hover:text-[#E8C97A]">
             <Plus className="w-3 h-3" /> Nova cobrança
           </button>
         )}
       </div>
-      <p className="text-[11px] text-muted-foreground">Informe o valor do laudo da empresa de engenharia e gere o PDF para o cliente pagar por PIX na conta da V3.</p>
+      <p className="text-[11px] text-muted-foreground">Informe o valor do laudo da empresa de engenharia e gere o PDF para o cliente pagar por PIX na conta da V3 ou de um terceiro.</p>
 
       {carregando ? (
         <p className="text-[11px] text-muted-foreground flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" /> Carregando…</p>
@@ -145,6 +173,9 @@ export function CobrancaAvaliacaoEngenharia({ proposalId, canEdit, etapaAtual, i
                   {c.pago_em
                     ? <span className="text-[#E8C97A] font-semibold">Pago em {new Date(c.pago_em).toLocaleDateString("pt-BR")}{c.pago_por ? ` (${c.pago_por})` : ""}</span>
                     : <>Aguardando pagamento · gerada em {new Date(c.criado_em).toLocaleDateString("pt-BR")}{c.criado_por ? ` por ${c.criado_por}` : ""}</>}
+                </p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  Recebe: {c.conta?.tipo === "terceiro" ? <span className="text-white/80">{c.conta.razao_social} · {c.conta.banco_nome}</span> : "conta V3 (Cora)"}
                 </p>
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
@@ -183,6 +214,62 @@ export function CobrancaAvaliacaoEngenharia({ proposalId, canEdit, etapaAtual, i
             <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Imóvel</label>
             <input value={imovel} onChange={(e) => setImovel(e.target.value)} placeholder="Endereço / matrícula" className={INPUT} />
           </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-muted-foreground mb-1">O cliente paga para *</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([["v3", "Conta V3", "Cora · PIX CNPJ da V3"], ["terceiro", "Conta de terceiro", "Ex.: a empresa de engenharia"]] as const).map(([k, t, d]) => (
+                <button key={k} type="button" onClick={() => setContaTipo(k)}
+                  className={`rounded-lg border px-3 py-2 text-left transition-colors ${contaTipo === k ? "border-[#C9A84C] bg-[#C9A84C]/15" : "border-border hover:border-[#C9A84C]/40"}`}>
+                  <p className={`text-xs font-semibold ${contaTipo === k ? "text-[#E8C97A]" : "text-white"}`}>{t}</p>
+                  <p className="text-[10px] text-muted-foreground">{d}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          {contaTipo === "terceiro" && (
+            <div className="space-y-2 rounded-lg border border-[#C9A84C]/30 bg-background/40 p-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Razão social de quem recebe *</label>
+                <input value={terc.razao_social} onChange={(e) => mudarTerc("razao_social", e.target.value)} placeholder="Ex.: Engenharia Avaliações Ltda" className={INPUT} />
+              </div>
+              <div className="grid grid-cols-[90px_1fr] gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Banco nº *</label>
+                  <input value={terc.banco_codigo} onChange={(e) => mudarTerc("banco_codigo", e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="341" inputMode="numeric" className={INPUT} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Nome do banco *</label>
+                  <input value={terc.banco_nome} onChange={(e) => mudarTerc("banco_nome", e.target.value)} placeholder="Itaú Unibanco" className={INPUT} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Agência *</label>
+                  <input value={terc.agencia} onChange={(e) => mudarTerc("agencia", e.target.value.replace(/[^\dxX-]/g, "").slice(0, 7))} placeholder="0001" inputMode="numeric" className={INPUT} />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Conta com dígito *</label>
+                  <input value={terc.conta} onChange={(e) => mudarTerc("conta", e.target.value.replace(/[^\dxX-]/g, "").slice(0, 16))} placeholder="12345-6" className={INPUT} />
+                </div>
+              </div>
+              <div className="grid grid-cols-[120px_1fr] gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Chave PIX *</label>
+                  <select value={terc.pix_tipo} onChange={(e) => setTerc((t) => ({ ...t, pix_tipo: e.target.value as TipoChavePix, pix_chave: "" }))} className={INPUT}>
+                    {(Object.keys(ROTULO_PIX) as TipoChavePix[]).map((k) => <option key={k} value={k}>{ROTULO_PIX[k]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-muted-foreground mb-1">&nbsp;</label>
+                  <input value={terc.pix_chave} onChange={(e) => mudarTerc("pix_chave", e.target.value)}
+                    onBlur={() => terc.pix_chave && terc.pix_tipo !== "email" && setTerc((t) => ({ ...t, pix_chave: formatarChavePix(t.pix_tipo, t.pix_chave) }))}
+                    placeholder={terc.pix_tipo === "cnpj" ? "00.000.000/0001-00" : terc.pix_tipo === "email" ? "financeiro@empresa.com.br" : "(11) 99999-9999"}
+                    inputMode={terc.pix_tipo === "telefone" ? "tel" : terc.pix_tipo === "email" ? "email" : "text"} className={INPUT} />
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Esses dados saem no PDF no lugar da conta da V3.</p>
+            </div>
+          )}
           <div>
             <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Descrição no PDF</label>
             <textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={2} className={INPUT} />

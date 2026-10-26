@@ -5,6 +5,81 @@
 // servidor grava; ver protegerMetadata).
 
 import { CONTA_MANDATO, dataBR } from "./cobranca-mandato";
+import { formatCNPJ, isValidCNPJ } from "./validators/cpf-cnpj";
+import { formatPhoneIntl, normalizePhone } from "./phone";
+
+// Conta de recebimento (26/10/2026): a cobrança pode ir para a conta da V3 (Cora) ou para a
+// conta de um terceiro (ex.: a própria empresa de engenharia). Cobranças antigas, sem o campo,
+// são da conta V3.
+export type TipoChavePix = "cnpj" | "email" | "telefone";
+export type ContaRecebimento =
+  | { tipo: "v3" }
+  | {
+      tipo: "terceiro";
+      banco_codigo: string;
+      banco_nome: string;
+      agencia: string;
+      /** Conta com dígito, ex.: 12345-6 */
+      conta: string;
+      pix_tipo: TipoChavePix;
+      pix_chave: string;
+      razao_social: string;
+    };
+
+/** Bancos mais comuns (código COMPE → nome), para completar o nome ao digitar o número. */
+export const BANCOS: Record<string, string> = {
+  "001": "Banco do Brasil", "004": "Banco do Nordeste", "033": "Santander", "041": "Banrisul", "070": "BRB",
+  "077": "Banco Inter", "104": "Caixa Econômica Federal", "208": "BTG Pactual", "212": "Banco Original",
+  "237": "Bradesco", "260": "Nubank", "290": "PagBank", "323": "Mercado Pago", "336": "C6 Bank",
+  "341": "Itaú Unibanco", "380": "PicPay", "403": "Cora", "422": "Safra", "655": "Banco Votorantim",
+  "748": "Sicredi", "756": "Sicoob",
+};
+
+export const ROTULO_PIX: Record<TipoChavePix, string> = { cnpj: "CNPJ", email: "E-mail", telefone: "Telefone" };
+
+/** Chave PIX no formato exibido (CNPJ com máscara, telefone +55 (11) 9…). */
+export function formatarChavePix(tipo: TipoChavePix, chave: string): string {
+  if (tipo === "cnpj") return formatCNPJ(chave);
+  if (tipo === "telefone") return formatPhoneIntl(normalizePhone(chave).e164 ?? chave);
+  return chave.trim().toLowerCase();
+}
+
+/**
+ * Valida e normaliza a conta informada. Devolve { erro } com a primeira falha ou { conta }
+ * pronta para gravar (chave PIX normalizada: CNPJ só caracteres, telefone em E.164).
+ */
+export function validarContaRecebimento(entrada: unknown): { conta: ContaRecebimento } | { erro: string } {
+  const c = (entrada ?? {}) as Record<string, unknown>;
+  if (!c.tipo || c.tipo === "v3") return { conta: { tipo: "v3" } };
+  if (c.tipo !== "terceiro") return { erro: "Escolha a conta de recebimento." };
+  const t = (k: string) => String(c[k] ?? "").trim();
+  const banco_codigo = t("banco_codigo").replace(/\D/g, "").padStart(3, "0");
+  const banco_nome = t("banco_nome");
+  const agencia = t("agencia");
+  const conta = t("conta");
+  const razao_social = t("razao_social");
+  const pix_tipo = t("pix_tipo") as TipoChavePix;
+  let pix_chave = t("pix_chave");
+  if (!/^\d{3}$/.test(banco_codigo) || banco_codigo === "000") return { erro: "Informe o número do banco (3 dígitos)." };
+  if (banco_nome.length < 2) return { erro: "Informe o nome do banco." };
+  if (!/^\d{1,5}(-[\dxX])?$/.test(agencia)) return { erro: "Agência inválida (só números, ex.: 0001)." };
+  if (!/^\d{1,13}-[\dxX]{1,2}$/.test(conta)) return { erro: "Informe a conta com o dígito, ex.: 12345-6." };
+  if (razao_social.length < 3) return { erro: "Informe a razão social de quem recebe." };
+  if (pix_tipo === "cnpj") {
+    pix_chave = pix_chave.replace(/[^0-9A-Za-z]/g, "").toUpperCase();
+    if (!isValidCNPJ(pix_chave)) return { erro: "Chave PIX: CNPJ inválido." };
+  } else if (pix_tipo === "email") {
+    pix_chave = pix_chave.toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pix_chave)) return { erro: "Chave PIX: e-mail inválido." };
+  } else if (pix_tipo === "telefone") {
+    const tel = normalizePhone(pix_chave);
+    if (!tel.ok || !tel.e164) return { erro: "Chave PIX: telefone inválido (com DDD)." };
+    pix_chave = tel.e164;
+  } else {
+    return { erro: "Escolha o tipo da chave PIX (CNPJ, e-mail ou telefone)." };
+  }
+  return { conta: { tipo: "terceiro", banco_codigo, banco_nome, agencia, conta: conta.toUpperCase(), pix_tipo, pix_chave, razao_social } };
+}
 
 export type CobrancaAvaliacao = {
   id: string;
@@ -16,6 +91,8 @@ export type CobrancaAvaliacao = {
   descricao: string;
   /** Imóvel(is) a avaliar (endereço/matrícula), impresso no PDF. */
   imovel?: string | null;
+  /** Para onde o cliente paga. Ausente = conta V3 (cobranças anteriores a 26/10/2026). */
+  conta?: ContaRecebimento | null;
   criado_em: string;
   criado_por?: string | null;
   pago_em?: string | null;
@@ -52,6 +129,7 @@ export function htmlCobrancaAvaliacao(opts: {
   emitidoEm: Date;
 }): string {
   const { cobranca: c } = opts;
+  const terceiro = c.conta?.tipo === "terceiro" ? c.conta : null;
   const emitido = opts.emitidoEm.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
   const doc = fmtDoc(opts.clienteDoc);
   const linha = (rotulo: string, valor: string, forte = false) =>
@@ -112,15 +190,20 @@ export function htmlCobrancaAvaliacao(opts: {
   </div>
 
   <h2>Dados para pagamento</h2>
-  <div class="pix">
+  ${terceiro ? `<div class="pix">
+    <p>PIX (chave ${ROTULO_PIX[terceiro.pix_tipo]})</p>
+    <p class="k">${esc(formatarChavePix(terceiro.pix_tipo, terceiro.pix_chave))}</p>
+    <p style="margin-top:8px">Banco ${esc(terceiro.banco_codigo)} – ${esc(terceiro.banco_nome)} · Agência ${esc(terceiro.agencia)} · Conta ${esc(terceiro.conta)}</p>
+    <p>Favorecido: <b>${esc(terceiro.razao_social)}</b></p>
+  </div>` : `<div class="pix">
     <p>PIX (chave CNPJ)</p>
     <p class="k">${CONTA_MANDATO.cnpj}</p>
     <p style="margin-top:8px">Banco ${CONTA_MANDATO.banco} · Agência ${CONTA_MANDATO.agencia} · Conta ${CONTA_MANDATO.conta}</p>
     <p>Favorecido: <b>${CONTA_MANDATO.favorecido}</b> – CNPJ ${CONTA_MANDATO.cnpj}</p>
-  </div>
+  </div>`}
 
   <div class="nota">
-    <p>Pagamento por PIX ou transferência para a conta acima, de titularidade da V3 Partners; o comprovante serve como recibo. Envie o comprovante ao seu assessor para que a vistoria do imóvel seja agendada com a empresa de engenharia.</p>
+    <p>Pagamento por PIX ou transferência para a conta acima, de titularidade ${terceiro ? `de ${esc(terceiro.razao_social)}` : "da V3 Partners"}; o comprovante serve como recibo. Envie o comprovante ao seu assessor para que a vistoria do imóvel seja agendada com a empresa de engenharia.</p>
     <p>O valor refere-se exclusivamente ao serviço de avaliação do imóvel pela empresa de engenharia, exigido pela instituição financeira na análise do crédito.</p>
   </div>
 

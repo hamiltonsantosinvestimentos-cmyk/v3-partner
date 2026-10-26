@@ -5,7 +5,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { launchBrowser } from "@/lib/credit-report-generate";
 import { atualizarMetadata } from "@/lib/credit-proposal-meta";
 import {
-  DESCRICAO_PADRAO, cobrancasAvaliacao, codigoCobrancaAvaliacao, htmlCobrancaAvaliacao, type CobrancaAvaliacao,
+  DESCRICAO_PADRAO, cobrancasAvaliacao, codigoCobrancaAvaliacao, htmlCobrancaAvaliacao, validarContaRecebimento, type CobrancaAvaliacao,
 } from "@/lib/cobranca-avaliacao";
 
 export const maxDuration = 120;
@@ -13,7 +13,8 @@ export const maxDuration = 120;
 // Cobrança da avaliação de engenharia (19/10/2026).
 //   GET                 → { cobrancas }
 //   GET ?id=<id>        → PDF da cobrança (para enviar ao cliente)
-//   POST { valor, vencimento, descricao?, imovel? } → cria a cobrança
+//   POST { valor, vencimento, descricao?, imovel?, conta? } → cria a cobrança
+//        conta: { tipo: "v3" } (padrão) ou { tipo: "terceiro", banco, agência, conta, PIX, razão social }
 //   PATCH { id, pago }  → marca/desmarca como paga
 //   DELETE ?id=<id>     → remove
 // Lista em credit_desk_proposals.metadata.cobrancas_avaliacao.
@@ -78,10 +79,12 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   const { proposalId } = await params;
   const ctx = await contexto(proposalId);
   if ("erro" in ctx) return ctx.erro;
-  const body = (await req.json().catch(() => ({}))) as { valor?: number; vencimento?: string; descricao?: string; imovel?: string };
+  const body = (await req.json().catch(() => ({}))) as { valor?: number; vencimento?: string; descricao?: string; imovel?: string; conta?: unknown };
   const valor = Math.round(Number(body.valor) * 100) / 100;
   if (!(valor > 0)) return NextResponse.json({ error: "Informe o valor da avaliação." }, { status: 400 });
   if (!/^\d{4}-\d{2}-\d{2}$/.test(body.vencimento ?? "")) return NextResponse.json({ error: "Informe o vencimento." }, { status: 400 });
+  const contaOk = validarContaRecebimento(body.conta);
+  if ("erro" in contaOk) return NextResponse.json({ error: contaOk.erro }, { status: 400 });
   let nova: CobrancaAvaliacao | null = null;
   const r = await salvar(ctx.db, proposalId, (lista) => {
     nova = {
@@ -91,6 +94,7 @@ export async function POST(req: NextRequest, { params }: Ctx) {
       vencimento: body.vencimento!,
       descricao: (body.descricao ?? "").trim() || DESCRICAO_PADRAO,
       imovel: (body.imovel ?? "").trim() || null,
+      conta: contaOk.conta,
       criado_em: new Date().toISOString(),
       criado_por: ctx.nome,
     };
