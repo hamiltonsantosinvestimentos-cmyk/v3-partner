@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
-import { TrendingUp, TrendingDown, RefreshCw, Activity } from "lucide-react";
+import Link from "next/link";
+import { TrendingUp, TrendingDown, RefreshCw, Activity, ArrowRight } from "lucide-react";
 import type { MarketData } from "@/app/api/market-data/route";
 
 function TickerItem({
@@ -116,7 +117,9 @@ export function MarketTicker() {
 
       {/* Timestamp + refresh */}
       {data && !loading && (
-        <div className="flex items-center gap-2 px-3 shrink-0 border-l border-[#122036] h-full">
+        <div className="relative hidden sm:flex items-center gap-2 px-3 shrink-0 border-l border-[#122036] h-full">
+          {/* Fade na borda direita do scroll */}
+          <div className="absolute right-full top-0 w-8 h-full bg-gradient-to-l from-[#09081A] to-transparent pointer-events-none z-10" />
           <span className="text-[#5A7490] text-[10px] leading-none">{data.updatedAt}</span>
           <button
             onClick={fetchData}
@@ -128,8 +131,14 @@ export function MarketTicker() {
         </div>
       )}
 
-      {/* Fade na borda direita (antes do timestamp) */}
-      <div className="absolute right-[72px] top-0 w-8 h-full bg-gradient-to-l from-[#09081A] to-transparent pointer-events-none z-10" />
+      {/* Aba Mercado completa */}
+      <Link
+        href="/mercado"
+        className="group flex items-center gap-1.5 px-3 h-full shrink-0 border-l border-[#122036] text-[#C9A84C] hover:bg-[#C9A84C]/10 transition-colors"
+      >
+        <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Ver mercado</span>
+        <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+      </Link>
     </div>
   );
 }
