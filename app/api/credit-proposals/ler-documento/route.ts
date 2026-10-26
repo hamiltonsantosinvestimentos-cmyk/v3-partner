@@ -29,6 +29,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ dados });
   } catch (e) {
     console.error("[ler-documento]", e);
+    // Falha da API de IA (sem crédito, chave, sobrecarga) não é culpa da foto: não pedir outra.
+    const status = (e as { status?: number })?.status;
+    if (status) {
+      return NextResponse.json({ error: "A leitura automática está indisponível no momento. Digite os dados manualmente." }, { status: 503 });
+    }
     return NextResponse.json({ error: "Não consegui ler o documento. Tente uma foto mais nítida ou digite manualmente." }, { status: 422 });
   }
 }
