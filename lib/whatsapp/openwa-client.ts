@@ -30,6 +30,11 @@ function resolveSessionId(sessionId?: string): string {
 //    carregado) — sem chamar POST /api/sessions/:id/start ela nunca sai
 //    desse estado e o QR nunca é gerado. Ver services/whatsapp-gateway/src/
 //    modules/session/session.controller.ts (@Post() e @Post(':id/start')).
+// Eventos que o /api/sdr/webhook sabe processar — mesma assinatura do
+// webhook já registrado manualmente pra sessão global da V3
+// (v3-partners-prod) desde 13/08/2026. Sessão nova nenhuma tinha isso.
+const SDR_WEBHOOK_EVENTS = ["message.received", "session.qr", "session.authenticated", "session.disconnected"];
+
 export async function createSession(name: string): Promise<string> {
   const res = await fetch(`${BASE_URL}/api/sessions`, {
     method: "POST",
@@ -41,8 +46,53 @@ export async function createSession(name: string): Promise<string> {
   const sessionId = data.id ?? data.sessionId;
   if (!sessionId) throw new Error("OpenWA: resposta de criação de sessão sem id");
 
+  // Achado 14/09/2026: toda sessão de partner criada por createSession()
+  // nascia SEM webhook nenhum registrado no gateway (webhooks são por
+  // sessão, não globais — ver services/whatsapp-gateway/src/modules/webhook).
+  // A conexão do WhatsApp completava normalmente (QR, "conectado"...), mas
+  // nenhuma mensagem recebida chegava nunca em /api/sdr/webhook -- a aba
+  // Conversas ficava vazia pra sempre, silenciosamente, sem erro nenhum. Best
+  // effort de propósito: um webhook que falha ao registrar não deve impedir
+  // a conexão do WhatsApp em si (o partner ainda consegue conectar e usar
+  // Automação/Envio em Massa); a falta do webhook fica só sem Conversas.
+  try {
+    const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/sdr/webhook`;
+    const whRes = await fetch(`${BASE_URL}/api/sessions/${sessionId}/webhooks`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({ url: webhookUrl, events: SDR_WEBHOOK_EVENTS }),
+    });
+    if (!whRes.ok) {
+      console.error(`[openwa] falha ao registrar webhook da sessão ${sessionId}: ${whRes.status} ${await whRes.text().catch(() => "")}`);
+    }
+  } catch (e) {
+    console.error(`[openwa] falha ao registrar webhook da sessão ${sessionId}:`, e);
+  }
+
   await startSession(sessionId);
   return sessionId;
+}
+
+// Garante que uma sessão já existente (criada antes desse fix, ou por
+// qualquer outro caminho) tem o webhook do SDR registrado -- idempotente,
+// não duplica se já existir. Chamado tanto no restart de sessão morta
+// (connect/route.ts) quanto disponível pra rodar manualmente em sessões
+// órfãs como a do próprio Hamilton.
+export async function ensureSessionWebhook(sessionId: string): Promise<void> {
+  const listRes = await fetch(`${BASE_URL}/api/sessions/${sessionId}/webhooks`, { headers: headers() });
+  if (listRes.ok) {
+    const existing = (await listRes.json()) as { url?: string }[];
+    if (existing.some((w) => w.url?.endsWith("/api/sdr/webhook"))) return;
+  }
+  const webhookUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/api/sdr/webhook`;
+  const whRes = await fetch(`${BASE_URL}/api/sessions/${sessionId}/webhooks`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ url: webhookUrl, events: SDR_WEBHOOK_EVENTS }),
+  });
+  if (!whRes.ok) {
+    throw new Error(`OpenWA: falha ao registrar webhook (${whRes.status}) ${await whRes.text().catch(() => "")}`);
+  }
 }
 
 // (Re)inicia uma sessão já existente — necessário tanto pra criação (acima)
