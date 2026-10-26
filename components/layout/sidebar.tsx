@@ -10,7 +10,7 @@ import {
   Trophy, GraduationCap, Handshake, Settings2, Medal,
   ContactRound, DollarSign, Wallet, Zap, Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package, Megaphone,
+  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package, Megaphone, ChartCandlestick,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ const iconMap = {
   Settings2, Medal, ContactRound, DollarSign, Wallet, Zap,
   Target, ShieldCheck, Calculator, UserPlus, ClipboardList, BadgeCheck, Layers, BarChart2, BookMarked, BotMessageSquare,
   ShoppingBag, Radar, BookOpen, FileText, UserPlus2, MessageSquare, BarChart3, Video, UsersRound,
-  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package, Megaphone,
+  FileCheck2, Plane, FolderOpen, Gavel, Link2, Compass, User, Package, Megaphone, ChartCandlestick,
 };
 
 interface NavSubItem { href: string; label: string; roles: string[]; }
@@ -37,6 +37,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: "GERAL",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "SDR", "CLOSER"] },
+      { href: "/mercado", label: "Mercado", icon: "ChartCandlestick", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "SDR", "CLOSER", "FINANCEIRO"] },
       { href: "/crm", label: "CRM", icon: "ContactRound", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
       { href: "/chat", label: "Chat Mesa V3", icon: "MessageSquare", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] },
       { href: "/chat/admin", label: "Chat Partners", icon: "MessageSquare", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
