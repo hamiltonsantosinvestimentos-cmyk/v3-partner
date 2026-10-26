@@ -39,7 +39,7 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "SDR", "CLOSER"] },
       { href: "/mercado", label: "Mercado", icon: "ChartCandlestick", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "SDR", "CLOSER", "FINANCEIRO"] },
       { href: "/crm", label: "CRM", icon: "ContactRound", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
-      { href: "/chat", label: "Chat Mesa V3", icon: "MessageSquare", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] },
+      { href: "/chat", label: "Chat Mesa V3", icon: "MessageSquare", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
       { href: "/chat/admin", label: "Chat Partners", icon: "MessageSquare", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
       { href: "/chat/equipe", label: "Chat Equipe", icon: "UsersRound", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       {

@@ -5,6 +5,7 @@ import { sendText } from "@/lib/whatsapp/openwa-client";
 import { numerosAlertaQuiz } from "@/lib/quiz-lead-unico";
 import { lembretesDevidos } from "@/lib/prospeccao-lembrete";
 import { recuperarCheckoutsWebinar } from "@/lib/webinar";
+import { verificarSlaChat } from "@/lib/chat-partners";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -70,5 +71,9 @@ export async function GET(req: NextRequest) {
   // Mesmo pg_cron por minuto: recuperação do checkout do webinar (WhatsApp para quem não pagou).
   const webinar = await recuperarCheckoutsWebinar(db).catch((e) => { console.error("Recuperação webinar:", e); return 0; });
 
-  return NextResponse.json({ ok: true, enviados: enviados.length, webinar });
+  // Mesmo pg_cron: alerta de SLA do Chat Partners (partner sem resposta da Mesa há CHAT_SLA_HORAS).
+  const slaChat = await verificarSlaChat(db, (texto) => Promise.allSettled(numeros.map((n) => sendText(n, texto).catch(() => false))))
+    .catch((e) => { console.error("SLA chat:", e); return 0; });
+
+  return NextResponse.json({ ok: true, enviados: enviados.length, webinar, slaChat });
 }

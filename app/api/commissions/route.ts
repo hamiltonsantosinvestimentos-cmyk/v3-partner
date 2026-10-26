@@ -6,6 +6,7 @@ import { logAudit } from "@/lib/audit";
 import { notifyNovaComissao, notifyComissaoPaga } from "@/lib/email";
 import { createNotification } from "@/lib/notify";
 import { renderComprovanteComissaoPDF } from "@/lib/comprovante-comissao-pdf";
+import { avisarComissaoPaga } from "@/lib/chat-partners";
 
 // PATCH → PAGA gera o comprovante em PDF (render server-side); folga extra de tempo.
 export const maxDuration = 60;
@@ -309,6 +310,11 @@ export async function PATCH(req: NextRequest) {
       const taxVal  = commission.tax_value ?? (taxPct > 0 ? gross * taxPct / 100 : 0);
       const netVal  = commission.commission_net_value ?? (gross - taxVal);
       const partnerName = partnerProfile?.full_name ?? "Partner";
+
+      // Chat Partners: aviso automático na conversa do partner
+      avisarComissaoPaga(svcEmail, commission.partner_id, {
+        code: commission.code, operacao: commission.operation_code, liquido: netVal, data: commission.payment_date,
+      }, { id: user.id, nome: profile?.full_name ?? "Financeiro V3" }).catch(() => {});
 
       // Comprovante em PDF (não bloqueia o e-mail se falhar)
       let pdf: { filename: string; content: Buffer } | undefined;
