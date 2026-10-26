@@ -676,13 +676,17 @@ export function OfertaLp() {
     setForm({ aberto: true, plano });
   };
   const fechar = useCallback(() => setForm((f) => ({ ...f, aberto: false })), []);
+  // Os CTAs de "30 dias grátis" vão direto ao cadastro (sem pagamento), levando as UTMs.
+  const irCadastro = (plano: PlanoOferta | null = null) => {
+    trackPixel("InitiateCheckout", { content_name: "oferta_trial_30_dias", plano: plano ?? "indefinido" });
+    const q = new URLSearchParams({ ...(plano ? { plano } : {}), ...tracking }).toString();
+    window.location.href = `/cadastro-partner-oferta${q ? `?${q}` : ""}`;
+  };
   // Gold e Diamante vão direto ao cadastro (sem pagamento, 30 dias grátis); o Partner PRO, anual,
   // segue pelo formulário de contato.
   const escolherPlano = (id: PlanoOferta) => {
     if (id === "partner_pro") return abrir(id);
-    trackPixel("InitiateCheckout", { content_name: "oferta_trial_30_dias", plano: id });
-    const q = new URLSearchParams(tracking).toString();
-    window.location.href = `/cadastro-partner-oferta?plano=${id}${q ? `&${q}` : ""}`;
+    irCadastro(id);
   };
 
   return (
@@ -735,7 +739,7 @@ export function OfertaLp() {
             <Image src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" width={52} height={32} className="h-7 w-auto object-contain" />
             <span className="hidden md:inline text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: C.gold }}>Oferta única · {OFERTA.trialDias} dias grátis</span>
           </div>
-          <button type="button" onClick={() => abrir()} className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-5 py-2.5 text-sm font-bold transition-all hover:brightness-110"
+          <button type="button" onClick={() => irCadastro()} className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg px-5 py-2.5 text-sm font-bold transition-all hover:brightness-110"
             style={{ background: `linear-gradient(135deg, ${C.goldLight}, ${C.gold})`, color: C.bg }}>
             Começar grátis <ArrowRight className="w-4 h-4" />
           </button>
@@ -744,7 +748,7 @@ export function OfertaLp() {
 
       <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 sm:px-6 py-5">
         <Image src="/v3-logo-flat-gold-alpha.png" alt="V3 Partners" width={72} height={44} className="h-10 w-auto object-contain" priority />
-        <button type="button" onClick={() => abrir()} className="hidden sm:inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] transition-colors hover:bg-[#C9A84C]/10"
+        <button type="button" onClick={() => irCadastro()} className="hidden sm:inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] transition-colors hover:bg-[#C9A84C]/10"
           style={{ borderColor: C.line, color: C.gold }}>
           <CalendarCheck2 className="w-3.5 h-3.5" /> 30 dias grátis
         </button>
@@ -768,7 +772,7 @@ export function OfertaLp() {
               Suba suas propostas na Mesa de Crédito, use a análise, os contratos e o time da V3 por <strong style={{ color: C.cream }}>30 dias sem pagar nada</strong>. Depois, escolha o seu plano ou cancele. <strong style={{ color: C.cream }}>Sem fidelidade.</strong>
             </p>
             <div className="q-rise mt-9 flex flex-col sm:flex-row sm:items-center gap-4" style={{ animationDelay: "2300ms" }}>
-              <Magnetico onClick={() => abrir()} grande>Quero meus 30 dias grátis</Magnetico>
+              <Magnetico onClick={() => irCadastro()} grande>Quero meus 30 dias grátis</Magnetico>
               <a href="#planos" className="inline-flex items-center gap-2 text-sm font-semibold transition-colors hover:text-[#E8C97A]" style={{ color: C.muted }}>
                 Ver os planos <ChevronDown className="h-4 w-4" />
               </a>
@@ -807,7 +811,7 @@ export function OfertaLp() {
               <p className="mt-6 max-w-md text-base leading-relaxed" style={{ color: C.muted }}>
                 Uma oferta simples: 30 dias com tudo liberado para subir propostas reais. No fim, você escolhe como seguir, ou não segue.
               </p>
-              <div className="mt-8 hidden lg:block"><Magnetico onClick={() => abrir()}>Começar meu trial</Magnetico></div>
+              <div className="mt-8 hidden lg:block"><Magnetico onClick={() => irCadastro()}>Começar meu trial</Magnetico></div>
             </Revelar>
           </div>
           <LinhaOferta />
@@ -885,7 +889,7 @@ export function OfertaLp() {
             <p className="relative mx-auto mt-6 max-w-xl text-base sm:text-lg leading-relaxed" style={{ color: C.muted }}>
               Deixe seu contato e a equipe da V3 libera o seu acesso.
             </p>
-            <div className="relative mt-10 flex justify-center"><Magnetico onClick={() => abrir()} grande>Quero meus 30 dias grátis</Magnetico></div>
+            <div className="relative mt-10 flex justify-center"><Magnetico onClick={() => irCadastro()} grande>Quero meus 30 dias grátis</Magnetico></div>
             <p className="relative mt-5 flex items-center justify-center gap-2 text-[11px]" style={{ color: C.muted }}>
               <Clock3 className="w-3.5 h-3.5" /> Leva menos de 1 minuto · sem cartão
             </p>
@@ -917,7 +921,7 @@ export function OfertaLp() {
 
       {/* CTA fixo no celular */}
       <div className="fixed inset-x-0 bottom-0 z-30 border-t p-3 backdrop-blur-md sm:hidden" style={{ borderColor: C.line, background: "rgba(9,8,26,0.85)" }}>
-        <button type="button" onClick={() => abrir()} className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold"
+        <button type="button" onClick={() => irCadastro()} className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-bold"
           style={{ background: `linear-gradient(135deg, ${C.goldLight}, ${C.gold})`, color: C.bg }}>
           Quero meus 30 dias grátis <ArrowRight className="w-4 h-4" />
         </button>
