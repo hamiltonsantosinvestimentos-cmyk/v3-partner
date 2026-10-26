@@ -169,8 +169,8 @@ export function MercadoClient() {
       </div>
 
       {/* Abas */}
-      <div className="sticky top-0 z-20 -mx-1 overflow-x-auto bg-[#09081A]/85 px-1 py-2 backdrop-blur-md">
-        <div className="inline-flex gap-1 rounded-2xl border border-[#243A66]/70 bg-[#111F35]/80 p-1">
+      <div className="sticky top-0 z-20 -mx-1 overflow-x-auto px-1 py-2">
+        <div className="inline-flex gap-1 rounded-2xl border border-[#243A66]/70 bg-[#111F35]/90 p-1 shadow-[0_12px_32px_-12px_rgba(9,8,26,.9)] backdrop-blur-md">
           {ABAS.map(({ id, t, i: Icone }) => (
             <button key={id} onClick={() => setAba(id)}
               className={`inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-bold transition-all ${aba === id ? "bg-gradient-to-br from-[#E8C97A] to-[#C9A84C] text-[#09081A] shadow-[0_8px_24px_-10px_rgba(201,168,76,.8)]" : "text-[#7A8FA8] hover:text-[#F0ECE4]"}`}>
