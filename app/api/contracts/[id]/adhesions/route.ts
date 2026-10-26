@@ -71,6 +71,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     })),
     pending_batches: (batches ?? [])
       .filter((b) => !b.consumido_por_contract_id)
+      .filter((b) => ((b.cm_party_qualifications as { deleted_at: string | null }[]) ?? []).some((p) => !p.deleted_at))
       .map((b) => ({
         id: b.id,
         status: b.status,
