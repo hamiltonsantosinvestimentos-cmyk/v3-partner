@@ -12,6 +12,7 @@ import { createNotification, notifyByRoles } from "@/lib/notify";
 import { issueCreditCode } from "@/lib/v3-codes";
 import { resolveClient } from "@/lib/v3-clients";
 import { gerarComissoesCreditoLiberado } from "@/lib/credit-commissions";
+import { avisarMudancaEtapa } from "@/lib/chat-partners";
 import { PARTNER_HE_CREDIT_LINES } from "@/lib/constants";
 
 function serviceClient() {
@@ -561,6 +562,12 @@ export async function PATCH(req: NextRequest) {
     } catch (e) {
       console.error("[credit-proposals PATCH] falha ao gerar comissões da liberação", e instanceof Error ? e.message : e);
     }
+  }
+
+  // Chat Partners: aviso automático na conversa do partner quando a proposta muda de etapa
+  if (fields.stage && previousStage !== fields.stage) {
+    avisarMudancaEtapa(serviceClient(), id, fields.stage, { id: user.id!, nome: profile?.full_name ?? "Mesa V3" })
+      .catch((e) => console.error("[credit-proposals PATCH] aviso no chat", e instanceof Error ? e.message : e));
   }
 
   // Notifica partner se status mudou (fire and forget)

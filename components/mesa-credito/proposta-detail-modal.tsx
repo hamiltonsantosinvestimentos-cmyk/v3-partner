@@ -18,6 +18,7 @@ import { formatCurrency, formatDate, maskCurrencyBRLInput, maskTelefoneCredito, 
 import { STATUS_LABELS, STATUS_COLORS, PLAN_COMMISSION_PCT, ROLE_LABELS, type OperationStatus, type UserRole } from "@/lib/constants";
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
+import { ChatDaProposta } from "@/components/chat/chat-da-proposta";
 import { RecomendacaoLinha } from "./recomendacao-linha";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
 import { NdaVinculoProposta } from "@/components/mesa-credito/nda-vinculo-proposta";
@@ -4997,6 +4998,9 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
 
           {/* ── Mensagens da Mesa ── */}
           {modalTab === "raio_x" && <RaioXExtrato proposalId={proposal.id} clienteNome={proposal.client_name ?? "cliente"} />}
+
+          {/* ── Chat Partners: mensagens ligadas a esta proposta (só Mesa) ── */}
+          {modalTab === "comentarios" && <ChatDaProposta proposalId={proposal.id} />}
 
           {modalTab === "comentarios" && <div className="p-4 rounded-xl border border-border bg-secondary/30 space-y-3">
             <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
