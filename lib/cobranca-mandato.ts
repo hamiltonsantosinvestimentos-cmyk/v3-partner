@@ -29,6 +29,16 @@ export type RecursoLiberado = {
   criado_por?: string;
   /** Preenchido quando o PDF de cobrança é gerado pela primeira vez. */
   cobranca_gerada_em?: string;
+  /** Cliente pagou a Remuneração de Sucesso desta tranche (27/10/2026): data (aaaa-mm-dd). */
+  pago_cliente_em?: string;
+  /** Valor efetivamente recebido do cliente (base da comissão do mandato do partner). */
+  valor_pago_cliente?: number;
+  pago_registrado_por?: string;
+  /** Comissão do partner gerada sobre este pagamento (commissions.id) e o valor dela. */
+  comissao_mandato_id?: string;
+  comissao_mandato_valor?: number;
+  /** Por que não gerou comissão (ex.: modelo antigo, sem partner). */
+  comissao_mandato_obs?: string;
 };
 
 export function recursosLiberados(metadata: Record<string, unknown> | null | undefined): RecursoLiberado[] {

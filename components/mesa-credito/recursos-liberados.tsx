@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Banknote, Plus, FileDown, Trash2, Loader2, FileSignature, AlertTriangle } from "lucide-react";
+import { Banknote, Plus, FileDown, Trash2, Loader2, FileSignature, AlertTriangle, BadgeCheck, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmar } from "@/lib/aviso";
 import { formatCurrency, maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
@@ -10,7 +10,9 @@ import { dataBR, type RecursoLiberado } from "@/lib/cobranca-mandato";
 // Recursos liberados (15/10/2026, pedido do Hamilton): a Mesa lança cada
 // liberação (tranche) da operação — uma proposta pode ter vários créditos liberados — e gera, pelo Mandato de Crédito assinado,
 // o PDF de cobrança da Remuneração de Sucesso para enviar ao cliente pagar
-// (ver /api/mesa-credito/cobranca-mandato/[proposalId]).
+// (ver /api/mesa-credito/cobranca-mandato/[proposalId]). Desde 27/10/2026: "Comissão paga pelo
+// cliente" em cada tranche registra o pagamento e gera a comissão do mandato do partner na aba
+// Comissões (aguardando autorização).
 
 type MandatoInfo = { contract_code: string; signed_at: string | null; percentual: number; contratante_nome: string };
 type Recurso = RecursoLiberado & { remuneracao?: number; vencimento?: string };
@@ -41,6 +43,10 @@ export function RecursosLiberados({
   const [salvando, setSalvando] = useState(false);
   const [gerando, setGerando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const [pagando, setPagando] = useState<string | null>(null);
+  const [valorPago, setValorPago] = useState("");
+  const [dataPago, setDataPago] = useState(hojeISO());
+  const [aviso, setAviso] = useState<string | null>(null);
 
   async function carregar() {
     const j = await fetch(url).then((r) => r.json()).catch(() => null);
@@ -131,6 +137,61 @@ export function RecursosLiberados({
     }
   }
 
+  function abrirPagamento(r: Recurso) {
+    setPagando(r.id);
+    setErro(null);
+    setAviso(null);
+    setValorPago(r.remuneracao != null ? maskCurrencyBRLInput(String(Math.round(r.remuneracao * 100))) : "");
+    setDataPago(hojeISO());
+  }
+
+  async function registrarPagamento(r: Recurso) {
+    const v = parseCurrencyBRLInput(valorPago);
+    if (!(v > 0)) { setErro("Informe o valor recebido do cliente."); return; }
+    setSalvando(true);
+    setErro(null);
+    try {
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ liberacao: r.id, acao: "pago", valor: v, data: dataPago }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || j.error) { setErro(typeof j.error === "string" ? j.error : "Não foi possível registrar."); return; }
+      onChange?.(j.recursos ?? []);
+      setPagando(null);
+      const c = j.comissao as { status?: string; licenciadoValue?: number; needsManualValue?: boolean } | undefined;
+      setAviso(c?.status === "created"
+        ? c.needsManualValue
+          ? "Pagamento registrado. Comissão do partner criada na aba Comissões: o plano não tem % definido, o financeiro define o valor."
+          : `Pagamento registrado. Comissão do partner de ${formatCurrency(c.licenciadoValue ?? 0)} criada na aba Comissões, aguardando autorização.`
+        : "Pagamento registrado.");
+      await carregar();
+    } catch {
+      setErro("Falha de rede ao registrar.");
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function desfazerPagamento(r: Recurso) {
+    const ok = await confirmar(r.comissao_mandato_id
+      ? "Desfazer o pagamento desta tranche? A comissão do partner gerada (ainda não autorizada) será apagada."
+      : "Desfazer o pagamento desta tranche?");
+    if (!ok) return;
+    setErro(null);
+    setAviso(null);
+    try {
+      await aplicar(await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ liberacao: r.id, acao: "desfazer" }),
+      }));
+    } catch {
+      setErro("Falha de rede ao desfazer.");
+    }
+  }
+
   const total = recursos.reduce((s, r) => s + r.valor, 0);
   const totalRemuneracao = recursos.reduce((s, r) => s + (r.remuneracao ?? 0), 0);
 
@@ -169,7 +230,8 @@ export function RecursosLiberados({
       {recursos.length > 0 && (
         <div className="space-y-1.5">
           {recursos.map((r, i) => (
-            <div key={r.id} className="p-2.5 rounded-lg bg-background/60 border border-border flex items-center justify-between gap-2">
+            <div key={r.id} className="p-2.5 rounded-lg bg-background/60 border border-border space-y-2">
+            <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs text-white font-semibold">
                   {formatCurrency(r.valor)}
@@ -183,6 +245,15 @@ export function RecursosLiberados({
                   </p>
                 )}
                 {r.obs && <p className="text-[10px] text-muted-foreground/80 truncate">{r.obs}</p>}
+                {r.pago_cliente_em && (
+                  <p className="text-[10px] text-emerald-400 flex items-center gap-1">
+                    <BadgeCheck className="w-3 h-3" />
+                    Pago pelo cliente em {dataBR(r.pago_cliente_em)} · {formatCurrency(r.valor_pago_cliente ?? 0)}
+                    {r.comissao_mandato_id
+                      ? <span className="text-[#E8C97A]"> · comissão do partner {formatCurrency(r.comissao_mandato_valor ?? 0)} na aba Comissões</span>
+                      : r.comissao_mandato_obs ? <span className="text-muted-foreground"> · {r.comissao_mandato_obs}</span> : null}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <Button
@@ -196,6 +267,26 @@ export function RecursosLiberados({
                   {gerando === r.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />}
                   PDF de cobrança
                 </Button>
+                {canEdit && !r.pago_cliente_em && pagando !== r.id && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => abrirPagamento(r)}
+                    title="O cliente pagou a Remuneração de Sucesso desta tranche: gera o % do partner na aba Comissões"
+                    className="h-7 gap-1 text-[11px] border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                  >
+                    <BadgeCheck className="w-3 h-3" /> Comissão paga pelo cliente
+                  </Button>
+                )}
+                {canEdit && r.pago_cliente_em && (
+                  <button
+                    onClick={() => desfazerPagamento(r)}
+                    title="Desfazer pagamento"
+                    className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
+                  >
+                    <Undo2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
                 {canEdit && (
                   <button
                     onClick={() => remover(r)}
@@ -206,6 +297,28 @@ export function RecursosLiberados({
                   </button>
                 )}
               </div>
+            </div>
+            {pagando === r.id && (
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-2.5 space-y-2">
+                <p className="text-[10.5px] text-muted-foreground">Confirme o que o cliente pagou. A comissão do partner sai sobre esse valor (menos impostos), no % do plano dele, e vai para a aba Comissões aguardando autorização.</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Valor recebido *</label>
+                    <input value={valorPago} onChange={(e) => setValorPago(maskCurrencyBRLInput(e.target.value))} placeholder="0,00" inputMode="numeric" className={INPUT} autoFocus />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Data do pagamento *</label>
+                    <input type="date" value={dataPago} onChange={(e) => setDataPago(e.target.value)} className={INPUT} />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setPagando(null)} disabled={salvando}>Cancelar</Button>
+                  <Button size="sm" onClick={() => registrarPagamento(r)} disabled={salvando} className="gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-[#09081A] border-0">
+                    {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BadgeCheck className="w-3.5 h-3.5" />} Confirmar e gerar comissão
+                  </Button>
+                </div>
+              </div>
+            )}
             </div>
           ))}
           <div className="flex items-center justify-between text-xs pt-1">
@@ -265,6 +378,7 @@ export function RecursosLiberados({
         </div>
       )}
 
+      {aviso && <p className="text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{aviso}</p>}
       {erro && <p className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{erro}</p>}
     </div>
   );
