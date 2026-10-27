@@ -4113,6 +4113,11 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
             {!proposal.partner_id && (
               <p className="text-[10px] text-amber-400/80 text-center italic">Proposta sem parceiro vinculado — comissão do licenciado não se aplica.</p>
             )}
+            {proposal.partner_id && (
+              <p className="text-[10px] text-muted-foreground text-center">
+                Na aba Comissões: a parte da instituição nasce ao liberar o recurso; a do mandato, em cada tranche marcada como paga pelo cliente (Recursos Liberados).
+              </p>
+            )}
 
             {!canChangeStage && (
               <p className="text-[10px] text-muted-foreground text-center italic">Somente analistas e administradores podem editar os campos de comissão.</p>

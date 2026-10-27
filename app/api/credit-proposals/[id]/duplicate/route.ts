@@ -33,7 +33,7 @@ function resolveBucket(doc: { storage_path?: string; bucket?: string }): string 
 const META_NAO_COPIAR = [
   "stage_history", "stage_changed_at", "crm_pending_review", "sla_override",
   "docs_checklist_confirmed_at", "docs_checklist_confirmed_by", "docs_checklist_confirmed_by_name",
-  "mandato_envios", "recursos_liberados", "commissions_generated", "analise_gate_override", "ai_analysis",
+  "mandato_envios", "recursos_liberados", "commissions_generated", "comissao_modelo", "commission_ids", "analise_gate_override", "ai_analysis",
   "lembretes_enviados", "pendencias_ocr", "duplicada_de",
 ];
 

@@ -3,6 +3,8 @@ import { randomUUID } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { launchBrowser } from "@/lib/credit-report-generate";
+import { notifyByRoles } from "@/lib/notify";
+import { desfazerComissaoMandatoTranche, gerarComissaoMandatoTranche } from "@/lib/credit-commissions";
 import {
   calcularCobranca, codigoCobranca, htmlCobranca, mandatoAssinadoDaProposta, recursosLiberados,
   type RecursoLiberado,
@@ -14,6 +16,7 @@ export const maxDuration = 120;
 //   GET                    → { mandato, recursos } (mandato = Mandato de Crédito assinado ou null)
 //   GET ?liberacao=<id>    → PDF de cobrança daquela liberação
 //   POST { valor, data, obs? } → lança uma liberação
+//   PATCH { liberacao, acao: "pago" | "desfazer", valor?, data? } → pagamento do cliente + comissão do mandato
 //   DELETE ?liberacao=<id> → remove uma liberação
 // Lista em credit_desk_proposals.metadata.recursos_liberados.
 
@@ -150,12 +153,94 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   return NextResponse.json({ recursos });
 }
 
+// PATCH { liberacao, acao: "pago", valor, data } → cliente pagou a Remuneração de Sucesso desta
+//       tranche: grava o pagamento e gera a comissão do mandato do partner (aba Comissões,
+//       aguardando autorização). { liberacao, acao: "desfazer" } → apaga enquanto não autorizada.
+export async function PATCH(req: NextRequest, { params }: Ctx) {
+  const { proposalId } = await params;
+  const ctx = await contexto(proposalId);
+  if ("erro" in ctx) return ctx.erro;
+  const { db, user, profile, proposta } = ctx;
+  const body = (await req.json().catch(() => ({}))) as { liberacao?: string; acao?: string; valor?: unknown; data?: unknown };
+  const recursos = recursosLiberados((proposta.metadata ?? {}) as Record<string, unknown>);
+  const idx = recursos.findIndex((r) => r.id === body.liberacao);
+  if (idx < 0) return NextResponse.json({ error: "Liberação não encontrada" }, { status: 404 });
+  const tranche = recursos[idx];
+
+  if (body.acao === "desfazer") {
+    if (tranche.comissao_mandato_id) {
+      const d = await desfazerComissaoMandatoTranche(tranche.comissao_mandato_id);
+      if (!d.ok) return NextResponse.json({ error: d.erro }, { status: 409 });
+    }
+    const { recursos: lista, error } = await salvarRecursos(db, proposalId, (l) => l.map((r) => {
+      if (r.id !== tranche.id) return r;
+      const limpo = { ...r };
+      delete limpo.pago_cliente_em; delete limpo.valor_pago_cliente; delete limpo.pago_registrado_por;
+      delete limpo.comissao_mandato_id; delete limpo.comissao_mandato_valor; delete limpo.comissao_mandato_obs;
+      return limpo;
+    }));
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ recursos: lista });
+  }
+
+  if (body.acao !== "pago") return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
+  if (tranche.pago_cliente_em) return NextResponse.json({ error: "Esta tranche já está marcada como paga." }, { status: 409 });
+  const valor = Math.round(Number(body.valor) * 100) / 100;
+  const data = typeof body.data === "string" ? body.data.slice(0, 10) : "";
+  if (!(valor > 0)) return NextResponse.json({ error: "Informe o valor recebido do cliente." }, { status: 422 });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || Number.isNaN(Date.parse(data))) {
+    return NextResponse.json({ error: "Informe a data do pagamento." }, { status: 422 });
+  }
+
+  let res;
+  try {
+    res = await gerarComissaoMandatoTranche(proposalId, { id: tranche.id, numero: idx + 1, valorRecebido: valor, pagoEm: data }, user.id);
+  } catch (e) {
+    const msg = (e as Error).message;
+    const semMigration = /operation_ref/.test(msg);
+    return NextResponse.json({ error: semMigration ? "Falta rodar a migration 20261027_comissao_mandato_tranche no Supabase." : msg }, { status: 500 });
+  }
+  const obs = res.status === "created" ? undefined
+    : res.reason === "modelo_antigo" ? "Comissão do mandato já gerada na liberação do recurso (modelo anterior a 27/10/2026)."
+    : res.reason === "no_partner" ? "Proposta sem partner: não há comissão."
+    : res.reason === "already_generated" ? "Comissão desta tranche já existia." : undefined;
+
+  const { recursos: lista, error } = await salvarRecursos(db, proposalId, (l) => l.map((r) => (r.id === tranche.id ? {
+    ...r,
+    pago_cliente_em: data,
+    valor_pago_cliente: valor,
+    pago_registrado_por: (profile.full_name as string | null) ?? user.id,
+    ...(res.licenciadoId ? { comissao_mandato_id: res.licenciadoId, comissao_mandato_valor: res.licenciadoValue } : {}),
+    ...(obs ? { comissao_mandato_obs: obs } : {}),
+  } : r)));
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (res.status === "created") {
+    const valorFmt = res.licenciadoValue != null ? res.licenciadoValue.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
+    notifyByRoles(["ADMIN", "FINANCEIRO"], {
+      title: "Comissão aguardando autorização 💰",
+      message: res.needsManualValue
+        ? `${proposta.code} — mandato T${idx + 1} pago pelo cliente. O plano do partner não tem % definido: defina o valor da comissão e autorize.`
+        : `${proposta.code} — mandato T${idx + 1} pago pelo cliente. Comissão do partner ${valorFmt}${res.referralId ? " + indicação 10%" : ""} pronta para autorização.`,
+      type: "commission",
+      action_url: "/comissoes",
+    }).catch(() => {});
+  }
+  return NextResponse.json({ recursos: lista, comissao: res });
+}
+
 export async function DELETE(req: NextRequest, { params }: Ctx) {
   const { proposalId } = await params;
   const ctx = await contexto(proposalId);
   if ("erro" in ctx) return ctx.erro;
   const liberacaoId = new URL(req.url).searchParams.get("liberacao");
   if (!liberacaoId) return NextResponse.json({ error: "Informe a liberação." }, { status: 422 });
+  // Tranche com comissão do mandato gerada: apaga a comissão junto (só se ainda não autorizada)
+  const tranche = recursosLiberados((ctx.proposta.metadata ?? {}) as Record<string, unknown>).find((r) => r.id === liberacaoId);
+  if (tranche?.comissao_mandato_id) {
+    const d = await desfazerComissaoMandatoTranche(tranche.comissao_mandato_id);
+    if (!d.ok) return NextResponse.json({ error: d.erro }, { status: 409 });
+  }
   const { recursos, error } = await salvarRecursos(ctx.db, proposalId, (lista) => lista.filter((r) => r.id !== liberacaoId));
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ recursos });
