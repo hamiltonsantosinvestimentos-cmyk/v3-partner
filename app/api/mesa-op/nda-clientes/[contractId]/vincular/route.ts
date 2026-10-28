@@ -33,7 +33,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     .maybeSingle();
   if (!contrato || contrato.deleted_at) return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
   if (!(await isNdaMesaContract(db, contrato.template_id))) {
-    return NextResponse.json({ error: "Só NDAs do template \"NDA (Mesa de operações)\" podem ser vinculados por aqui." }, { status: 422 });
+    return NextResponse.json({ error: "Só NDAs do NDA da Mesa Operacional podem ser vinculados por aqui." }, { status: 422 });
   }
 
   if (proposalId) {

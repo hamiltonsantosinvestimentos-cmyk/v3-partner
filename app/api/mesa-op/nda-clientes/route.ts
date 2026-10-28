@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
-import { findNdaMesaTemplate, NDA_MESA_ROLES } from "@/lib/nda-mesa-operacoes";
+import { findNdaMesaTemplate, ndaMesaTemplateIds, NDA_MESA_NOME, NDA_MESA_ROLES } from "@/lib/nda-mesa-operacoes";
 
 // GET /api/mesa-op/nda-clientes — painel "NDA para clientes" da Mesa Operacional.
-//   Sem parâmetros: lotes de qualificação do template NDA (Mesa de operações),
+//   Sem parâmetros: lotes de qualificação do NDA da Mesa Operacional (NCDA atual e v5 antigo),
 //   com a parte (cliente), o contrato gerado a partir do lote e a proposta vinculada.
 //   ?contratos=1: contratos NDA gerados (para o vínculo no modal da proposta);
 //   ?credit_proposal_id=X filtra os já vinculados àquela proposta.
@@ -34,7 +34,9 @@ export async function GET(req: NextRequest) {
 
   const db = svc();
   const tpl = await findNdaMesaTemplate(db);
-  if (!tpl) return NextResponse.json({ error: 'Template "NDA (Mesa de operações)" não encontrado na Central de Contratos.' }, { status: 404 });
+  if (!tpl) return NextResponse.json({ error: `Template "${NDA_MESA_NOME}" não encontrado na Central de Contratos.` }, { status: 404 });
+  const tplIds = await ndaMesaTemplateIds(db);
+  if (!tplIds.includes(tpl.id)) tplIds.push(tpl.id);
 
   const { searchParams } = new URL(req.url);
 
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
   if (searchParams.get("contratos") === "1") {
     let q = db.from("operation_contracts")
       .select("id, contract_code, status_signature, credit_proposal_id, parties, created_at, sent_to_signature_at, signed_at")
-      .eq("template_id", tpl.id)
+      .in("template_id", tplIds)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(200);
@@ -57,7 +59,7 @@ export async function GET(req: NextRequest) {
   const { data: batches, error } = await db
     .from("cm_qualification_batches")
     .select("id, status, created_at, completed_at, consumido_por_contract_id, cm_party_qualifications(id, full_name, email, phone, status, filled_at, qualification_token, cpf_cnpj, company_name, company_cnpj, party_nature, person_type, deleted_at)")
-    .eq("template_id", tpl.id)
+    .in("template_id", tplIds)
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

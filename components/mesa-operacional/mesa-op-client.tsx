@@ -1,6 +1,7 @@
 "use client";
 import { aviso, confirmar } from "@/lib/aviso";
 import { statusAoReabrir } from "@/lib/credit-proposal-status";
+import { isNdaMesaTemplateName, NDA_MESA_NOME } from "@/lib/nda-mesa-operacoes";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
@@ -824,7 +825,7 @@ function PendingBadge({ ticket }: { ticket: Ticket }) {
   );
 }
 
-// ─── Modal Enviar NDA (Central de Contratos → template "NDA (Mesa de operações)") ──
+// ─── Modal Enviar NDA (Central de Contratos → template "NCDA MESA OPERACIONAL") ──
 type OperationContract = {
   id: string;
   contract_code: string | null;
@@ -869,7 +870,8 @@ function SendNdaModal({ open, onClose, ticket }: {
     try {
       const tplRes = await fetch("/api/contracts/templates?vertical=credito").then(r => r.json());
       const templates: { id: string; template_name: string; contract_series: string }[] = tplRes.templates ?? [];
-      const tpl = templates.find(t => t.template_name.toLowerCase().includes("mesa de opera"))
+      const tpl = templates.find(t => t.template_name.toLowerCase().includes("mesa operacional"))
+        ?? templates.find(t => isNdaMesaTemplateName(t.template_name))
         ?? templates.find(t => t.contract_series === "V3C-NDA");
       if (!tpl) { setError("Nenhum template de NDA encontrado na Central de Contratos (vertical Mesa de Crédito)."); return; }
 
@@ -917,7 +919,7 @@ function SendNdaModal({ open, onClose, ticket }: {
         <div className="px-6 py-5 space-y-4">
           <p className="text-xs text-muted-foreground">
             Ticket <span className="font-mono text-[#C9A84C]">{ticket.code}</span> — usa o template{" "}
-            <strong className="text-foreground">NDA (Mesa de operações)</strong> da Central de Contratos.
+            <strong className="text-foreground">{NDA_MESA_NOME}</strong> da Central de Contratos.
           </p>
 
           {loading ? (

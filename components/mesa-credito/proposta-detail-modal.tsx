@@ -30,6 +30,7 @@ import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
 import { AvaliacaoTecnicaCard, type JobAvaliacaoTecnica } from "@/components/mesa-credito/avaliacao-tecnica-card";
 import type { AvaliacaoTecnica, PdfAvaliacaoMeta } from "@/lib/avaliacao-tecnica/tipos";
 import { pegarOrigemModal, recorteDe } from "@/components/motion/origem-modal";
+import { isNdaMesaTemplateName, NDA_MESA_NOME } from "@/lib/nda-mesa-operacoes";
 
 export type MesaComment = {
   id: string;
@@ -1029,9 +1030,10 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
     setSendingNda(true);
     setNdaSendError(null);
     try {
-      const tpl = ncndaTemplates.find(t => t.template_name.toLowerCase().includes("mesa de opera"));
+      const tpl = ncndaTemplates.find(t => t.template_name.toLowerCase().includes("mesa operacional"))
+        ?? ncndaTemplates.find(t => isNdaMesaTemplateName(t.template_name));
       if (!tpl) {
-        setNdaSendError('Template "NDA (Mesa de operações)" não encontrado na Central de Contratos.');
+        setNdaSendError(`Template "${NDA_MESA_NOME}" não encontrado na Central de Contratos.`);
         return;
       }
 

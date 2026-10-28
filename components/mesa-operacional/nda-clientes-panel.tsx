@@ -318,7 +318,7 @@ function NovoNdaModal({ templateId, onClose, onCriado }: { templateId: string; o
       ) : (
         <>
           <p className="text-xs text-muted-foreground">
-            Usa o template <strong className="text-foreground">NDA (Mesa de operações)</strong>. O cliente recebe por e-mail o link para preencher a qualificação e enviar os documentos.
+            Usa o template <strong className="text-foreground">NCDA MESA OPERACIONAL</strong> (confidencialidade e não circunvenção). O cliente recebe por e-mail o link para preencher a qualificação e enviar os documentos.
           </p>
           <div>
             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nome do cliente *</label>
