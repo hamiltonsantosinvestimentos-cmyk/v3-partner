@@ -166,7 +166,15 @@ export function parseSaidaE1(texto: string, confirmados: string[] = []) {
       ausencia: !!f.ausencia,
     };
     if (fato.unidade && !UNIDADES.find(u => u.code === fato.unidade)?.monetaria) fato.moeda = null;
-    const erros = validarFato(fato);
+    let erros = validarFato(fato);
+    // Número sem unidade do catálogo (ex.: "64 anos"): o fato dito na reunião não pode sumir.
+    // Guarda como texto, sem os campos numéricos, e registra o motivo em rejeitados.
+    if (erros.length && fato.tema && fato.afirmacao && (fato.valor_min != null || fato.valor_max != null) && !fato.unidade) {
+      rejeitados.push({ fato: f, erros: [...erros, "guardado como texto, sem valor estruturado"] });
+      const texto = { ...fato, valor_min: null, valor_max: null, unidade: null, moeda: null, ausencia: false };
+      erros = validarFato(texto);
+      if (!erros.length) { aceitos.push(texto); continue; }
+    }
     if (erros.length) rejeitados.push({ fato: f, erros }); else aceitos.push(fato);
   }
   const decisao = ["sim", "nao", "em_conversa"].includes(String(o.decisao)) ? String(o.decisao) : "em_conversa";

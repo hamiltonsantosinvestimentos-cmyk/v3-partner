@@ -76,7 +76,7 @@ export function OriginacaoPanel({ dealId }: { dealId: string }) {
       const j = await r.json();
       if (!r.ok) { aviso(j.error ?? "Erro"); return false; }
       setSt(j);
-      if (action === "extrair" && j.rejeitados) aviso(`${j.rejeitados} fato(s) numérico(s) da IA reprovados na validação e não gravados.`);
+      if (action === "extrair" && j.rejeitados) aviso(`${j.rejeitados} valor(es) da IA fora das regras de faixa, unidade ou moeda: o fato fica como texto, sem número estruturado, quando a unidade não existe no catálogo.`);
       return true;
     } finally { setOcupado(null); }
   }

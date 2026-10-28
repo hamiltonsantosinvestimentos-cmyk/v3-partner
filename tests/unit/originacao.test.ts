@@ -81,6 +81,14 @@ test("parse da saída do E1: rótulo forçado, ausência = 0, faixa preservada, 
   assert.throws(() => parseSaidaE1("sem json"), /sem JSON/);
 });
 
+test("fato numérico sem unidade do catálogo vira texto, não some (achado do teste em produção)", () => {
+  const s = parseSaidaE1(JSON.stringify({ nomes: [], fatos: [{ tema: "Idade do fundador", afirmacao: "Tenho 64 anos.", valor_min: 64, valor_max: 64, unidade: null }] }));
+  assert.equal(s.fatos.length, 1);
+  assert.equal(s.fatos[0].valor_min, null);
+  assert.equal(s.fatos[0].afirmacao, "Tenho 64 anos.");
+  assert.match(s.rejeitados[0].erros.join(" "), /guardado como texto/);
+});
+
 test("prompt E1 sem travessão e com as regras do BRIEF", () => {
   const p = promptE1();
   assert.ok(!/[—–]/.test(p));
