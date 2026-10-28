@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ con
     .maybeSingle();
   if (!contrato || contrato.deleted_at) return NextResponse.json({ error: "Contrato não encontrado" }, { status: 404 });
   if (!(await isNdaMesaContract(db, contrato.template_id as string | null))) {
-    return NextResponse.json({ error: "Só NDAs do template \"NDA (Mesa de operações)\" podem ser cancelados por aqui." }, { status: 422 });
+    return NextResponse.json({ error: "Só NDAs do NDA da Mesa Operacional podem ser cancelados por aqui." }, { status: 422 });
   }
   if (contrato.status_signature === "assinado") {
     return NextResponse.json({ error: "NDA já assinado não pode ser cancelado." }, { status: 409 });
