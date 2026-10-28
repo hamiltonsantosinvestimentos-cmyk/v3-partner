@@ -12,17 +12,17 @@ export const NDA_MESA_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 export type NdaMesaTemplate = { id: string; template_name: string; contract_series: string | null };
 
-// 28/10/2026: o "NCDA MESA OPERACIONAL" (v7 — confidencialidade + não
+// 28/10/2026: o "NCNDA MESA OPERACIONAL" (v7 — confidencialidade + não
 // circunvenção + remuneração protegida) substituiu o "NDA (Mesa de operações)"
 // v5. O nome antigo continua reconhecido para os NDAs já gerados com ele.
-export const NDA_MESA_NOME = "NCDA MESA OPERACIONAL";
+export const NDA_MESA_NOME = "NCNDA MESA OPERACIONAL";
 
 export function isNdaMesaTemplateName(nome: string | null | undefined): boolean {
   const n = String(nome ?? "").toLowerCase();
   return n.includes("mesa operacional") || n.includes("mesa de opera");
 }
 
-/** Template ativo do NDA da Mesa Operacional (o NCDA tem preferência). */
+/** Template ativo do NDA da Mesa Operacional (o NCNDA tem preferência). */
 export async function findNdaMesaTemplate(db: SupabaseClient): Promise<NdaMesaTemplate | null> {
   const { data } = await db
     .from("contract_templates")
@@ -46,7 +46,7 @@ export async function ndaMesaTemplateIds(db: SupabaseClient): Promise<string[]> 
     .map(t => t.id);
 }
 
-/** true quando o contrato foi gerado a partir do NDA da Mesa Operacional (NCDA ou o antigo). */
+/** true quando o contrato foi gerado a partir do NDA da Mesa Operacional (NCNDA ou o antigo). */
 export async function isNdaMesaContract(db: SupabaseClient, templateId: string | null | undefined): Promise<boolean> {
   if (!templateId) return false;
   const { data } = await db

@@ -4,7 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { findNdaMesaTemplate, ndaMesaTemplateIds, NDA_MESA_NOME, NDA_MESA_ROLES } from "@/lib/nda-mesa-operacoes";
 
 // GET /api/mesa-op/nda-clientes — painel "NDA para clientes" da Mesa Operacional.
-//   Sem parâmetros: lotes de qualificação do NDA da Mesa Operacional (NCDA atual e v5 antigo),
+//   Sem parâmetros: lotes de qualificação do NDA da Mesa Operacional (NCNDA atual e v5 antigo),
 //   com a parte (cliente), o contrato gerado a partir do lote e a proposta vinculada.
 //   ?contratos=1: contratos NDA gerados (para o vínculo no modal da proposta);
 //   ?credit_proposal_id=X filtra os já vinculados àquela proposta.

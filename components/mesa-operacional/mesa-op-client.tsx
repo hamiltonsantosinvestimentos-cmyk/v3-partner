@@ -825,7 +825,7 @@ function PendingBadge({ ticket }: { ticket: Ticket }) {
   );
 }
 
-// ─── Modal Enviar NDA (Central de Contratos → template "NCDA MESA OPERACIONAL") ──
+// ─── Modal Enviar NDA (Central de Contratos → template "NCNDA MESA OPERACIONAL") ──
 type OperationContract = {
   id: string;
   contract_code: string | null;
