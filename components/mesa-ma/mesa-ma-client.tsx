@@ -252,7 +252,7 @@ function MoveToMenu({ card, onMoveRequest }: { card: MaCard; onMoveRequest: (tar
         aria-expanded={open}
         onClick={() => setOpen(o => !o)}
         onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
-        className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#243A66] text-[9px] font-bold uppercase tracking-wide text-[#9BAFC5] hover:text-[#F5F1E8] hover:border-[#C9A84C]/50"
+        className="flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 rounded border border-[#243A66] text-[9px] font-bold uppercase tracking-wide text-[#9BAFC5] hover:text-[#F5F1E8] hover:border-[#C9A84C]/50"
       >
         <ArrowLeftRight className="w-3 h-3" /> Mover para…
       </button>
