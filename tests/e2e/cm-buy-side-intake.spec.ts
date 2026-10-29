@@ -211,6 +211,9 @@ test.describe("Bolsa de Capitais — painel Demandas de Compra (UI)", () => {
 
     await page.goto("/bolsa/mesa");
     await page.getByRole("button", { name: "Demandas de Compra" }).click();
+    // Desde 20/09/2026 a aba abre no Kanban; partner, frequencia e o botao de documentos
+    // ficam na tabela da visao "Lista".
+    await page.getByRole("button", { name: "Lista", exact: true }).click();
     await expect(page.getByText("QA PLAYWRIGHT BUY-SIDE UI FIXTURE")).toBeVisible({ timeout: 15_000 });
 
     // Escopado na linha do fixture -- admin.full_name (ex: "JOAO LEMOS") tambem aparece no
@@ -221,7 +224,8 @@ test.describe("Bolsa de Capitais — painel Demandas de Compra (UI)", () => {
       await expect(row.getByText(admin.full_name)).toBeVisible();
     }
 
-    await row.getByRole("button", { name: /Documentos/ }).click();
+    // Os documentos ficam no painel de detalhe, aberto pelo clique na linha.
+    await row.click();
     await expect(page.getByText("Nenhum documento enviado ainda pelo comprador.")).toBeVisible();
   });
 });

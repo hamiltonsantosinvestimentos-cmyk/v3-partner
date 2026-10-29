@@ -1,11 +1,12 @@
 import { test, expect } from "@playwright/test";
-import { QA_DEAL_ID, uniqueFileContent } from "./fixtures";
+import { createQaDeal, deleteQaDeal, uniqueFileContent } from "./fixtures";
 
 // MPS Documentos V3 Fase 3 - teste 1/3: mesmo arquivo duas vezes deve ser bloqueado como duplicata.
 test("upload duplicado do mesmo arquivo e bloqueado, nao cria copia", async ({ request }) => {
   const content = uniqueFileContent("dup");
   const fileName = "teste-fase3-duplicata.pdf";
   let docIdToClean = "";
+  const QA_DEAL_ID = await createQaDeal();
 
   try {
     const first = await request.post("/api/ma/documents", {
@@ -39,5 +40,6 @@ test("upload duplicado do mesmo arquivo e bloqueado, nao cria copia", async ({ r
     if (docIdToClean) {
       await request.delete(`/api/ma/documents?deal_id=${QA_DEAL_ID}&doc_id=${docIdToClean}`);
     }
+    await deleteQaDeal(QA_DEAL_ID);
   }
 });

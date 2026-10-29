@@ -1,8 +1,43 @@
-// Fixture fixa da suite de governanca de documentos (MPS Documentos V3 Fase 3).
-// Deal "V3 Validacao Playwright Ltda" (MA-26-99184, v3_code V3-2026-07-IND-002),
-// reaproveitado entre os specs para nao acumular deals de teste a cada execucao.
+import { createClient } from "@supabase/supabase-js";
+
+// Fixture da suite de governanca de documentos (MPS Documentos V3 Fase 3).
+// Deal "V3 Validacao Playwright Ltda" (v3_code V3-2026-07-IND-002). A pasta MPS desse codigo
+// continua em folder_registry; o deal em si foi apagado de ma_deals (sem rastro em audit_logs)
+// e os specs de upload passaram a falhar com 404. Desde 28/10/2026 cada spec cria o deal que
+// usa e apaga no final (createQaDeal/deleteQaDeal), sem depender de linha fixa no banco.
 export const QA_DEAL_ID = "41f78955-b838-4aac-bdb5-a9bdf7368a84";
 export const QA_DEAL_V3_CODE = "V3-2026-07-IND-002";
+export const QA_DEAL_TITLE = "V3 Validacao Playwright Ltda";
+
+function svc() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY ausentes (ver .env.local)");
+  return createClient(url, key);
+}
+
+// Cria (ou recria) o deal de teste com o id e o v3_code fixos. O v3_code e obrigatorio: e por ele
+// que o trigger sync_ma_documents_from_deal acha a pasta MPS e grava ma_documents, onde mora a
+// checagem de duplicata. A suite roda com workers: 1, entao os specs nunca disputam o mesmo deal.
+export async function createQaDeal(): Promise<string> {
+  const db = svc();
+  const { data: admin } = await db.from("profiles").select("id").eq("role", "ADMIN").limit(1).single();
+  const { error } = await db.from("ma_deals").upsert({
+    id: QA_DEAL_ID,
+    code: QA_DEAL_V3_CODE,
+    v3_code: QA_DEAL_V3_CODE,
+    title: QA_DEAL_TITLE,
+    target_company: QA_DEAL_TITLE,
+    created_by: admin!.id,
+  });
+  if (error) throw new Error(`createQaDeal: ${error.message}`);
+  return QA_DEAL_ID;
+}
+
+// Apaga o deal de teste; ma_documents e ma_deal_history saem junto (FK on delete cascade).
+export async function deleteQaDeal(id: string): Promise<void> {
+  await svc().from("ma_deals").delete().eq("id", id);
+}
 export const NONEXISTENT_DEAL_ID = "00000000-0000-0000-0000-000000000000";
 
 // Fixture da suite da Bolsa de Capitais (Fase 3, SLA/Match/Qualificacao,
