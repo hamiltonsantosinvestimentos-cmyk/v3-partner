@@ -13,6 +13,10 @@ export const NOTAS_DO_PORQUE = {
     titulo: "CPF ou CNPJ",
     texto: "Pedimos o seu CPF (ou o CNPJ da empresa) para ter certeza de quem está assinando e para montar o contrato. Só a equipe autorizada da V3 vê, e o número fica escondido na tela até alguém clicar para ver, com o registro de quem viu. Sem ele não conseguimos montar o contrato.",
   },
+  doc_limite_envio: {
+    titulo: "Limite de tamanho do arquivo",
+    texto: "A plataforma de envio aceita até 4 MB por arquivo. Se o seu arquivo for maior, reduza a resolução da foto ou salve o PDF em tamanho menor. Se o envio falhar, o arquivo não é guardado e você pode tentar de novo. Se não conseguir, fale com quem lhe enviou o link.",
+  },
   doc_identidade_envio: {
     titulo: "Documento de identidade",
     texto: "Pedimos o documento para confirmar a sua identidade ou os poderes de quem assina pela empresa. O arquivo fica em ambiente restrito, só abre com o clique de quem tem autorização, e cada abertura fica registrada. Guardamos por 36 meses depois do fim da operação.",

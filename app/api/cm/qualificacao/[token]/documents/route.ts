@@ -3,9 +3,10 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { isValidCPF, isValidCNPJ } from "@/lib/validators/cpf-cnpj";
 import { resolveClient, resolvePassportClient } from "@/lib/v3-clients";
 import {
-  KYC_ALLOWED_MIME_TYPES, KYC_MAX_FILE_SIZE_BYTES, KYC_INSTRUMENT_KINDS_ENABLED,
+  KYC_ALLOWED_MIME_TYPES, KYC_INSTRUMENT_KINDS_ENABLED,
   type KycDocumentKind,
 } from "@/lib/kyc-documents";
+import { KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES, fileTooLargeMessage } from "@/lib/upload-limits";
 import { isIsoCountryCode, isValidPassportNumber } from "@/lib/qualification-schema";
 
 function svc() {
@@ -73,8 +74,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!KYC_ALLOWED_MIME_TYPES.includes(file.type)) {
     return NextResponse.json({ error: "Formato não aceito. Envie JPG, PNG ou PDF." }, { status: 422 });
   }
-  if (file.size > KYC_MAX_FILE_SIZE_BYTES) {
-    return NextResponse.json({ error: "Arquivo maior que 15MB." }, { status: 422 });
+  if (file.size > KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES) {
+    return NextResponse.json({ error: fileTooLargeMessage(file.size) }, { status: 422 });
   }
 
   const kind = documentKind as KycDocumentKind;

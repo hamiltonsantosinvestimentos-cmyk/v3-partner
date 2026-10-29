@@ -21,6 +21,9 @@ import {
 import { isValidCNPJ, isValidCPF } from "@/lib/validators/cpf-cnpj";
 import { fetchCep } from "@/lib/viacep";
 import { LGPD_AVISO_QUALIFICACAO, LGPD_CHECKBOX_TEXT } from "@/lib/lgpd-aviso-qualificacao";
+import {
+  KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES, UPLOAD_NETWORK_ERROR_MESSAGE, fileTooLargeMessage, formatFileSizePtBr, uploadFailureMessage,
+} from "@/lib/upload-limits";
 
 /** Data de nascimento digitada (DD/MM/AAAA, teclado numérico no celular). Entrega AAAA-MM-DD ao formulário. */
 function BirthDateInput({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
@@ -123,6 +126,11 @@ function DocSlot({ token, kind, anchor, anchorHint, value, onChange, showError }
 
   const upload = async (file: File) => {
     if (!anchor) return;
+    // A plataforma recusa corpo acima de 4,5 MB com resposta que não é JSON; checa antes, com o tamanho real.
+    if (file.size > KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES) {
+      onChange({ status: "error", error: fileTooLargeMessage(file.size), anchorKey: anchor.key });
+      return;
+    }
     onChange({ status: "uploading", anchorKey: anchor.key });
     const fd = new FormData();
     fd.append("file", file);
@@ -135,11 +143,12 @@ function DocSlot({ token, kind, anchor, anchorHint, value, onChange, showError }
     }
     try {
       const res = await fetch(`/api/cm/qualificacao/${token}/documents`, { method: "POST", body: fd });
-      const json = await res.json();
-      if (res.ok) onChange({ status: "uploaded", documentId: json.document.id, filename: json.document.original_filename, anchorKey: anchor.key });
-      else onChange({ status: "error", error: json.error ?? "Falha no upload", anchorKey: anchor.key });
+      // Resposta que não é JSON (413 da plataforma, 5xx de gateway) não pode virar "erro de conexão".
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.document?.id) onChange({ status: "uploaded", documentId: json.document.id, filename: json.document.original_filename, anchorKey: anchor.key });
+      else onChange({ status: "error", error: uploadFailureMessage(res.status, typeof json?.error === "string" ? json.error : null), anchorKey: anchor.key });
     } catch {
-      onChange({ status: "error", error: "Erro de conexão no upload", anchorKey: anchor.key });
+      onChange({ status: "error", error: UPLOAD_NETWORK_ERROR_MESSAGE, anchorKey: anchor.key });
     }
   };
 
@@ -180,9 +189,15 @@ function DocSlot({ token, kind, anchor, anchorHint, value, onChange, showError }
       {(value.status === "idle" || value.status === "error") && anchor && (
         <label className="flex items-center gap-2 text-[12px] text-[#9BAFC5] bg-[#12112A] border border-dashed border-[#9BAFC5]/25 rounded px-3 py-3 cursor-pointer hover:border-[#C9A84C]/50 transition">
           <Upload size={14} />
-          Selecionar arquivo (JPG, PNG ou PDF, até 15MB)
+          Selecionar arquivo (JPG, PNG ou PDF, até {formatFileSizePtBr(KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES)})
+          <Dica id="doc_limite_envio" />
           <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              // Limpa o campo para o mesmo arquivo poder ser escolhido de novo depois de reduzido ou de uma falha.
+              e.target.value = "";
+              if (f) upload(f);
+            }} />
         </label>
       )}
 
@@ -676,22 +691,25 @@ export default function QualificacaoIntakePage() {
     }
   }
 
-  /** Anexos obrigatórios que ainda faltam (a tela e o servidor aplicam a mesma regra). */
-  const missingDocs = (): string[] => {
-    const out: string[] = [];
-    if (["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO"].includes(nature) && !docReady(principalDocs.id)) out.push(DOC_KIND_LABELS.identificacao_foto);
-    if (nature === "PJ" && !docReady(principalDocs.social)) out.push(DOC_KIND_LABELS.contrato_social);
+  /** Anexos obrigatórios e se já foram enviados (a tela e o servidor aplicam a mesma regra). */
+  const docChecklist = (): { label: string; ok: boolean }[] => {
+    const out: { label: string; ok: boolean }[] = [];
+    if (["PF", "PF_PROCURACAO", "INCAPAZ_RELATIVO"].includes(nature)) out.push({ label: DOC_KIND_LABELS.identificacao_foto, ok: docReady(principalDocs.id) });
+    if (nature === "PJ") out.push({ label: DOC_KIND_LABELS.contrato_social, ok: docReady(principalDocs.social) });
     if (needsInstrument && reps[0]?.type) {
       const k = INSTRUMENT_DOCUMENT_KIND[reps[0].type] as DocKind | null;
-      if (k && !docReady(principalDocs.instrument)) out.push(DOC_KIND_LABELS[k]);
+      if (k) out.push({ label: DOC_KIND_LABELS[k], ok: docReady(principalDocs.instrument) });
     }
     reps.forEach((r, i) => {
-      if (r.nature === "PJ" ? !docReady(r.docs.social) : !docReady(r.docs.id)) {
-        out.push(`Representante ${i + 1}: ${DOC_KIND_LABELS[r.nature === "PJ" ? "contrato_social" : "identificacao_foto"]}`);
-      }
+      out.push({
+        label: `Representante ${i + 1}: ${DOC_KIND_LABELS[r.nature === "PJ" ? "contrato_social" : "identificacao_foto"]}`,
+        ok: r.nature === "PJ" ? docReady(r.docs.social) : docReady(r.docs.id),
+      });
     });
     return out;
   };
+  /** Anexos obrigatórios que ainda faltam. */
+  const missingDocs = (): string[] => docChecklist().filter((d) => !d.ok).map((d) => d.label);
 
   const startSubmit = () => {
     setFormError("");
@@ -909,6 +927,20 @@ export default function QualificacaoIntakePage() {
                 </div>
               </details>
             </div>
+
+            {docChecklist().length > 0 && (
+              <div className="rounded-lg border border-[#9BAFC5]/15 bg-[#12112A] px-3 py-2" aria-live="polite">
+                <p className="text-[11px] text-[#E8C97A] font-bold uppercase mb-1">Anexos</p>
+                <ul className="space-y-0.5">
+                  {docChecklist().map((d) => (
+                    <li key={d.label} className={`text-[12px] flex items-center gap-2 ${d.ok ? "text-emerald-400" : "text-[#9BAFC5]"}`}>
+                      {d.ok ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} className="text-[#C9A84C]" />}
+                      {d.label}: {d.ok ? "enviado" : "pendente"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {formError && <p className="text-[12px] text-red-400" role="alert">{formError}</p>}
 
