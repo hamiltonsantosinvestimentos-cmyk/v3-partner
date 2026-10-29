@@ -189,8 +189,9 @@ function DocSlot({ token, kind, anchor, anchorHint, value, onChange, showError }
       {(value.status === "idle" || value.status === "error") && anchor && (
         <label className="flex items-center gap-2 text-[12px] text-[#9BAFC5] bg-[#12112A] border border-dashed border-[#9BAFC5]/25 rounded px-3 py-3 cursor-pointer hover:border-[#C9A84C]/50 transition">
           <Upload size={14} />
-          Selecionar arquivo (JPG, PNG ou PDF, até {formatFileSizePtBr(KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES)})
-          <Dica id="doc_limite_envio" />
+          {/* O campo de arquivo TEM de vir antes da nota (a Dica é um botão): um rótulo sem "for" aciona o
+              primeiro elemento de formulário dentro dele. Com a nota antes, o clique abria a nota e nunca o seletor
+              de arquivo (relato da Rafael Campos, 29/10/2026, regressão do PR #335). */}
           <input type="file" accept="image/jpeg,image/png,application/pdf" className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -198,6 +199,8 @@ function DocSlot({ token, kind, anchor, anchorHint, value, onChange, showError }
               e.target.value = "";
               if (f) upload(f);
             }} />
+          Selecionar arquivo (JPG, PNG ou PDF, até {formatFileSizePtBr(KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES)})
+          <Dica id="doc_limite_envio" />
         </label>
       )}
 
