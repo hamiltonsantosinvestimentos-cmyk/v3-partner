@@ -14,13 +14,22 @@ export async function resolveEffectiveSourceConfig(db: SupabaseClient, clientDoc
 
   // Painel de Configuração de Fontes: usa a config salva pelo CNPJ do titular,
   // ou os defaults se nunca configurado.
+  // select("*") + recorte pelas chaves dos defaults: uma coluna nova (ex.: checktudo_juridico,
+  // 29/10/2026) ainda não criada no banco cai no default em vez de derrubar o select inteiro
+  // e fazer a análise ignorar a config salva do titular.
   const { data: sourceConfig } = await db
     .from("credit_source_configs")
-    .select("receita_federal, cnj_datajud, ceis, registrato_bacen, serasa, serasa_modalidade, serasa_cnpj, serasa_cpf, serasa_cpf_list, spc, escavador")
+    .select("*")
     .eq("cnpj", clientDoc ?? "")
     .single();
 
-  const baseSourceConfig = (sourceConfig ?? CREDIT_SOURCE_DEFAULTS) as SourceConfig;
+  const baseSourceConfig = (
+    sourceConfig
+      ? Object.fromEntries(
+          Object.entries(CREDIT_SOURCE_DEFAULTS).map(([k, def]) => [k, k in sourceConfig ? sourceConfig[k] : def])
+        )
+      : CREDIT_SOURCE_DEFAULTS
+  ) as SourceConfig;
 
   // Pedidos de Partners de PF: o Serasa só roda no n8n quando serasa_cpf está
   // ligado E o CPF consta em serasa_cpf_list. O painel de fontes não permite

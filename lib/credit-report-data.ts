@@ -180,6 +180,21 @@ export interface CreditReportData {
     consultadoEm: string | null;
   };
 
+  /**
+   * Dossiê Jurídico Resumido do CheckTudo (querycode 200), 29/10/2026. Soma com DataJud e
+   * Escavador: traz só totais (quantidade e valor como réu e como autor), sem a lista de
+   * processos. Gravado em raw_result.checktudo_juridico (lib/credit-checktudo-juridico.ts).
+   */
+  juridicoCheckTudo: {
+    consultado: boolean;
+    totalProcessos: number | null;
+    reuQuantidade: number | null;
+    reuValor: string | null;
+    autorQuantidade: number | null;
+    autorValor: string | null;
+    consultadoEm: string | null;
+  };
+
   ceis: {
     hasMatch: boolean;
     consultado: boolean;
@@ -206,6 +221,7 @@ const SOURCE_CATALOG: Array<{ key: string; label: string; scope: string }> = [
   { key: "registrato_bacen", label: "Registrato BACEN", scope: "Relacionamento bancário e operações de crédito" },
   { key: "serasa", label: "Serasa Experian", scope: "Score, protestos, pefin, refin e pendências financeiras" },
   { key: "escavador", label: "Escavador", scope: "Histórico judicial nacional (justiça estadual, federal e do trabalho)" },
+  { key: "checktudo_juridico", label: "Jurídico CheckTudo", scope: "Dossiê jurídico resumido: processos como réu e como autor" },
 ];
 
 /**
@@ -295,6 +311,10 @@ function txt(v: unknown): string | null {
   if (v === null || v === undefined || v === "") return null;
   return String(v);
 }
+function num(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() ? Number(v) : NaN;
+  return Number.isFinite(n) ? n : null;
+}
 function opsComPercentual(ops: unknown): Array<{ descricao: string | null; valor: string | null; percentual: string | null }> {
   if (!Array.isArray(ops)) return [];
   return (ops as Array<Record<string, unknown>>).map((o) => ({
@@ -340,6 +360,8 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
   // initialization" — só apareceu testando de verdade, nunca no tsc/build.
   const bacenScr = (profile.bacen_scr_data ?? null) as Record<string, any> | null;
   const bacenScrConsultado = bacenScr !== null;
+  // Mesmo motivo do SCR: roda fora do n8n, então nunca aparece em sources_free/sources_paid.
+  const juridicoCt = ((profile.raw_result as Record<string, unknown> | null)?.checktudo_juridico ?? null) as Record<string, unknown> | null;
 
   const sources: CreditReportSource[] = SOURCE_CATALOG.map((s) => ({
     ...s,
@@ -347,7 +369,10 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
     // portal), nunca aparece em sources_free/sources_paid (só o motor escreve
     // lá). Conta como consultada também quando bacen_scr_data foi de fato
     // preenchido, senão o dossiê acusava "não consultada" com dado real ao lado.
-    consulted: s.key === "registrato_bacen" ? (consultedKeys.has(s.key) || bacenScrConsultado) : consultedKeys.has(s.key),
+    consulted:
+      s.key === "registrato_bacen" ? (consultedKeys.has(s.key) || bacenScrConsultado)
+      : s.key === "checktudo_juridico" ? juridicoCt !== null
+      : consultedKeys.has(s.key),
   }));
 
   const rawResult = (profile.raw_result ?? {}) as Record<string, unknown>;
@@ -618,6 +643,18 @@ export async function buildCreditReportData(creditProfileId: string): Promise<Cr
       limiteCreditoOperacoes: opsComPercentual(bacenScr?.limite_credito_operacoes),
       consultadoEm: bacenScr?.consultado_em
         ? new Date(bacenScr.consultado_em as string).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
+        : null,
+    },
+
+    juridicoCheckTudo: {
+      consultado: juridicoCt !== null,
+      totalProcessos: num(juridicoCt?.total_processos),
+      reuQuantidade: num(juridicoCt?.reu_quantidade),
+      reuValor: fmtBRL(juridicoCt?.reu_valor),
+      autorQuantidade: num(juridicoCt?.autor_quantidade),
+      autorValor: fmtBRL(juridicoCt?.autor_valor),
+      consultadoEm: typeof juridicoCt?.consultado_em === "string"
+        ? new Date(juridicoCt.consultado_em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })
         : null,
     },
 

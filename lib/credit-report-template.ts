@@ -472,7 +472,42 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
   }
   ${proc.items.map(procCard).join("")}`
     : `<h3 class="sec">Processos judiciais</h3>
-  <p class="note">Nenhum processo judicial localizado nas bases consultadas na data desta análise.</p>`;
+  <p class="note">${
+    (data.juridicoCheckTudo.totalProcessos ?? 0) > 0
+      ? "Nenhum processo listado pelo CNJ DataJud e pelo Escavador na data desta análise. O dossiê do CheckTudo, abaixo, aponta processos em seus totais."
+      : "Nenhum processo judicial localizado nas bases consultadas na data desta análise."
+  }</p>`;
+
+  // ----- Jurídico CheckTudo (Dossiê Jurídico Resumido, 29/10/2026) -----
+  // Soma com o bloco de processos acima (DataJud/Escavador): só totais, sem lista.
+  // Não consultado = some do dossiê (a tabela de fontes já mostra que não rodou).
+  const jc = data.juridicoCheckTudo;
+  const juridicoCtBlock = jc.consultado
+    ? `<div class="keep"><h3 class="sec">Dossiê jurídico (CheckTudo)</h3>
+  <p class="note">Dossiê Jurídico Resumido, consultado automaticamente na data de emissão${
+    jc.consultadoEm ? ` (${esc(jc.consultadoEm)})` : ""
+  }. Traz os totais por posição no processo; o detalhe por processo está no bloco acima.</p>
+  <div class="kv">
+    <div>
+      <div class="kv-row"><span>Total de processos</span><span>${v(jc.totalProcessos)}</span></div>
+      <div class="kv-row"><span>Como réu (polo passivo)</span><span>${v(jc.reuQuantidade)}</span></div>
+      <div class="kv-row"><span>Valor como réu</span><span>${v(jc.reuValor)}</span></div>
+    </div>
+    <div>
+      <div class="kv-row"><span>Como autor (polo ativo)</span><span>${v(jc.autorQuantidade)}</span></div>
+      <div class="kv-row"><span>Valor como autor</span><span>${v(jc.autorValor)}</span></div>
+    </div>
+  </div>
+  ${
+    (jc.reuQuantidade ?? 0) > 0
+      ? `<div class="hl hl-red"><strong>${jc.reuQuantidade} processo(s) com o sujeito como réu${
+          jc.reuValor ? `, somando ${esc(jc.reuValor)}` : ""
+        }.</strong> Recomenda-se análise jurídica do passivo contingente antes da decisão de crédito.</div>`
+      : jc.reuQuantidade === 0
+        ? `<div class="hl hl-green"><strong>Nenhum processo com o sujeito como réu no dossiê do CheckTudo.</strong></div>`
+        : ""
+  }</div>`
+    : "";
 
   // ----- Sanções -----
   // Nunca afirmar ausência de sanção numa base que não foi consultada. O dossiê
@@ -675,6 +710,7 @@ export function buildExternalReportBodyHtml(data: CreditReportData): string {
     serasaBlock,
     restricoesBlock,
     judicialBlock,
+    juridicoCtBlock,
     ceisBlock,
     bacenBlock,
     fontesBlock,

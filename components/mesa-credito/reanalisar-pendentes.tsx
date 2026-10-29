@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 // Nada é reconsultado, então não gera cobrança repetida. Ver lib/credit-reanalysis.ts.
 
 interface EstadoFonte {
-  fonte: "serasa" | "bacen";
+  fonte: "serasa" | "bacen" | "juridico";
   label: string;
   consultada: boolean;
   habilitada: boolean;
@@ -20,7 +20,7 @@ interface EstadoFonte {
 interface Estado {
   fontes: EstadoFonte[];
   pendentes: string[];
-  configurado: { serasa: boolean; bacen: boolean };
+  configurado: { serasa: boolean; bacen: boolean; juridico: boolean };
 }
 
 interface Resultado {

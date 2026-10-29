@@ -18,6 +18,7 @@ interface SourceConfigData {
   serasa_cpf_list: string[] | null;
   spc: boolean;
   escavador: boolean;
+  checktudo_juridico: boolean;
   is_default: boolean;
 }
 
@@ -149,6 +150,7 @@ export function PainelFontesCredito() {
           <SourceRow label="CNJ DataJud" description="Processos judiciais (cível, fiscal e trabalhista)" checked={config.cnj_datajud} onChange={(v) => update("cnj_datajud", v)} />
           <SourceRow label="CEIS" description="Sanções administrativas e impedimentos de contratar" checked={config.ceis} onChange={(v) => update("ceis", v)} />
           <SourceRow label="Registrato BACEN" description="Relacionamento bancário. Requer consentimento do titular (LGPD)" checked={config.registrato_bacen} onChange={(v) => update("registrato_bacen", v)} />
+          <SourceRow label="Jurídico CheckTudo" description="Dossiê Jurídico Resumido: total de processos e valores como réu e como autor. Soma com DataJud e Escavador" checked={config.checktudo_juridico} onChange={(v) => update("checktudo_juridico", v)} />
 
           <div className="py-3 border-b border-border/30">
             <SourceRow
