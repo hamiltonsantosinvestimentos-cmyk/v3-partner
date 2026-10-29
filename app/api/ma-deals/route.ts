@@ -8,7 +8,8 @@ import { issueV3Code, resolveSectorCode, insertWithLegacyCode } from "@/lib/v3-c
 import {
   LOSS_CATEGORIES, MIN_REASON_LENGTH, DB_TO_PIPELINE, STAGE_DEFAULT_PROBABILITY,
   classifyTransition, stageRoleDenial, validateClosedDate, todaySaoPaulo, isoToBr,
-  dbStageLabel, lossCategoryLabel, type TransitionKind,
+  dbStageLabel, lossCategoryLabel, crossesCreditGate, WORKING_DB_STAGES, CLOSED_DB_STAGES,
+  type TransitionKind,
 } from "@/lib/ma/pipeline";
 
 function serviceClient() {
@@ -28,14 +29,9 @@ const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
 const ORIGIN_VERTICALS = ["MA", "Credito", "Consorcios"] as const;
 
-// Gate obrigatório de Análise de Crédito (09/09/2026) — estende pra M&A o
-// mesmo mecanismo já em produção pra Mesa de Crédito desde 26/08/2026
-// (app/api/credit-proposals/route.ts). Ordem do funil linear principal
-// (espelha o mapeamento PIPELINE_TO_DB em mesa-ma-client.tsx) -- usada só
-// pra distinguir avanço de retrocesso. CLOSED_WON/CLOSED_LOST ficam fora de
-// propósito: são saídas do funil, não posições nele. Ponto de corte
-// confirmado com João: Qualificação → Viabilidade (QUALIFICATION → IOI).
-const PIPELINE_STAGE_ORDER = ["PROSPECTING", "QUALIFICATION", "IOI", "PROPOSAL", "NEGOTIATION", "DUE_DILIGENCE", "CLOSING"];
+// Gate obrigatório de Análise de Crédito (09/09/2026): estende pra M&A o mesmo mecanismo já em
+// produção pra Mesa de Crédito desde 26/08/2026 (app/api/credit-proposals/route.ts). Ponto de
+// corte em lib/ma/pipeline.ts (crossesCreditGate): entrada do Mandato desde o bloco E (29/10/2026).
 
 const createSchema = z.object({
   company:                z.string().min(1, "Nome da empresa obrigatório").max(200),
@@ -66,7 +62,7 @@ const patchSchema = z.object({
   sector:                 z.string().max(100).optional().nullable(),
   location:               z.string().max(200).optional().nullable(),
   deal_value:             z.number().positive().optional().nullable(),
-  stage:                  z.enum(["PROSPECTING","QUALIFICATION","IOI","PROPOSAL","DUE_DILIGENCE","NEGOTIATION","CLOSING","CLOSED_WON","CLOSED_LOST"]).optional(),
+  stage:                  z.enum([...WORKING_DB_STAGES, ...CLOSED_DB_STAGES] as [string, ...string[]]).optional(),
   probability_percent:    z.number().int().min(0).max(100).optional().nullable(),
   notes:                  z.string().max(2000).optional().nullable(),
   comments:               z.array(dealCommentSchema).optional(),
@@ -393,7 +389,7 @@ export async function PATCH(req: NextRequest) {
         }, { status: 422 });
       }
       if (kind === "won_invalid") {
-        return NextResponse.json({ error: "Ganho só a partir de \"Aprovação Final e Fechamento\"." }, { status: 422 });
+        return NextResponse.json({ error: "Ganho só a partir de \"Fechamento\"." }, { status: 422 });
       }
       const denial = stageRoleDenial(profile?.role, kind);
       if (denial) return NextResponse.json({ error: denial }, { status: 403 });
@@ -418,17 +414,14 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: `Para marcar como Perdido, escolha a categoria e descreva o motivo (mínimo de ${MIN_REASON_LENGTH} caracteres).` }, { status: 422 });
       }
 
-      // Gate Análise de Crédito (09/09/2026): avançar de Qualificação para
-      // Viabilidade (ou além) exige a Análise de Crédito do cliente paga
-      // (partner_service_orders vinculado via ma_deal_id) OU autorização
-      // explícita de um ADMIN (asset_data.analise_gate_override, ver guard
-      // acima). Só barra avanço de verdade: retroceder, encerrar e reabrir não.
-      // Mudança do ponto de corte para depois da entrada do Mandato: bloco E do BRIEF.
-      if (kind === "advance" || kind === "skip") {
-        const targetIdx = PIPELINE_STAGE_ORDER.indexOf(targetStage);
+      // Gate Análise de Crédito: entrar no Mandato (ou saltar por ele) exige a Análise de Crédito
+      // do cliente paga (partner_service_orders vinculado via ma_deal_id) OU autorização explícita
+      // de um ADMIN (asset_data.analise_gate_override, ver guard acima). Só barra avanço de
+      // verdade: retroceder, encerrar e reabrir não.
+      if ((kind === "advance" || kind === "skip") && crossesCreditGate(from, targetStage)) {
         const existingAssetData = (current.asset_data as Record<string, unknown>) ?? {};
         const overriddenNow = fields.asset_data && typeof fields.asset_data === "object" && "analise_gate_override" in fields.asset_data;
-        if (targetIdx >= PIPELINE_STAGE_ORDER.indexOf("IOI") && !existingAssetData.analise_gate_override && !overriddenNow) {
+        if (!existingAssetData.analise_gate_override && !overriddenNow) {
           const { data: paidOrder } = await svc
             .from("partner_service_orders")
             .select("id")
@@ -438,7 +431,7 @@ export async function PATCH(req: NextRequest) {
             .maybeSingle();
           if (!paidOrder) {
             return NextResponse.json(
-              { error: "Avanço bloqueado: a Análise de Crédito do cliente ainda está pendente de pagamento. Gere o link no deal ou peça autorização a um ADMIN." },
+              { error: "Entrada no Mandato bloqueada: a Análise de Crédito do cliente ainda está pendente de pagamento. Gere o link no deal ou peça autorização a um ADMIN." },
               { status: 422 }
             );
           }

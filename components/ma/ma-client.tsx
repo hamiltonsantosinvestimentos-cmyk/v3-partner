@@ -20,7 +20,7 @@ import { MA_PIPELINE, DB_TO_PIPELINE } from "@/lib/ma/pipeline";
 // quem ainda importa daqui.
 export { MA_PIPELINE };
 
-// Visão do partner (/ma): Ganho e Perdido continuam aparecendo em "Aprovação Final"
+// Visão do partner (/ma): Ganho e Perdido continuam aparecendo em "Fechamento"
 // até o BRIEF próprio da visão do partner (Roadmap). A Mesa já mostra as colunas.
 const STAGE_MAP: Record<string, string> = {
   ...DB_TO_PIPELINE,

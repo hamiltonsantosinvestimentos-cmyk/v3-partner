@@ -4,7 +4,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
 import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 import { recordSignatureNote, applyEnvelopeClosed, isSafeProviderId } from "@/lib/contract-signature-timeline";
-import { STAGE_DEFAULT_PROBABILITY } from "@/lib/ma/pipeline";
+import { STAGE_DEFAULT_PROBABILITY, PRE_NCNDA_DB_STAGES, type DbStage } from "@/lib/ma/pipeline";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -368,12 +368,13 @@ async function handleV1Event(eventName: string, externalId: string, extra?: Webh
         contract_status:    "SIGNED",
         contract_signed_at: new Date().toISOString(),
       }).eq("id", deal.id);
-      // Avanço automático Prospecção -> Qualificação passa por ma_deal_transition()
-      // (BRIEF 28/10/2026, bloco B): fase e histórico na mesma transação. O insert
-      // antigo em ma_deal_history usava colunas que não existem e nunca gravou.
-      // Idempotente: evento repetido encontra o deal já em Qualificação e não grava.
-      // Se falhar, devolve 500 para a ClickSign reenviar o evento.
-      if (isSigned && deal.stage === "PROSPECTING") {
+      // Avanço automático para "NCNDA / Qualificação" passa por ma_deal_transition()
+      // (BRIEF 28/10/2026, bloco B): fase e histórico na mesma transação. Desde o bloco E
+      // (29/10/2026) vale a partir de qualquer coluna anterior ao NCNDA (Originação,
+      // Relatórios e Teaser, Cenários e Proposta), porque o NCNDA vem depois do teaser.
+      // Deal já em Qualificação ou além não volta. Idempotente: evento repetido encontra o
+      // deal já em Qualificação e não grava. Se falhar, devolve 500 para a ClickSign reenviar.
+      if (isSigned && PRE_NCNDA_DB_STAGES.includes(deal.stage as DbStage)) {
         const { error: trErr } = await db.rpc("ma_deal_transition", {
           p_deal_id: deal.id,
           p_to_stage: "QUALIFICATION",

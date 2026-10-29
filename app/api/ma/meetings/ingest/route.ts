@@ -48,7 +48,7 @@ Dado o transcript de uma reunião comercial, extraia em JSON:
     "empresa": "nome da empresa ou pessoa prospectada",
     "setor_v3": "Energia | Real Estate | MA Cross-Border | Mineracao | Credito | Outro",
     "ticket_estimado_r": 0,
-    "etapa_sugerida": "PROSPECTING | QUALIFICATION | IOI | PROPOSAL | DUE_DILIGENCE",
+    "etapa_sugerida": "PROSPECTING | IOI | PROPOSAL | QUALIFICATION",
     "solucoes_apresentadas": ["solução 1"],
     "proximos_passos": ["passo 1"]
   }
@@ -175,7 +175,9 @@ export async function POST(req: NextRequest) {
         target_company: dealCtx.empresa,
         sector: dealCtx.setor_v3,
         deal_value: dealCtx.ticket_estimado_r > 0 ? dealCtx.ticket_estimado_r : null,
-        stage: (dealCtx.etapa_sugerida ?? "PROSPECTING") as "PROSPECTING",
+        // Só fases antes da trava da Análise de Crédito (entrada do Mandato, bloco E): sugestão da IA
+        // fora dessa lista vira Originação, para nunca criar deal já depois da trava.
+        stage: ((["PROSPECTING", "IOI", "PROPOSAL", "QUALIFICATION"] as const).find(st => st === dealCtx.etapa_sugerida) ?? "PROSPECTING"),
         status: "DRAFT" as "DRAFT",
         created_by: userId,
         notes: `Criado automaticamente via reunião "${title}" em ${meeting_date}`,

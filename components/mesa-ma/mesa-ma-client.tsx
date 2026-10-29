@@ -15,7 +15,7 @@ import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   MA_PIPELINE, MA_CLOSED_STAGES, PIPELINE_TO_DB, DB_TO_PIPELINE, STAGE_DEFAULT_PROBABILITY,
-  classifyTransition, stageRoleDenial, lossCategoryLabel, isoToBr, type TransitionKind,
+  classifyTransition, stageRoleDenial, lossCategoryLabel, isoToBr, crossesCreditGate, type TransitionKind,
 } from "@/lib/ma/pipeline";
 import { closureFromRow, type DealClosure } from "@/lib/ma/closure";
 import { MaTransitionModal, type ModalKind, type TransitionPayload } from "@/components/mesa-ma/ma-transition-modal";
@@ -107,7 +107,7 @@ const MA_STAGES_DEFAULT: MaStage[] = MA_PIPELINE.map(s => ({
   bg: s.bg.replace("0.12", "0.1"),
 }));
 
-// Colunas Ganho e Perdido (BRIEF 28/10/2026, bloco B): à direita de "Aprovação Final".
+// Colunas Ganho e Perdido (BRIEF 28/10/2026, bloco B): à direita de "Fechamento".
 const MA_CLOSED_COLUMNS: MaStage[] = MA_CLOSED_STAGES.map(s => ({ id: s.id, label: s.label, color: s.color, bg: s.bg }));
 const ALL_STAGE_LABELS: Record<string, string> = Object.fromEntries(
   [...MA_STAGES_DEFAULT, ...MA_CLOSED_COLUMNS].map(s => [s.id, s.label])
@@ -833,7 +833,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         : "Movimento não permitido.");
       return;
     }
-    if (kind === "won_invalid") { warnBoard("Ganho só a partir de \"Aprovação Final e Fechamento\"."); return; }
+    if (kind === "won_invalid") { warnBoard("Ganho só a partir de \"Fechamento\"."); return; }
     const denial = stageRoleDenial(userRole, kind);
     if (denial) { warnBoard(denial); return; }
     if (kind === "advance") { handleMoveStage(card, targetStageId); return; }
@@ -1171,7 +1171,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 <p className="text-2xl font-bold text-[#C9A84C]">{formatM(totalValue)}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
-                <p className="text-xs text-[#7A8FA8] mb-1">Em Closing</p>
+                <p className="text-xs text-[#7A8FA8] mb-1">Em Fechamento</p>
                 <p className="text-2xl font-bold text-emerald-400">{cards.filter(c => c.stage === "aprovacao").length}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
@@ -2699,12 +2699,11 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       const idx = maStages.findIndex(s => s.id === selectedCard.stage);
                       const prev = idx > 0 ? maStages[idx - 1] : null;
                       const next = idx < maStages.length - 1 ? maStages[idx + 1] : null;
-                      // Espelha o gate do backend (app/api/ma-deals/route.ts): avançar
-                      // pra Viabilidade (IOI) ou além exige Análise de Crédito paga
-                      // ou autorização de ADMIN. Só desabilita o botão pra não deixar
-                      // clicar num avanço que o servidor vai recusar.
-                      const viabilidadeIdx = maStages.findIndex(s => s.id === "viabilidade");
-                      const advanceBlockedByAnalise = !!next && viabilidadeIdx !== -1 && idx + 1 >= viabilidadeIdx && !analiseGateOpen;
+                      // Espelha o gate do backend (crossesCreditGate em lib/ma/pipeline.ts): entrar
+                      // no Mandato exige Análise de Crédito paga ou autorização de ADMIN. Só
+                      // desabilita o botão pra não deixar clicar num avanço que o servidor vai recusar.
+                      const advanceBlockedByAnalise = !!next && !analiseGateOpen &&
+                        crossesCreditGate(PIPELINE_TO_DB[selectedCard.stage] ?? "", PIPELINE_TO_DB[next.id] ?? "");
                       return (
                         <>
                           <button

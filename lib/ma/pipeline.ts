@@ -5,20 +5,26 @@
 // Usado no cliente e no servidor: sem dependência de React nem de Supabase.
 
 export type DbStage =
-  | "PROSPECTING" | "QUALIFICATION" | "IOI" | "PROPOSAL" | "NEGOTIATION"
-  | "DUE_DILIGENCE" | "CLOSING" | "CLOSED_WON" | "CLOSED_LOST";
+  | "PROSPECTING" | "QUALIFICATION" | "IOI" | "PROPOSAL" | "MANDATE" | "ROADSHOW"
+  | "NEGOTIATION" | "DUE_DILIGENCE" | "CLOSING" | "CLOSED_WON" | "CLOSED_LOST";
 
 export type PipelineStage = { id: string; db: DbStage; label: string; color: string; bg: string; probability: number };
 
 // Fases de trabalho, na ordem da esteira (escala ordinal: a ordem tem significado, não alfabetizar).
+// Bloco E (29/10/2026): colunas alinhadas à Esteira de Originação (BRIEF 28/10/2026, seção 8).
+// Nenhum deal mudou de fase: IOI e PROPOSAL ganharam rótulo novo, MANDATE e ROADSHOW são valores
+// novos do enum deal_stage (migration 20261029a). Os ids de tela antigos ficam para não quebrar
+// links e estados salvos. NCNDA vem depois do teaser e dos cenários; Due Diligence antes da Negociação.
 export const MA_PIPELINE: PipelineStage[] = [
-  { id: "prospeccao",    db: "PROSPECTING",   label: "Prospecção",                   color: "#8B5CF6", bg: "rgba(139,92,246,0.12)", probability: 10 },
-  { id: "qualificacao",  db: "QUALIFICATION", label: "Qualificação",                 color: "#3B82F6", bg: "rgba(59,130,246,0.12)", probability: 20 },
-  { id: "viabilidade",   db: "IOI",           label: "Análise de Viabilidade",       color: "#06B6D4", bg: "rgba(6,182,212,0.12)",  probability: 35 },
-  { id: "estruturacao",  db: "PROPOSAL",      label: "Estruturação da Oferta",       color: "#F59E0B", bg: "rgba(245,158,11,0.12)", probability: 50 },
-  { id: "negociacao",    db: "NEGOTIATION",   label: "Negociação",                   color: "#EF4444", bg: "rgba(239,68,68,0.12)",  probability: 65 },
-  { id: "due_diligence", db: "DUE_DILIGENCE", label: "Due Diligence",                color: "#C4922E", bg: "rgba(196,146,46,0.12)", probability: 75 },
-  { id: "aprovacao",     db: "CLOSING",       label: "Aprovação Final e Fechamento", color: "#10B981", bg: "rgba(16,185,129,0.12)", probability: 90 },
+  { id: "prospeccao",    db: "PROSPECTING",   label: "Originação",                color: "#8B5CF6", bg: "rgba(139,92,246,0.12)", probability: 10 },
+  { id: "viabilidade",   db: "IOI",           label: "Relatórios e Teaser",       color: "#06B6D4", bg: "rgba(6,182,212,0.12)",  probability: 20 },
+  { id: "estruturacao",  db: "PROPOSAL",      label: "Cenários e Proposta",       color: "#F59E0B", bg: "rgba(245,158,11,0.12)", probability: 30 },
+  { id: "qualificacao",  db: "QUALIFICATION", label: "NCNDA / Qualificação",      color: "#3B82F6", bg: "rgba(59,130,246,0.12)", probability: 40 },
+  { id: "mandato",       db: "MANDATE",       label: "Mandato",                   color: "#A78BFA", bg: "rgba(167,139,250,0.12)", probability: 50 },
+  { id: "roadshow",      db: "ROADSHOW",      label: "Roadshow com Investidores", color: "#E8C97A", bg: "rgba(232,201,122,0.12)", probability: 60 },
+  { id: "due_diligence", db: "DUE_DILIGENCE", label: "Due Diligence",             color: "#C4922E", bg: "rgba(196,146,46,0.12)", probability: 70 },
+  { id: "negociacao",    db: "NEGOTIATION",   label: "Negociação",                color: "#EF4444", bg: "rgba(239,68,68,0.12)",  probability: 80 },
+  { id: "aprovacao",     db: "CLOSING",       label: "Fechamento",                color: "#10B981", bg: "rgba(16,185,129,0.12)", probability: 90 },
 ];
 
 // Saídas do funil: colunas próprias à direita do Kanban.
@@ -105,7 +111,7 @@ export type TransitionKind =
   | "skip"          // mais de uma fase à frente: exige justificativa
   | "back"          // qualquer fase anterior: exige confirmação
   | "won"           // CLOSING -> CLOSED_WON
-  | "won_invalid"   // Ganho fora de "Aprovação Final e Fechamento"
+  | "won_invalid"   // Ganho fora de "Fechamento"
   | "lost"          // fase de trabalho -> CLOSED_LOST
   | "reopen_won"    // CLOSED_WON -> closed_from_stage (só ADMIN)
   | "reopen_lost"   // CLOSED_LOST -> closed_from_stage
@@ -129,6 +135,21 @@ export function classifyTransition(from: string, to: string, closedFromStage?: s
   if (ti > fi + 1) return "skip";
   return "back";
 }
+
+// Trava da Análise de Crédito (rev.113, movida no bloco E por decisão do João em 28/10/2026):
+// barra a ENTRADA no Mandato, inclusive salto que passe por ele. Antes barrava a saída da
+// Qualificação. Inteligência, teaser e cenários vêm antes de qualquer cobrança ao cliente.
+export const CREDIT_GATE_STAGE: DbStage = "MANDATE";
+
+export function crossesCreditGate(from: string, to: string): boolean {
+  const gi = WORKING_DB_STAGES.indexOf(CREDIT_GATE_STAGE);
+  const fi = WORKING_DB_STAGES.indexOf(from as DbStage);
+  const ti = WORKING_DB_STAGES.indexOf(to as DbStage);
+  return fi !== -1 && ti !== -1 && fi < gi && ti >= gi;
+}
+
+// Fases antes do NCNDA: NCNDA assinado (webhook ClickSign) leva o deal daqui para QUALIFICATION.
+export const PRE_NCNDA_DB_STAGES: DbStage[] = WORKING_DB_STAGES.slice(0, WORKING_DB_STAGES.indexOf("QUALIFICATION"));
 
 // Matriz por papel (seção 4.2). Devolve null se o papel pode, ou a mensagem do 403.
 export const MA_STAGE_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
