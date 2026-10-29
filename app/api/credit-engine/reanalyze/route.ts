@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
     configurado: {
       serasa: Boolean(process.env.SERASA_CLIENT_ID && process.env.SERASA_CLIENT_SECRET),
       bacen: Boolean(process.env.CHECKTUDO_USERNAME && process.env.CHECKTUDO_PASSWORD),
+      juridico: Boolean(process.env.CHECKTUDO_USERNAME && process.env.CHECKTUDO_PASSWORD),
     },
   });
 }

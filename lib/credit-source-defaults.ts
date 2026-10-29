@@ -25,4 +25,6 @@ export const CREDIT_SOURCE_DEFAULTS = {
   serasa_cpf_list: null as string[] | null,
   spc: true,
   escavador: true,
+  // Dossiê Jurídico Resumido do CheckTudo (29/10/2026): soma com DataJud e Escavador.
+  checktudo_juridico: true,
 };

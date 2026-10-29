@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { resolveEffectiveSourceConfig } from "@/lib/credit-source-config";
 import { buscarBacenScr } from "@/lib/credit-bacen";
+import { consultarJuridicoCheckTudo } from "@/lib/credit-checktudo-juridico";
 import { corrigirNomeAnalisado, mesmoNome } from "@/lib/credit-nome-oficial";
 import { lookupCnpj } from "@/lib/cnpj-lookup";
 import { generateAndStoreCreditReportPdf } from "@/lib/credit-report-generate";
@@ -112,13 +113,39 @@ export async function POST(req: NextRequest) {
     const nome = await corrigirNomeAnalisado(svc, result.profile_id).catch(() => ({ corrigido: false }));
     let precisaRegerar = nome.corrigido;
 
-    // BACEN via CheckTudo (SCR), 01/09/2026: dado de referência, nunca entra no
-    // Tier/score da V3. Só roda se a fonte estiver ligada na config efetiva.
-    if (effectiveSourceConfig.registrato_bacen && rawDoc) {
-      const bacenData = await buscarBacenScr(subject_type === "PJ" ? "cnpj" : "cpf", rawDoc);
-      if (bacenData) {
-        await svc.from("credit_profiles").update({ bacen_scr_data: bacenData }).eq("id", result.profile_id).then(null, () => {});
-        result.bacen_scr = bacenData;
+    // BACEN (SCR) e Jurídico (Dossiê Resumido) via CheckTudo: dados de referência, nunca
+    // entram no Tier/score da V3. Cada um só roda se a fonte estiver ligada na config
+    // efetiva; os dois são independentes, então em paralelo.
+    const docType = subject_type === "PJ" ? "cnpj" : "cpf";
+    const [bacenData, juridico] = await Promise.all([
+      effectiveSourceConfig.registrato_bacen && rawDoc ? buscarBacenScr(docType, rawDoc) : Promise.resolve(null),
+      effectiveSourceConfig.checktudo_juridico && rawDoc ? consultarJuridicoCheckTudo(docType, rawDoc) : Promise.resolve(null),
+    ]);
+    if (bacenData) {
+      await svc.from("credit_profiles").update({ bacen_scr_data: bacenData }).eq("id", result.profile_id).then(null, () => {});
+      result.bacen_scr = bacenData;
+      precisaRegerar = true;
+    }
+    if (juridico) {
+      // Sucesso grava o dado; falha grava o motivo em fontes_status, pro "Reanalisar" mostrar.
+      const { data: prof } = await svc.from("credit_profiles").select("raw_result").eq("id", result.profile_id).single();
+      const raw = (prof?.raw_result ?? {}) as Record<string, unknown>;
+      const statusJur = juridico.ok
+        ? { ok: true, em: new Date().toISOString() }
+        : { ok: false, erro: juridico.error.slice(0, 500), em: new Date().toISOString() };
+      if (!juridico.ok) console.error("CheckTudo Jurídico falhou, seguindo sem esse dado:", juridico.error);
+      await svc.from("credit_profiles")
+        .update({
+          raw_result: {
+            ...raw,
+            ...(juridico.ok ? { checktudo_juridico: juridico.data } : {}),
+            fontes_status: { ...((raw.fontes_status as object | undefined) ?? {}), juridico: statusJur },
+          },
+        })
+        .eq("id", result.profile_id)
+        .then(null, () => {});
+      if (juridico.ok) {
+        result.checktudo_juridico = juridico.data;
         precisaRegerar = true;
       }
     }

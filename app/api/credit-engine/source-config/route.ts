@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: true, data: { cnpj, razao_social: null, ...DEFAULTS, configured_by: null, updated_at: null, is_default: true } });
   }
 
-  return NextResponse.json({ success: true, data: { ...data, is_default: false } });
+  return NextResponse.json({ success: true, data: { ...DEFAULTS, ...data, is_default: false } });
 }
 
 export async function POST(req: NextRequest) {
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const body = await req.json();
-  const { cnpj, razao_social, receita_federal, cnj_datajud, ceis, registrato_bacen, serasa, serasa_modalidade, serasa_cnpj, serasa_cpf, serasa_cpf_list, spc, escavador } = body;
+  const { cnpj, razao_social, receita_federal, cnj_datajud, ceis, registrato_bacen, serasa, serasa_modalidade, serasa_cnpj, serasa_cpf, serasa_cpf_list, spc, escavador, checktudo_juridico } = body;
 
   if (!cnpj) return NextResponse.json({ error: "cnpj obrigatório" }, { status: 422 });
   if (serasa_cpf === true && (!Array.isArray(serasa_cpf_list) || serasa_cpf_list.length === 0)) {
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest) {
     serasa_cpf_list: Boolean(serasa_cpf) ? serasa_cpf_list : null,
     spc: Boolean(spc),
     escavador: Boolean(escavador),
+    checktudo_juridico: Boolean(checktudo_juridico),
     configured_by: auth.userId,
   }, { onConflict: "cnpj" }).select("id, cnpj, updated_at").single();
 

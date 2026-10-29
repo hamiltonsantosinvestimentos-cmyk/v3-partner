@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveEffectiveSourceConfig, type SourceConfig } from "@/lib/credit-source-config";
 import { consultarBacenScr } from "@/lib/credit-bacen";
+import { consultarJuridicoCheckTudo } from "@/lib/credit-checktudo-juridico";
 import { corrigirNomeAnalisado } from "@/lib/credit-nome-oficial";
 import { consultarSerasa } from "@/lib/serasa";
 import { recalcularScoreComSerasa, restricoesSerasa } from "@/lib/credit-score";
@@ -11,15 +12,16 @@ import { generateAndStoreCreditReportPdf } from "@/lib/credit-report-generate";
 // o score quando o Serasa chega e regenerando o dossiê. Fontes já consultadas nunca são
 // reconsultadas, então nunca geram cobrança repetida.
 //
-// Hoje cobre Serasa e BACEN/SCR, as duas que falhavam em silêncio: o motor (n8n) entrega o
-// dossiê sem a fonte quando ela dá erro, sem avisar. Os motivos das falhas ficam gravados em
+// Hoje cobre Serasa, BACEN/SCR e o Jurídico do CheckTudo (29/10/2026). Serasa e BACEN falhavam
+// em silêncio: o motor (n8n) entrega o dossiê sem a fonte quando ela dá erro, sem avisar. Os motivos das falhas ficam gravados em
 // credit_profiles.raw_result.fontes_status para a tela mostrar.
 
-export type FonteReanalise = "serasa" | "bacen";
+export type FonteReanalise = "serasa" | "bacen" | "juridico";
 
 export const FONTE_LABEL: Record<FonteReanalise, string> = {
   serasa: "Serasa",
   bacen: "BACEN (SCR)",
+  juridico: "Jurídico (CheckTudo)",
 };
 
 export interface EstadoFonte {
@@ -101,6 +103,7 @@ function montarFontes(perfil: PerfilRow, cfg: SourceConfig, isPj: boolean): Esta
   // consolidado_bruto — conta como pendente pra o Reanalisar buscar de novo (uma vez só:
   // depois disso o consolidado_bruto existe, mesmo que o CheckTudo não traga os campos).
   const bacenOk = !!perfil.bacen_scr_data && "consolidado_bruto" in perfil.bacen_scr_data;
+  const juridicoOk = !!perfil.raw_result?.checktudo_juridico;
   return [
     {
       fonte: "serasa",
@@ -116,6 +119,13 @@ function montarFontes(perfil: PerfilRow, cfg: SourceConfig, isPj: boolean): Esta
       desatualizada: !!perfil.bacen_scr_data && !bacenOk,
       habilitada: !!cfg.registrato_bacen,
       ultimo_erro: !bacenOk && status.bacen?.ok === false ? status.bacen.erro ?? null : null,
+    },
+    {
+      fonte: "juridico",
+      label: FONTE_LABEL.juridico,
+      consultada: juridicoOk,
+      habilitada: !!cfg.checktudo_juridico,
+      ultimo_erro: !juridicoOk && status.juridico?.ok === false ? status.juridico.erro ?? null : null,
     },
   ];
 }
@@ -151,6 +161,7 @@ export interface ResultadoReanalise {
 export interface ReanaliseDeps {
   serasa?: typeof consultarSerasa;
   bacen?: typeof consultarBacenScr;
+  juridico?: typeof consultarJuridicoCheckTudo;
   gerarPdf?: typeof generateAndStoreCreditReportPdf;
 }
 
@@ -162,6 +173,7 @@ export async function reanalisarPendentes(
 ): Promise<ResultadoReanalise | ErroReanalise> {
   const fSerasa = deps.serasa ?? consultarSerasa;
   const fBacen = deps.bacen ?? consultarBacenScr;
+  const fJuridico = deps.juridico ?? consultarJuridicoCheckTudo;
   const fPdf = deps.gerarPdf ?? generateAndStoreCreditReportPdf;
   const c = await carregar(db, proposalId);
   if (!c.ok) return c;
@@ -197,11 +209,14 @@ export async function reanalisarPendentes(
   let sourcesPaid = [...(perfil.sources_paid ?? [])];
   let flags = { ...(perfil.flags ?? {}) };
 
-  // As duas fontes são independentes: consulta em paralelo.
+  // As fontes são independentes: consulta em paralelo.
   const consultas = await Promise.all(
     pendentes.map(async (f) => {
       if (f.fonte === "serasa") {
         return { fonte: f.fonte, r: await fSerasa({ doc: rawDoc, isPj, modalidade: cfg.serasa_modalidade }) };
+      }
+      if (f.fonte === "juridico") {
+        return { fonte: f.fonte, r: await fJuridico(isPj ? "cnpj" : "cpf", rawDoc) };
       }
       return { fonte: f.fonte, r: await fBacen(isPj ? "cnpj" : "cpf", rawDoc) };
     })
@@ -220,6 +235,9 @@ export async function reanalisarPendentes(
     if (fonte === "bacen") {
       // Referência apenas: nunca entra no Tier/score (decisão de João, 01/09/2026).
       update.bacen_scr_data = r.data;
+    } else if (fonte === "juridico") {
+      // Também referência apenas, gravado no raw_result (sem coluna própria).
+      raw = { ...raw, checktudo_juridico: r.data };
     } else {
       const serasa = r.data;
       const rec = recalcularScoreComSerasa(
