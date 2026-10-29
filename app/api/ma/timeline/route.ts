@@ -1,22 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { dbStageLabel, lossCategoryLabel } from "@/lib/ma/pipeline";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
-
-const STAGE_LABELS: Record<string, string> = {
-  PROSPECTING:   "Prospecção",
-  QUALIFICATION: "Qualificação",
-  IOI:           "Viabilidade",
-  PROPOSAL:      "Estruturação",
-  NEGOTIATION:   "Negociação",
-  DUE_DILIGENCE: "Due Diligence",
-  CLOSING:       "Closing",
-  CLOSED_WON:    "Fechado (Won)",
-  CLOSED_LOST:   "Fechado (Perdido)",
-};
 
 export type TimelineEvent = {
   id: string;
@@ -75,8 +64,9 @@ export async function GET(req: NextRequest) {
       changed_by: string | null; created_at: string;
       profiles: { full_name?: string } | null;
     }>) {
-      const fromLabel = STAGE_LABELS[h.from_stage ?? ""] ?? h.from_stage ?? "—";
-      const toLabel   = STAGE_LABELS[h.to_stage] ?? h.to_stage;
+      // Rótulos da fonte única (lib/ma/pipeline.ts): "Ganho", "Perdido" e "Sem fase", sem travessão.
+      const fromLabel = dbStageLabel(h.from_stage);
+      const toLabel   = dbStageLabel(h.to_stage);
       events.push({
         id:          h.id,
         type:        "stage_change",
@@ -136,7 +126,24 @@ export async function GET(req: NextRequest) {
     new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   );
 
-  return NextResponse.json({ events: events.slice(0, 50) });
+  // Encerramento atual do deal (BRIEF 28/10/2026, bloco B). Mesmo acesso de antes: só a Mesa.
+  const { data: closure } = await svc()
+    .from("ma_deals")
+    .select("stage, closed_date, closed_reason_category, closed_reason")
+    .eq("id", dealId)
+    .maybeSingle();
+
+  return NextResponse.json({
+    events: events.slice(0, 50),
+    closure: closure && closure.closed_date ? {
+      stage: closure.stage,
+      stage_label: dbStageLabel(closure.stage),
+      closed_date: closure.closed_date,
+      closed_reason_category: closure.closed_reason_category,
+      closed_reason_category_label: closure.closed_reason_category ? lossCategoryLabel(closure.closed_reason_category) : null,
+      closed_reason: closure.closed_reason,
+    } : null,
+  });
 }
 
 // PATCH — marca notificações do deal como lidas para o usuário atual

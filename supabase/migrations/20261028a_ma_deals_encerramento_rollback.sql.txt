@@ -1,0 +1,15 @@
+-- Rollback de 20261028a_ma_deals_encerramento.sql (rodar manualmente no SQL Editor, só se necessário).
+-- Antes: confirmar que nenhum deal está em CLOSED_WON/CLOSED_LOST com dados de encerramento que precisem ser guardados.
+drop function if exists public.ma_deal_transition(uuid, public.deal_stage, uuid, text, jsonb);
+alter table public.ma_deals drop constraint if exists ma_deals_closed_lost_motivo_chk;
+alter table public.ma_deals drop constraint if exists ma_deals_closed_reason_category_chk;
+alter table public.ma_deals
+  drop column if exists closed_note,
+  drop column if exists closed_reason,
+  drop column if exists closed_reason_category,
+  drop column if exists closed_from_stage,
+  drop column if exists closed_by,
+  drop column if exists closed_at,
+  drop column if exists closed_date;
+comment on column public.ma_deal_clients.status is
+  'prospecto (vinculado, antes de assinar) -> a_performar (contrato assinado, deal ainda nao fechado) -> performado (deal CLOSED_WON). Nunca rebaixado automaticamente.';

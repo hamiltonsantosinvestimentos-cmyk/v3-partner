@@ -1,6 +1,7 @@
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import Anthropic from "@anthropic-ai/sdk";
+import { isClosedDbStage } from "@/lib/ma/pipeline";
 
 /**
  * RELATÓRIO GERENCIAL, MESA M&A + BOLSA DE ATIVOS
@@ -29,8 +30,8 @@ const MA_STAGE_LABELS: Record<string, string> = {
   NEGOTIATION: "Negociação",
   DUE_DILIGENCE: "Due Diligence",
   CLOSING: "Aprovação Final e Fechamento",
-  CLOSED_WON: "Fechado (Ganho)",
-  CLOSED_LOST: "Fechado (Perdido)",
+  CLOSED_WON: "Ganho",
+  CLOSED_LOST: "Perdido",
 };
 const MA_OPEN_STAGES = ["PROSPECTING", "QUALIFICATION", "IOI", "PROPOSAL", "NEGOTIATION", "DUE_DILIGENCE", "CLOSING"];
 
@@ -109,7 +110,7 @@ export interface RelatorioGerencialResult {
   report_id: string | null;
   period: string;
   mesa: MesaFiltro;
-  ma?: { total: number; abertos: number; criados_no_periodo: number; fechados_ganhos: number; fechados_perdidos: number; parados: number };
+  ma?: { total: number; abertos: number; criados_no_periodo: number; fechados_ganhos: number; fechados_perdidos: number; reabertos: number; parados: number };
   bolsa?: { total_ativos: number; lotes_parados: number; contratos_sla_estourado: number; ativos_sem_oferta: number };
   gargalos_total: number;
 }
@@ -159,8 +160,18 @@ export async function gerarRelatorioGerencial(
       .gte("created_at", bounds.start.toISOString())
       .lte("created_at", bounds.end.toISOString());
 
-    const closedWonInPeriod = (historyInPeriod ?? []).filter((h: any) => h.to_stage === "CLOSED_WON").length;
-    const closedLostInPeriod = (historyInPeriod ?? []).filter((h: any) => h.to_stage === "CLOSED_LOST").length;
+    // Só o último evento de cada deal no período conta (BRIEF 28/10/2026, seção 4.5):
+    // encerramento reaberto no mesmo período não conta como ganho/perda; reabertura
+    // de um encerramento de período anterior aparece como "reaberto".
+    const lastEventByDeal = new Map<string, { from_stage: string | null; to_stage: string; created_at: string }>();
+    for (const h of (historyInPeriod ?? []) as { deal_id: string; from_stage: string | null; to_stage: string; created_at: string }[]) {
+      const prev = lastEventByDeal.get(h.deal_id);
+      if (!prev || h.created_at > prev.created_at) lastEventByDeal.set(h.deal_id, h);
+    }
+    const lastEvents = [...lastEventByDeal.values()];
+    const closedWonInPeriod = lastEvents.filter((h) => h.to_stage === "CLOSED_WON").length;
+    const closedLostInPeriod = lastEvents.filter((h) => h.to_stage === "CLOSED_LOST").length;
+    const reopenedInPeriod = lastEvents.filter((h) => isClosedDbStage(h.from_stage) && !isClosedDbStage(h.to_stage)).length;
 
     const { data: allHistory } = await db
       .from("ma_deal_history")
@@ -229,6 +240,7 @@ export async function gerarRelatorioGerencial(
       criados_no_periodo: createdInPeriod,
       fechados_ganhos: closedWonInPeriod,
       fechados_perdidos: closedLostInPeriod,
+      reabertos: reopenedInPeriod,
       parados: stuckDeals.length,
     };
 
@@ -251,7 +263,7 @@ export async function gerarRelatorioGerencial(
 <thead><tr style="color:#E8C97A;text-transform:uppercase;font-size:10px;"><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #C9A84C;">Fase</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #C9A84C;">Deals</th><th style="text-align:left;padding:8px 12px;border-bottom:2px solid #C9A84C;">Tempo médio real na fase</th></tr></thead>
 <tbody>${stageRows}</tbody>
 </table>
-<p style="margin:0 0 16px;font-size:12px;color:#9BAFC5;">${createdInPeriod} deals criados · ${closedWonInPeriod} fechados ganhos · ${closedLostInPeriod} fechados perdidos, no período.</p>
+<p style="margin:0 0 16px;font-size:12px;color:#9BAFC5;">${createdInPeriod} deals criados · ${closedWonInPeriod} fechados ganhos · ${closedLostInPeriod} fechados perdidos${reopenedInPeriod ? ` · ${reopenedInPeriod} reabertos` : ""}, no período.</p>
 
 <p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#C9A84C;">Mesa M&amp;A, Deals Parados (mais de ${MA_DEAL_STUCK_DAYS} dias na mesma fase)</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:12px;margin-bottom:20px;">
