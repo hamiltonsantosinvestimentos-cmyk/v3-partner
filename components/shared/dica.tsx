@@ -68,7 +68,10 @@ export function Dica({ id, className = "" }: { id: NotaId; className?: string })
         <span
           id={tipId}
           role="tooltip"
-          className="absolute z-50 left-0 top-full mt-1 w-64 max-w-[calc(100vw-32px)] rounded-lg border border-[#C9A84C]/40 bg-[#12112A] px-3 py-2 text-[12px] font-normal normal-case tracking-normal leading-relaxed text-[#F5F1E8] shadow-lg"
+          // pointer-events-none: o texto aberto não pode capturar o clique de quem está embaixo
+          // (achado no teste da Mesa M&A, 28/10/2026: com o cursor parado sobre a nota, o botão
+          // Confirmar do modal não recebia o clique). Hover, foco e toque continuam no ícone.
+          className="pointer-events-none absolute z-50 left-0 top-full mt-1 w-64 max-w-[calc(100vw-32px)] rounded-lg border border-[#C9A84C]/40 bg-[#12112A] px-3 py-2 text-[12px] font-normal normal-case tracking-normal leading-relaxed text-[#F5F1E8] shadow-lg"
         >
           {nota.texto}
         </span>
