@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
-import { Cormorant_Garamond } from "next/font/google";
+import localFont from "next/font/local";
 import { ArrowRight, ArrowLeft, Clock3, Check, MessageCircle, ShieldCheck } from "lucide-react";
 import { maskPhone } from "./wizard-ui";
 import { trackPixel } from "./meta-pixel";
@@ -13,7 +13,16 @@ import {
 } from "@/lib/quiz-partner";
 
 // Display serifado do manual de marca V4.2 — só nos títulos grandes; o resto é DM Sans.
-export const display = Cormorant_Garamond({ subsets: ["latin"], weight: ["500", "600", "700"], style: ["normal", "italic"], display: "swap" });
+// Arquivos locais (subconjunto latin, peso variável, do Google Fonts) desde 29/10/2026: com
+// next/font/google o build baixava a fonte a cada deploy e falhou 3 vezes em 28/10, uma delas
+// travando o deploy de produção.
+export const display = localFont({
+  src: [
+    { path: "./fonts/cormorant-garamond-latin.woff2", weight: "500 700", style: "normal" },
+    { path: "./fonts/cormorant-garamond-latin-italic.woff2", weight: "500 700", style: "italic" },
+  ],
+  display: "swap",
+});
 
 export const C = {
   bg: "#09081A",
