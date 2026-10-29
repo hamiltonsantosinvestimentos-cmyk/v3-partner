@@ -6,7 +6,7 @@ test("upload duplicado do mesmo arquivo e bloqueado, nao cria copia", async ({ r
   const content = uniqueFileContent("dup");
   const fileName = "teste-fase3-duplicata.pdf";
   let docIdToClean = "";
-  const QA_DEAL_ID = await createQaDeal({ withV3Code: false });
+  const QA_DEAL_ID = await createQaDeal();
 
   try {
     const first = await request.post("/api/ma/documents", {

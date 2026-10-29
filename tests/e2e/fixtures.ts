@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { randomUUID } from "crypto";
 
 // Fixture da suite de governanca de documentos (MPS Documentos V3 Fase 3).
 // Deal "V3 Validacao Playwright Ltda" (v3_code V3-2026-07-IND-002). A pasta MPS desse codigo
@@ -17,22 +16,22 @@ function svc() {
   return createClient(url, key);
 }
 
-// Cria (ou recria) o deal de teste. Com withV3Code, usa o id e o v3_code fixos, que reaproveitam
-// a pasta MPS ja existente; sem, um deal descartavel sem codigo (o upload cai no bucket de fallback).
-export async function createQaDeal({ withV3Code }: { withV3Code: boolean }): Promise<string> {
+// Cria (ou recria) o deal de teste com o id e o v3_code fixos. O v3_code e obrigatorio: e por ele
+// que o trigger sync_ma_documents_from_deal acha a pasta MPS e grava ma_documents, onde mora a
+// checagem de duplicata. A suite roda com workers: 1, entao os specs nunca disputam o mesmo deal.
+export async function createQaDeal(): Promise<string> {
   const db = svc();
   const { data: admin } = await db.from("profiles").select("id").eq("role", "ADMIN").limit(1).single();
-  const id = withV3Code ? QA_DEAL_ID : randomUUID();
   const { error } = await db.from("ma_deals").upsert({
-    id,
-    code: withV3Code ? QA_DEAL_V3_CODE : `ZZTEST-E2E-${Date.now()}`,
-    v3_code: withV3Code ? QA_DEAL_V3_CODE : null,
+    id: QA_DEAL_ID,
+    code: QA_DEAL_V3_CODE,
+    v3_code: QA_DEAL_V3_CODE,
     title: QA_DEAL_TITLE,
     target_company: QA_DEAL_TITLE,
     created_by: admin!.id,
   });
   if (error) throw new Error(`createQaDeal: ${error.message}`);
-  return id;
+  return QA_DEAL_ID;
 }
 
 // Apaga o deal de teste; ma_documents e ma_deal_history saem junto (FK on delete cascade).

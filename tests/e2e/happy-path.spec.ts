@@ -7,7 +7,7 @@ test("upload com categoria CIM cai no path governado correto", async ({ request 
   const content = uniqueFileContent("happy-cim");
   const docId = `qa_happy_${Date.now()}`;
   const fileName = "teste-fase3-happy-path.pdf";
-  await createQaDeal({ withV3Code: true });
+  await createQaDeal();
   try {
     const urlRes = await request.get(
       `/api/ma/documents/upload-url?deal_id=${QA_DEAL_ID}&doc_id=${docId}&file_name=${encodeURIComponent(fileName)}&category=CIM`

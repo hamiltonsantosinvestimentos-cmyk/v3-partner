@@ -224,7 +224,8 @@ test.describe("Bolsa de Capitais — painel Demandas de Compra (UI)", () => {
       await expect(row.getByText(admin.full_name)).toBeVisible();
     }
 
-    await row.getByRole("button", { name: /Documentos/ }).click();
+    // Os documentos ficam no painel de detalhe, aberto pelo clique na linha.
+    await row.click();
     await expect(page.getByText("Nenhum documento enviado ainda pelo comprador.")).toBeVisible();
   });
 });
