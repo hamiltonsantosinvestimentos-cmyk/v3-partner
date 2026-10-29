@@ -9,10 +9,16 @@ import {
   MessageSquare, Send, Zap, FileImage, FileSignature,
   ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp, Bot,
   Link2, AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, Handshake, User, StickyNote, Compass,
+  GripVertical, RotateCcw,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { MA_PIPELINE } from "@/components/ma/ma-client";
+import {
+  MA_PIPELINE, MA_CLOSED_STAGES, PIPELINE_TO_DB, DB_TO_PIPELINE, STAGE_DEFAULT_PROBABILITY,
+  classifyTransition, stageRoleDenial, lossCategoryLabel, isoToBr, type TransitionKind,
+} from "@/lib/ma/pipeline";
+import { closureFromRow, type DealClosure } from "@/lib/ma/closure";
+import { MaTransitionModal, type ModalKind, type TransitionPayload } from "@/components/mesa-ma/ma-transition-modal";
 import { ForjaPanel } from "@/components/ma/forja-panel";
 import { DocumentRequestPanel } from "@/components/ma/document-request-panel";
 import { ContratoPanel } from "@/components/ma/contrato-panel";
@@ -62,7 +68,7 @@ type DealComment = {
   created_at: string;
 };
 
-type MaCard = {
+type MaCard = DealClosure & {
   id: string;
   code: string;
   company: string;
@@ -101,30 +107,17 @@ const MA_STAGES_DEFAULT: MaStage[] = MA_PIPELINE.map(s => ({
   bg: s.bg.replace("0.12", "0.1"),
 }));
 
+// Colunas Ganho e Perdido (BRIEF 28/10/2026, bloco B): à direita de "Aprovação Final".
+const MA_CLOSED_COLUMNS: MaStage[] = MA_CLOSED_STAGES.map(s => ({ id: s.id, label: s.label, color: s.color, bg: s.bg }));
+const ALL_STAGE_LABELS: Record<string, string> = Object.fromEntries(
+  [...MA_STAGES_DEFAULT, ...MA_CLOSED_COLUMNS].map(s => [s.id, s.label])
+);
+const CLOSED_IDS = ["ganho", "perdido"];
+const CAN_MOVE_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+
 
 const SECTORS = ["Fintech", "Real Estate", "Agronegócio", "Varejo", "Logística", "Saúde", "Tecnologia", "Indústria", "Energia", "Outro"];
 
-// Mapeia pipeline IDs de volta para ENUM do banco
-const PIPELINE_TO_DB: Record<string, string> = {
-  prospeccao:    "PROSPECTING",
-  qualificacao:  "QUALIFICATION",
-  viabilidade:   "IOI",
-  estruturacao:  "PROPOSAL",
-  negociacao:    "NEGOTIATION",
-  due_diligence: "DUE_DILIGENCE",
-  aprovacao:     "CLOSING",
-};
-
-// Probabilidade padrão por fase — atualizada automaticamente ao mover
-const STAGE_DEFAULT_PROBABILITY: Record<string, number> = {
-  prospeccao:    10,
-  qualificacao:  20,
-  viabilidade:   35,
-  estruturacao:  50,
-  negociacao:    65,
-  due_diligence: 75,
-  aprovacao:     90,
-};
 const ROLES_MA = ["Analista Jr.", "Analista", "Analista Sênior", "Especialista M&A", "Gestor"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -230,26 +223,99 @@ function AnaliseCreditoLinkButtonMA({ dealId, dealCode, partnerId, hideBadge }: 
 }
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
+// Menu "Mover para…" (BRIEF 28/10/2026, bloco B): mesmas regras do arrastar, e é o
+// caminho no celular e no teclado, onde o arrastar nativo não funciona. Fases na ordem
+// da esteira (escala ordinal, não alfabética), Ganho e Perdido no fim; a atual desabilitada.
+function MoveToMenu({ card, onMoveRequest }: { card: MaCard; onMoveRequest: (target: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const fora = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener("pointerdown", fora);
+    return () => document.removeEventListener("pointerdown", fora);
+  }, [open]);
+  const isClosed = CLOSED_IDS.includes(card.stage);
+  const reopenTarget = DB_TO_PIPELINE[card.closedFromStage ?? ""] ?? "aprovacao";
+  const options: { id: string; label: string }[] = isClosed
+    ? [{ id: reopenTarget, label: `Reabrir deal (${ALL_STAGE_LABELS[reopenTarget]})` }]
+    : [
+        ...MA_STAGES_DEFAULT.map(s => ({ id: s.id, label: s.label })),
+        { id: "ganho", label: "Marcar como Ganho" },
+        { id: "perdido", label: "Marcar como Perdido" },
+      ];
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+        onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+        className="flex items-center gap-1 px-1.5 py-0.5 rounded border border-[#243A66] text-[9px] font-bold uppercase tracking-wide text-[#9BAFC5] hover:text-[#F5F1E8] hover:border-[#C9A84C]/50"
+      >
+        <ArrowLeftRight className="w-3 h-3" /> Mover para…
+      </button>
+      {open && (
+        <div role="menu" className="absolute z-30 right-0 mt-1 w-56 max-w-[calc(100vw-32px)] rounded-lg border border-[#243A66] bg-[#12112A] py-1 shadow-lg">
+          {options.map(o => (
+            <button
+              key={o.id}
+              type="button"
+              role="menuitem"
+              disabled={o.id === card.stage}
+              onClick={() => { setOpen(false); onMoveRequest(o.id); }}
+              onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+              className="w-full text-left px-3 py-1.5 text-[11px] text-[#F5F1E8] hover:bg-[#243A66] disabled:text-[#9BAFC5]/50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+              {o.label}{o.id === card.stage ? " (atual)" : ""}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function KanbanCardItem({
-  card, stages, onClick, onOpenForja,
+  card, stages, onClick, onOpenForja, canMove, onMoveRequest, onDragStart, onDragEnd,
 }: {
   card: MaCard;
   stages: MaStage[];
   onClick: () => void;
   onOpenForja: () => void;
+  canMove: boolean;
+  onMoveRequest: (target: string) => void;
+  onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: () => void;
 }) {
   const stage = stages.find(s => s.id === card.stage);
   const isInvestidor = card.tipo_participante === "Investidor";
   const forjaStatus = card.asset_data?.forja_status as string | undefined;
+  const draggable = canMove && !!onDragStart;
   return (
     <div
       onClick={onClick}
-      className="rounded-lg border border-[#122036] bg-[#091221] p-3 cursor-pointer hover:border-[#C9A84C]/60 hover:shadow-lg transition-all group"
+      draggable={draggable}
+      onDragStart={draggable ? onDragStart : undefined}
+      onDragEnd={draggable ? onDragEnd : undefined}
+      className={`rounded-lg border border-[#122036] bg-[#091221] p-3 hover:border-[#C9A84C]/60 hover:shadow-lg transition-all group ${draggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
     >
       <div className="flex items-start justify-between mb-2">
-        <p className="text-xs font-semibold text-[#E8EDF5] leading-tight group-hover:text-[#C9A84C] transition-colors">{card.company}</p>
+        <div className="flex items-start gap-1 min-w-0">
+          {draggable && <GripVertical className="w-3 h-3 mt-0.5 flex-shrink-0 text-[#9BAFC5]/60" aria-hidden="true" />}
+          <p className="text-xs font-semibold text-[#E8EDF5] leading-tight group-hover:text-[#C9A84C] transition-colors">{card.company}</p>
+        </div>
         <span className="text-[10px] text-[#7A8FA8] flex-shrink-0 ml-1">{card.code}</span>
       </div>
+      {card.stage === "perdido" && card.closedReasonCategory && (
+        <p className="mb-2 inline-block text-[10px] px-1.5 py-0.5 rounded-full border border-[#9BAFC5]/40 text-[#9BAFC5]">
+          {lossCategoryLabel(card.closedReasonCategory)}
+        </p>
+      )}
+      {(card.stage === "ganho" || card.stage === "perdido") && card.closedDate && (
+        <p className="mb-2 text-[10px] text-[#9BAFC5]">Fechado em {isoToBr(card.closedDate)}</p>
+      )}
       <div className="flex items-center gap-1.5 mb-2 flex-wrap">
         <span className="text-[10px] px-1.5 py-0.5 rounded-full border"
           style={{ color: stage?.color, borderColor: `${stage?.color}40`, background: stage?.bg }}>
@@ -292,6 +358,8 @@ function KanbanCardItem({
             <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-[#C9A84C]/15 text-[#C9A84C]">KIT ✓</span>
           )}
         </div>
+
+        {canMove && <MoveToMenu card={card} onMoveRequest={onMoveRequest} />}
 
         {/* Botão de inserção / conciliação de dados OCR */}
         <button
@@ -394,12 +462,6 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
       .then(({ deals: fresh }) => {
         if (!Array.isArray(fresh)) return;
         setCards(fresh.map((d: Record<string, unknown>) => {
-          const STAGE_MAP: Record<string, string> = {
-            PROSPECTING: "prospeccao", QUALIFICATION: "qualificacao",
-            IOI: "viabilidade", DUE_DILIGENCE: "due_diligence",
-            PROPOSAL: "estruturacao", NEGOTIATION: "negociacao",
-            CLOSING: "aprovacao", CLOSED_WON: "aprovacao", CLOSED_LOST: "aprovacao",
-          };
           const rawStage = d.stage as string;
           const assetData = (d.asset_data ?? {}) as Record<string, unknown>;
           return {
@@ -408,7 +470,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
             company: (d.target_company ?? d.title ?? "Sem nome") as string,
             sector: (d.sector ?? "") as string,
             value: (d.deal_value ?? 0) as number,
-            stage: STAGE_MAP[rawStage] ?? rawStage ?? "prospeccao",
+            stage: DB_TO_PIPELINE[rawStage] ?? rawStage ?? "prospeccao",
             dbStage: rawStage,
             responsible: (() => {
               const p = d.partner;
@@ -423,6 +485,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
             asset_data: assetData,
             location: (d.location ?? "") as string,
             tipo_participante: assetData?.tipo_participante as string | undefined,
+            ...closureFromRow(d),
           };
         }));
       })
@@ -699,49 +762,131 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
     setEditSaving(false);
   };
 
-  const totalValue = cards.reduce((a, c) => a + c.value, 0);
-  const avgProb = cards.length ? Math.round(cards.reduce((a, c) => a + c.probability, 0) / cards.length) : 0;
-  const lastStageId = maStages[maStages.length - 1]?.id ?? "closing";
+  // Valor em aberto e probabilidade média contam só deals em fase de trabalho:
+  // Ganho e Perdido saem do pipeline ativo (BRIEF 28/10/2026, bloco B).
+  const workingCards = cards.filter(c => !CLOSED_IDS.includes(c.stage));
+  const totalValue = workingCards.reduce((a, c) => a + c.value, 0);
+  const avgProb = workingCards.length ? Math.round(workingCards.reduce((a, c) => a + c.probability, 0) / workingCards.length) : 0;
+  const canMove = CAN_MOVE_ROLES.includes(userRole);
+
+  // Faixa de aviso no topo do quadro por 6 segundos (mesmo padrão da Bolsa de Ativos).
+  const [boardWarning, setBoardWarning] = useState<string | null>(null);
+  const boardWarningTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const warnBoard = (msg: string) => {
+    setBoardWarning(msg);
+    if (boardWarningTimer.current) clearTimeout(boardWarningTimer.current);
+    boardWarningTimer.current = setTimeout(() => setBoardWarning(null), 6000);
+  };
+
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [expandedClosed, setExpandedClosed] = useState<Record<string, boolean>>({ ganho: false, perdido: false });
+  const [transitionModal, setTransitionModal] = useState<{ card: MaCard; kind: ModalKind; target: string } | null>(null);
 
   // 09/09/2026: async + checa res.ok e reverte o otimismo em caso de falha
   // (ex: 422 do gate de Análise de Crédito) -- mesmo bug e mesmo fix já
   // aplicados em credit-desk-client.tsx/nivel1-client.tsx (08/08/2026): sem
   // isso, um bloqueio real do backend aparecia como avanço bem-sucedido na
-  // tela, split-brain entre UI e banco.
+  // tela, split-brain entre UI e banco. Usado só para o avanço de uma fase;
+  // os demais movimentos passam pelo modal de confirmação.
   const handleMoveStage = async (card: MaCard, targetStageId: string) => {
     if (targetStageId === card.stage) return;
     const prevStageId = card.stage;
     const prevProb = card.probability;
     const newProb = STAGE_DEFAULT_PROBABILITY[targetStageId] ?? card.probability;
     setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: targetStageId, probability: newProb } : c));
-    setSelectedCard(prev => prev ? { ...prev, stage: targetStageId, probability: newProb } : null);
+    setSelectedCard(prev => prev && prev.id === card.id ? { ...prev, stage: targetStageId, probability: newProb } : prev);
 
     const dbStage = PIPELINE_TO_DB[targetStageId];
     if (!dbStage) return;
 
+    const revert = (msg: string) => {
+      setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: prevStageId, probability: prevProb } : c));
+      setSelectedCard(prev => prev && prev.id === card.id ? { ...prev, stage: prevStageId, probability: prevProb } : prev);
+      warnBoard(msg);
+    };
     try {
       const res = await fetch("/api/ma-deals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: card.id, stage: dbStage, probability_percent: newProb }),
+        body: JSON.stringify({ id: card.id, stage: dbStage }),
       });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
-        setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: prevStageId, probability: prevProb } : c));
-        setSelectedCard(prev => prev ? { ...prev, stage: prevStageId, probability: prevProb } : null);
-        aviso(json.error ?? "Não foi possível mover o deal de fase.");
+        revert(typeof json.error === "string" ? json.error : "Não foi possível mover o deal de fase.");
       }
     } catch {
-      setCards(prev => prev.map(c => c.id === card.id ? { ...c, stage: prevStageId, probability: prevProb } : c));
-      setSelectedCard(prev => prev ? { ...prev, stage: prevStageId, probability: prevProb } : null);
-      aviso("Erro de rede ao mover o deal de fase.");
+      revert("Erro de rede ao mover o deal de fase.");
+    }
+  };
+
+  // Ponto único de mudança de fase: arrastar, menu "Mover para…", painel do deal.
+  // Espelha as regras do servidor só para orientar; quem decide é o PATCH.
+  const requestMove = (card: MaCard, targetStageId: string, source: "drag" | "menu") => {
+    const from = PIPELINE_TO_DB[card.stage];
+    const to = PIPELINE_TO_DB[targetStageId];
+    if (!from || !to) return;
+    const kind: TransitionKind = classifyTransition(from, to, card.closedFromStage);
+    if (kind === "same") return;
+    if (kind === "invalid") {
+      warnBoard(CLOSED_IDS.includes(card.stage)
+        ? `Deal encerrado só volta para a fase de origem (${ALL_STAGE_LABELS[DB_TO_PIPELINE[card.closedFromStage ?? ""]] ?? "fase de origem"}), pelo "Reabrir deal".`
+        : "Movimento não permitido.");
+      return;
+    }
+    if (kind === "won_invalid") { warnBoard("Ganho só a partir de \"Aprovação Final e Fechamento\"."); return; }
+    const denial = stageRoleDenial(userRole, kind);
+    if (denial) { warnBoard(denial); return; }
+    if (kind === "advance") { handleMoveStage(card, targetStageId); return; }
+    if (kind === "skip" && source === "drag") {
+      warnBoard(`Arrastando, o deal avança uma fase por vez. Para pular para "${ALL_STAGE_LABELS[targetStageId]}", use "Mover para…" com justificativa.`);
+      return;
+    }
+    setTransitionModal({ card, kind: kind as ModalKind, target: targetStageId });
+  };
+
+  const confirmTransition = async (payload: TransitionPayload): Promise<string | null> => {
+    if (!transitionModal) return null;
+    const { card, target } = transitionModal;
+    try {
+      const res = await fetch("/api/ma-deals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: card.id, stage: PIPELINE_TO_DB[target], ...payload }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) return typeof json.error === "string" ? json.error : "Não foi possível mudar a fase.";
+      const row = (json.deal ?? {}) as Record<string, unknown>;
+      // Quem encerrou não volta no PATCH (sem join); só o nome de quem está logado é conhecido.
+      const closure = closureFromRow(row);
+      const updated: Partial<MaCard> = {
+        stage: target,
+        dbStage: PIPELINE_TO_DB[target],
+        probability: (row.probability_percent as number | null) ?? STAGE_DEFAULT_PROBABILITY[target] ?? card.probability,
+        ...closure,
+        closedByName: closure.closedDate ? userName : undefined,
+      };
+      setCards(prev => prev.map(c => c.id === card.id ? { ...c, ...updated } : c));
+      setSelectedCard(prev => prev && prev.id === card.id ? { ...prev, ...updated } : prev);
+      setTransitionModal(null);
+      return null;
+    } catch {
+      return "Erro de rede. Nada foi gravado.";
     }
   };
 
   const handleAdvanceStage = (card: MaCard) => {
     const next = nextStage(card.stage, maStages);
     if (!next) return;
-    handleMoveStage(card, next);
+    requestMove(card, next, "menu");
+  };
+
+  const handleColumnDrop = (e: React.DragEvent<HTMLDivElement>, columnId: string) => {
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    setDraggingId(null);
+    const card = cards.find(c => c.id === id);
+    if (!card || card.stage === columnId) return;
+    requestMove(card, columnId, "drag");
   };
 
   const handleDeleteCard = async (card: MaCard) => {
@@ -1015,11 +1160,11 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         {/* ── KANBAN TAB ─────────────────────────────────────── */}
         {activeTab === "kanban" && (
           <div>
-            {/* KPIs */}
+            {/* KPIs (só deals em fase de trabalho; Ganho e Perdido têm colunas próprias) */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
                 <p className="text-xs text-[#7A8FA8] mb-1">Total de Operações</p>
-                <p className="text-2xl font-bold text-[#E8EDF5]">{cards.length}</p>
+                <p className="text-2xl font-bold text-[#E8EDF5]">{workingCards.length}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
                 <p className="text-xs text-[#7A8FA8] mb-1">Volume Total</p>
@@ -1027,13 +1172,24 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
                 <p className="text-xs text-[#7A8FA8] mb-1">Em Closing</p>
-                <p className="text-2xl font-bold text-emerald-400">{cards.filter(c => c.stage === "closing").length}</p>
+                <p className="text-2xl font-bold text-emerald-400">{cards.filter(c => c.stage === "aprovacao").length}</p>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
                 <p className="text-xs text-[#7A8FA8] mb-1">Prob. Média</p>
                 <p className="text-2xl font-bold" style={{ color: probColor(avgProb) }}>{avgProb}%</p>
               </div>
             </div>
+
+            {/* Faixa de aviso do quadro (movimento não permitido, 422 do servidor) */}
+            {boardWarning && (
+              <div role="alert" className="mb-3 flex items-start gap-2 rounded-lg border border-[#F5B942]/40 bg-[#F5B942]/10 px-3 py-2 text-xs text-[#F5F1E8]">
+                <AlertTriangle className="w-4 h-4 text-[#F5B942] flex-shrink-0" aria-hidden="true" />
+                <span className="flex-1">{boardWarning}</span>
+                <button type="button" onClick={() => setBoardWarning(null)} aria-label="Fechar aviso" className="text-[#9BAFC5] hover:text-[#F5F1E8]">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
 
             {/* Kanban Board */}
             <div className="flex gap-4 overflow-x-auto pb-4">
@@ -1050,7 +1206,13 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       </span>
                     </div>
                     {/* Cards */}
-                    <div className="space-y-2 min-h-[100px] rounded-xl border border-[#122036]/60 bg-[#09081A]/50 p-2">
+                    <div
+                      onDragOver={(e) => { if (canMove) e.preventDefault(); }}
+                      onDrop={(e) => { if (canMove) handleColumnDrop(e, stage.id); }}
+                      className={`space-y-2 min-h-[100px] rounded-xl border bg-[#09081A]/50 p-2 transition-colors ${
+                        draggingId ? "border-[#C9A84C]/30" : "border-[#122036]/60"
+                      }`}
+                    >
                       {stageCards.map(card => (
                         <KanbanCardItem
                           key={card.id}
@@ -1058,11 +1220,77 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                           stages={maStages}
                           onClick={() => setSelectedCard(card)}
                           onOpenForja={() => { setDetailTab("forja"); setSelectedCard(card); }}
+                          canMove={canMove}
+                          onMoveRequest={(target) => requestMove(card, target, "menu")}
+                          onDragStart={(e) => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; setDraggingId(card.id); }}
+                          onDragEnd={() => setDraggingId(null)}
                         />
                       ))}
                       {stageCards.length === 0 && (
                         <div className="h-16 flex items-center justify-center">
                           <p className="text-[11px] text-[#7A8FA8]">Sem operações</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Ganho e Perdido: recolhidas por padrão (título e contagem); um clique expande.
+                  Ordem: data de fechamento mais recente primeiro, desempate pelo momento do registro. */}
+              {MA_CLOSED_COLUMNS.map(stage => {
+                const stageCards = cards
+                  .filter(c => c.stage === stage.id)
+                  .sort((a, b) =>
+                    (b.closedDate ?? "").localeCompare(a.closedDate ?? "") ||
+                    (b.closedAt ?? "").localeCompare(a.closedAt ?? ""));
+                const expanded = expandedClosed[stage.id];
+                const isWon = stage.id === "ganho";
+                return (
+                  <div
+                    key={stage.id}
+                    className={`flex-shrink-0 ${expanded ? "w-64" : "w-40"}`}
+                    onDragOver={(e) => { if (canMove) e.preventDefault(); }}
+                    onDrop={(e) => { if (canMove) handleColumnDrop(e, stage.id); }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setExpandedClosed(prev => ({ ...prev, [stage.id]: !prev[stage.id] }))}
+                      aria-expanded={expanded}
+                      className={`w-full flex items-center gap-2 mb-3 px-2 py-1.5 rounded-lg border text-left ${
+                        isWon ? "border-[#C9A84C]/60" : "border-[#9BAFC5]/40"
+                      }`}
+                    >
+                      {expanded ? <ChevronLeft size={12} className="text-[#9BAFC5]" /> : <ChevronRight size={12} className="text-[#9BAFC5]" />}
+                      <span className={`text-xs font-semibold flex-1 ${isWon ? "text-[#C9A84C]" : "text-[#9BAFC5]"}`}>{stage.label}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full font-medium" style={{ color: stage.color, background: stage.bg }}>
+                        {stageCards.length}
+                      </span>
+                    </button>
+                    <div className={`space-y-2 min-h-[100px] rounded-xl border bg-[#09081A]/50 p-2 ${
+                      isWon ? "border-[#C9A84C]/40" : "border-[#9BAFC5]/25"
+                    }`}>
+                      {expanded && stageCards.map(card => (
+                        <KanbanCardItem
+                          key={card.id}
+                          card={card}
+                          stages={maStages}
+                          onClick={() => setSelectedCard(card)}
+                          onOpenForja={() => { setDetailTab("forja"); setSelectedCard(card); }}
+                          canMove={canMove}
+                          onMoveRequest={(target) => requestMove(card, target, "menu")}
+                        />
+                      ))}
+                      {expanded && stageCards.length === 0 && (
+                        <div className="h-16 flex items-center justify-center">
+                          <p className="text-[11px] text-[#7A8FA8]">{isWon ? "Nenhum deal ganho" : "Nenhum deal perdido"}</p>
+                        </div>
+                      )}
+                      {!expanded && (
+                        <div className="h-16 flex items-center justify-center px-1">
+                          <p className="text-[10px] text-[#7A8FA8] text-center">
+                            {canMove ? "Solte um card aqui ou clique no título para ver" : "Clique no título para ver"}
+                          </p>
                         </div>
                       )}
                     </div>
@@ -2418,17 +2646,53 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   )
                 )}
 
-                {/* ── Mover Fase ── */}
+                {/* ── Encerramento (Ganho/Perdido, BRIEF 28/10/2026, bloco B) ── */}
+                {CLOSED_IDS.includes(selectedCard.stage) && (() => {
+                  const isWon = selectedCard.stage === "ganho";
+                  const reopenTarget = DB_TO_PIPELINE[selectedCard.closedFromStage ?? ""] ?? "aprovacao";
+                  const reopenDenied = stageRoleDenial(userRole, isWon ? "reopen_won" : "reopen_lost");
+                  return (
+                    <div className={`rounded-xl border p-3 space-y-1.5 ${isWon ? "border-[#C9A84C]/50" : "border-[#9BAFC5]/40"} bg-[#0F1E35]`}>
+                      <p className="text-[10px] font-bold tracking-widest uppercase text-[#E8C97A]">Encerramento: {isWon ? "Ganho" : "Perdido"}</p>
+                      <p className="text-[11px] text-[#9BAFC5]">Data de fechamento: <span className="text-[#F5F1E8]">{selectedCard.closedDate ? isoToBr(selectedCard.closedDate) : "não registrada"}</span></p>
+                      <p className="text-[11px] text-[#9BAFC5]">Encerrado por: <span className="text-[#F5F1E8]">{selectedCard.closedByName ?? "não registrado"}</span></p>
+                      {!isWon && selectedCard.closedReasonCategory && (
+                        <p className="text-[11px] text-[#9BAFC5]">Categoria: <span className="text-[#F5F1E8]">{lossCategoryLabel(selectedCard.closedReasonCategory)}</span></p>
+                      )}
+                      {!isWon && selectedCard.closedReason && (
+                        <p className="text-[11px] text-[#9BAFC5] whitespace-pre-line">Motivo: <span className="text-[#F5F1E8]">{selectedCard.closedReason}</span></p>
+                      )}
+                      {isWon && selectedCard.closedNote && (
+                        <p className="text-[11px] text-[#9BAFC5] whitespace-pre-line">Observação: <span className="text-[#F5F1E8]">{selectedCard.closedNote}</span></p>
+                      )}
+                      {!reopenDenied && (
+                        <button
+                          type="button"
+                          onClick={() => requestMove(selectedCard, reopenTarget, "menu")}
+                          className="mt-1 flex items-center gap-1.5 rounded-lg border border-[#243A66] px-3 py-1.5 text-xs font-semibold text-[#F5F1E8] hover:border-[#C9A84C]/60"
+                        >
+                          <RotateCcw size={12} /> Reabrir deal ({ALL_STAGE_LABELS[reopenTarget]})
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* ── Mover Fase ── (mesmas regras do arrastar: avanço direto; salto, retrocesso,
+                    Ganho e Perdido pedem confirmação no modal) */}
+                {canMove && !CLOSED_IDS.includes(selectedCard.stage) && (
                 <div className="rounded-xl border border-[#122036] bg-[#0F1E35] p-3 space-y-2.5">
                   <p className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8]">Mover Fase</p>
                   <select
                     value={selectedCard.stage}
-                    onChange={e => handleMoveStage(selectedCard, e.target.value)}
+                    onChange={e => requestMove(selectedCard, e.target.value, "menu")}
                     className="w-full rounded-lg border border-[#122036] bg-[#091221] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors"
                   >
                     {maStages.map(s => (
                       <option key={s.id} value={s.id}>{s.label}</option>
                     ))}
+                    <option value="ganho">Marcar como Ganho</option>
+                    <option value="perdido">Marcar como Perdido</option>
                   </select>
                   <div className="flex gap-2">
                     {(() => {
@@ -2444,7 +2708,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       return (
                         <>
                           <button
-                            onClick={() => prev && handleMoveStage(selectedCard, prev.id)}
+                            onClick={() => prev && requestMove(selectedCard, prev.id, "menu")}
                             disabled={!prev}
                             className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-[#122036] text-[#7A8FA8] text-xs py-2 hover:text-[#E8EDF5] hover:border-[#243A66] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                           >
@@ -2455,7 +2719,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                             title={advanceBlockedByAnalise ? "Bloqueado: Análise de Crédito do cliente pendente de pagamento (peça autorização a um ADMIN se necessário)" : undefined}
                           >
                             <button
-                              onClick={() => next && handleMoveStage(selectedCard, next.id)}
+                              onClick={() => next && requestMove(selectedCard, next.id, "menu")}
                               disabled={!next || advanceBlockedByAnalise}
                               className="w-full flex items-center justify-center gap-1.5 rounded-lg bg-[#C9A84C]/15 border border-[#C9A84C]/40 text-[#C9A84C] text-xs py-2 hover:bg-[#C9A84C]/25 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                             >
@@ -2466,10 +2730,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       );
                     })()}
                   </div>
+                  {boardWarning && <p role="alert" className="text-[11px] text-[#F5B942]">{boardWarning}</p>}
                   <p className="text-[9px] text-[#5A7490]">
                     Probabilidade atualiza automaticamente ao mover fase · valor atual: <span style={{ color: probColor(selectedCard.probability) }}>{selectedCard.probability}%</span>
                   </p>
                 </div>
+                )}
 
                 {/* Enviar para Securitizadora */}
                 {["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(userRole) && (
@@ -3351,6 +3617,19 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal de mudança de fase (Ganho, Perdido, Reabrir, Retroceder, Salto). */}
+      {transitionModal && (
+        <MaTransitionModal
+          open
+          kind={transitionModal.kind}
+          dealLabel={`${transitionModal.card.code} · ${transitionModal.card.company}`}
+          fromLabel={ALL_STAGE_LABELS[transitionModal.card.stage] ?? transitionModal.card.stage}
+          toLabel={ALL_STAGE_LABELS[transitionModal.target] ?? transitionModal.target}
+          onCancel={() => setTransitionModal(null)}
+          onConfirm={confirmTransition}
+        />
+      )}
     </div>
   );
 }

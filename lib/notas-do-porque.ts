@@ -122,6 +122,31 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Encaminhar para",
     texto: "Registramos para quem o texto da minuta foi enviado, porque ele é confidencial e sai do sistema. Fica guardado junto com o registro do download.",
   },
+  // Mesa M&A: Ganho, Perdido e mudança de fase (BRIEF 28/10/2026, seção 4.4).
+  ma_motivo_perda: {
+    titulo: "Motivo da perda",
+    texto: "O motivo alimenta o relatório gerencial de gargalos e evita prospectar de novo o mesmo alvo sem contexto. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardado enquanto o deal existir. Sem motivo, o deal não é encerrado.",
+  },
+  ma_ganho: {
+    titulo: "Marcar como Ganho",
+    texto: "Marcar como Ganho promove os clientes vinculados a \"performado\" no Cliente 360 e entra em metas, ranking e no relatório gerencial. Só ADMIN reabre.",
+  },
+  ma_data_fechamento: {
+    titulo: "Data de fechamento",
+    texto: "Data em que o negócio foi efetivamente fechado ou perdido, usada nos relatórios do período. Pode ser até 365 dias no passado e nunca futura. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardada enquanto o deal existir. Sem ela, vale a data de hoje.",
+  },
+  ma_observacao_ganho: {
+    titulo: "Observação do Ganho",
+    texto: "Registro livre do fechamento, como condição final ou próximo passo pós-venda. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardada enquanto o deal existir. Pode ficar em branco.",
+  },
+  ma_justificativa_salto: {
+    titulo: "Justificativa de salto de fase",
+    texto: "Pular etapa tira o deal da sequência padrão da esteira. A justificativa fica na Timeline para auditoria da Mesa. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardada enquanto o deal existir. Sem ela, só é possível avançar uma fase por vez.",
+  },
+  ma_motivo_reabertura: {
+    titulo: "Motivo da reabertura",
+    texto: "Reabrir desfaz um encerramento e muda relatórios e o Cliente 360. O motivo fica na Timeline. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardado enquanto o deal existir. Sem ele, o deal continua encerrado.",
+  },
 } as const satisfies Record<string, Nota>;
 
 export type NotaId = keyof typeof NOTAS_DO_PORQUE;

@@ -5,6 +5,7 @@ import {
   Clock, Upload, Zap, ArrowLeftRight,
   MessageSquare, Bell, Loader2,
 } from "lucide-react";
+import { isoToBr } from "@/lib/ma/pipeline";
 
 type TimelineEvent = {
   id: string;
@@ -77,19 +78,30 @@ function relativeTime(iso: string): string {
   return "agora";
 }
 
+type Closure = {
+  stage: string;
+  stage_label: string;
+  closed_date: string;
+  closed_reason_category: string | null;
+  closed_reason_category_label: string | null;
+  closed_reason: string | null;
+};
+
 export function DealTimeline({ dealId }: { dealId: string }) {
   const [events, setEvents]   = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState<string | null>(null);
+  const [closure, setClosure] = useState<Closure | null>(null);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
     fetch(`/api/ma/timeline?deal_id=${dealId}`)
       .then(r => r.json())
-      .then(({ events: data, error: err }: { events?: TimelineEvent[]; error?: string }) => {
+      .then(({ events: data, closure: cl, error: err }: { events?: TimelineEvent[]; closure?: Closure | null; error?: string }) => {
         if (err) { setError(err); return; }
         setEvents(Array.isArray(data) ? data : []);
+        setClosure(cl ?? null);
       })
       .catch(() => setError("Não foi possível carregar a timeline."))
       .finally(() => setLoading(false));
@@ -106,6 +118,20 @@ export function DealTimeline({ dealId }: { dealId: string }) {
           <span className="ml-auto text-[10px] text-[#243A66]">{events.length} eventos</span>
         )}
       </div>
+
+      {/* Encerramento atual (BRIEF 28/10/2026, bloco B): fase, data, categoria e motivo. */}
+      {!loading && !error && closure && (
+        <div className="mb-3 rounded-xl border border-[#C9A84C]/30 bg-[#0F1E35] p-3">
+          <p className="text-[10px] font-bold tracking-widest uppercase text-[#E8C97A] mb-1">Encerramento: {closure.stage_label}</p>
+          <p className="text-[11px] text-[#9BAFC5]">Data de fechamento: {isoToBr(closure.closed_date)}</p>
+          {closure.closed_reason_category_label && (
+            <p className="text-[11px] text-[#9BAFC5]">Categoria: {closure.closed_reason_category_label}</p>
+          )}
+          {closure.closed_reason && (
+            <p className="text-[11px] text-[#9BAFC5] whitespace-pre-line">Motivo: {closure.closed_reason}</p>
+          )}
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center py-10">
@@ -154,13 +180,19 @@ export function DealTimeline({ dealId }: { dealId: string }) {
                         </span>
                         <p className="text-xs font-semibold text-[#E8EDF5]">{ev.title}</p>
                       </div>
-                      <span className="text-[10px] text-[#243A66] flex-shrink-0 whitespace-nowrap">
+                      <span
+                        className="text-[10px] text-[#243A66] flex-shrink-0 whitespace-nowrap"
+                        title={new Date(ev.created_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                      >
                         {relativeTime(ev.created_at)}
                       </span>
                     </div>
 
                     {ev.description && (
                       <p className="text-[11px] text-[#9BAFC5] leading-relaxed">{ev.description}</p>
+                    )}
+                    {ev.type === "stage_change" && typeof ev.metadata?.notes === "string" && ev.metadata.notes && (
+                      <p className="text-[11px] text-[#9BAFC5] leading-relaxed whitespace-pre-line mt-1">{ev.metadata.notes}</p>
                     )}
                     {ev.actor && (
                       <p className="text-[10px] text-[#243A66] mt-1">{ev.actor}</p>

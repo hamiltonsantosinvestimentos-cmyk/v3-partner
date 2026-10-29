@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
 import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 import { recordSignatureNote, applyEnvelopeClosed, isSafeProviderId } from "@/lib/contract-signature-timeline";
+import { STAGE_DEFAULT_PROBABILITY } from "@/lib/ma/pipeline";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -363,20 +364,28 @@ async function handleV1Event(eventName: string, externalId: string, extra?: Webh
     // Atualiza deal M&A se encontrado
     const deal = dealRows?.[0] as { id: string; stage: string } | undefined;
     if (deal) {
-      const updates: Record<string, string> = {
+      await db.from("ma_deals").update({
         contract_status:    "SIGNED",
         contract_signed_at: new Date().toISOString(),
-      };
-      if (deal.stage === "PROSPECTING" || deal.stage === "APPROACH") {
-        updates.stage = "QUALIFICATION";
+      }).eq("id", deal.id);
+      // Avanço automático Prospecção -> Qualificação passa por ma_deal_transition()
+      // (BRIEF 28/10/2026, bloco B): fase e histórico na mesma transação. O insert
+      // antigo em ma_deal_history usava colunas que não existem e nunca gravou.
+      // Idempotente: evento repetido encontra o deal já em Qualificação e não grava.
+      // Se falhar, devolve 500 para a ClickSign reenviar o evento.
+      if (isSigned && deal.stage === "PROSPECTING") {
+        const { error: trErr } = await db.rpc("ma_deal_transition", {
+          p_deal_id: deal.id,
+          p_to_stage: "QUALIFICATION",
+          p_changed_by: null,
+          p_notes: `Avanço automático: NCNDA assinado (ClickSign, envelope ${externalId}).`,
+          p_fields: { probability_percent: STAGE_DEFAULT_PROBABILITY.qualificacao },
+        });
+        if (trErr) {
+          console.error("[clicksign-webhook] ma_deal_transition falhou:", trErr.message);
+          return NextResponse.json({ error: "Falha ao mover a fase do deal" }, { status: 500 });
+        }
       }
-      await db.from("ma_deals").update(updates).eq("id", deal.id);
-      void db.from("ma_deal_history").insert({
-        deal_id:     deal.id,
-        event_type:  "CONTRACT_SIGNED",
-        description: `Contrato assinado via ClickSign, envelope ${externalId}`,
-        created_at:  new Date().toISOString(),
-      });
     }
   } catch (err) {
     console.error("[clicksign-webhook] Erro:", err);

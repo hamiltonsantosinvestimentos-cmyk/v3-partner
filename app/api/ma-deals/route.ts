@@ -5,6 +5,11 @@ import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { createNotification, notifyByRoles } from "@/lib/notify";
 import { issueV3Code, resolveSectorCode, insertWithLegacyCode } from "@/lib/v3-codes";
+import {
+  LOSS_CATEGORIES, MIN_REASON_LENGTH, DB_TO_PIPELINE, STAGE_DEFAULT_PROBABILITY,
+  classifyTransition, stageRoleDenial, validateClosedDate, todaySaoPaulo, isoToBr,
+  dbStageLabel, lossCategoryLabel, type TransitionKind,
+} from "@/lib/ma/pipeline";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -70,6 +75,13 @@ const patchSchema = z.object({
   asset_data:             z.record(z.string(), z.unknown()).optional(),
   origin_vertical:        z.enum(ORIGIN_VERTICALS).optional(),
   originator_profile_id:  z.string().uuid().optional().nullable(),
+  // Mudança de fase (BRIEF 28/10/2026, bloco B): justificativa de salto ou motivo de reabertura,
+  // e os campos de encerramento (Ganho/Perdido). Autoria e horário vêm sempre do servidor.
+  transition_reason:      z.string().max(2000).optional(),
+  closed_date:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data no formato AAAA-MM-DD").optional(),
+  closed_reason_category: z.enum(LOSS_CATEGORIES.map(c => c.value) as [string, ...string[]]).optional(),
+  closed_reason:          z.string().max(2000).optional(),
+  closed_note:            z.string().max(2000).optional(),
 });
 
 // Monta select com join de partner — usa nome da coluna para evitar problema com nome do FK constraint
@@ -78,6 +90,12 @@ const DEAL_SELECT = `
   stage, probability_percent, expected_close_date, created_at, updated_at,
   notes, comments, assigned_to, created_by, asset_data, location,
   partner:profiles!assigned_to(id, full_name)
+`;
+
+// Campos de encerramento só para a Mesa (ADMIN, GESTAO, MESA_OPERACIONAL), nunca para partner.
+const DEAL_SELECT_MESA = `${DEAL_SELECT},
+  closed_date, closed_at, closed_from_stage, closed_reason_category, closed_reason, closed_note,
+  closer:profiles!closed_by(full_name)
 `;
 
 // GET — lista deals (partner vê os seus, admin vê todos)
@@ -90,17 +108,18 @@ export async function GET(req: NextRequest) {
   const stage = searchParams.get("stage");
   const id = searchParams.get("id");
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
+  const select = isAdmin ? DEAL_SELECT_MESA : DEAL_SELECT;
 
   // Busca deal único por ID (para refresh de asset_data)
   if (id) {
-    let q = svc.from("ma_deals").select(DEAL_SELECT).eq("id", id).is("deleted_at", null);
+    let q = svc.from("ma_deals").select(select).eq("id", id).is("deleted_at", null);
     if (!isAdmin) q = q.or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`);
     const { data, error } = await q.single();
     if (error) return NextResponse.json({ error: error.message }, { status: 404 });
     return NextResponse.json({ deal: data });
   }
 
-  let query = svc.from("ma_deals").select(DEAL_SELECT).is("deleted_at", null).order("created_at", { ascending: false });
+  let query = svc.from("ma_deals").select(select).is("deleted_at", null).order("created_at", { ascending: false });
 
   if (!isAdmin) {
     query = query.or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`);
@@ -301,7 +320,10 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
   }
 
-  const { id, ...fields } = parsed.data;
+  const {
+    id, stage: targetStage, transition_reason, closed_date, closed_reason_category, closed_reason, closed_note,
+    ...fields
+  } = parsed.data;
   const svc = serviceClient();
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
 
@@ -322,6 +344,12 @@ export async function PATCH(req: NextRequest) {
     };
   }
 
+  // Fase do deal é conduzida pela Mesa (BRIEF 28/10/2026, decisão do João): partner,
+  // mesmo dono do deal, recebe 403 em qualquer alteração de stage.
+  if (targetStage && !isAdmin) {
+    return NextResponse.json({ error: "A fase do deal é conduzida pela Mesa M&A." }, { status: 403 });
+  }
+
   if (!isAdmin) {
     const { data: existing } = await svc.from("ma_deals").select("assigned_to, created_by, originator_profile_id").eq("id", id).single();
     if (!existing || (existing.assigned_to !== user.id && existing.created_by !== user.id)) {
@@ -329,7 +357,7 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  if (profile?.role === "MESA_OPERACIONAL" && (fields.asset_data !== undefined || fields.stage !== undefined)) {
+  if (profile?.role === "MESA_OPERACIONAL" && (fields.asset_data !== undefined || targetStage !== undefined)) {
     const { data: dealCheck } = await svc.from("ma_deals").select("originator_profile_id").eq("id", id).single();
     if (!dealCheck?.originator_profile_id) {
       console.error(`[ma-deals PATCH] GOVERNANCE_VIOLATION: MESA_OPERACIONAL ${user.id} tentou alterar deal ${id} sem originator_profile_id`);
@@ -340,138 +368,254 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  // Gate Análise de Crédito (09/09/2026): avançar de Qualificação para
-  // Viabilidade (ou além) exige a Análise de Crédito do cliente paga
-  // (partner_service_orders vinculado via ma_deal_id) OU autorização
-  // explícita de um ADMIN (asset_data.analise_gate_override, ver guard
-  // acima). Mesmo mecanismo do gate de Crédito (26/08/2026), só troca a
-  // tabela vinculada e o ponto de corte no funil. Só barra avanço de
-  // verdade -- retroceder estágio nunca é bloqueado.
-  if (fields.stage) {
-    const { data: current } = await svc.from("ma_deals").select("stage, asset_data").eq("id", id).single();
-    if (current && current.stage !== fields.stage) {
-      const currentIdx = PIPELINE_STAGE_ORDER.indexOf(current.stage as string);
-      const targetIdx = PIPELINE_STAGE_ORDER.indexOf(fields.stage);
-      const existingAssetData = (current.asset_data as Record<string, unknown>) ?? {};
-      const overriddenNow = fields.asset_data && typeof fields.asset_data === "object" && "analise_gate_override" in fields.asset_data;
-      const isAdvancePastQualificacao = currentIdx !== -1 && targetIdx !== -1 && targetIdx > currentIdx && targetIdx >= PIPELINE_STAGE_ORDER.indexOf("IOI");
-      if (isAdvancePastQualificacao && !existingAssetData.analise_gate_override && !overriddenNow) {
-        const { data: paidOrder } = await svc
-          .from("partner_service_orders")
-          .select("id")
-          .eq("ma_deal_id", id)
-          .eq("status", "PAID")
-          .limit(1)
-          .maybeSingle();
-        if (!paidOrder) {
-          return NextResponse.json(
-            { error: "Avanço bloqueado: a Análise de Crédito do cliente ainda está pendente de pagamento. Gere o link no deal ou peça autorização a um ADMIN." },
-            { status: 422 }
-          );
+  // ── Mudança de fase (BRIEF 28/10/2026, bloco B) ──────────────────────────────
+  // Regra, papel e campos validados aqui; a gravação de fase + histórico é atômica
+  // em ma_deal_transition() (migration 20261028a). Se a função falhar, nada é gravado.
+  let transition: { kind: TransitionKind; from: string; to: string; reason?: string; category?: string } | null = null;
+  if (targetStage) {
+    const { data: current } = await svc
+      .from("ma_deals")
+      .select("stage, asset_data, closed_from_stage, contract_status")
+      .eq("id", id)
+      .is("deleted_at", null)
+      .single();
+    if (!current) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
+
+    const from = current.stage as string;
+    const kind = classifyTransition(from, targetStage, current.closed_from_stage as string | null);
+
+    if (kind !== "same") {
+      if (kind === "invalid") {
+        return NextResponse.json({
+          error: from === "CLOSED_WON" || from === "CLOSED_LOST"
+            ? `Deal encerrado só pode ser reaberto para a fase de origem (${dbStageLabel(current.closed_from_stage as string | null)}).`
+            : "Transição de fase inválida.",
+        }, { status: 422 });
+      }
+      if (kind === "won_invalid") {
+        return NextResponse.json({ error: "Ganho só a partir de \"Aprovação Final e Fechamento\"." }, { status: 422 });
+      }
+      const denial = stageRoleDenial(profile?.role, kind);
+      if (denial) return NextResponse.json({ error: denial }, { status: 403 });
+
+      const reason = (transition_reason ?? "").trim();
+      if ((kind === "skip" || kind === "reopen_won" || kind === "reopen_lost") && reason.length < MIN_REASON_LENGTH) {
+        return NextResponse.json({
+          error: kind === "skip"
+            ? `Para pular fase, informe a justificativa (mínimo de ${MIN_REASON_LENGTH} caracteres).`
+            : `Informe o motivo da reabertura (mínimo de ${MIN_REASON_LENGTH} caracteres).`,
+        }, { status: 422 });
+      }
+
+      let closedIso = todaySaoPaulo();
+      if (kind === "won" || kind === "lost") {
+        if (closed_date) closedIso = closed_date;
+        const dateErr = validateClosedDate(closedIso);
+        if (dateErr) return NextResponse.json({ error: dateErr }, { status: 422 });
+      }
+      const lostReason = (closed_reason ?? "").trim();
+      if (kind === "lost" && (!closed_reason_category || lostReason.length < MIN_REASON_LENGTH)) {
+        return NextResponse.json({ error: `Para marcar como Perdido, escolha a categoria e descreva o motivo (mínimo de ${MIN_REASON_LENGTH} caracteres).` }, { status: 422 });
+      }
+
+      // Gate Análise de Crédito (09/09/2026): avançar de Qualificação para
+      // Viabilidade (ou além) exige a Análise de Crédito do cliente paga
+      // (partner_service_orders vinculado via ma_deal_id) OU autorização
+      // explícita de um ADMIN (asset_data.analise_gate_override, ver guard
+      // acima). Só barra avanço de verdade: retroceder, encerrar e reabrir não.
+      // Mudança do ponto de corte para depois da entrada do Mandato: bloco E do BRIEF.
+      if (kind === "advance" || kind === "skip") {
+        const targetIdx = PIPELINE_STAGE_ORDER.indexOf(targetStage);
+        const existingAssetData = (current.asset_data as Record<string, unknown>) ?? {};
+        const overriddenNow = fields.asset_data && typeof fields.asset_data === "object" && "analise_gate_override" in fields.asset_data;
+        if (targetIdx >= PIPELINE_STAGE_ORDER.indexOf("IOI") && !existingAssetData.analise_gate_override && !overriddenNow) {
+          const { data: paidOrder } = await svc
+            .from("partner_service_orders")
+            .select("id")
+            .eq("ma_deal_id", id)
+            .eq("status", "PAID")
+            .limit(1)
+            .maybeSingle();
+          if (!paidOrder) {
+            return NextResponse.json(
+              { error: "Avanço bloqueado: a Análise de Crédito do cliente ainda está pendente de pagamento. Gere o link no deal ou peça autorização a um ADMIN." },
+              { status: 422 }
+            );
+          }
         }
+      }
+
+      const nowIso = new Date().toISOString();
+      const toLabel = dbStageLabel(targetStage);
+      let notes: string | null = null;
+      // Campos closed_* ficam nulos fora de Ganho/Perdido (reabrir limpa; o histórico guarda tudo).
+      let pFields: Record<string, unknown> = {
+        probability_percent: STAGE_DEFAULT_PROBABILITY[DB_TO_PIPELINE[targetStage]] ?? null,
+      };
+
+      if (kind === "skip") notes = `Salto de fase para ${toLabel}. Justificativa: ${reason}`;
+      if (kind === "back") notes = `Retrocesso de ${dbStageLabel(from)} para ${toLabel}.`;
+      if (kind === "reopen_won" || kind === "reopen_lost") {
+        notes = `Reaberto (${kind === "reopen_won" ? "Ganho" : "Perdido"}) para ${toLabel}. Motivo: ${reason}`;
+      }
+      if (kind === "won") {
+        // Status anterior de cada cliente vinculado, para auditoria de uma reabertura futura (seção 4.5).
+        const { data: clients } = await svc.from("ma_deal_clients").select("v3_client_id, status").eq("deal_id", id);
+        const prev = (clients ?? []).map(c => `${c.v3_client_id}: ${c.status}`).join("; ");
+        const note = (closed_note ?? "").trim();
+        notes = `Ganho em ${isoToBr(closedIso)}.${note ? ` Observação: ${note}` : ""}${prev ? ` Status anterior dos clientes: ${prev}.` : ""}`;
+        pFields = {
+          probability_percent: 100, closed_date: closedIso, closed_at: nowIso, closed_by: user.id,
+          closed_from_stage: from, closed_note: note || null,
+        };
+      }
+      if (kind === "lost") {
+        notes = `Perdido em ${isoToBr(closedIso)}. Categoria: ${lossCategoryLabel(closed_reason_category)}. Motivo: ${lostReason}`;
+        pFields = {
+          probability_percent: 0, closed_date: closedIso, closed_at: nowIso, closed_by: user.id,
+          closed_from_stage: from, closed_reason_category, closed_reason: lostReason,
+        };
+      }
+
+      const { error: rpcErr } = await svc.rpc("ma_deal_transition", {
+        p_deal_id: id, p_to_stage: targetStage, p_changed_by: user.id, p_notes: notes, p_fields: pFields,
+      });
+      if (rpcErr) {
+        console.error("[ma-deals PATCH] ma_deal_transition falhou:", rpcErr.message);
+        return NextResponse.json({ error: "Não foi possível mudar a fase. Nada foi gravado." }, { status: 500 });
+      }
+      transition = { kind, from, to: targetStage, reason, category: closed_reason_category };
+
+      // Client 360, Fase B (10-11/08/2026): deal Ganho promove os clientes vinculados a
+      // "performado". Reabertura de Ganho (só ADMIN) rebaixa para "a_performar" se o deal
+      // tem contrato assinado, senão para "prospecto" (BRIEF 28/10/2026, seção 4.5).
+      if (kind === "won") {
+        const { error: cliErr } = await svc
+          .from("ma_deal_clients")
+          .update({ status: "performado", updated_at: nowIso })
+          .eq("deal_id", id)
+          .neq("status", "performado");
+        if (cliErr) console.error("[ma-deals PATCH] promoção do Cliente 360 falhou:", cliErr.message);
+      }
+      if (kind === "reopen_won") {
+        let signed = current.contract_status === "SIGNED";
+        if (!signed) {
+          const { data: signedContract } = await svc
+            .from("operation_contracts")
+            .select("id")
+            .eq("deal_id", id)
+            .eq("status_signature", "assinado")
+            .limit(1)
+            .maybeSingle();
+          signed = !!signedContract;
+        }
+        const { error: cliErr } = await svc
+          .from("ma_deal_clients")
+          .update({ status: signed ? "a_performar" : "prospecto", updated_at: nowIso })
+          .eq("deal_id", id)
+          .eq("status", "performado");
+        if (cliErr) console.error("[ma-deals PATCH] reversão do Cliente 360 falhou:", cliErr.message);
       }
     }
   }
 
-  const { data, error } = await svc
-    .from("ma_deals")
-    .update({ ...fields, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  logAudit({ userId: user.id, userName: profile?.full_name, action: "UPDATE", entity: "ma_deals", entityId: id, newData: fields as Record<string, unknown> });
-
-  // Client 360, Fase B (10-11/08/2026): deal fechado com sucesso promove
-  // todos os clientes vinculados a "performado" (nunca rebaixa quem já
-  // estava lá, nunca mexe em quem ainda nem chegou a "a_performar").
-  if (fields.stage === "CLOSED_WON") {
-    await svc
-      .from("ma_deal_clients")
-      .update({ status: "performado", updated_at: new Date().toISOString() })
-      .eq("deal_id", id)
-      .neq("status", "performado");
+  // Demais campos do deal (fase e probabilidade de fase já gravadas pela transição).
+  if (transition) delete fields.probability_percent;
+  let data: Record<string, unknown> | null = null;
+  if (Object.keys(fields).length > 0) {
+    const { data: upd, error } = await svc
+      .from("ma_deals")
+      .update({ ...fields, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select()
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    data = upd;
+  } else {
+    const { data: row, error } = await svc.from("ma_deals").select().eq("id", id).single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    data = row;
   }
 
-  // Bridge B: Ma_deals → CRM (log de interação — fire-and-forget)
+  logAudit({
+    userId: user.id, userName: profile?.full_name, action: "UPDATE", entity: "ma_deals", entityId: id,
+    newData: { ...(fields as Record<string, unknown>), ...(transition ? { stage_from: transition.from, stage: transition.to, transition: transition.kind } : {}) },
+  });
+
+  // Bridge B: Ma_deals → CRM (log de interação)
   // Princípio: CRM encerra em "ganho" quando lead é passado à Mesa.
   // A partir daí, apenas appendamos interações — NUNCA alteramos o status do lead.
   // Isso preserva os Kanbans de crédito, ENDI e outros módulos intactos.
-  if (fields.stage && typeof fields.stage === "string") {
-    const STAGE_LABELS: Record<string, string> = {
-      PROSPECTING: "Prospecção", QUALIFICATION: "Qualificação",
-      IOI: "Viabilidade",        PROPOSAL: "Estruturação",
-      NEGOTIATION: "Negociação", DUE_DILIGENCE: "Due Diligence",
-      CLOSING: "Closing",        CLOSED_WON: "Fechado — Ganho",
-      CLOSED_LOST: "Encerrado",
-    };
-    const stageLabel = STAGE_LABELS[fields.stage];
-    if (stageLabel) {
-      try {
-        // Busca lead M&A vinculado a este deal (criado pela Bridge A ou B)
-        const { data: maLeads } = await svc
-          .from("crm_leads")
-          .select("id, interactions")
-          .contains("metadata", { ma_deal_id: id })
+  if (transition) {
+    const toLabel = dbStageLabel(transition.to);
+    const crmNote =
+      transition.kind === "won" ? "Mesa M&A: deal marcado como Ganho." :
+      transition.kind === "lost" ? `Mesa M&A: deal marcado como Perdido (${lossCategoryLabel(transition.category)}).` :
+      transition.kind === "reopen_won" || transition.kind === "reopen_lost" ? `Mesa M&A: deal reaberto para ${toLabel}. Motivo: ${transition.reason}` :
+      transition.kind === "back" ? `Mesa M&A: deal voltou para "${toLabel}".` :
+      `Mesa M&A: deal avançou para "${toLabel}".`;
+    try {
+      // Busca lead M&A vinculado a este deal (criado pela Bridge A ou B)
+      const { data: maLeads } = await svc
+        .from("crm_leads")
+        .select("id, interactions")
+        .contains("metadata", { ma_deal_id: id })
+        .eq("credit_line", "M&A")
+        .in("source", ["hub", "mesa_ma"])
+        .limit(1);
+
+      const newInteraction = {
+        id: `mesa-${Date.now()}`,
+        date: new Date().toISOString().split("T")[0],
+        type: "email",
+        notes: crmNote,
+        author: profile?.full_name ?? "Mesa V3",
+      };
+
+      if (maLeads && maLeads.length > 0) {
+        // Lead existe — apenas appenda interação, status permanece como está
+        const current = maLeads[0] as { id: string; interactions: unknown[] };
+        const updatedInteractions = [...(Array.isArray(current.interactions) ? current.interactions : []), newInteraction];
+        await svc.from("crm_leads")
+          .update({ interactions: updatedInteractions })
+          .eq("id", current.id);
+      } else if (data && (data as { assigned_to?: string; target_company?: string }).assigned_to) {
+        // Lead não existe — cria como "ganho" (já chegou à Mesa) com primeira interação
+        const deal = data as { assigned_to: string; target_company?: string; sector?: string; deal_value?: number; code?: string };
+        const companyName = deal.target_company ?? `Deal ${deal.code ?? id.slice(0, 8)}`;
+
+        // Anti-duplicata: não criar se já existe lead M&A para este partner + empresa
+        const { data: dup } = await svc
+          .from("crm_leads").select("id")
+          .eq("partner_id", deal.assigned_to)
+          .eq("name", companyName)
           .eq("credit_line", "M&A")
-          .in("source", ["hub", "mesa_ma"])
           .limit(1);
 
-        const newInteraction = {
-          id: `mesa-${Date.now()}`,
-          date: new Date().toISOString().split("T")[0],
-          type: "email",
-          notes: `Mesa M&A: deal avançou para "${stageLabel}".`,
-          author: profile?.full_name ?? "Mesa V3",
-        };
-
-        if (maLeads && maLeads.length > 0) {
-          // Lead existe — apenas appenda interação, status permanece como está
-          const current = maLeads[0] as { id: string; interactions: unknown[] };
-          const updatedInteractions = [...(Array.isArray(current.interactions) ? current.interactions : []), newInteraction];
-          await svc.from("crm_leads")
-            .update({ interactions: updatedInteractions })
-            .eq("id", current.id);
-        } else if (data && (data as { assigned_to?: string; target_company?: string }).assigned_to) {
-          // Lead não existe — cria como "ganho" (já chegou à Mesa) com primeira interação
-          const deal = data as { assigned_to: string; target_company?: string; sector?: string; deal_value?: number; code?: string };
-          const companyName = deal.target_company ?? `Deal ${deal.code ?? id.slice(0, 8)}`;
-
-          // Anti-duplicata: não criar se já existe lead M&A para este partner + empresa
-          const { data: dup } = await svc
-            .from("crm_leads").select("id")
-            .eq("partner_id", deal.assigned_to)
-            .eq("name", companyName)
-            .eq("credit_line", "M&A")
-            .limit(1);
-
-          if (!dup || dup.length === 0) {
-            // MAX real + retry no 23505, nunca COUNT(*).
-            await insertWithLegacyCode(svc, "crm_leads", "CRM-26", (leadCode) => ({
-              code:             leadCode,
-              name:             companyName,
-              person_type:      "PJ",
-              segment:          deal.sector ?? "M&A",
-              annual_revenue:   deal.deal_value ?? 0,
-              status:           "qualificado",    // Bridge via PATCH = já qualificado pela Mesa
-              source:           "mesa_ma",
-              product_interest: "ma",
-              credit_line:      "M&A",
-              converted_to:     "ma",
-              partner_id:       deal.assigned_to,
-              created_by:       user.id,
-              interactions:     [newInteraction], // primeira interação já registrada
-              metadata:         { ma_deal_id: id, ma_code: (data as {code?: string})?.code },
-            }));
-          }
+        if (!dup || dup.length === 0) {
+          // MAX real + retry no 23505, nunca COUNT(*).
+          await insertWithLegacyCode(svc, "crm_leads", "CRM-26", (leadCode) => ({
+            code:             leadCode,
+            name:             companyName,
+            person_type:      "PJ",
+            segment:          deal.sector ?? "M&A",
+            annual_revenue:   deal.deal_value ?? 0,
+            status:           "qualificado",    // Bridge via PATCH = já qualificado pela Mesa
+            source:           "mesa_ma",
+            product_interest: "ma",
+            credit_line:      "M&A",
+            converted_to:     "ma",
+            partner_id:       deal.assigned_to,
+            created_by:       user.id,
+            interactions:     [newInteraction], // primeira interação já registrada
+            metadata:         { ma_deal_id: id, ma_code: deal.code },
+          }));
         }
-      } catch (bridgeErr) {
-        // Continua best-effort e não bloqueia o deal, mas a falha passa a
-        // aparecer em log em vez de sumir num catch vazio.
-        console.error("[ma-deals PATCH] Bridge B CRM lançou exceção:", bridgeErr);
       }
+    } catch (bridgeErr) {
+      // Continua best-effort e não bloqueia o deal, mas a falha passa a
+      // aparecer em log em vez de sumir num catch vazio.
+      console.error("[ma-deals PATCH] Bridge B CRM lançou exceção:", bridgeErr);
     }
   }
 

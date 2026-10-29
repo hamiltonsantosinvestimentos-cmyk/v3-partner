@@ -1,6 +1,8 @@
 import { MesaMaClient } from "@/components/mesa-ma/mesa-ma-client";
 import { createClient as sc } from "@supabase/supabase-js";
 import { requireRole } from "@/lib/auth/require-role";
+import { DB_TO_PIPELINE } from "@/lib/ma/pipeline";
+import { closureFromRow } from "@/lib/ma/closure";
 
 export const dynamic = "force-dynamic";
 
@@ -19,17 +21,12 @@ export default async function MesaMaPage() {
   // Carrega deals server-side para garantir que aparecem imediatamente ao abrir a página
   const { data: dealsData, error: dealsError } = await svc
     .from("ma_deals")
-    .select("id, code, title, target_company, sector, deal_value, ebitda_multiple, stage, probability_percent, expected_close_date, created_at, notes, comments, assigned_to, created_by, asset_data, location, partner:profiles!assigned_to(id, full_name)")
+    .select("id, code, title, target_company, sector, deal_value, ebitda_multiple, stage, probability_percent, expected_close_date, created_at, notes, comments, assigned_to, created_by, asset_data, location, partner:profiles!assigned_to(id, full_name), closed_date, closed_at, closed_from_stage, closed_reason_category, closed_reason, closed_note, closer:profiles!closed_by(full_name)")
+    // Deals na Lixeira não entram no Kanban (a rota GET já filtrava; a carga inicial não).
+    .is("deleted_at", null)
     .order("created_at", { ascending: false });
 
   if (dealsError) console.error("[mesa-ma/page] query error:", dealsError.message);
-
-  const STAGE_MAP: Record<string, string> = {
-    PROSPECTING: "prospeccao", QUALIFICATION: "qualificacao",
-    IOI: "viabilidade", DUE_DILIGENCE: "due_diligence",
-    PROPOSAL: "estruturacao", NEGOTIATION: "negociacao",
-    CLOSING: "aprovacao", CLOSED_WON: "aprovacao", CLOSED_LOST: "aprovacao",
-  };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const initialDeals = (dealsData ?? []).map((d: any) => {
@@ -44,7 +41,7 @@ export default async function MesaMaPage() {
       company:          (d.target_company ?? d.title ?? "Sem nome") as string,
       sector:           (d.sector ?? "") as string,
       value:            (d.deal_value ?? 0) as number,
-      stage:            STAGE_MAP[d.stage as string] ?? d.stage ?? "prospeccao",
+      stage:            DB_TO_PIPELINE[d.stage as string] ?? d.stage ?? "prospeccao",
       dbStage:          d.stage as string,
       responsible,
       assigned_to_id:   d.assigned_to as string | undefined,
@@ -55,6 +52,7 @@ export default async function MesaMaPage() {
       asset_data:       assetData,
       location:         (d.location ?? "") as string,
       tipo_participante: assetData?.tipo_participante as string | undefined,
+      ...closureFromRow(d),
     };
   });
 

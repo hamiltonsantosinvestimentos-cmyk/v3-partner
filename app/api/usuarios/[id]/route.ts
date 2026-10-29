@@ -124,6 +124,7 @@ export async function DELETE(
     svc2.from("ma_deals").update({ partner_id: null }).eq("partner_id", id),
     svc2.from("ma_deals").update({ assigned_to: null }).eq("assigned_to", id),
     svc2.from("ma_deals").update({ created_by: null }).eq("created_by", id),
+    svc2.from("ma_deals").update({ closed_by: null }).eq("closed_by", id),
     // ma_captacao_links
     svc2.from("ma_captacao_links").update({ partner_id: null }).eq("partner_id", id),
     // ma_deal_history

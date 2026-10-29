@@ -13,27 +13,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 import { ForjaPanel } from "@/components/ma/forja-panel";
+import { MA_PIPELINE, DB_TO_PIPELINE } from "@/lib/ma/pipeline";
 
 // ─── Etapas unificadas M&A ────────────────────────────────────────────────────
-export const MA_PIPELINE = [
-  { id: "prospeccao",    label: "Prospecção",                   color: "#8B5CF6", bg: "rgba(139,92,246,0.12)" },
-  { id: "qualificacao",  label: "Qualificação",                 color: "#3B82F6", bg: "rgba(59,130,246,0.12)" },
-  { id: "viabilidade",   label: "Análise de Viabilidade",       color: "#06B6D4", bg: "rgba(6,182,212,0.12)"  },
-  { id: "estruturacao",  label: "Estruturação da Oferta",       color: "#F59E0B", bg: "rgba(245,158,11,0.12)" },
-  { id: "negociacao",    label: "Negociação",                   color: "#EF4444", bg: "rgba(239,68,68,0.12)"  },
-  { id: "due_diligence", label: "Due Diligence",                color: "#C4922E", bg: "rgba(196,146,46,0.12)" },
-  { id: "aprovacao",     label: "Aprovação Final e Fechamento", color: "#10B981", bg: "rgba(16,185,129,0.12)" },
-];
+// Fonte única em lib/ma/pipeline.ts (BRIEF 28/10/2026). Re-exportado aqui para
+// quem ainda importa daqui.
+export { MA_PIPELINE };
 
-// Mapeia deal_stage ENUM do BD para os IDs do pipeline
+// Visão do partner (/ma): Ganho e Perdido continuam aparecendo em "Aprovação Final"
+// até o BRIEF próprio da visão do partner (Roadmap). A Mesa já mostra as colunas.
 const STAGE_MAP: Record<string, string> = {
-  PROSPECTING:   "prospeccao",
-  QUALIFICATION: "qualificacao",
-  IOI:           "viabilidade",
-  DUE_DILIGENCE: "due_diligence",
-  PROPOSAL:      "estruturacao",
-  NEGOTIATION:   "negociacao",
-  CLOSING:       "aprovacao",
+  ...DB_TO_PIPELINE,
   CLOSED_WON:    "aprovacao",
   CLOSED_LOST:   "aprovacao",
 };
