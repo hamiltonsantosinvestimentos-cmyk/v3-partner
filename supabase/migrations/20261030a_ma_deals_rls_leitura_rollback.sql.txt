@@ -1,0 +1,9 @@
+-- Rollback de 20261030a (restaura a leitura aberta a qualquer usuário logado).
+-- Só usar se a nova política bloquear um fluxo legítimo; reabre a lacuna de acesso,
+-- então registrar o motivo e corrigir a política em seguida.
+
+drop policy if exists ma_select on public.ma_deals;
+
+create policy ma_select on public.ma_deals
+  for select
+  using (auth.uid() is not null);

@@ -1,0 +1,13 @@
+-- Rollback de 20261030b (devolve as views ao estado anterior: SECURITY DEFINER implícito e
+-- acesso total a anon e authenticated). Reabre a exposição de dados pessoais a usuários sem
+-- login; só usar se algum consumidor legítimo (n8n, painel externo) quebrar, registrar o motivo
+-- e corrigir o consumidor em seguida.
+
+alter view public.v3_client_risk_trajectory reset (security_invoker);
+alter view public.v_kyc_monthly_usage       reset (security_invoker);
+alter view public.vdr_audit_trail           reset (security_invoker);
+
+grant all on public.v3_client_risk_trajectory,
+             public.v_kyc_monthly_usage,
+             public.vdr_audit_trail
+  to anon, authenticated;
