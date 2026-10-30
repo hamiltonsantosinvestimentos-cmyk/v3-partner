@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { createClient as sc } from "@supabase/supabase-js";
+import { requireRole } from "@/lib/auth/require-role";
 import { ROLE_LABELS, type UserRole } from "@/lib/constants";
 import { CLOSER_OPERATION_REF, CLOSER_PERCENT } from "@/lib/closer-commissions";
 
@@ -26,16 +27,7 @@ type Linha = {
 type Origem = { id: string; partner_id: string; operation_value: number; commission_value: number | null };
 
 export default async function CloserPage({ searchParams }: { searchParams: Promise<{ closer?: string }> }) {
-  const { createClient } = await import("@/lib/supabase/server");
-  const { createClient: sc } = await import("@supabase/supabase-js");
-
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  const role = (profile as { role: string } | null)?.role ?? "";
-  if (!["ADMIN", "GESTAO", "FINANCEIRO", "CLOSER"].includes(role)) redirect("/unauthorized");
+  const { user, role } = await requireRole(["ADMIN", "GESTAO", "FINANCEIRO", "CLOSER"]);
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
