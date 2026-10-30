@@ -25,6 +25,34 @@ import {
   KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES, UPLOAD_NETWORK_ERROR_MESSAGE, fileTooLargeMessage, formatFileSizePtBr, uploadFailureMessage,
 } from "@/lib/upload-limits";
 
+/**
+ * Botão de saída das telas finais (pedido da Rafael Campos, 29/10/2026: a tela de sucesso não tinha como sair).
+ * Navegadores só deixam uma aba se fechar sozinha quando ela foi aberta por script; aberta por link de e-mail,
+ * window.close() é ignorado. Por isso, se a aba continuar aberta, o botão explica e oferece o site da V3.
+ */
+function CloseScreenButton() {
+  const [couldNotClose, setCouldNotClose] = useState(false);
+  const close = () => {
+    window.close();
+    window.setTimeout(() => setCouldNotClose(true), 400);
+  };
+  return (
+    <div className="mt-8 flex flex-col items-center gap-3">
+      <button type="button" onClick={close}
+        className="px-6 py-3 bg-[#C9A84C] text-[#09081A] rounded-lg text-sm font-bold hover:bg-[#E8C97A] transition">
+        Fechar esta tela
+      </button>
+      {couldNotClose && (
+        <p className="text-xs text-[#9BAFC5] max-w-sm leading-relaxed" role="status">
+          O seu navegador não permite fechar esta aba por aqui. Feche a aba ou a janela pelo próprio navegador,
+          ou{" "}
+          <a href="https://v3partners.com.br" className="text-[#E8C97A] font-bold underline">vá para o site da V3 Partners</a>.
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Data de nascimento digitada (DD/MM/AAAA, teclado numérico no celular). Entrega AAAA-MM-DD ao formulário. */
 function BirthDateInput({ value, onChange }: { value: string; onChange: (iso: string) => void }) {
   const toBr = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso);
@@ -792,6 +820,7 @@ export default function QualificacaoIntakePage() {
             <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Qualificação já enviada</h2>
             <p className="text-sm text-[#9BAFC5] max-w-md">{errorMsg}</p>
             <p className="text-xs text-[#9BAFC5]/50 mt-6">Entre em contato: deal@v3partners.com.br</p>
+            <CloseScreenButton />
           </div>
         )}
 
@@ -800,8 +829,9 @@ export default function QualificacaoIntakePage() {
             <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mb-6">
               <CheckCircle2 className="w-8 h-8 text-emerald-400" />
             </div>
-            <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Qualificação enviada</h2>
-            <p className="text-sm text-[#9BAFC5] max-w-md">Seus dados foram recebidos. A V3 Partners prosseguirá com a geração do documento assim que todos os envolvidos concluírem esta etapa.</p>
+            <h2 className="text-xl font-bold text-[#F5F1E8] mb-2">Qualificação enviada com sucesso</h2>
+            <p className="text-sm text-[#9BAFC5] max-w-md">Seus dados foram recebidos. A V3 Partners prosseguirá com a geração do documento assim que todos os envolvidos concluírem esta etapa. Você já pode sair desta tela.</p>
+            <CloseScreenButton />
           </div>
         )}
 
