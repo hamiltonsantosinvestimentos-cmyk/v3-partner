@@ -36,7 +36,7 @@ const ESTRUTURA = [
 // Linhas ativas do Portfólio (portfolio_linhas) em 30/10/2026. Lista fixa: linha nova no Portfólio
 // precisa entrar aqui. Fora: Op. Internacional com garantia imobiliária, travada pelo fundo.
 const LINHAS_V3 = [
-  { categoria: "Imobiliário", linhas: ["Home Equity", "HomeCash", "Cash Home / Cash Agro", "CGI — Crédito com Garantia Imobiliária", "Crédito com Garantia de Imóvel — Operação Estressada", "CRI — Certificado de Recebíveis Imobiliários", "Financiamento Imobiliário", "Sale Leaseback"] },
+  { categoria: "Imobiliário", linhas: ["Home Equity", "HomeCash", "Cash Home / Cash Agro", "CGI — Crédito com Garantia Imobiliária", "Crédito com Garantia de Imóvel — Operação para Cliente com Restrição", "CRI — Certificado de Recebíveis Imobiliários", "Financiamento Imobiliário", "Sale Leaseback"] },
   { categoria: "Construção", linhas: ["Fundo Construção — Residencial Unifamiliar", "Fundo Construção — Residencial Geminados", "Fundo Construção — Moradia Residencial", "Fundo Construção — Reforma", "Fundo Construção — Construtoras", "Fundo Construção — Incorporadoras", "Fundo Construção — Crédito Ponte (Início de Obra) CRI"] },
   { categoria: "Internacional", linhas: ["Financiamento Imobiliário — Brasileiros no Exterior e Estrangeiros", "FINIMP — Financiamento à Importação", "ACC — Adiantamento sobre Contrato de Câmbio", "ACE — Adiantamento sobre Cambiais Entregues", "Câmbio Pronto", "Exporte-se — Estruturação nos EUA", "Op. Internacional — Cash Collateral"] },
   { categoria: "Capital de Giro", linhas: ["Crédito no Aval / Recebíveis", "Cash Collateral"] },
