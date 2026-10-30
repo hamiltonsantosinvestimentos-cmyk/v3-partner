@@ -1,0 +1,8 @@
+-- Rollback de 20261030c. Devolve a escrita a anon e authenticated nas vitrines públicas.
+-- Reabre a possibilidade de um anônimo alterar e apagar listings em status de vitrine.
+-- Só usar se um consumidor legítimo de escrita via view for descoberto; corrigir o consumidor
+-- em seguida.
+
+grant insert, update, delete, truncate, references, trigger
+  on public.cm_vitrine_public, public.cm_vitrine_publica_imoveis
+  to anon, authenticated;
