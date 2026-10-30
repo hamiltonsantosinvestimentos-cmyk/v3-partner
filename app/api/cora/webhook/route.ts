@@ -1,3 +1,4 @@
+import { gerarComissaoCloserAssinatura } from "@/lib/closer-commissions";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
@@ -198,7 +199,7 @@ export async function POST(req: NextRequest) {
     // 2. Atualiza mensalidade e gera próxima cobrança automaticamente
     const { data: sub } = await db
       .from("partner_subscriptions")
-      .select("id, partner_id, plano")
+      .select("id, partner_id, plano, amount_cents")
       .eq("cora_invoice_id", invoiceId)
       .single();
 
@@ -207,6 +208,10 @@ export async function POST(req: NextRequest) {
         status: "PAID",
         paid_at: paidAt,
       }).eq("id", sub.id);
+
+      await gerarComissaoCloserAssinatura(db, {
+        partnerId: sub.partner_id, valorPago: Number(sub.amount_cents ?? 0) / 100, pagamentoId: sub.id, dataPagamento: paidAt,
+      });
 
       // Estende validade no profile por 1 mês
       const newExpiry = new Date();

@@ -769,7 +769,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                     </SelectContent>
                   </Select>
                   <p className="text-[11px] text-muted-foreground">
-                    O closer recebe 10% do líquido da V3 nas comissões geradas a partir do vínculo.
+                    A partir do vínculo, o closer recebe 10% do líquido da V3 nas operações e 30% de cada mensalidade paga.
                   </p>
                 </div>
               )}

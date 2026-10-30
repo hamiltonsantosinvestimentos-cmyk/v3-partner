@@ -10,3 +10,14 @@ alter table public.profiles
 create index if not exists idx_profiles_closer_id
   on public.profiles (closer_id)
   where closer_id is not null;
+
+-- Comissão do closer sobre a mensalidade (30%): operation_type ASSINATURA e
+-- operation_ref = 'closer-assinatura:<pagamento>', único para o webhook não gerar em dobro.
+alter table public.commissions drop constraint if exists commissions_operation_type_check;
+alter table public.commissions
+  add constraint commissions_operation_type_check
+  check (operation_type in ('CREDITO', 'MA', 'CONSORCIO', 'MARKETPLACE', 'ASSINATURA'));
+
+create unique index if not exists uq_commissions_closer_assinatura
+  on public.commissions (operation_ref)
+  where operation_ref like 'closer-assinatura:%';

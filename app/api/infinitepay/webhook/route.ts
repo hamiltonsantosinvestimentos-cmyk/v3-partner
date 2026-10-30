@@ -1,3 +1,4 @@
+import { gerarComissaoCloserAssinatura } from "@/lib/closer-commissions";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { checkPayment } from "@/lib/infinitepay";
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
 
     const { data: sub } = await db
       .from("partner_subscriptions")
-      .select("id, partner_id, plano, status")
+      .select("id, partner_id, plano, status, amount_cents")
       .eq("id", subscriptionId)
       .single();
 
@@ -54,6 +55,10 @@ export async function POST(req: NextRequest) {
       status: "PAID",
       paid_at: paidAt,
     }).eq("id", sub.id);
+
+    await gerarComissaoCloserAssinatura(db, {
+      partnerId: sub.partner_id, valorPago: Number(sub.amount_cents ?? 0) / 100, pagamentoId: sub.id, dataPagamento: paidAt,
+    });
 
     const newExpiry = new Date();
     newExpiry.setDate(newExpiry.getDate() + 30);

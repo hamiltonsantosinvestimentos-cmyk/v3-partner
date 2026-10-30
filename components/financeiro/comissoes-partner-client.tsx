@@ -92,7 +92,7 @@ function TipoBadge({ tipo }: { tipo: string }) {
     CONSORCIO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
     MARKETPLACE: "bg-[#C9A84C]/20 text-[#C9A84C] border-[#C9A84C]/30",
   };
-  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace" };
+  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace", ASSINATURA: "Assinatura" };
   return (
     <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${map[tipo] ?? "bg-gray-500/20 text-gray-400 border-gray-500/30"}`}>
       {labels[tipo] ?? tipo}

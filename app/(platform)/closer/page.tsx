@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient as sc } from "@supabase/supabase-js";
 import { requireRole } from "@/lib/auth/require-role";
 import { ROLE_LABELS, type UserRole } from "@/lib/constants";
-import { CLOSER_OPERATION_REF, CLOSER_PERCENT } from "@/lib/closer-commissions";
+import { CLOSER_ASSINATURA_PERCENT, CLOSER_ASSINATURA_REF_PREFIX, CLOSER_OPERATION_REF, CLOSER_PERCENT } from "@/lib/closer-commissions";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,7 @@ type Linha = {
   id: string; code: string; operation_code: string | null; operation_description: string;
   operation_value: number; commission_value: number | null; status: string;
   operation_closed_at: string | null; payment_date: string | null; referral_source_commission_id: string | null;
+  operation_ref: string | null; operation_id: string | null;
 };
 type Origem = { id: string; partner_id: string; operation_value: number; commission_value: number | null };
 
@@ -50,12 +51,14 @@ export default async function CloserPage({ searchParams }: { searchParams: Promi
 
   const { data: linhasRaw } = closerId
     ? await svc.from("commissions")
-        .select("id, code, operation_code, operation_description, operation_value, commission_value, status, operation_closed_at, payment_date, referral_source_commission_id")
+        .select("id, code, operation_code, operation_description, operation_value, commission_value, status, operation_closed_at, payment_date, referral_source_commission_id, operation_ref, operation_id")
         .eq("partner_id", closerId)
-        .eq("operation_ref", CLOSER_OPERATION_REF)
+        .like("operation_ref", "closer%")
         .order("created_at", { ascending: false })
     : { data: [] };
-  const linhas = (linhasRaw ?? []) as Linha[];
+  const todas = (linhasRaw ?? []) as Linha[];
+  const linhas = todas.filter((l) => l.operation_ref === CLOSER_OPERATION_REF);
+  const mensalidades = todas.filter((l) => l.operation_ref?.startsWith(CLOSER_ASSINATURA_REF_PREFIX));
 
   const origemIds = linhas.map((l) => l.referral_source_commission_id).filter((x): x is string => !!x);
   const { data: origensRaw } = origemIds.length
@@ -63,18 +66,24 @@ export default async function CloserPage({ searchParams }: { searchParams: Promi
     : { data: [] };
   const origens = new Map(((origensRaw ?? []) as Origem[]).map((o) => [o.id, o]));
 
-  const validas = linhas.filter((l) => l.status !== "CANCELADA");
+  const validas = todas.filter((l) => l.status !== "CANCELADA");
+  const operacoesValidas = validas.filter((l) => l.operation_ref === CLOSER_OPERATION_REF);
+  const mensalidadesValidas = validas.filter((l) => l.operation_ref !== CLOSER_OPERATION_REF);
   const soma = (ls: Linha[], campo: "operation_value" | "commission_value") =>
     ls.reduce((t, l) => t + Number(l[campo] ?? 0), 0);
   const kpis = [
     { label: "Partners vinculados", valor: String(partners.length) },
-    { label: "Líquido V3 gerado", valor: money(soma(validas, "operation_value")) },
+    { label: "Líquido V3 gerado", valor: money(soma(operacoesValidas, "operation_value")) },
+    { label: "Mensalidades pagas", valor: money(soma(mensalidadesValidas, "operation_value")) },
     { label: "A receber", valor: money(soma(validas.filter((l) => l.status !== "PAGA"), "commission_value")) },
     { label: "Recebido", valor: money(soma(validas.filter((l) => l.status === "PAGA"), "commission_value")) },
   ];
 
   // Busca pela origem: o partner pode ter sido desvinculado depois da comissão
-  const idsOrigem = [...new Set([...origens.values()].map((o) => o.partner_id))];
+  const idsOrigem = [...new Set([
+    ...[...origens.values()].map((o) => o.partner_id),
+    ...mensalidades.map((l) => l.operation_id).filter((x): x is string => !!x),
+  ])];
   const { data: nomesRaw } = idsOrigem.length
     ? await svc.from("profiles").select("id, full_name, email").in("id", idsOrigem)
     : { data: [] };
@@ -87,7 +96,7 @@ export default async function CloserPage({ searchParams }: { searchParams: Promi
       <div>
         <h1 className="text-2xl font-bold text-[#F0ECE4]">Closer</h1>
         <p className="text-sm text-[#7A8FA8] mt-1">
-          {CLOSER_PERCENT}% sobre o que fica líquido para a V3 depois da comissão do partner, em todos os partners vinculados.
+          Em todos os partners vinculados: {CLOSER_ASSINATURA_PERCENT}% de cada mensalidade paga e {CLOSER_PERCENT}% sobre o que fica líquido para a V3 nas operações.
           Exemplo: entrou R$ 100.000 para a V3, R$ 50.000 foram para o partner, o closer recebe R$ 5.000.
         </p>
       </div>
@@ -106,7 +115,7 @@ export default async function CloserPage({ searchParams }: { searchParams: Promi
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {kpis.map((k) => (
           <div key={k.label} className="bg-[#162744] border border-[#243A66] rounded-xl p-4">
             <p className="text-[10px] font-bold uppercase tracking-wider text-[#C9A84C]">{k.label}</p>
@@ -139,7 +148,37 @@ export default async function CloserPage({ searchParams }: { searchParams: Promi
       </section>
 
       <section className="bg-[#162744] border border-[#243A66] rounded-xl overflow-hidden">
-        <h2 className="text-base font-semibold text-[#F0ECE4] px-4 pt-4 pb-2">Comissões do closer</h2>
+        <h2 className="text-base font-semibold text-[#F0ECE4] px-4 pt-4 pb-2">Comissões sobre mensalidades ({CLOSER_ASSINATURA_PERCENT}%)</h2>
+        {mensalidades.length === 0 ? (
+          <p className="px-4 pb-4 text-sm text-[#7A8FA8]">Nenhuma mensalidade paga até agora.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#243A66]">
+                  <th className={th}>Código</th><th className={th}>Partner</th><th className={th}>Mensalidade paga</th>
+                  <th className={th}>Closer {CLOSER_ASSINATURA_PERCENT}%</th><th className={th}>Status</th><th className={th}>Data</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mensalidades.map((l) => (
+                  <tr key={l.id} className="border-b border-[#243A66]/50">
+                    <td className={td}>{l.code}</td>
+                    <td className={`${td} text-[#F0ECE4]`}>{(l.operation_id && nomePartner.get(l.operation_id)) || "—"}</td>
+                    <td className={td}>{money(Number(l.operation_value))}</td>
+                    <td className={`${td} font-semibold text-[#C9A84C]`}>{money(Number(l.commission_value ?? 0))}</td>
+                    <td className={td}>{STATUS_LABEL[l.status] ?? l.status}</td>
+                    <td className={td}>{dataBR(l.payment_date ?? l.operation_closed_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="bg-[#162744] border border-[#243A66] rounded-xl overflow-hidden">
+        <h2 className="text-base font-semibold text-[#F0ECE4] px-4 pt-4 pb-2">Comissões sobre operações ({CLOSER_PERCENT}%)</h2>
         {linhas.length === 0 ? (
           <p className="px-4 pb-4 text-sm text-[#7A8FA8]">Nenhuma comissão gerada até agora.</p>
         ) : (
