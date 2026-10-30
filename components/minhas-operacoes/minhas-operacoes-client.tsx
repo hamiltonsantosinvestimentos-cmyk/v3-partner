@@ -6,6 +6,7 @@ import { CreditCard, Building2, Trophy, AlertCircle, AlertTriangle, CheckCircle2
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PortfolioViewer } from "@/components/portfolio/portfolio-viewer";
+import { dbStageLabel, isClosedDbStage } from "@/lib/ma/pipeline";
 
 interface PendenciaOcr {
   doc_label: string;
@@ -81,6 +82,10 @@ function StatusMA({ stage }: { stage: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     PROSPECTING:   { label: "Prospecção",    cls: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
     QUALIFICATION: { label: "Qualificação",  cls: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+    IOI:           { label: "",              cls: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30" },
+    PROPOSAL:      { label: "",              cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+    MANDATE:       { label: "",              cls: "bg-violet-500/20 text-violet-300 border-violet-500/30" },
+    ROADSHOW:      { label: "",              cls: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30" },
     DUE_DILIGENCE: { label: "Due Diligence", cls: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
     NEGOTIATION:   { label: "Negociação",    cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
     CLOSING:       { label: "Fechamento",    cls: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
@@ -88,7 +93,9 @@ function StatusMA({ stage }: { stage: string }) {
     CLOSED_LOST:   { label: "Perdido",       cls: "bg-red-500/20 text-red-400 border-red-500/30" },
   };
   const cfg = map[stage] ?? { label: stage, cls: "bg-gray-500/20 text-gray-400 border-gray-500/30" };
-  return <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${cfg.cls}`}>{cfg.label}</span>;
+  // Fases de trabalho usam o rótulo da fonte única (colunas da Mesa, bloco E 29/10/2026).
+  const label = isClosedDbStage(stage) ? cfg.label : dbStageLabel(stage);
+  return <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${cfg.cls}`}>{label}</span>;
 }
 
 type Tab = "credito" | "ma" | "consorcio" | "portfolio";

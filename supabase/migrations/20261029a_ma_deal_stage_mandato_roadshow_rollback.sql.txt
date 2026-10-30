@@ -1,0 +1,9 @@
+-- Rollback de 20261029a (só se nenhuma linha usar MANDATE/ROADSHOW).
+-- 1) Conferir:
+--    select count(*) from ma_deals where stage in ('MANDATE','ROADSHOW')
+--      or closed_from_stage in ('MANDATE','ROADSHOW');
+--    select count(*) from ma_deal_history where from_stage in ('MANDATE','ROADSHOW') or to_stage in ('MANDATE','ROADSHOW');
+-- 2) Recriar o tipo sem os dois valores exige: criar deal_stage_old com os 9 valores
+--    anteriores, alterar as 4 colunas (ma_deals.stage, ma_deals.closed_from_stage,
+--    ma_deal_history.from_stage, ma_deal_history.to_stage) com USING stage::text::deal_stage_old,
+--    recriar ma_deal_transition() com o tipo novo e renomear. Fazer em transação, com snapshot.

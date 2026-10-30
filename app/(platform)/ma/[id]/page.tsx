@@ -7,28 +7,22 @@ import Link from "next/link";
 import { DEMO_DEALS } from "@/lib/demo-data";
 import { ContratoPanel } from "@/components/ma/contrato-panel";
 import { DealUpdatesClient } from "@/components/ma/deal-updates-client";
+import { MA_ALL_STAGES } from "@/lib/ma/pipeline";
 
 export const dynamic = "force-dynamic";
 
 const IS_DEMO = false;
 
-const STAGE_LABELS: Record<string, string> = {
-  PROSPECTING:   "Prospecção",
-  QUALIFICATION: "Qualificação",
-  IOI:           "Análise de Viabilidade",
-  PROPOSAL:      "Estruturação da Oferta",
-  DUE_DILIGENCE: "Due Diligence",
-  NEGOTIATION:   "Negociação",
-  CLOSING:       "Fechamento",
-  CLOSED_WON:    "Fechado (Ganho)",
-  CLOSED_LOST:   "Fechado (Perdido)",
-};
+// Rótulos da fonte única (lib/ma/pipeline.ts), alinhados às colunas da Mesa desde o bloco E (29/10/2026).
+const STAGE_LABELS: Record<string, string> = Object.fromEntries(MA_ALL_STAGES.map(st => [st.db, st.label]));
 
 const STAGE_COLORS: Record<string, string> = {
   PROSPECTING:   "bg-gray-500/20 text-gray-400 border-gray-500/30",
   QUALIFICATION: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   IOI:           "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
   PROPOSAL:      "bg-amber-500/20 text-amber-400 border-amber-500/30",
+  MANDATE:       "bg-violet-500/20 text-violet-300 border-violet-500/30",
+  ROADSHOW:      "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
   DUE_DILIGENCE: "bg-orange-500/20 text-orange-400 border-orange-500/30",
   NEGOTIATION:   "bg-red-500/20 text-red-400 border-red-500/30",
   CLOSING:       "bg-purple-500/20 text-purple-400 border-purple-500/30",

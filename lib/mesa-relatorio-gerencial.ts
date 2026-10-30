@@ -1,7 +1,7 @@
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import Anthropic from "@anthropic-ai/sdk";
-import { isClosedDbStage } from "@/lib/ma/pipeline";
+import { isClosedDbStage, MA_ALL_STAGES, WORKING_DB_STAGES } from "@/lib/ma/pipeline";
 
 /**
  * RELATÓRIO GERENCIAL, MESA M&A + BOLSA DE ATIVOS
@@ -22,18 +22,9 @@ function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-const MA_STAGE_LABELS: Record<string, string> = {
-  PROSPECTING: "Prospecção",
-  QUALIFICATION: "Qualificação",
-  IOI: "Análise de Viabilidade",
-  PROPOSAL: "Estruturação da Oferta",
-  NEGOTIATION: "Negociação",
-  DUE_DILIGENCE: "Due Diligence",
-  CLOSING: "Aprovação Final e Fechamento",
-  CLOSED_WON: "Ganho",
-  CLOSED_LOST: "Perdido",
-};
-const MA_OPEN_STAGES = ["PROSPECTING", "QUALIFICATION", "IOI", "PROPOSAL", "NEGOTIATION", "DUE_DILIGENCE", "CLOSING"];
+// Rótulos e ordem das fases vêm da fonte única (lib/ma/pipeline.ts), atualizada no bloco E (29/10/2026).
+const MA_STAGE_LABELS: Record<string, string> = Object.fromEntries(MA_ALL_STAGES.map(st => [st.db, st.label]));
+const MA_OPEN_STAGES: string[] = [...WORKING_DB_STAGES];
 
 const LISTING_STATUS_LABELS: Record<string, string> = {
   reuniao_validada: "Reunião Validada",
