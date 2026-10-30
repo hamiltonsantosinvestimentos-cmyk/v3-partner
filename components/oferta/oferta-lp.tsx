@@ -33,6 +33,22 @@ const ESTRUTURA = [
   { icon: Handshake, titulo: "Os sócios com você", texto: "Três sócios que estruturam junto, não um call center. As 4 verticais da V3 à sua disposição." },
 ];
 
+// Linhas ativas do Portfólio (portfolio_linhas) em 30/10/2026. Lista fixa: linha nova no Portfólio
+// precisa entrar aqui. Fora: Op. Internacional com garantia imobiliária, travada pelo fundo.
+const LINHAS_V3 = [
+  { categoria: "Imobiliário", linhas: ["Home Equity", "HomeCash", "Cash Home / Cash Agro", "CGI — Crédito com Garantia Imobiliária", "Crédito com Garantia de Imóvel — Operação Estressada", "CRI — Certificado de Recebíveis Imobiliários", "Financiamento Imobiliário", "Sale Leaseback"] },
+  { categoria: "Construção", linhas: ["Fundo Construção — Residencial Unifamiliar", "Fundo Construção — Residencial Geminados", "Fundo Construção — Moradia Residencial", "Fundo Construção — Reforma", "Fundo Construção — Construtoras", "Fundo Construção — Incorporadoras", "Fundo Construção — Crédito Ponte (Início de Obra) CRI"] },
+  { categoria: "Internacional", linhas: ["Financiamento Imobiliário — Brasileiros no Exterior e Estrangeiros", "FINIMP — Financiamento à Importação", "ACC — Adiantamento sobre Contrato de Câmbio", "ACE — Adiantamento sobre Cambiais Entregues", "Câmbio Pronto", "Exporte-se — Estruturação nos EUA", "Op. Internacional — Cash Collateral"] },
+  { categoria: "Capital de Giro", linhas: ["Crédito no Aval / Recebíveis", "Cash Collateral"] },
+  { categoria: "Auto", linhas: ["Cash Auto", "Giro Auto"] },
+  { categoria: "Agro", linhas: ["CPR Agro", "Capital Maquinários"] },
+  { categoria: "Consórcio", linhas: ["Consórcio", "Cartas de Crédito Contempladas"] },
+  { categoria: "Seguros", linhas: ["Seguros Corporativos", "Seguros Patrimoniais e Especializados"] },
+  { categoria: "M&A", linhas: ["M&A — Fusões e Aquisições"] },
+  { categoria: "Contratos", linhas: ["Antecipação de Contratos Públicos"] },
+];
+const TOTAL_LINHAS_V3 = LINHAS_V3.reduce((total, c) => total + c.linhas.length, 0);
+
 const MARQUEE = ["Mesa de Crédito", "Mesa Operacional", "Análise de Crédito", "Avaliação de Imóvel", "CRM", "Central de Contratos", "Mandato de Crédito", "Simuladores", "Squads de IA", "Academy", "Marketplace", "KYC e Compliance", "Real Estate", "M&A e Fundos"];
 
 const ETAPAS = [
@@ -819,6 +835,34 @@ export function OfertaLp() {
       </section>
 
       <Estrutura />
+
+      {/* Linhas */}
+      <section id="linhas" className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-28">
+        <Revelar efeito="cortina">
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.28em]" style={{ color: C.gold }}>Todas as linhas em que atuamos</p>
+          <h2 className={`${display.className} mt-4 max-w-3xl text-[40px] sm:text-6xl font-semibold leading-[1.02]`}>
+            {TOTAL_LINHAS_V3} linhas para <em style={GOLD_TXT} className="q-gold-text">o seu cliente.</em>
+          </h2>
+        </Revelar>
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {LINHAS_V3.map((c) => (
+            <Revelar key={c.categoria}>
+              <div className="h-full rounded-3xl border p-6" style={{ borderColor: C.line, background: `linear-gradient(160deg, rgba(36,58,102,0.5), rgba(9,8,26,0.85))` }}>
+                <h3 className="text-lg font-bold" style={{ color: C.goldLight }}>{c.categoria}</h3>
+                <ul className="mt-4 space-y-2.5">
+                  {c.linhas.map((l) => (
+                    <li key={l} className="flex items-start gap-2 text-sm leading-relaxed" style={{ color: C.cream }}>
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: C.gold }} />
+                      {l}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Revelar>
+          ))}
+        </div>
+        <p className="mt-5 text-[11px]" style={{ color: C.muted }}>Sujeitas à análise e às condições de cada operação.</p>
+      </section>
 
       {/* Planos */}
       <section id="planos" className="relative z-10 mx-auto max-w-6xl px-4 sm:px-6 py-20 sm:py-32">
