@@ -1,0 +1,25 @@
+-- Rollback de 20261030d. Devolve ao papel anon os privilégios de tabela anteriores (todos).
+-- Reabre a leitura e a escrita anônimas nessas tabelas; só usar se um consumidor legítimo
+-- sem chave de serviço for descoberto, registrar o motivo e corrigir o consumidor em seguida.
+
+grant all on
+  public.partner_contracts,
+  public.partner_subscriptions,
+  public.sdr_leads,
+  public.sdr_conversas,
+  public.sdr_campanha_contatos,
+  public.sdr_campanhas,
+  public.sdr_config,
+  public.sdr_flow_config,
+  public.sdr_flow_stages,
+  public.sdr_optouts,
+  public.instituicoes,
+  public.instituicoes_linhas,
+  public.people_hub_members,
+  public.disc_assessments,
+  public.creative_jobs,
+  public.academy_badges,
+  public.academy_certificates,
+  public.academy_video_overrides,
+  public.partner_registrations
+to anon;

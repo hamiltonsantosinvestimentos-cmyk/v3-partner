@@ -1,0 +1,118 @@
+-- Rollback de 20261030e: recria exatamente as políticas removidas (definições lidas de pg_policies
+-- em 30/10/2026). Reabre leitura e escrita a anon e authenticated nas tabelas listadas; só usar se
+-- um consumidor legítimo sem chave de serviço for descoberto, registrar o motivo e corrigir o
+-- consumidor em seguida. Obs.: anon continua sem privilégio de tabela por causa da 20261030d.
+
+drop policy if exists creative_jobs_select on public.creative_jobs;
+
+create policy "service insert badges" on public.academy_badges as permissive for INSERT to public
+  with check (true);
+
+create policy "Service inserts certificates" on public.academy_certificates as permissive for INSERT to public
+  with check (true);
+
+create policy "service can delete overrides" on public.academy_video_overrides as permissive for DELETE to public
+  using (true);
+
+create policy "service can update overrides" on public.academy_video_overrides as permissive for UPDATE to public
+  using (true);
+
+create policy "service can upsert overrides" on public.academy_video_overrides as permissive for INSERT to public
+  with check (true);
+
+create policy creative_jobs_select on public.creative_jobs as permissive for SELECT to public
+  using (true);
+
+create policy people_hub_assessment_insert on public.disc_assessments as permissive for INSERT to public
+  with check (true);
+
+create policy ph_assessment_select on public.disc_assessments as permissive for SELECT to public
+  using (true);
+
+create policy "service_role full access" on public.instituicoes as permissive for ALL to public
+  using (true)
+  with check (true);
+
+create policy "service_role full access" on public.instituicoes_linhas as permissive for ALL to public
+  using (true)
+  with check (true);
+
+create policy service_role_all on public.partner_contracts as permissive for ALL to public
+  using (true)
+  with check (true);
+
+create policy select_admin on public.partner_registrations as permissive for SELECT to public
+  using (true);
+
+create policy update_admin on public.partner_registrations as permissive for UPDATE to public
+  using (true);
+
+create policy "service full access" on public.partner_subscriptions as permissive for ALL to public
+  using (true)
+  with check (true);
+
+create policy ph_members_delete on public.people_hub_members as permissive for DELETE to public
+  using (true);
+
+create policy ph_members_insert on public.people_hub_members as permissive for INSERT to public
+  with check (true);
+
+create policy ph_members_select on public.people_hub_members as permissive for SELECT to public
+  using (true);
+
+create policy ph_members_update on public.people_hub_members as permissive for UPDATE to public
+  using (true);
+
+create policy service_role_all on public.sdr_campanha_contatos as permissive for ALL to public
+  using (true);
+
+create policy service_role_all on public.sdr_campanhas as permissive for ALL to public
+  using (true);
+
+create policy "service full access sdr_config" on public.sdr_config as permissive for ALL to public
+  using (true)
+  with check (true);
+
+create policy service_role_all on public.sdr_config as permissive for ALL to public
+  using (true);
+
+create policy "service inserts sdr conversas" on public.sdr_conversas as permissive for INSERT to public
+  with check (true);
+
+create policy service_role_all on public.sdr_conversas as permissive for ALL to public
+  using (true);
+
+create policy "service full access sdr flow config" on public.sdr_flow_config as permissive for ALL to public
+  using (true)
+  with check (true);
+
+create policy "service full access sdr flow stages" on public.sdr_flow_stages as permissive for ALL to public
+  using (true)
+  with check (true);
+
+create policy service_role_all on public.sdr_leads as permissive for ALL to public
+  using (true);
+
+create policy service_role_all on public.sdr_optouts as permissive for ALL to public
+  using (true);
+
+-- Restaura a leitura total de SDR e CLOSER em sdr_leads e sdr_conversas.
+alter policy "sdr_leads_partner_or_staff" on public.sdr_leads
+  using (
+    (partner_id = auth.uid())
+    or exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = any (array['ADMIN'::user_role, 'GESTAO'::user_role, 'SDR'::user_role, 'CLOSER'::user_role])
+    )
+  );
+
+alter policy "sdr_conversas_partner_or_staff_select" on public.sdr_conversas
+  using (
+    (partner_id = auth.uid())
+    or exists (
+      select 1 from public.profiles
+      where profiles.id = auth.uid()
+        and profiles.role = any (array['ADMIN'::user_role, 'GESTAO'::user_role, 'SDR'::user_role, 'CLOSER'::user_role])
+    )
+  );
