@@ -42,6 +42,19 @@ export async function PATCH(
     if (field in body) updateData[field] = body[field];
   }
 
+  // Closer responsável pelo partner: só aceita usuário com perfil CLOSER (ou null para desvincular)
+  if ("closer_id" in body) {
+    const closerId = (body.closer_id as string | null) || null;
+    if (closerId) {
+      const { data: closer } = await supabase.from("profiles").select("role").eq("id", closerId).single();
+      if ((closer as { role: string } | null)?.role !== "CLOSER" || closerId === id) {
+        return NextResponse.json({ error: "Selecione um usuário com perfil Closer." }, { status: 422 });
+      }
+    }
+    updateData.closer_id = closerId;
+    updateData.closer_vinculado_em = closerId ? new Date().toISOString() : null;
+  }
+
   const supabaseAny = supabase as unknown as {
     from: (table: string) => {
       update: (data: unknown) => {

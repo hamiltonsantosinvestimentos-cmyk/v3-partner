@@ -1,5 +1,6 @@
 import { createClient as sc, type SupabaseClient } from "@supabase/supabase-js";
 import { PLAN_COMMISSION_PCT, ROLE_LABELS, type UserRole } from "@/lib/constants";
+import { gerarComissaoCloser } from "@/lib/closer-commissions";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -169,6 +170,15 @@ async function inserirComissoes(db: SupabaseClient, a: {
       notes: `Indicação de ${a.partner.full_name ?? "parceiro"} — 10% da comissão do licenciado (${a.proposalCode}${a.sufixoDescricao ? ` · ${a.sufixoDescricao}` : ""})`,
     }).select("id").single();
     referralId = ref?.id;
+  }
+
+  // Closer vinculado ao partner: 10% do que fica líquido para a V3. Falha aqui não derruba a do partner.
+  if (licenciado?.id) {
+    await gerarComissaoCloser(db, {
+      sourceId: licenciado.id, partnerId: a.partner.id, operationType: "CREDITO",
+      operationId: a.proposalId, operationCode: a.proposalCode, descricao,
+      entradaV3: a.liquidaV3, comissaoPartner: licenciadoValue, dataOperacao: a.dataOperacao, actorId: a.actorId,
+    }).catch((e) => console.error("[credit-commissions] comissão do closer não gravada:", e));
   }
   return { licenciadoId: licenciado?.id, referralId, licenciadoValue };
 }

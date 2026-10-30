@@ -50,6 +50,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/prospeccao/dashboard", label: "Dashboard SDR", roles: ["ADMIN", "SDR", "CLOSER", "GESTAO"] },
         ],
       },
+      { href: "/closer", label: "Closer", icon: "Handshake", roles: ["ADMIN", "GESTAO", "FINANCEIRO", "CLOSER"] },
       { href: "/minhas-operacoes", label: "Minhas Operações", icon: "ClipboardList", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
       { href: "/meus-links", label: "Links de Serviço", icon: "Link2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "MESA_OPERACIONAL"] },
       { href: "/meus-compradores", label: "Meus Compradores", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] },

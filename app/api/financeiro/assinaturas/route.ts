@@ -1,3 +1,4 @@
+import { gerarComissaoCloserAssinatura } from "@/lib/closer-commissions";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -460,7 +461,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Parâmetros inválidos" }, { status: 400 });
   }
 
-  const { error: payErr } = await svc()
+  const { data: pagamento, error: payErr } = await svc()
     .from("financeiro_records")
     .insert({
       type: "ASSINATURA_PAGAMENTO",
@@ -474,9 +475,15 @@ export async function POST(req: NextRequest) {
         observacoes: observacoes ?? "",
         dataPagamento: new Date().toISOString(),
       },
-    });
+    })
+    .select("id")
+    .single();
 
   if (payErr) return NextResponse.json({ error: payErr.message }, { status: 500 });
+
+  await gerarComissaoCloserAssinatura(svc(), {
+    partnerId, valorPago: Number(valor), pagamentoId: pagamento.id, dataPagamento: new Date().toISOString(),
+  });
 
   // Renova acesso +30 dias a partir de hoje
   const novaExpiracao = new Date();

@@ -106,7 +106,10 @@ interface User {
   trial_expires_at?: string | null;
   contract_signed?: boolean;
   starter_antigo?: boolean;
+  closer_id?: string | null;
 }
+
+const ROLES_COM_CLOSER: UserRole[] = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"];
 
 interface UsersClientProps {
   initialUsers: User[];
@@ -275,7 +278,8 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
     }
   };
 
-  const [editForm, setEditForm] = useState({ role: "" as UserRole, document_cpf: "", email: "", full_name: "", phone: "" });
+  const [editForm, setEditForm] = useState({ role: "" as UserRole, document_cpf: "", email: "", full_name: "", phone: "", closer_id: "" });
+  const closers = users.filter((u) => u.role === "CLOSER" && u.is_active);
 
   const handleUpdateRole = async (userId: string, newRole: UserRole) => {
     const res = await fetch(`/api/usuarios/${userId}`, {
@@ -346,6 +350,9 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
     if (editForm.email && editForm.email !== editUser.email) {
       payload.email = editForm.email.trim().toLowerCase();
     }
+    // Só envia o closer se mudou, para não reescrever a data do vínculo
+    const closerMudou = (editForm.closer_id || null) !== (editUser.closer_id ?? null);
+    if (closerMudou) payload.closer_id = editForm.closer_id || null;
     const res = await fetch(`/api/usuarios/${editUser.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -354,7 +361,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
     if (res.ok) {
       setUsers(users.map((u) =>
         u.id === editUser.id
-          ? { ...u, role: editForm.role, document_cpf: editForm.document_cpf || null, email: payload.email as string ?? u.email, full_name: payload.full_name as string ?? u.full_name, phone: payload.phone as string ?? u.phone }
+          ? { ...u, role: editForm.role, document_cpf: editForm.document_cpf || null, email: payload.email as string ?? u.email, full_name: payload.full_name as string ?? u.full_name, phone: payload.phone as string ?? u.phone, closer_id: editForm.closer_id || null }
           : u
       ));
       setEditUser(null);
@@ -506,7 +513,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button
-                          onClick={() => { setEditUser(user); setEditForm({ role: user.role, document_cpf: user.document_cpf || "", email: user.email, full_name: user.full_name || "", phone: user.phone || "" }); setShowAudit(false); setAuditLogs([]); }}
+                          onClick={() => { setEditUser(user); setEditForm({ role: user.role, document_cpf: user.document_cpf || "", email: user.email, full_name: user.full_name || "", phone: user.phone || "", closer_id: user.closer_id || "" }); setShowAudit(false); setAuditLogs([]); }}
                           className="p-1.5 rounded hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
                           title="Editar perfil"
                         >
@@ -742,6 +749,30 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                   placeholder="000.000.000-00 ou 00.000.000/0001-00"
                 />
               </div>
+              {ROLES_COM_CLOSER.includes(editForm.role) && (
+                <div className="space-y-1.5">
+                  <Label>Closer responsável</Label>
+                  <Select
+                    value={editForm.closer_id || "none"}
+                    onValueChange={(v) => setEditForm({ ...editForm, closer_id: v === "none" ? "" : v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent position="popper" className="z-[9999]">
+                      <SelectItem value="none">Sem closer</SelectItem>
+                      {closers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.full_name || c.email}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    A partir do vínculo, o closer recebe 10% do líquido da V3 nas operações e 30% de cada mensalidade paga.
+                  </p>
+                </div>
+              )}
               {/* Histórico da conta (o que aconteceu COM esse cadastro) */}
               <div className="border-t border-border/40 pt-3">
                 <button

@@ -70,7 +70,7 @@ function TipoComissaoBadge({ tipo }: { tipo: string }) {
     CONSORCIO: "bg-amber-500/20 text-amber-400 border-amber-500/30",
     MARKETPLACE: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
   };
-  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace" };
+  const labels: Record<string, string> = { CREDITO: "Crédito", MA: "M&A", CONSORCIO: "Consórcio", MARKETPLACE: "Marketplace", ASSINATURA: "Assinatura" };
   return (
     <span className={`text-[10px] font-semibold border px-2 py-0.5 rounded-full ${map[tipo] ?? ""}`}>
       {labels[tipo] ?? tipo}
