@@ -7,6 +7,7 @@ import { notifyNovaComissao, notifyComissaoPaga } from "@/lib/email";
 import { createNotification } from "@/lib/notify";
 import { renderComprovanteComissaoPDF } from "@/lib/comprovante-comissao-pdf";
 import { avisarComissaoPaga } from "@/lib/chat-partners";
+import { CLOSER_OPERATION_REF, gerarComissaoCloser, sincronizarComissaoCloser } from "@/lib/closer-commissions";
 
 // PATCH → PAGA gera o comprovante em PDF (render server-side); folga extra de tempo.
 export const maxDuration = 60;
@@ -206,6 +207,14 @@ export async function POST(req: NextRequest) {
   // Comissão de indicação: 10% do valor para quem indicou este partner (fire and forget)
   gerarComissaoIndicacao(svc, data, d.partner_id).catch(() => {});
 
+  // Closer vinculado ao partner: 10% do que fica líquido para a V3
+  await gerarComissaoCloser(svc, {
+    sourceId: data.id, partnerId: d.partner_id, operationType: d.operation_type,
+    operationId: d.operation_id, operationCode: d.operation_code, descricao: d.operation_description,
+    entradaV3: Number(data.operation_value), comissaoPartner: Number(data.commission_value ?? 0),
+    dataOperacao: d.operation_closed_at, actorId: user.id,
+  }).catch((e) => console.error("[commissions POST] comissão do closer não gravada:", e));
+
   // Notifica partner por e-mail (fire and forget)
   const svcEmail = serviceClient();
   const { data: partnerUser } = await svcEmail.auth.admin.getUserById(d.partner_id);
@@ -285,6 +294,12 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   logAudit({ userId: user.id, userName: profile?.full_name, action: "UPDATE", entity: "commissions" as never, entityId: id, newData: fields as Record<string, unknown> });
+
+  // A comissão do closer acompanha a do partner (valor editado ou cancelamento)
+  if (fields.operation_value !== undefined || fields.commission_percent !== undefined || fields.status === "CANCELADA") {
+    await sincronizarComissaoCloser(serviceClient(), data)
+      .catch((e) => console.error("[commissions PATCH] comissão do closer não sincronizada:", e));
+  }
 
   // Notifica partner quando comissão for paga (fire and forget)
   if (fields.status === "PAGA") {
@@ -377,6 +392,10 @@ export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "ID obrigatório" }, { status: 400 });
+
+  // A do closer aponta para esta (FK): sai junto enquanto não foi autorizada
+  await serviceClient().from("commissions").delete()
+    .eq("referral_source_commission_id", id).eq("operation_ref", CLOSER_OPERATION_REF).eq("status", "AGUARDANDO_AUTORIZACAO");
 
   const { error } = await serviceClient().from("commissions").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
