@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { listClickSignSignEvents } from "@/lib/esignature/clicksign-provider";
 import { applyEnvelopeClosed, recordSignatureNote } from "@/lib/contract-signature-timeline";
+import { avisarContratoOfertaAssinado } from "@/lib/contrato-oferta-assinado";
 import { detectExternalCancel } from "@/lib/contract-envelope-cancel";
 import { MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
 
@@ -76,6 +77,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   let fechado = false;
   if (result.envelopeStatus === "closed" || result.envelopeStatus === "auto_closed") {
     fechado = await applyEnvelopeClosed(db, { id: contract.id, status_signature: contract.status_signature }, result.finishedAt ?? new Date().toISOString());
+    if (fechado) await avisarContratoOfertaAssinado(db, contract.id);
   }
 
   const signatarios = parties.filter((p) => p.email?.trim());
