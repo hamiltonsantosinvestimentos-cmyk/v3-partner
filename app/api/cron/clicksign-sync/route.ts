@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { getProvider } from "@/lib/esignature";
 import { detectExternalCancel } from "@/lib/contract-envelope-cancel";
+import { avisarContratoOfertaAssinado } from "@/lib/contrato-oferta-assinado";
 
 // GET /api/cron/clicksign-sync: sincronização real de status de assinatura
 // (19/08/2026, item 2 dos ajustes de governança pedidos por João).
@@ -144,6 +145,8 @@ export async function GET(req: NextRequest) {
         .eq("deal_id", contract.deal_id)
         .eq("status", "prospecto");
     }
+
+    await avisarContratoOfertaAssinado(db, contract.id);
 
     updated.push(contract.id);
   }

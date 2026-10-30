@@ -4,6 +4,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { auditHtml, auditText } from "@/lib/brand-guardian-gate";
 import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 import { recordSignatureNote, applyEnvelopeClosed, isSafeProviderId } from "@/lib/contract-signature-timeline";
+import { avisarContratoOfertaAssinado } from "@/lib/contrato-oferta-assinado";
 import { STAGE_DEFAULT_PROBABILITY, PRE_NCNDA_DB_STAGES, type DbStage } from "@/lib/ma/pipeline";
 
 function svc() {
@@ -304,6 +305,7 @@ async function handleV1Event(eventName: string, externalId: string, extra?: Webh
         // Envelope fechado: marca como assinado e registra o fechamento na linha do
         // tempo (mesma função usada pela rota "Atualizar status das assinaturas").
         await applyEnvelopeClosed(db, { id: contract.id, status_signature: contract.status_signature }, extra?.finishedAt ?? new Date().toISOString());
+        await avisarContratoOfertaAssinado(db, contract.id);
 
         // Etapa 3 da esteira: assinatura da Carta de Intenção ("compra firme")
         // dispara automaticamente a FPA Venda para o grupo do Rafael.
