@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { anexarTransferencias } from "@/lib/ma/transferir-mesa";
 import { normalizeDocument, detectDocumentType } from "@/lib/v3-clients";
 import { maskCpfCnpj } from "@/lib/qualification-mask";
 
@@ -146,6 +147,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docu
     contratos = data ?? [];
   }
 
+  // Caminho do ativo (bloco C): para cada deal M&A do cliente, os registros de destino (Bolsa e
+  // Crédito) ligados por ma_deal_id. Só registros de transferência; a rota é só da equipe.
+  const maEntradas = (maDeals.data ?? []) as unknown as { id: string; ma_deals: { id: string } | null }[];
+  const maDealsDoCliente = maEntradas.map((e) => e.ma_deals).filter((d): d is { id: string } => !!d);
+  const comCaminho = await anexarTransferencias(svc, maDealsDoCliente);
+  const caminhoPorDeal = new Map(comCaminho.map((d) => [d.id, d.transferencias]));
+  const maComCaminho = maEntradas.map((e) => ({ ...e, caminho: e.ma_deals ? (caminhoPorDeal.get(e.ma_deals.id) ?? []) : [] }));
+
   return NextResponse.json({
     found: true,
     client: { ...client, document_number: maskCpfCnpj(client.document_number) ?? "" },
@@ -153,7 +162,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ docu
     bolsa_de_ativos: bolsa.data ?? [],
     credit_engine: creditEngine.data ?? [],
     partners: partners.data ?? [],
-    ma: maDeals.data ?? [],
+    ma: maComCaminho,
     kyc: kyc.data ?? [],
     contratos,
     risco: { trajetoria: trajetoriaPorDimensao, sugestoes: sugestoes.data ?? [] },

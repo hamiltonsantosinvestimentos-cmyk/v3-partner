@@ -5,6 +5,7 @@ import { z } from "zod";
 import { logAudit } from "@/lib/audit";
 import { createNotification, notifyByRoles } from "@/lib/notify";
 import { issueV3Code, resolveSectorCode, insertWithLegacyCode } from "@/lib/v3-codes";
+import { anexarTransferencias } from "@/lib/ma/transferir-mesa";
 import {
   LOSS_CATEGORIES, MIN_REASON_LENGTH, DB_TO_PIPELINE, STAGE_DEFAULT_PROBABILITY,
   classifyTransition, stageRoleDenial, validateClosedDate, todaySaoPaulo, isoToBr,
@@ -112,6 +113,11 @@ export async function GET(req: NextRequest) {
     if (!isAdmin) q = q.or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`);
     const { data, error } = await q.single();
     if (error) return NextResponse.json({ error: error.message }, { status: 404 });
+    // Selo da transferência entre mesas: só a equipe recebe (o partner nunca vê a mesa de destino).
+    if (isAdmin && data) {
+      const [comTransf] = await anexarTransferencias(svc, [data as unknown as { id: string }]);
+      return NextResponse.json({ deal: { ...(data as object), transferencias: comTransf.transferencias } });
+    }
     return NextResponse.json({ deal: data });
   }
 
@@ -128,6 +134,10 @@ export async function GET(req: NextRequest) {
   if (error) {
     console.error("[ma-deals GET] error:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (isAdmin) {
+    const comTransf = await anexarTransferencias(svc, (data ?? []) as unknown as { id: string }[]);
+    return NextResponse.json({ deals: comTransf });
   }
   return NextResponse.json({ deals: data ?? [] });
 }

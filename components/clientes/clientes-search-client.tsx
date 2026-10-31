@@ -10,17 +10,26 @@ interface ClientResult {
   document_number?: string;
   document_type?: string;
   client?: { id: string; document_number: string; document_type: string; legal_name: string | null; first_seen_vertical: string | null; first_seen_at: string };
-  credito?: { id: string; code: string; title: string; client_name: string; credit_line: string; requested_value: number; stage: string; status: string; created_at: string }[];
-  bolsa_de_ativos?: { id: string; numero_interno: string | null; seller_name: string; asset_type: string; valor_face: number; listing_status: string; created_at: string }[];
+  credito?: { id: string; code: string | null; title: string; client_name: string; credit_line: string | null; requested_value: number | null; stage: string; status: string; created_at: string }[];
+  bolsa_de_ativos?: { id: string; numero_interno: string | null; seller_name: string; asset_type: string; valor_face: number | null; listing_status: string; created_at: string }[];
   credit_engine?: { id: string; tier: string; score_total: number; analysis_type: string; created_at: string }[];
   partners?: { id: string; nome_completo: string; plano: string; status: string; created_at: string }[];
-  ma?: { id: string; role: "comprador" | "vendedor" | "intermediario" | null; status: "prospecto" | "a_performar" | "performado"; created_at: string; ma_deals: { id: string; code: string; title: string; stage: string } | null }[];
+  ma?: { id: string; role: "comprador" | "vendedor" | "intermediario" | null; status: "prospecto" | "a_performar" | "performado"; created_at: string; ma_deals: { id: string; code: string; title: string; stage: string } | null; caminho?: CaminhoAtivo[] }[];
   kyc?: { id: string; score: number; risk_label: string; verdict: string; dd_level: string; created_at: string }[];
   contratos?: { id: string; contract_code: string | null; contract_title: string; vertical: string; status_signature: string; created_at: string }[];
   risco?: {
     trajetoria: Record<string, { dimension: string; score_atual: number; classificacao_atual: string; score_anterior: number | null; direcao: string; created_at: string }>;
     sugestoes: { id: string; dimension: string; suggestion: string; status: string; created_at: string }[];
   };
+}
+
+// Caminho do ativo (bloco C): registros de destino ligados ao deal por ma_deal_id.
+type CaminhoAtivo = { destino: "bolsa" | "credito"; registro_id: string; codigo: string | null; cancelado: boolean; criado_em: string };
+const DESTINO_LABEL: Record<string, string> = { bolsa: "Bolsa de Ativos", credito: "Mesa de Crédito" };
+// DD/MM/AAAA sem passar por new Date("AAAA-MM-DD"), para a data não andar um dia.
+function dataBr(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
 }
 
 const ROLE_LABELS: Record<string, string> = { comprador: "Comprador", vendedor: "Vendedor", intermediario: "Intermediário" };
@@ -232,7 +241,7 @@ export function ClientesSearchClient({ initialClienteId = null }: { initialClien
             href="/mesa-credito"
           >
             {(result.credito ?? []).map(p => (
-              <RowItem key={p.id} title={`${p.code} · ${p.credit_line}`} sub={`${p.stage} · ${formatMoney(p.requested_value)}`} />
+              <RowItem key={p.id} title={`${p.code ?? "código a emitir"} · ${p.credit_line ?? "linha a definir"}`} sub={`${p.stage} · ${p.requested_value == null ? "valor a definir" : formatMoney(p.requested_value)}`} />
             ))}
           </ResultSection>
 
@@ -243,7 +252,7 @@ export function ClientesSearchClient({ initialClienteId = null }: { initialClien
             href="/bolsa/mesa"
           >
             {(result.bolsa_de_ativos ?? []).map(l => (
-              <RowItem key={l.id} title={`${l.numero_interno ?? l.id.slice(0, 8)} · ${l.asset_type}`} sub={`${l.listing_status} · ${formatMoney(l.valor_face)}`} />
+              <RowItem key={l.id} title={`${l.numero_interno ?? l.id.slice(0, 8)} · ${l.asset_type}`} sub={`${l.listing_status} · ${l.valor_face == null ? "valor a definir" : formatMoney(l.valor_face)}`} />
             ))}
           </ResultSection>
 
@@ -276,12 +285,24 @@ export function ClientesSearchClient({ initialClienteId = null }: { initialClien
             {(result.ma ?? []).map(m => {
               const meta = MA_STATUS_META[m.status] ?? MA_STATUS_META.prospecto;
               return (
-                <div key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 10px", background: "#162744", borderRadius: 6 }}>
-                  <div>
-                    <div style={{ color: "#F5F1E8", fontWeight: 600, fontSize: 12 }}>{m.ma_deals?.code ?? "-"} · {m.ma_deals?.title ?? ""}</div>
-                    <div style={{ color: "#9BAFC5", fontSize: 11, marginTop: 2 }}>{m.role ? ROLE_LABELS[m.role] : "Papel indefinido"}</div>
+                <div key={m.id} style={{ padding: "8px 10px", background: "#162744", borderRadius: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                    <div>
+                      <div style={{ color: "#F5F1E8", fontWeight: 600, fontSize: 12 }}>{m.ma_deals?.code ?? "-"} · {m.ma_deals?.title ?? ""}</div>
+                      <div style={{ color: "#9BAFC5", fontSize: 11, marginTop: 2 }}>{m.role ? ROLE_LABELS[m.role] : "Papel indefinido"}</div>
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20, color: meta.color, background: meta.bg, flexShrink: 0 }}>{meta.label}</span>
                   </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 20, color: meta.color, background: meta.bg, flexShrink: 0 }}>{meta.label}</span>
+                  {(m.caminho ?? []).length > 0 && (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px solid #243A66" }}>
+                      <div style={{ color: "#E8C97A", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Caminho do ativo</div>
+                      {(m.caminho ?? []).map(c => (
+                        <div key={c.registro_id} style={{ color: "#F5F1E8", fontSize: 11, marginTop: 2, textDecoration: c.cancelado ? "line-through" : "none", opacity: c.cancelado ? 0.7 : 1 }}>
+                          {m.ma_deals?.code ?? "Deal"} → {DESTINO_LABEL[c.destino] ?? c.destino} · {c.codigo ?? "código a emitir"} · {dataBr(c.criado_em)}{c.cancelado ? " (cancelado)" : ""}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -71,7 +71,7 @@ function PropostaSelect({ propostas, value, onChange }: { propostas: PropostaOpc
   const [busca, setBusca] = useState("");
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
-    return (q ? propostas.filter((p) => p.code.toLowerCase().includes(q) || p.client_name.toLowerCase().includes(q)) : propostas).slice(0, 50);
+    return (q ? propostas.filter((p) => (p.code ?? "").toLowerCase().includes(q) || p.client_name.toLowerCase().includes(q)) : propostas).slice(0, 50);
   }, [busca, propostas]);
   return (
     <div className="space-y-1.5">

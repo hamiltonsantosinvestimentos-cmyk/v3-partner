@@ -150,7 +150,7 @@ export function KanbanCard({
         </div>
       )}
 
-      <div className="text-[9px] text-[#C9A84C] font-bold">{l.anonymous_id}</div>
+      <div className="text-[9px] text-[#C9A84C] font-bold">{l.anonymous_id ?? "código a emitir"}</div>
       {l.apelido && <div className="text-[10px] text-[#F5F1E8] font-semibold truncate">{l.apelido}</div>}
       <div className="text-xs sm:text-xs text-[#F5F1E8] font-semibold">{valueLabel}</div>
       {l.risk_score && (

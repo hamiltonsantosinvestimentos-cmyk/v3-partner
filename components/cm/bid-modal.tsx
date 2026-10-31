@@ -103,7 +103,7 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
         <div className="bg-[#09081A] rounded-lg p-3 mb-4 text-xs text-[#9BAFC5]">
           <div className="flex justify-between">
             <span>Valor de Face</span>
-            <span className="text-[#F5F1E8] font-bold">{symbol} {listing.valor_face.toLocaleString(currency === "BRL" ? "pt-BR" : "en-US")}</span>
+            <span className="text-[#F5F1E8] font-bold">{symbol} {(listing.valor_face ?? 0).toLocaleString(currency === "BRL" ? "pt-BR" : "en-US")}</span>
           </div>
           {listing.desagio_pretendido && (
             <div className="flex justify-between mt-1">

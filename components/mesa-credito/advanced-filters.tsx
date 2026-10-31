@@ -212,7 +212,7 @@ export function applyFilters<T extends {
       const q = f.search.toLowerCase();
       if (
         !p.client_name.toLowerCase().includes(q) &&
-        !p.code.toLowerCase().includes(q) &&
+        !(p.code ?? "").toLowerCase().includes(q) &&
         !p.title.toLowerCase().includes(q)
       ) return false;
     }

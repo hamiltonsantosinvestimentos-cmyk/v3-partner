@@ -1,0 +1,26 @@
+-- Rollback de 20261030g (bloco C, transferir de esteira).
+-- ANTES de rodar: conferir se existem registros de transferência. Se existirem, decidir o destino
+-- deles (cancelar com Lixeira) antes de remover as colunas e as restrições.
+--   select count(*) from cm_asset_listings where ma_deal_id is not null;
+--   select count(*) from credit_desk_proposals where ma_deal_id is not null;
+-- Voltar NOT NULL exige que nenhuma linha tenha esses campos vazios.
+
+drop function if exists public.ma_desk_confirm_classification(uuid, uuid, text, text, text);
+drop function if exists public.ma_deal_transfer_to_desk(uuid, uuid, text, text, text, uuid);
+
+drop trigger if exists trg_exige_transferencia_ma_listings on public.cm_asset_listings;
+drop trigger if exists trg_exige_transferencia_ma_credito on public.credit_desk_proposals;
+drop function if exists public.trg_exige_transferencia_ma();
+
+drop index if exists public.ux_cm_listing_ma_deal_ativo;
+drop index if exists public.ux_credit_prop_ma_deal_ativo;
+
+alter table public.credit_desk_proposals drop constraint if exists chk_credit_transfer_campos;
+alter table public.credit_desk_proposals drop constraint if exists chk_credit_transfer_faixa;
+alter table public.cm_asset_listings drop constraint if exists chk_listing_transfer_campos;
+alter table public.cm_asset_listings drop constraint if exists chk_listing_transfer_faixa;
+
+-- Só depois de remover/cancelar os registros de transferência:
+-- alter table public.credit_desk_proposals alter column code set not null, alter column requested_value set not null, alter column credit_line set not null;
+-- alter table public.cm_asset_listings alter column valor_face set not null, alter column anonymous_id set not null;
+-- alter table public.credit_desk_proposals drop column if exists ma_deal_id;

@@ -19,6 +19,8 @@ import {
 } from "@/lib/ma/pipeline";
 import { closureFromRow, type DealClosure } from "@/lib/ma/closure";
 import { MaTransitionModal, type ModalKind, type TransitionPayload } from "@/components/mesa-ma/ma-transition-modal";
+import { TransferirMesaPainel } from "@/components/mesa-ma/transferir-mesa-painel";
+import type { TransferenciaMesa } from "@/lib/ma/transferir-mesa-tipos";
 import { ForjaPanel } from "@/components/ma/forja-panel";
 import { DocumentRequestPanel } from "@/components/ma/document-request-panel";
 import { ContratoPanel } from "@/components/ma/contrato-panel";
@@ -85,6 +87,8 @@ type MaCard = DealClosure & {
   asset_data?: Record<string, unknown>;
   location?: string;
   tipo_participante?: string;
+  // Registros de destino (Bolsa e Crédito) do bloco C. Só a equipe recebe este campo da API.
+  transferencias?: TransferenciaMesa[];
 };
 
 type MesaOperator = {
@@ -331,6 +335,11 @@ function KanbanCardItem({
           </span>
         )}
       </div>
+      {(card.transferencias ?? []).filter(t => !t.cancelado).map(t => (
+        <p key={t.registro_id} className="mb-2 inline-block text-[10px] px-1.5 py-0.5 rounded-full border border-[#C9A84C]/40 text-[#C9A84C]">
+          Transferido: {t.destino === "bolsa" ? "Bolsa de Ativos" : "Mesa de Crédito"}, {t.codigo ?? "código a emitir"}
+        </p>
+      ))}
       <p className="text-sm font-bold text-[#C9A84C] mb-2">{formatM(card.value)}</p>
       {/* Probability bar */}
       <div className="mb-2">
@@ -485,6 +494,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
             asset_data: assetData,
             location: (d.location ?? "") as string,
             tipo_participante: assetData?.tipo_participante as string | undefined,
+            transferencias: Array.isArray(d.transferencias) ? (d.transferencias as TransferenciaMesa[]) : [],
             ...closureFromRow(d),
           };
         }));
@@ -2757,6 +2767,25 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       <Send size={12} /> Enviar para Securitizadora
                     </button>
                   </div>
+                )}
+
+                {/* Transferir de esteira (bloco C): para a Bolsa de Ativos ou a Mesa de Crédito */}
+                {["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(userRole) && !CLOSED_IDS.includes(selectedCard.stage) && (
+                  <TransferirMesaPainel
+                    dealId={selectedCard.id}
+                    dealLabel={`${selectedCard.company} · ${selectedCard.code}`}
+                    setorTexto={selectedCard.sector}
+                    transferencias={selectedCard.transferencias ?? []}
+                    onChanged={async () => {
+                      try {
+                        const r = await fetch(`/api/ma-deals?id=${selectedCard.id}`);
+                        const j = await r.json() as { deal?: { transferencias?: TransferenciaMesa[] } };
+                        const tr = j.deal?.transferencias ?? [];
+                        setCards(prev => prev.map(c => c.id === selectedCard.id ? { ...c, transferencias: tr } : c));
+                        setSelectedCard(prev => prev ? { ...prev, transferencias: tr } : prev);
+                      } catch { /* o próximo refresh da lista traz o estado atual */ }
+                    }}
+                  />
                 )}
 
                 {/* Transferir deal */}

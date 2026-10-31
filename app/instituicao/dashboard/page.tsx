@@ -155,7 +155,7 @@ export default function InstituicaoDashboard() {
 
   const filtered = propostas.filter(p =>
     p.client_name.toLowerCase().includes(search.toLowerCase()) ||
-    p.code.toLowerCase().includes(search.toLowerCase()) ||
+    (p.code ?? "").toLowerCase().includes(search.toLowerCase()) ||
     p.credit_line.toLowerCase().includes(search.toLowerCase())
   );
 

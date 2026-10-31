@@ -2134,7 +2134,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const filteredProposals = proposals.filter((p) => {
     const matchSearch = !search ||
       p.client_name.toLowerCase().includes(search.toLowerCase()) ||
-      p.code.toLowerCase().includes(search.toLowerCase()) ||
+      (p.code ?? "").toLowerCase().includes(search.toLowerCase()) ||
       (p.partner_name ?? "").toLowerCase().includes(search.toLowerCase());
     const matchStage = !selectedStage || p.stage === selectedStage;
     return matchSearch && matchStage;
