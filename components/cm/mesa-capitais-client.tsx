@@ -2854,7 +2854,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
             <div className="p-5 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
               <div>
                 <div className="text-[10px] text-[#C9A84C] font-bold tracking-wider">
-                  {selectedListing.anonymous_id}
+                  {selectedListing.anonymous_id ?? "código a emitir"}
                   {selectedListing.apelido && <span className="text-[#F5F1E8]"> · {selectedListing.apelido}</span>}
                 </div>
                 <div className="text-lg font-bold text-[#F5F1E8]">{formatListingValue(Number(selectedListing.valor_face), selectedListing.currency)}</div>

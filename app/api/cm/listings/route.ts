@@ -103,9 +103,11 @@ export async function POST(req: NextRequest) {
     asset_type, seller_name, seller_cpf_cnpj,
     ente_devedor, uf_ente_devedor, municipio_ente_devedor, esfera, tribunal, natureza, numero_processo,
     valor_face, valor_atualizado, desagio_pretendido, prazo_estimado_meses,
-    allows_tranching, tranche_valor_minimo, conditional_blocks, metadata, ma_deal_id,
+    allows_tranching, tranche_valor_minimo, conditional_blocks, metadata,
     apelido, originator_profile_id, originator_referral_id, currency,
   } = body;
+  // ma_deal_id NÃO vem do corpo (bloco C, 30/10/2026): o vínculo com o deal da Mesa M&A só é gravado
+  // pela função ma_deal_transfer_to_desk. O gatilho do banco recusaria (42501) qualquer outro caminho.
 
   if (!asset_type || !seller_name || !valor_face) {
     return NextResponse.json({
@@ -178,7 +180,6 @@ export async function POST(req: NextRequest) {
       seller_cpf_cnpj: seller_cpf_cnpj ?? null,
       v3_client_id: v3ClientId,
       seller_profile_id: null,
-      ma_deal_id: ma_deal_id ?? null,
       ente_devedor: ente_devedor ?? null,
       uf_ente_devedor: uf_ente_devedor ?? null,
       municipio_ente_devedor: municipio_ente_devedor ?? null,

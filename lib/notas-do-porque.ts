@@ -151,6 +151,18 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Motivo da reabertura",
     texto: "Reabrir desfaz um encerramento e muda relatórios e o Cliente 360. O motivo fica na Timeline. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardado enquanto o deal existir. Sem ele, o deal continua encerrado.",
   },
+  ma_transferir_motivo: {
+    titulo: "Motivo da transferência entre mesas",
+    texto: "Registra por que o deal foi encaminhado a outra mesa, quem decidiu e quando. Fica na auditoria (visível à diretoria) e no registro da mesa de destino, onde a equipe da mesa lê. O partner não vê. Fica guardado enquanto o registro existir. Sem o motivo a transferência não é concluída.",
+  },
+  ma_transferir_justificativa: {
+    titulo: "Justificativa sem cliente vinculado",
+    texto: "O deal ainda não tem cliente vinculado ao Cliente 360, ou a qualificação dele está pendente. A justificativa libera a transferência, fica na auditoria e no registro da mesa de destino, e não dispensa o NCNDA assinado nem a trava da Análise de Crédito. Visível para ADMIN, GESTAO e a equipe da mesa de destino.",
+  },
+  ma_confirmar_classificacao: {
+    titulo: "Confirmar a classificação",
+    texto: "Emite o código do registro (BA na Bolsa, CR no Crédito) e consome um número da série. Não dá para desfazer: se a classificação estava errada, a mesa cancela o registro e o número fica aposentado. O partner originador recebe um aviso genérico de movimentação, sem valores nem nomes de investidores.",
+  },
 } as const satisfies Record<string, Nota>;
 
 export type NotaId = keyof typeof NOTAS_DO_PORQUE;
