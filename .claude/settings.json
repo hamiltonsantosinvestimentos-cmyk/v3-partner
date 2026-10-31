@@ -1,3 +1,26 @@
 {
-  "language": "portuguese"
+  "language": "portuguese",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/brief-release-gate.js\" capture"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|mcp__plugin_supabase_supabase__apply_migration|mcp__plugin_supabase_supabase__execute_sql",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/brief-release-gate.js\" gate"
+          }
+        ]
+      }
+    ]
+  }
 }
