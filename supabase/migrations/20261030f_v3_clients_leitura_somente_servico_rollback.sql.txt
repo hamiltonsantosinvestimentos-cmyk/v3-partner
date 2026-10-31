@@ -1,0 +1,9 @@
+-- Rollback de 20261030f. Devolve a leitura da base do Cliente 360 a qualquer usuário logado e o
+-- privilégio de tabela ao papel anon. Reabre a exposição de CPF/CNPJ e razão social; só usar se um
+-- consumidor legítimo com sessão de usuário for descoberto, registrar o motivo e corrigir o
+-- consumidor em seguida.
+
+create policy "v3_clients_select_authenticated" on public.v3_clients as permissive for SELECT to authenticated
+  using (true);
+
+grant all on public.v3_clients to anon;
