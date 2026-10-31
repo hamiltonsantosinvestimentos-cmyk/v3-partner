@@ -72,3 +72,4 @@ Thumbs.db
 playwright-report/
 test-results/
 tests/e2e/.auth/
+.claude/brief-release/
