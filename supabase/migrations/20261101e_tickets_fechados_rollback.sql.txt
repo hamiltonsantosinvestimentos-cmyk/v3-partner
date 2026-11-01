@@ -1,0 +1,12 @@
+-- ROLLBACK de 20261101e_tickets_fechados.sql
+-- Recria as três políticas exatamente como estavam em 01/11/2026 (conferidas em pg_policies) e devolve ao anon os
+-- privilégios que ele tinha. Reabre o acesso direto de qualquer logado aos tickets. Só em emergência, e avisar o João.
+
+create policy "tickets_select" on public.operational_tickets for select
+  using ((auth.uid() IS NOT NULL));
+create policy "tickets_insert" on public.operational_tickets for insert
+  with check ((auth.uid() IS NOT NULL));
+create policy "tickets_update" on public.operational_tickets for update
+  using (((assigned_to = auth.uid()) OR (requester_id = auth.uid()) OR (get_user_role() = ANY (ARRAY['ADMIN'::user_role, 'MESA_OPERACIONAL'::user_role, 'GESTAO'::user_role]))));
+
+grant all on public.operational_tickets, public.ticket_comments to anon;

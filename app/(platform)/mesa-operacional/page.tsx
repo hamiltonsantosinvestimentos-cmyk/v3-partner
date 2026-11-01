@@ -2,6 +2,8 @@ import { MesaOpClient } from "@/components/mesa-operacional/mesa-op-client";
 import { semAnaliseDoSite } from "@/lib/analise-site";
 import { DEMO_TICKETS, DEMO_CREDIT_PROPOSALS } from "@/lib/demo-data";
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { resolverAcessoTickets } from "@/lib/mesa-operacional/acesso";
 import { createClient as sc } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
@@ -45,16 +47,22 @@ export default async function MesaOperacionalPage() {
     .select("id, full_name, role")
     .eq("id", user?.id ?? "")
     .single();
+  // Política de sigilo (BRIEF 01/11/2026): sem usuário ou sem perfil não existe papel padrão. A leitura abaixo usa a
+  // chave de serviço (a RLS não segura mais), então a decisão de acesso é a função pura, que nega por padrão.
+  const acesso = resolverAcessoTickets(user, profile);
+  if (acesso.tipo === "negado") redirect("/login");
+
   const currentUser = {
-    id: profile?.id ?? user?.id ?? "",
+    id: acesso.id,
     full_name: profile?.full_name ?? "Usuário",
-    role: profile?.role ?? "MESA_OPERACIONAL",
+    role: String(profile?.role ?? ""),
   };
 
-  const isAdmin = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(currentUser.role);
+  const isAdmin = acesso.tipo === "equipe";
+  const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-  // Tickets: admin vê todos, partner vê os próprios
-  let ticketsQuery = supabase.from("operational_tickets").select(`
+  // Tickets: equipe vê todos; os demais veem os tickets em que são solicitante ou responsável (igual ao GET /api/tickets)
+  let ticketsQuery = svc.from("operational_tickets").select(`
     id, code, title, description, category, priority,
     status, due_date, resolution, created_at, assigned_to,
     pending_reason, pending_responsible, pending_at,
@@ -62,11 +70,10 @@ export default async function MesaOperacionalPage() {
     requester:profiles!operational_tickets_requester_id_fkey(id, full_name),
     assignee:profiles!operational_tickets_assigned_to_fkey(id, full_name)
   `).order("created_at", { ascending: false });
-  if (!isAdmin) ticketsQuery = ticketsQuery.eq("requester_id", currentUser.id);
+  if (!isAdmin) ticketsQuery = ticketsQuery.or(`requester_id.eq.${acesso.id},assigned_to.eq.${acesso.id}`);
   const { data: ticketsData } = await ticketsQuery;
 
-  // Propostas: admin vê todas, partner vê somente as suas (usa service client p/ bypassar RLS)
-  const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+  // Propostas: equipe vê todas, partner vê somente as suas (usa service client p/ bypassar RLS)
   let proposalsQuery = svc
     .from("credit_desk_proposals")
     .select("*, partner:profiles!partner_id(id, full_name)")
@@ -88,7 +95,7 @@ export default async function MesaOperacionalPage() {
 
   return (
     <MesaOpClient
-      tickets={(ticketsData ?? []) as Parameters<typeof MesaOpClient>[0]["tickets"]}
+      tickets={(ticketsData ?? []) as unknown as Parameters<typeof MesaOpClient>[0]["tickets"]}
       proposals={proposals as Parameters<typeof MesaOpClient>[0]["proposals"]}
       currentUser={currentUser}
     />
