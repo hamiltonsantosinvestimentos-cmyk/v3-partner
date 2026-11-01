@@ -115,20 +115,22 @@ export function ChatFloatWidget({ profileId, profileName, role, isAdmin }: ChatF
     } catch {}
   }, [isAdmin, activeRoomId, partnerRoomId, profileId, open]);
 
-  // ── Supabase Realtime ──────────────────────────────────────────────────────
+  // ── Supabase Realtime (só equipe) ──────────────────────────────────────────
+  // realtime-so-equipe: política de sigilo (BRIEF 01/11/2026). O partner não acessa o banco, nem para ouvir o canal:
+  // ele consulta a API a cada 8 s; só a equipe (ADMIN, GESTAO, MESA_OPERACIONAL) assina o canal do banco.
   useEffect(() => {
     if (isOnChatPage) return;
+
+    if (!isAdmin) {
+      fetchMessages();
+      const ivPartner = setInterval(() => { if (!document.hidden) fetchMessages(); }, 8000);
+      return () => clearInterval(ivPartner);
+    }
 
     let supabase: ReturnType<typeof createClient> | null = null;
     try { supabase = createClient(); } catch { return; }
 
-    const roomFilter = isAdmin
-      ? undefined  // admin ouve todas as salas
-      : `room_id=eq.${partnerRoomId}`;
-
-    const channelName = isAdmin
-      ? `float-admin-${profileId}`
-      : `float-partner-${profileId}`;
+    const channelName = `float-admin-${profileId}`;
 
     const channel = supabase
       .channel(channelName)
@@ -138,7 +140,6 @@ export function ChatFloatWidget({ profileId, profileName, role, isAdmin }: ChatF
           event: "INSERT",
           schema: "public",
           table: "chat_messages",
-          ...(roomFilter ? { filter: roomFilter } : {}),
         },
         (payload) => {
           const msg = payload.new as Msg;

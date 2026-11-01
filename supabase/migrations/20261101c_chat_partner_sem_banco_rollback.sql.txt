@@ -1,0 +1,11 @@
+-- ROLLBACK de 20261101c_chat_partner_sem_banco.sql
+-- Devolve ao partner a leitura e a escrita direta na própria sala (estado de 01/11/2026). Só em emergência.
+
+drop policy if exists "chat_messages_leitura_equipe" on public.chat_messages;
+
+create policy "chat leitura mesa ou propria sala" on public.chat_messages for select
+  using ((((get_user_role())::text = any (array['ADMIN'::text, 'GESTAO'::text, 'MESA_OPERACIONAL'::text])) or (room_id = ('partner_'::text || (auth.uid())::text))));
+create policy "chat escrita mesa ou propria sala" on public.chat_messages for insert
+  with check ((((get_user_role())::text = any (array['ADMIN'::text, 'GESTAO'::text, 'MESA_OPERACIONAL'::text])) or (room_id = ('partner_'::text || (auth.uid())::text))));
+create policy "users_own_room" on public.chat_messages for all
+  using (((room_id = ('partner_'::text || (auth.uid())::text)) or (exists (select 1 from profiles where ((profiles.id = auth.uid()) and (profiles.role = any (array['ADMIN'::user_role, 'GESTAO'::user_role, 'MESA_OPERACIONAL'::user_role])))))));

@@ -1,0 +1,15 @@
+-- ROLLBACK de 20261101b_escritas_abertas_fechadas.sql
+-- Recria as políticas exatamente como estavam em 01/11/2026 (conferidas em pg_policies). Reabre a escrita direta.
+
+create policy "alo_insert" on public.analise_link_opens for insert with check (true);
+create policy "deal_intakes_authenticated_insert" on public.deal_intakes for insert to authenticated with check (true);
+create policy "deal_intakes_authenticated_update" on public.deal_intakes for update to authenticated using (true) with check (true);
+create policy "qa_messages_anon_insert" on public.deal_qa_messages for insert to anon with check (true);
+create policy "qa_threads_anon_insert" on public.deal_qa_threads for insert to anon with check (true);
+create policy "docs_authenticated_insert" on public.docs_ingeridos for insert to authenticated with check (true);
+create policy "docs_authenticated_update" on public.docs_ingeridos for update to authenticated using (true) with check (true);
+create policy "system_insert_quarantine" on public.document_quarantine for insert with check (true);
+create policy "insert_logs" on public.folder_governance_log for insert with check (true);
+create policy "suppliers_insert" on public.marketplace_suppliers for insert with check (true);
+create policy "insert_public" on public.partner_registrations for insert with check (true);
+create policy "pso_insert" on public.partner_service_orders for insert with check (true);
