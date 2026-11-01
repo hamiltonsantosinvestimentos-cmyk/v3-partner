@@ -149,3 +149,19 @@ test("anexo do chat: só caminho no formato gravado pelo upload, da própria sal
     null,
   ]) assert.equal(salaDoCaminhoAnexo(ruim), null, String(ruim));
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Chat do partner (BRIEF 01/11/2026): o partner não acessa o banco, nem para ouvir o canal Realtime. Só a equipe
+// assina o canal de chat_messages; arquivo que assina precisa carregar a marca e não pode filtrar por sala de partner.
+test("canal Realtime de chat_messages só para a equipe", () => {
+  const ruins: string[] = [];
+  for (const f of todos) {
+    const src = fs.readFileSync(f, "utf8");
+    if (!/postgres_changes/.test(src) || !/table:\s*["']chat_messages["']/.test(src)) continue;
+    const r = rel(f);
+    if (!/realtime-so-equipe/.test(src)) ruins.push(`${r}: falta a marca realtime-so-equipe`);
+    if (/room_id=eq\./.test(src)) ruins.push(`${r}: filtro por sala de partner no canal do banco`);
+    if (!/if\s*\(\s*!?isAdmin\s*\)/.test(src)) ruins.push(`${r}: assinatura do canal não está condicionada à equipe`);
+  }
+  assert.deepEqual(ruins, [], "partner lê o chat só pela API; canal do banco só para a equipe");
+});

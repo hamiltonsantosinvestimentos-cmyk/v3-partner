@@ -1,0 +1,11 @@
+-- ROLLBACK de 20261101a_funcoes_fechadas_a_anon.sql
+-- Reabre a execução para anônimo e logado (estado de 01/11/2026). Só em emergência, e avisar o João.
+
+grant execute on function public.search_documents_rag(vector, uuid, text, integer, double precision) to public, anon, authenticated;
+grant execute on function public.cancel_and_edit_contract(uuid, text, text, uuid, text) to public, anon, authenticated;
+grant execute on function public.create_deal_folder(text, text, text, uuid) to public, anon, authenticated;
+grant execute on function public.next_v3_code(text, text, timestamptz) to public, anon, authenticated;
+grant execute on function public.increment_link_uses(uuid) to public, anon, authenticated;
+grant execute on function public.increment_link_revenue(uuid, integer) to public, anon, authenticated;
+grant execute on function public.has_compliance_dashboard_access(uuid) to public, anon, authenticated;
+grant execute on function public.user_can_access_team_room(text, uuid) to public, anon, authenticated;

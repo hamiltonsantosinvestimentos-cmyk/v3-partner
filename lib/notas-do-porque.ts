@@ -151,6 +151,10 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Lado que o partner trouxe",
     texto: "Define qual cliente o partner que originou o deal pode ver: só o do lado que ele trouxe (vendedor ou comprador), com nome e documento completos. A outra parte continua oculta até a assinatura dos contratos e do mandato (duplo cego). Cada mudança fica registrada com o seu nome, o valor anterior e o novo, por 36 meses. Se ficar vazio, o partner não vê cliente nenhum do deal.",
   },
+  chat_registro_partner: {
+    titulo: "Registro da conversa",
+    texto: "Esta conversa fica registrada pela V3 para acompanhar o seu atendimento. Só você e a Mesa da V3 veem. O histórico não pode ser alterado nem apagado por você. O prazo de guarda segue a política de dados da V3 (VALIDAR COM ROBSON). Sem enviar a mensagem, nada é registrado.",
+  },
   ma_motivo_reabertura: {
     titulo: "Motivo da reabertura",
     texto: "Reabrir desfaz um encerramento e muda relatórios e o Cliente 360. O motivo fica na Timeline. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardado enquanto o deal existir. Sem ele, o deal continua encerrado.",

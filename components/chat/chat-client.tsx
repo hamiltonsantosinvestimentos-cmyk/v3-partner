@@ -6,6 +6,7 @@ import {
   Zap, Settings2, ArrowLeft, Clock, ChevronUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Dica } from "@/components/shared/dica";
 import { createClient } from "@/lib/supabase/client";
 import {
   type Anexo, type ChatMessage, type PropostaResumo, type RespostaPronta,
@@ -161,13 +162,17 @@ export function ChatClient({ roomId, profile, isAdmin }: ChatClientProps) {
     fetch("/api/chat/respostas").then((r) => r.json()).then((j) => setRespostas(j.respostas ?? [])).catch(() => {});
   }, [isAdmin]);
 
-  // ── Tempo real + reserva por intervalo ───────────────────────────────────────
+  // ── Tempo real (só equipe) + consulta por intervalo ───────────────────────────
+  // realtime-so-equipe: política de sigilo (BRIEF 01/11/2026). O partner não acessa o banco, nem para ouvir o canal:
+  // ele atualiza pela API a cada 8 s; só a equipe (ADMIN, GESTAO, MESA_OPERACIONAL) assina o canal do banco.
   useEffect(() => {
     let sb: ReturnType<typeof createClient> | null = null;
-    try { sb = createClient(); } catch { /* sem realtime: fica a reserva */ }
+    if (isAdmin) {
+      try { sb = createClient(); } catch { /* sem realtime: fica a reserva */ }
+    }
     const canal = sb?.channel(`chat-page-${profile.id}`).on(
       "postgres_changes",
-      { event: "INSERT", schema: "public", table: "chat_messages", ...(isAdmin ? {} : { filter: `room_id=eq.${roomId}` }) },
+      { event: "INSERT", schema: "public", table: "chat_messages" },
       (payload) => {
         const m = payload.new as ChatMessage;
         if (m.room_id === activeRef.current) {
@@ -182,7 +187,7 @@ export function ChatClient({ roomId, profile, isAdmin }: ChatClientProps) {
       if (document.hidden) return;
       if (activeRef.current) carregarMensagens(activeRef.current);
       if (isAdmin) carregarSalas();
-    }, 30000);
+    }, isAdmin ? 30000 : 8000);
     const aoVoltar = () => { if (!document.hidden && activeRef.current) { carregarMensagens(activeRef.current); marcarLido(activeRef.current); } };
     document.addEventListener("visibilitychange", aoVoltar);
     return () => {
@@ -190,7 +195,15 @@ export function ChatClient({ roomId, profile, isAdmin }: ChatClientProps) {
       document.removeEventListener("visibilitychange", aoVoltar);
       if (canal && sb) sb.removeChannel(canal);
     };
-  }, [isAdmin, roomId, profile.id, carregarMensagens, carregarSalas, agendarSalas, marcarLido]);
+  }, [isAdmin, profile.id, carregarMensagens, carregarSalas, agendarSalas, marcarLido]);
+
+  // Partner: sem canal do banco, marca como lida quando a consulta por intervalo traz mensagem de outra pessoa
+  useEffect(() => {
+    if (isAdmin) return;
+    const ultima = messages[messages.length - 1];
+    if (ultima && ultima.sender_id !== profile.id && ultima.room_id === activeRef.current) marcarLido(ultima.room_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages[messages.length - 1]?.id]);
 
   // Rolagem: ao abrir a sala e quando chega mensagem (se já estava perto do fim)
   const ultimoId = messages[messages.length - 1]?.id;
@@ -548,6 +561,7 @@ export function ChatClient({ roomId, profile, isAdmin }: ChatClientProps) {
                         )}
                       </div>
                     )}
+                    {!isAdmin && <Dica id="chat_registro_partner" />}
                     <textarea value={input} onChange={(e) => setInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
