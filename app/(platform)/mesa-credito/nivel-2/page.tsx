@@ -35,8 +35,10 @@ export default async function Nivel2Page() {
 
   // Master de Enterprise vê também as propostas/leads dos usuários dele (lib/enterprise.ts);
   // RLS só libera as próprias linhas, então nesse caso a leitura vai pelo service client.
+  // Política de sigilo (31/10/2026): leitura sempre pelo servidor (chave de serviço), recorte por partner_id
+  // abaixo (idsDaEquipe sempre inclui o próprio id); o partner não lê o banco direto.
   const equipeIds = isAdmin ? [] : await idsDaEquipe(svcEnterprise(), currentUser.id);
-  const leitor = (equipeIds.length > 1 ? svcEnterprise() : supabase) as unknown as typeof supabase;
+  const leitor = svcEnterprise() as unknown as typeof supabase;
   let query = leitor.from("credit_desk_proposals").select("*").eq("current_level", "NIVEL_2").order("created_at", { ascending: false });
   if (!isAdmin) query = query.in("partner_id", equipeIds);
 

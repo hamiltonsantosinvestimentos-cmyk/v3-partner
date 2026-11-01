@@ -16,7 +16,7 @@ async function requireRole(req: NextRequest) {
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
   if (!profile || !ALLOWED.includes(profile.role as string)) return null;
-  return { userId: user.id };
+  return { userId: user.id, role: profile.role as string };
 }
 
 // PATCH — a Mesa define/corrige o papel (comprador/vendedor/intermediario).
@@ -35,7 +35,26 @@ export async function PATCH(req: NextRequest, ctx: RouteContext) {
     return NextResponse.json({ error: "Papel inválido: use comprador, vendedor ou intermediario" }, { status: 422 });
   }
 
-  const { data, error } = await svc()
+  // Política de sigilo (31/10/2026): o papel do vínculo decide qual identidade o partner originador pode ver.
+  // A mudança é decisão de liberação de sigilo: audit_logs gravado ANTES (valor anterior e novo); se falhar, não grava.
+  const db = svc();
+  const { data: atual } = await db.from("ma_deal_clients").select("role").eq("id", id).eq("deal_id", dealId).maybeSingle();
+  if (!atual) return NextResponse.json({ error: "Vínculo não encontrado" }, { status: 404 });
+  const { error: logErr } = await db.from("audit_logs").insert({
+    user_id: caller.userId,
+    action: "ma_deal_client_role_alterado",
+    entity: "ma_deal_clients",
+    entity_id: id,
+    old_data: { role: (atual as { role: string | null }).role },
+    new_data: { role: role ?? null, deal_id: dealId, perfil: caller.role },
+    ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? null,
+  });
+  if (logErr) {
+    console.error("[ma/deals/clientes PATCH] falha ao gravar auditoria do papel", { code: logErr.code });
+    return NextResponse.json({ error: "Não foi possível registrar a alteração, tente novamente" }, { status: 500 });
+  }
+
+  const { data, error } = await db
     .from("ma_deal_clients")
     .update({ role: role ?? null, updated_at: new Date().toISOString() })
     .eq("id", id)

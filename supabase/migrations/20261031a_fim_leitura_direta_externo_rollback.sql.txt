@@ -1,0 +1,91 @@
+-- ROLLBACK de 20261031a_fim_leitura_direta_externo.sql
+-- Recria as políticas exatamente como estavam em 31/10/2026 (conferidas em pg_policies antes da migration).
+-- ATENÇÃO: reabre a leitura e a escrita direta de usuário comum. Só usar se o código novo causar regressão
+-- grave e depois de avisar o João. A coluna lado_originador só é removida se estiver vazia.
+
+-- 2) ma_documents
+drop policy if exists ma_documents_select on public.ma_documents;
+drop policy if exists ma_documents_insert on public.ma_documents;
+drop policy if exists ma_documents_update on public.ma_documents;
+create policy ma_documents_select on public.ma_documents for select to authenticated using (auth.uid() is not null);
+create policy ma_documents_insert on public.ma_documents for insert to authenticated with check (auth.uid() is not null);
+create policy ma_documents_update on public.ma_documents for update to authenticated
+  using (exists (select 1 from public.ma_deals d where d.id = ma_documents.deal_id
+    and (d.assigned_to = auth.uid() or get_user_role() = any (array['ADMIN'::user_role, 'GESTAO'::user_role]))));
+
+-- 3) ma_deals
+drop policy if exists ma_select on public.ma_deals;
+drop policy if exists ma_insert on public.ma_deals;
+drop policy if exists ma_update on public.ma_deals;
+create policy ma_select on public.ma_deals for select
+  using ((assigned_to = auth.uid()) or (created_by = auth.uid()) or (originator_profile_id = auth.uid())
+    or (get_user_role() = any (array['ADMIN'::user_role, 'GESTAO'::user_role, 'MESA_OPERACIONAL'::user_role, 'FINANCEIRO'::user_role])));
+create policy ma_insert on public.ma_deals for insert with check (auth.uid() is not null);
+create policy ma_update on public.ma_deals for update
+  using ((assigned_to = auth.uid()) or (get_user_role() = any (array['ADMIN'::user_role, 'GESTAO'::user_role])));
+
+-- 4) Bolsa de Ativos
+create policy cm_listings_insert on public.cm_asset_listings for insert to authenticated with check (auth.uid() is not null);
+create policy cm_listings_select on public.cm_asset_listings for select to authenticated
+  using ((listing_status = any (array['ativo_vitrine'::cm_listing_status, 'proposta_recebida'::cm_listing_status, 'em_escrow_due_diligence'::cm_listing_status, 'liquidado'::cm_listing_status]))
+    or (created_by = auth.uid()) or (get_user_role() = any (array['ADMIN'::user_role, 'GESTAO'::user_role])));
+create policy cm_listings_update on public.cm_asset_listings for update to authenticated
+  using ((created_by = auth.uid()) or (get_user_role() = any (array['ADMIN'::user_role, 'GESTAO'::user_role])));
+create policy cm_bids_insert on public.cm_bids for insert to authenticated with check (auth.uid() is not null);
+create policy cm_bids_select on public.cm_bids for select to authenticated
+  using ((created_by = auth.uid())
+    or (listing_id in (select cm_asset_listings.id from public.cm_asset_listings where cm_asset_listings.created_by = auth.uid()))
+    or (get_user_role() = any (array['ADMIN'::user_role, 'GESTAO'::user_role])));
+create policy cm_docs_insert on public.cm_listing_documents for insert to authenticated with check (auth.uid() is not null);
+create policy cm_docs_select on public.cm_listing_documents for select to authenticated
+  using (listing_id in (select cm_asset_listings.id from public.cm_asset_listings
+    where (cm_asset_listings.created_by = auth.uid()) or (get_user_role() = any (array['ADMIN'::user_role, 'GESTAO'::user_role]))));
+create policy cm_dra_insert on public.cm_deal_room_access for insert to public with check (auth.uid() is not null);
+
+-- 5) Mesa de Crédito
+drop policy if exists credit_select_partner on public.credit_desk_proposals;
+drop policy if exists credit_insert on public.credit_desk_proposals;
+create policy credit_select_partner on public.credit_desk_proposals for select to public
+  using ((partner_id = auth.uid()) or (get_user_role() = any (array['ADMIN'::user_role, 'GESTAO'::user_role, 'MESA_OPERACIONAL'::user_role])));
+create policy credit_insert on public.credit_desk_proposals for insert to public with check (auth.uid() is not null);
+
+-- 6) M&A
+create policy partner_read_own_doc_requests on public.ma_document_requests for select to public
+  using ((get_user_role() = any (array['PARTNER'::user_role, 'PARTNER_PRO'::user_role]))
+    and (deal_id in (select ma_deals.id from public.ma_deals where ma_deals.created_by = auth.uid())));
+create policy partner_own_ma_links on public.ma_captacao_links for all to public
+  using (partner_id = auth.uid()) with check (partner_id = auth.uid());
+
+-- 7) Consórcio
+drop policy if exists "autenticados podem ler projetos" on public.consorcio_projetos;
+create policy "autenticados podem ler projetos" on public.consorcio_projetos for select to public using (auth.uid() is not null);
+
+-- 8) Criativos
+drop policy if exists creative_jobs_insert on public.creative_jobs;
+drop policy if exists creative_jobs_select on public.creative_jobs;
+drop policy if exists creative_jobs_update on public.creative_jobs;
+drop policy if exists creative_files_insert on public.creative_files;
+drop policy if exists creative_files_select on public.creative_files;
+create policy creative_jobs_insert on public.creative_jobs for insert to public with check (auth.uid() is not null);
+create policy creative_jobs_select on public.creative_jobs for select to authenticated using (true);
+create policy creative_jobs_update on public.creative_jobs for update to public using (auth.uid() is not null);
+create policy creative_files_insert on public.creative_files for insert to public with check (auth.uid() is not null);
+create policy creative_files_select on public.creative_files for select to public using (auth.uid() is not null);
+
+-- 9) Funções: devolve a execução (o search_path fixado fica, é mais seguro)
+do $$
+declare f record;
+begin
+  for f in
+    select p.proname, pg_get_function_identity_arguments(p.oid) as args
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname in ('match_deals_for_investor', 'match_investors_for_deal')
+  loop
+    execute format('grant execute on function public.%I(%s) to public, anon, authenticated', f.proname, f.args);
+  end loop;
+end $$;
+
+-- 1) Coluna: remover só se estiver vazia (ver a contagem antes)
+-- select count(*) from public.ma_deals where lado_originador is not null;
+-- alter table public.ma_deals drop constraint if exists chk_ma_deals_lado_originador;
+-- alter table public.ma_deals drop column if exists lado_originador;

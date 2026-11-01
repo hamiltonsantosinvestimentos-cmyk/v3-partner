@@ -41,7 +41,8 @@ export async function GET() {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
-  if (!isAdmin) maQuery.eq("created_by", user.id);
+  // Critério único de originador (política de sigilo, 31/10/2026): originator_profile_id ou created_by.
+  if (!isAdmin) maQuery.or(`originator_profile_id.eq.${user.id},created_by.eq.${user.id}`);
 
   const [{ data: propostas, error: creditErr }, { data: deals, error: maErr }] = await Promise.all([creditQuery, maQuery]);
 

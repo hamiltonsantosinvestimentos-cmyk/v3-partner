@@ -40,14 +40,19 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
   if (IS_DEMO) {
     deal = DEMO_DEALS.find((d) => d.id === id) ?? null;
   } else {
+    // Política de sigilo (31/10/2026): o deal nunca é lido com a sessão do usuário. Equipe interna recebe o
+    // deal inteiro; o partner só o que originou, pelas colunas aprovadas, com a leitura registrada antes.
     const { createClient } = await import("@/lib/supabase/server");
+    const { lerDealParaSolicitante } = await import("@/lib/ma/deal-para-originador");
     const supabase = await createClient();
-    const { data } = await supabase.from("ma_deals").select("*").eq("id", id).single();
-    deal = data;
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).single();
-      userName = (profile as { full_name?: string } | null)?.full_name ?? "M&A";
+      const { data: profile } = await supabase.from("profiles").select("full_name, role").eq("id", user.id).single();
+      const perfil = profile as { full_name?: string; role?: string } | null;
+      userName = perfil?.full_name ?? "M&A";
+      const r = await lerDealParaSolicitante(id, { id: user.id, role: perfil?.role ?? "", nome: perfil?.full_name ?? null });
+      // O recorte do partner não traz notas, comentários nem probabilidade: valores neutros para a tela.
+      deal = r.ok ? { notes: null, comments: [], probability_percent: null, ...r.deal } : null;
     }
   }
 

@@ -2,7 +2,6 @@
 import { aviso } from "@/lib/aviso";
 
 import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { DEMO_CREATIVE_JOBS, DEMO_CREATIVE_FILES } from "@/lib/demo-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -99,17 +98,12 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
       return;
     }
     try {
-      const supabase = createClient();
-
-      const [jobsRes, filesRes] = await Promise.all([
-        supabase.from("creative_jobs").select("*").eq("deal_id", dealId)
-          .order("created_at", { ascending: false }).limit(1),
-        supabase.from("creative_files").select("*").eq("deal_id", dealId)
-          .order("created_at", { ascending: false }),
-      ]);
-
-      setLatestJob((jobsRes.data?.[0] ?? null) as unknown as CreativeJob | null);
-      setFiles((filesRes.data ?? []) as unknown as CreativeFile[]);
+      // Política de sigilo (31/10/2026): a leitura passa pela rota do servidor, nunca direto no banco.
+      const res = await fetch(`/api/ma/criativos?dealId=${encodeURIComponent(dealId)}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const dados = (await res.json()) as { job: CreativeJob | null; files: CreativeFile[] };
+      setLatestJob(dados.job ?? null);
+      setFiles(dados.files ?? []);
     } catch (e) {
       console.error("CriativosPanel loadData error:", e);
     } finally {
@@ -154,8 +148,12 @@ export function CriativosPanel({ dealId, dealName, isDemo = false, isAdmin = fal
     if (!latestJob) return;
     setResetting(true);
     try {
-      const supabase = createClient();
-      await supabase.from("creative_jobs").update({ status: "ERROR", error_message: "Cancelado manualmente" }).eq("id", latestJob.id);
+      const res = await fetch("/api/ma/criativos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dealId, jobId: latestJob.id, acao: "cancelar" }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await loadData();
     } catch (e) {
       console.error("handleReset error:", e);

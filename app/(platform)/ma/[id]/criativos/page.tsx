@@ -19,22 +19,26 @@ export default async function CriativosPage({ params }: { params: Promise<{ id: 
   if (IS_DEMO) {
     deal = DEMO_DEALS.find((d) => d.id === id) ?? null;
   } else {
+    // Política de sigilo (31/10/2026): o deal vem do carregador do servidor, nunca da sessão do usuário.
     const { createClient } = await import("@/lib/supabase/server");
+    const { lerDealParaSolicitante } = await import("@/lib/ma/deal-para-originador");
     const supabase = await createClient();
-    const [dealRes, userRes] = await Promise.all([
-      supabase.from("ma_deals").select("id, code, title, target_company, sector, location, slug, asset_data").eq("id", id).single(),
-      supabase.auth.getUser(),
-    ]);
-    deal = dealRes.data;
+    const { data: { user } } = await supabase.auth.getUser();
 
-    if (userRes.data.user) {
+    if (user) {
       // Usa o cliente do próprio usuário para ler seu perfil (RLS: id = auth.uid())
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
-        .eq("id", userRes.data.user.id)
+        .select("role, full_name")
+        .eq("id", user.id)
         .single();
-      isAdmin = ADMIN_ROLES.includes(profile?.role ?? "");
+      const perfil = profile as { role?: string; full_name?: string } | null;
+      isAdmin = ADMIN_ROLES.includes(perfil?.role ?? "");
+      const r = await lerDealParaSolicitante(id, { id: user.id, role: perfil?.role ?? "", nome: perfil?.full_name ?? null });
+      if (r.ok) {
+        const d = r.deal as Record<string, unknown>;
+        deal = { id: d.id, code: d.code, title: d.title, target_company: d.target_company, sector: d.sector, location: d.location, slug: d.slug, asset_data: d.asset_data };
+      }
     }
   }
 

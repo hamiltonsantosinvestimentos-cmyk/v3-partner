@@ -147,6 +147,10 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Justificativa de salto de fase",
     texto: "Pular etapa tira o deal da sequência padrão da esteira. A justificativa fica na Timeline para auditoria da Mesa. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardada enquanto o deal existir. Sem ela, só é possível avançar uma fase por vez.",
   },
+  ma_lado_originador: {
+    titulo: "Lado que o partner trouxe",
+    texto: "Define qual cliente o partner que originou o deal pode ver: só o do lado que ele trouxe (vendedor ou comprador), com nome e documento completos. A outra parte continua oculta até a assinatura dos contratos e do mandato (duplo cego). Cada mudança fica registrada com o seu nome, o valor anterior e o novo, por 36 meses. Se ficar vazio, o partner não vê cliente nenhum do deal.",
+  },
   ma_motivo_reabertura: {
     titulo: "Motivo da reabertura",
     texto: "Reabrir desfaz um encerramento e muda relatórios e o Cliente 360. O motivo fica na Timeline. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardado enquanto o deal existir. Sem ele, o deal continua encerrado.",
