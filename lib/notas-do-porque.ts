@@ -153,7 +153,7 @@ export const NOTAS_DO_PORQUE = {
   },
   chat_registro_partner: {
     titulo: "Registro da conversa",
-    texto: "Esta conversa fica registrada pela V3 para acompanhar o seu atendimento. Só você e a Mesa da V3 veem. O histórico não pode ser alterado nem apagado por você. O prazo de guarda segue a política de dados da V3 (VALIDAR COM ROBSON). Sem enviar a mensagem, nada é registrado.",
+    texto: "Esta conversa fica registrada pela V3 para acompanhar o seu atendimento. Só você e a Mesa da V3 veem. O histórico não pode ser alterado nem apagado por você. O histórico fica guardado por 36 meses. Sem enviar a mensagem, nada é registrado.",
   },
   ma_motivo_reabertura: {
     titulo: "Motivo da reabertura",
