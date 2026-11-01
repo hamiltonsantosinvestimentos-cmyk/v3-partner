@@ -116,3 +116,36 @@ test("receptor de sessão (variável ou chamada inline) só chama storage com up
   }
   assert.deepEqual(ruins, [], "o navegador só pode enviar por link assinado; leitura, listagem e remoção passam pelo servidor");
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Anexo do chat de equipe (BRIEF 01/11/2026): bucket privado, caminho no banco, leitura só pela rota.
+// getPublicUrl segue em uso nos buckets públicos white-label, marketplace, avatars e sdr-media (fora deste escopo,
+// conferência de conteúdo já registrada no BRIEF de Storage); aqui só o bucket do chat é proibido.
+test("nenhum arquivo gera endereço público do bucket do chat de equipe", () => {
+  const ruins: string[] = [];
+  for (const f of todos) {
+    const r = rel(f);
+    if (r === "lib/team-chat-anexo.ts") continue;
+    const src = fs.readFileSync(f, "utf8");
+    if (!/getPublicUrl/.test(src)) continue;
+    if (/team-chat-attachments|BUCKET_ANEXO_CHAT/.test(src)) ruins.push(r);
+  }
+  assert.deepEqual(ruins, [], "o bucket do chat é privado: leitura só por /api/team-chat/anexo com link assinado");
+});
+
+test("anexo do chat: só caminho no formato gravado pelo upload, da própria sala", async () => {
+  const { salaDoCaminhoAnexo } = await import("../../lib/team-chat-anexo");
+  const uuid = "123e4567-e89b-12d3-a456-426614174000";
+  assert.equal(salaDoCaminhoAnexo(`mesa_ma/${uuid}.pdf`), "mesa_ma");
+  assert.equal(salaDoCaminhoAnexo(`socios/${uuid}.png`), "socios");
+  for (const ruim of [
+    `https://x.supabase.co/storage/v1/object/public/team-chat-attachments/mesa_ma/${uuid}.pdf`,
+    `mesa_ma/../socios/${uuid}.pdf`,
+    `mesa_ma/${uuid}.exe`,
+    `MESA/${uuid}.pdf`,
+    `mesa_ma/outra/${uuid}.pdf`,
+    `mesa_ma/arquivo.pdf`,
+    "",
+    null,
+  ]) assert.equal(salaDoCaminhoAnexo(ruim), null, String(ruim));
+});

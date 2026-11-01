@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { BUCKET_ANEXO_CHAT } from "@/lib/team-chat-anexo";
 
 function svc() {
   return sc(
@@ -24,13 +25,16 @@ const ALLOWED_TYPES: Record<string, string> = {
   "text/plain": "txt",
 };
 
-// Política de sigilo (31/10/2026): o bucket team-chat-attachments era público e esta rota devolvia o endereço
-// público do arquivo, então o primeiro anexo de conversa interna ficaria aberto na internet. Upload bloqueado
-// até a solução definitiva (bucket privado e link assinado a cada leitura, Roadmap, prazo 20/11/2026).
-const ANEXOS_HABILITADOS = false;
+// Política de sigilo (BRIEF 01/11/2026): o upload só funciona com o bucket privado. Enquanto o bucket for público
+// (ou a consulta falhar), a rota recusa com 503, então o anexo nunca nasce aberto na internet. A rota devolve só o
+// caminho do arquivo; a leitura passa por /api/team-chat/anexo (sessão, sala, log e link assinado de 60 s).
+async function bucketPrivado(): Promise<boolean> {
+  const { data, error } = await svc().storage.getBucket(BUCKET_ANEXO_CHAT);
+  return !error && data?.public === false;
+}
 
 export async function POST(req: NextRequest) {
-  if (!ANEXOS_HABILITADOS) {
+  if (!(await bucketPrivado())) {
     return NextResponse.json(
       { error: "Anexos do chat de equipe estão indisponíveis até a revisão de segurança" },
       { status: 503, headers: { "Cache-Control": "no-store" } },
@@ -87,7 +91,7 @@ export async function POST(req: NextRequest) {
 
   const { error: uploadError } = await svc()
     .storage
-    .from("team-chat-attachments")
+    .from(BUCKET_ANEXO_CHAT)
     .upload(storagePath, buffer, {
       contentType: file.type,
       upsert: false,
@@ -97,14 +101,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: uploadError.message }, { status: 500 });
   }
 
-  const { data: publicUrlData } = svc()
-    .storage
-    .from("team-chat-attachments")
-    .getPublicUrl(storagePath);
-
   return NextResponse.json({
-    url: publicUrlData.publicUrl,
-    name: file.name,
+    path: storagePath,
+    name: file.name.slice(0, 200),
     type: file.type,
   });
 }

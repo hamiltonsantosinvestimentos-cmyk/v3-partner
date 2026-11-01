@@ -171,7 +171,7 @@ function RoomIcon({ icon, active }: { icon: string; active?: boolean }) {
 // ─── Attachment Preview (in message) ─────────────────────────────────────────
 
 function AttachmentDisplay({
-  url,
+  url: path,
   name,
   type,
 }: {
@@ -179,6 +179,8 @@ function AttachmentDisplay({
   name: string | null;
   type: string | null;
 }) {
+  // url guarda o caminho no bucket privado; o arquivo só abre pela rota (sessão, sala, log, link de 60 s)
+  const url = `/api/team-chat/anexo?path=${encodeURIComponent(path)}`;
   if (isImageType(type)) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" className="block mt-1.5">
@@ -373,11 +375,11 @@ export function TeamChatClient({ profile, initialRooms }: TeamChatClientProps) {
         }
 
         const uploadData = (await uploadRes.json()) as {
-          url: string;
+          path: string;
           name: string;
           type: string;
         };
-        attachmentUrl = uploadData.url;
+        attachmentUrl = uploadData.path;
         attachmentName = uploadData.name;
         attachmentType = uploadData.type;
       }
@@ -746,7 +748,7 @@ export function TeamChatClient({ profile, initialRooms }: TeamChatClientProps) {
                       ? "bg-[#C9A84C]/15 cursor-wait"
                       : "bg-[#162744] hover:bg-[#243A66]/60 text-[#7A8FA8] hover:text-[#F0ECE4]"
                   )}
-                  title="Anexar arquivo"
+                  title="Anexar arquivo. Visível só para quem está nesta sala; a abertura é registrada."
                 >
                   {uploadingFile ? (
                     <div className="w-4 h-4 border-2 border-[#C9A84C]/30 border-t-[#C9A84C] rounded-full animate-spin" />
