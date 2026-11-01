@@ -155,6 +155,10 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Registro da conversa",
     texto: "Esta conversa fica registrada pela V3 para acompanhar o seu atendimento. Só você e a Mesa da V3 veem. O histórico não pode ser alterado nem apagado por você. O histórico fica guardado por 36 meses. Sem enviar a mensagem, nada é registrado.",
   },
+  ma_motivo_exclusao: {
+    titulo: "Motivo da exclusão",
+    texto: "O motivo registra por que a operação saiu do quadro e evita exclusão sem rastro. Ele vai por e-mail à governança da V3 (os três sócios) e fica guardado junto com o registro da exclusão, por no mínimo 30 dias. Só o ADMIN vê a Lixeira, onde a operação fica por 30 dias antes de ser apagada. Sem o motivo, a exclusão não prossegue. Não escreva dado pessoal de cliente no motivo.",
+  },
   ma_motivo_reabertura: {
     titulo: "Motivo da reabertura",
     texto: "Reabrir desfaz um encerramento e muda relatórios e o Cliente 360. O motivo fica na Timeline. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardado enquanto o deal existir. Sem ele, o deal continua encerrado.",

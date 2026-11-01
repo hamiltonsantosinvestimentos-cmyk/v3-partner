@@ -1,5 +1,5 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, pedirMotivo } from "@/lib/aviso";
 
 import { useState, useEffect, useRef } from "react";
 import {
@@ -548,7 +548,6 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
   // Excluir deal
   const [deletingCard, setDeletingCard] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Lixeira (ADMIN)
   const [showLixeira, setShowLixeira] = useState(false);
@@ -900,15 +899,19 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   };
 
   const handleDeleteCard = async (card: MaCard) => {
-    const reason = window.prompt(
-      userRole === "ADMIN"
-        ? "Motivo da exclusão (obrigatório):"
-        : "Motivo da solicitação de exclusão (obrigatório, será enviado por email à governança):"
-    );
-    if (!reason || reason.trim().length < 5) {
-      if (reason !== null) aviso("Motivo obrigatório: mínimo 5 caracteres");
-      return;
-    }
+    // BRIEF Mesa M&A G1 (01/11/2026): modal V3 de motivo obrigatório no lugar do window.prompt. O modal é a confirmação
+    // única (sem o passo intermediário de antes); o botão de ação só habilita com o motivo válido (5 a 500 caracteres).
+    const ehAdmin = userRole === "ADMIN";
+    const reason = await pedirMotivo({
+      titulo: ehAdmin ? "Excluir esta operação" : "Solicitar exclusão desta operação",
+      mensagem: ehAdmin
+        ? `${card.code} · ${card.company}\n\nA operação vai para a Lixeira e pode ser restaurada por 30 dias.`
+        : `${card.code} · ${card.company}\n\nSerá enviada uma solicitação à governança por e-mail; o deal continua ativo até a decisão do ADMIN.`,
+      botao: ehAdmin ? "Excluir" : "Solicitar exclusão",
+      perigo: true,
+      nota: "ma_motivo_exclusao",
+    });
+    if (!reason) return;
     setDeletingCard(true);
     try {
       const res = await fetch(`/api/ma-deals/${card.id}/delete`, {
@@ -925,7 +928,6 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         } else {
           aviso("Solicitação enviada por email à governança. O deal continua ativo até a decisão do ADMIN.");
         }
-        setConfirmDelete(false);
       } else {
         aviso(json.error ?? "Erro ao processar exclusão");
       }
@@ -1444,7 +1446,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
       </div>
 
       {/* ── CARD DETAIL MODAL ──────────────────────────────────── */}
-      <Dialog open={!!selectedCard} onOpenChange={open => { if (!open) { setSelectedCard(null); setConfirmDelete(false); setEditingCard(false); } }}>
+      <Dialog open={!!selectedCard} onOpenChange={open => { if (!open) { setSelectedCard(null); setEditingCard(false); } }}>
         <DialogContent
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
@@ -2807,37 +2809,15 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
                 {/* Excluir deal */}
                 <div className="pt-1 border-t border-[#122036]">
-                  {!confirmDelete ? (
-                    <button
-                      onClick={() => setConfirmDelete(true)}
-                      className="w-full text-xs text-[#7A8FA8] hover:text-red-400 transition-colors py-1.5 flex items-center justify-center gap-1.5"
-                    >
-                      <Trash2 size={12} /> Excluir esta operação
-                    </button>
-                  ) : (
-                    <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3 space-y-2">
-                      <p className="text-xs text-red-400 text-center font-medium">
-                        {userRole === "ADMIN" ? "Confirmar exclusão? Fica na Lixeira por 30 dias." : "Confirmar solicitação de exclusão à governança?"}
-                      </p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setConfirmDelete(false)}
-                          className="flex-1 rounded-lg border border-[#122036] text-[#7A8FA8] text-xs py-2 hover:text-[#E8EDF5] transition-colors"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCard(selectedCard)}
-                          disabled={deletingCard}
-                          className="flex-1 rounded-lg bg-red-500/20 border border-red-500/40 text-red-400 text-xs py-2 hover:bg-red-500/30 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
-                        >
-                          {deletingCard
-                            ? <div className="w-3 h-3 border-2 border-red-400/40 border-t-red-400 rounded-full animate-spin" />
-                            : <><Trash2 size={12} /> Excluir</>}
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  <button
+                    onClick={() => handleDeleteCard(selectedCard)}
+                    disabled={deletingCard}
+                    className="w-full text-xs text-[#7A8FA8] hover:text-red-400 transition-colors py-1.5 flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    {deletingCard
+                      ? <div className="w-3 h-3 border-2 border-red-400/40 border-t-red-400 rounded-full animate-spin" />
+                      : <><Trash2 size={12} /> Excluir esta operação</>}
+                  </button>
                 </div>
               </div>
             );
