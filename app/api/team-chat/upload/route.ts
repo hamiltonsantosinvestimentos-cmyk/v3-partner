@@ -24,7 +24,18 @@ const ALLOWED_TYPES: Record<string, string> = {
   "text/plain": "txt",
 };
 
+// Política de sigilo (31/10/2026): o bucket team-chat-attachments era público e esta rota devolvia o endereço
+// público do arquivo, então o primeiro anexo de conversa interna ficaria aberto na internet. Upload bloqueado
+// até a solução definitiva (bucket privado e link assinado a cada leitura, Roadmap, prazo 20/11/2026).
+const ANEXOS_HABILITADOS = false;
+
 export async function POST(req: NextRequest) {
+  if (!ANEXOS_HABILITADOS) {
+    return NextResponse.json(
+      { error: "Anexos do chat de equipe estão indisponíveis até a revisão de segurança" },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const supabase = await createClient();
   const {
     data: { user },
