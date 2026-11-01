@@ -29,13 +29,18 @@ export default async function MAPage() {
     const adminRoles = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
     const isAdmin = adminRoles.includes(userRole);
 
+    // Política de sigilo (31/10/2026): o partner recebe só as colunas comerciais mínimas dos deals que
+    // originou (originator_profile_id ou created_by). Notas, comentários, probabilidade e o responsável da
+    // equipe ficam de fora; assigned_to sem originação não dá acesso. A equipe interna segue com a tela completa.
+    const colunasInternas = "id, code, title, target_company, sector, deal_value, ebitda_multiple, stage, probability_percent, created_at, notes, comments, asset_data, assigned_to, created_by, partner:profiles!assigned_to(id, full_name)";
+    const colunasPartner = "id, code, title, target_company, sector, deal_value, ebitda_multiple, stage, created_at";
     let query = svc
       .from("ma_deals")
-      .select("id, code, title, target_company, sector, deal_value, ebitda_multiple, stage, probability_percent, created_at, notes, comments, asset_data, assigned_to, created_by, partner:profiles!assigned_to(id, full_name)")
+      .select(isAdmin ? colunasInternas : colunasPartner)
       .order("created_at", { ascending: false });
 
     if (!isAdmin) {
-      query = query.or(`assigned_to.eq.${user.id},created_by.eq.${user.id}`);
+      query = query.is("deleted_at", null).or(`originator_profile_id.eq.${user.id},created_by.eq.${user.id}`);
     }
 
     const { data: dealsData, error } = await query;

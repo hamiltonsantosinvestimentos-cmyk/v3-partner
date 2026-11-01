@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 
 // Authenticated endpoint: Mesa generates a token-based intake link for a deal.
 // POST /api/ma/bp-intake/generate
@@ -42,8 +43,12 @@ export async function POST(req: NextRequest) {
   const { deal_id, expires_days = DEFAULT_EXPIRES_DAYS } = body;
   if (!deal_id) return NextResponse.json({ error: "deal_id required" }, { status: 422 });
 
+  // Política de sigilo (31/10/2026): o papel interno já foi validado acima; a leitura e a gravação do deal
+  // vão pela chave de serviço (a sessão do usuário não lê nem grava ma_deals direto).
+  const servico = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
   // Verify deal exists and get current asset_data
-  const { data: deal, error: dealErr } = await supabase
+  const { data: deal, error: dealErr } = await servico
     .from("ma_deals")
     .select("id, asset_data")
     .eq("id", deal_id)
@@ -76,7 +81,7 @@ export async function POST(req: NextRequest) {
     bp_observer_token: observerToken,
   };
 
-  const { error: updateErr } = await supabase
+  const { error: updateErr } = await servico
     .from("ma_deals")
     .update({ asset_data: updatedAssetData })
     .eq("id", deal_id);

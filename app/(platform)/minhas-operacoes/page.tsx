@@ -33,7 +33,9 @@ export default async function MinhasOperacoesPage() {
     svc
       .from("ma_deals")
       .select("id, code, title, stage, deal_value, sector, created_at, updated_at")
-      .eq("created_by", user.id)
+      // Critério único de originador (política de sigilo, 31/10/2026): assigned_to não dá acesso.
+      .or(`originator_profile_id.eq.${user.id},created_by.eq.${user.id}`)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false }),
     svc
       .from("consorcio_leads")

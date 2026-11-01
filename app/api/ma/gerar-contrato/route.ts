@@ -369,17 +369,24 @@ export async function GET(request: NextRequest) {
   } else {
     // Produção: busca no Supabase
     try {
+      // Política de sigilo (31/10/2026): o deal vem do carregador do servidor, nunca da sessão do usuário.
+      // Sem sessão (antes: a RLS devolvia vazio) continua 404; equipe recebe o deal inteiro e o partner
+      // só o que originou, pelas colunas aprovadas, com a leitura registrada.
       const { createClient } = await import("@/lib/supabase/server");
+      const { lerDealParaSolicitante } = await import("@/lib/ma/deal-para-originador");
       const supabase = await createClient();
-      const { data, error } = await supabase
-        .from("ma_deals")
-        .select("*")
-        .eq("id", dealId)
-        .single();
-      if (error || !data) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
         return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
       }
-      deal = data as unknown as (typeof DEMO_DEALS)[0];
+      const { data: perfil } = await supabase.from("profiles").select("role, full_name").eq("id", user.id).single();
+      const p = perfil as { role?: string; full_name?: string } | null;
+      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip") ?? null;
+      const r = await lerDealParaSolicitante(dealId, { id: user.id, role: p?.role ?? "", nome: p?.full_name ?? null, ip });
+      if (!r.ok) {
+        return NextResponse.json({ error: "Deal não encontrado" }, { status: r.status === 500 ? 500 : 404 });
+      }
+      deal = r.deal as unknown as (typeof DEMO_DEALS)[0];
     } catch {
       return NextResponse.json({ error: "Erro ao buscar deal" }, { status: 500 });
     }

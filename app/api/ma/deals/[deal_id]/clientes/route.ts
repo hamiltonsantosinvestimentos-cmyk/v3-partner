@@ -17,7 +17,7 @@ async function requireRole(req: NextRequest) {
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
   if (!profile || !ALLOWED.includes(profile.role as string)) return null;
-  return { userId: user.id };
+  return { userId: user.id, role: profile.role as string };
 }
 
 // GET — clientes vinculados a este deal (Client 360, Fase B), com dados do
@@ -34,7 +34,8 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     .order("created_at", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ clientes: data ?? [] });
+  const { data: dealRow } = await svc().from("ma_deals").select("lado_originador").eq("id", dealId).maybeSingle();
+  return NextResponse.json({ clientes: data ?? [], lado_originador: (dealRow as { lado_originador: string | null } | null)?.lado_originador ?? null });
 }
 
 // POST — vincula um cliente (por CPF/CNPJ) a este deal. Nasce como
@@ -73,4 +74,43 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   }
 
   return NextResponse.json({ ok: true, cliente: data }, { status: 201 });
+}
+
+// PATCH — a Mesa define o lado do negócio que o partner originador trouxe (vendedor ou comprador), ou limpa (null).
+// Política de sigilo (31/10/2026): é a decisão que libera ao partner a identidade do cliente daquele lado, por
+// isso só a Mesa grava (papel interno validado acima), a coluna ma_deals.lado_originador nunca é aceita de rota
+// de partner, e audit_logs é gravado ANTES (valor anterior e novo); se o log falhar, a gravação não ocorre.
+export async function PATCH(req: NextRequest, ctx: RouteContext) {
+  const caller = await requireRole(req);
+  if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const { deal_id: dealId } = await ctx.params;
+
+  let body: { lado_originador?: string | null };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Corpo inválido" }, { status: 400 }); }
+  const lado = body.lado_originador ?? null;
+  if (lado !== null && lado !== "vendedor" && lado !== "comprador") {
+    return NextResponse.json({ error: "Lado inválido: use vendedor, comprador ou null" }, { status: 422 });
+  }
+
+  const db = svc();
+  const { data: deal } = await db.from("ma_deals").select("id, lado_originador").eq("id", dealId).is("deleted_at", null).maybeSingle();
+  if (!deal) return NextResponse.json({ error: "Deal não encontrado" }, { status: 404 });
+
+  const { error: logErr } = await db.from("audit_logs").insert({
+    user_id: caller.userId,
+    action: "ma_deal_lado_originador_alterado",
+    entity: "ma_deals",
+    entity_id: dealId,
+    old_data: { lado_originador: (deal as { lado_originador: string | null }).lado_originador },
+    new_data: { lado_originador: lado, perfil: caller.role },
+    ip_address: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? null,
+  });
+  if (logErr) {
+    console.error("[ma/deals/clientes PATCH lado] falha ao gravar auditoria", { code: logErr.code });
+    return NextResponse.json({ error: "Não foi possível registrar a alteração, tente novamente" }, { status: 500 });
+  }
+
+  const { error } = await db.from("ma_deals").update({ lado_originador: lado }).eq("id", dealId);
+  if (error) return NextResponse.json({ error: "Não foi possível salvar o lado" }, { status: 500 });
+  return NextResponse.json({ ok: true, lado_originador: lado });
 }

@@ -58,14 +58,20 @@ export default async function MesaCreditoPage() {
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
+      // Política de sigilo (31/10/2026): as métricas saem do servidor (chave de serviço). Equipe interna vê
+      // tudo; o partner só as próprias propostas (partner_id), recorte feito aqui e não na RLS.
+      const { createClient: criarClienteServico } = await import("@supabase/supabase-js");
+      const servico = criarClienteServico(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+      const ehEquipe = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(role);
+      const idDoUsuario = user?.id ?? "";
+
       const [allResult, monthResult] = await Promise.allSettled([
-        supabase
-          .from("credit_desk_proposals")
-          .select("current_level, status, requested_value, metadata"),
-        supabase
-          .from("credit_desk_proposals")
-          .select("current_level, status, requested_value, metadata")
-          .gte("created_at", monthStart),
+        ehEquipe
+          ? servico.from("credit_desk_proposals").select("current_level, status, requested_value, metadata")
+          : servico.from("credit_desk_proposals").select("current_level, status, requested_value, metadata").eq("partner_id", idDoUsuario),
+        ehEquipe
+          ? servico.from("credit_desk_proposals").select("current_level, status, requested_value, metadata").gte("created_at", monthStart)
+          : servico.from("credit_desk_proposals").select("current_level, status, requested_value, metadata").eq("partner_id", idDoUsuario).gte("created_at", monthStart),
       ]);
 
       if (allResult.status === "fulfilled" && allResult.value.data) {
@@ -106,13 +112,18 @@ export default async function MesaCreditoPage() {
         }
       }
 
-      const { count: ordersCount } = await supabase
-        .from("partner_service_orders")
-        .select("id, partner_service_links!inner(service_type)", { count: "exact", head: true })
-        .eq("status", "PAID")
-        .is("report_delivered_at", null)
-        .eq("partner_service_links.service_type", "credit_analysis");
-      pendingPartnerOrders = ordersCount ?? 0;
+      // Pedidos de análise pagos e ainda sem relatório: contagem interna da Mesa. Com a chave de serviço
+      // seria a contagem de todos os partners, então só a equipe a recebe (o partner vê 0, como a RLS já fazia
+      // para as linhas de outros).
+      if (ehEquipe) {
+        const { count: ordersCount } = await servico
+          .from("partner_service_orders")
+          .select("id, partner_service_links!inner(service_type)", { count: "exact", head: true })
+          .eq("status", "PAID")
+          .is("report_delivered_at", null)
+          .eq("partner_service_links.service_type", "credit_analysis");
+        pendingPartnerOrders = ordersCount ?? 0;
+      }
     } catch {}
   }
 

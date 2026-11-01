@@ -4,6 +4,7 @@ import { confirmar } from "@/lib/aviso";
 import { useState, useEffect, useCallback } from "react";
 import { Loader2, Plus, X, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dica } from "@/components/shared/dica";
 
 type Role = "comprador" | "vendedor" | "intermediario" | null;
 type Status = "prospecto" | "a_performar" | "performado";
@@ -35,12 +36,16 @@ export function DealClientesPanel({ dealId }: { dealId: string }) {
   const [form, setForm] = useState({ cpf_cnpj: "", legal_name: "", role: "" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lado, setLado] = useState<"" | "comprador" | "vendedor">("");
 
   const load = useCallback(() => {
     setLoading(true);
     fetch(`/api/ma/deals/${dealId}/clientes`)
       .then(r => r.json())
-      .then(json => setClientes(Array.isArray(json.clientes) ? json.clientes : []))
+      .then(json => {
+        setClientes(Array.isArray(json.clientes) ? json.clientes : []);
+        setLado(json.lado_originador === "comprador" || json.lado_originador === "vendedor" ? json.lado_originador : "");
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [dealId]);
@@ -81,6 +86,27 @@ export function DealClientesPanel({ dealId }: { dealId: string }) {
     load();
   };
 
+  // Política de sigilo (31/10/2026): decisão que libera ao partner originador a identidade do cliente daquele lado.
+  const handleLado = async (novo: string) => {
+    const valor = novo === "comprador" || novo === "vendedor" ? novo : null;
+    const mensagem = valor
+      ? `Confirmar que o partner trouxe o ${valor.toUpperCase()}? A partir daqui ele passa a ver nome e documento completos do cliente vinculado como ${valor}. A outra parte continua oculta até a assinatura dos contratos. A mudança fica registrada.`
+      : "Remover o lado do partner? Ele deixa de ver qualquer cliente deste deal. A mudança fica registrada.";
+    if (!await confirmar(mensagem)) return;
+    const res = await fetch(`/api/ma/deals/${dealId}/clientes`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lado_originador: valor }),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      setError(typeof json.error === "string" ? json.error : "Não foi possível salvar o lado");
+      return;
+    }
+    setError(null);
+    load();
+  };
+
   const handleRemove = async (id: string) => {
     if (!await confirmar("Desvincular este cliente do deal?")) return;
     await fetch(`/api/ma/deals/${dealId}/clientes/${id}`, { method: "DELETE" });
@@ -95,6 +121,17 @@ export function DealClientesPanel({ dealId }: { dealId: string }) {
           <Plus size={14} style={{ marginRight: 6 }} />
           Vincular Cliente
         </Button>
+      </div>
+
+      <div style={{ background: "#162744", border: "1px solid #243A66", borderRadius: 10, padding: "12px 14px", marginBottom: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#F5F1E8" }}>Lado que o partner trouxe <Dica id="ma_lado_originador" /></span>
+        <select value={lado} onChange={e => handleLado(e.target.value)}
+          style={{ height: 32, padding: "0 10px", fontSize: 12, background: "#09081A", border: "1px solid #243A66", borderRadius: 6, color: "#F5F1E8" }}>
+          <option value="">Não informado</option>
+          <option value="comprador">Comprador</option>
+          <option value="vendedor">Vendedor</option>
+        </select>
+        {!lado && <span style={{ fontSize: 11, color: "#E8C97A" }}>Lado do partner não informado, o partner não vê cliente.</span>}
       </div>
 
       {showForm && (
