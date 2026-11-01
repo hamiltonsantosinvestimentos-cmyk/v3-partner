@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { nomeAnexoValido, salaDoCaminhoAnexo, TIPOS_ANEXO } from "@/lib/team-chat-anexo";
 
 function svc() {
   return sc(
@@ -65,6 +66,17 @@ export async function POST(req: NextRequest) {
 
   if (!room_id) {
     return NextResponse.json({ error: "room_id é obrigatório" }, { status: 400 });
+  }
+
+  if (attachment_url != null) {
+    // attachment_url guarda o caminho do arquivo no bucket privado (nunca endereço); precisa ser da própria sala
+    if (
+      salaDoCaminhoAnexo(attachment_url) !== room_id ||
+      !nomeAnexoValido(attachment_name) ||
+      !TIPOS_ANEXO.includes(attachment_type ?? "")
+    ) {
+      return NextResponse.json({ error: "Anexo inválido" }, { status: 400 });
+    }
   }
 
   if (!content?.trim() && !attachment_url) {
