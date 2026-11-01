@@ -21,6 +21,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { aviso } from "@/lib/aviso";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -364,8 +365,9 @@ export function TeamChatClient({ profile, initialRooms }: TeamChatClientProps) {
         setUploadingFile(false);
 
         if (!uploadRes.ok) {
-          const err = (await uploadRes.json()) as { error?: string };
+          const err = (await uploadRes.json().catch(() => ({}))) as { error?: string };
           console.error("Upload failed:", err.error);
+          aviso(err.error ?? "Não foi possível enviar o anexo");
           setSending(false);
           return;
         }

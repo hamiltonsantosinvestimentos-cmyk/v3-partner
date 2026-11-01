@@ -73,3 +73,46 @@ test("o carregador do originador aplica o recorte de colunas ao partner", () => 
   assert.match(src, /clientesDoLadoDoOriginador\(/);
   assert.match(src, /registrarAcesso\(/);
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Storage (BRIEF 31/10/2026): o navegador nunca lê, lista, apaga nem monta endereço de arquivo do Storage com a
+// sessão do usuário. Só o envio por link assinado (emitido pelo servidor) é permitido.
+
+// Únicos arquivos que montam o endereço de envio assinado (/storage/v1/object/upload/sign/).
+const ENVIO_ASSINADO_PERMITIDO = new Set([
+  "components/mesa-ma/mesa-ma-client.tsx",
+  "lib/credit-documents/upload.ts",
+]);
+
+test("nenhum arquivo monta endereço direto do Storage, exceto o envio assinado dos dois arquivos de envio", () => {
+  const ruins: string[] = [];
+  for (const f of todos) {
+    const r = rel(f);
+    const src = fs.readFileSync(f, "utf8");
+    for (const m of src.matchAll(/\/storage\/v1\/object\/[^"'`\s)]*/g)) {
+      const trecho = m[0];
+      const ehEnvioAssinado = trecho.startsWith("/storage/v1/object/upload/sign/");
+      if (!(ehEnvioAssinado && ENVIO_ASSINADO_PERMITIDO.has(r))) ruins.push(`${r}: ${trecho}`);
+    }
+  }
+  assert.deepEqual(ruins, [], "endereço direto do Storage: use a rota do servidor com link assinado");
+});
+
+test("receptor de sessão (variável ou chamada inline) só chama storage com uploadToSignedUrl", () => {
+  const ruins: string[] = [];
+  for (const f of todos) {
+    const r = rel(f);
+    if (r.startsWith("lib/supabase/")) continue;
+    const src = fs.readFileSync(f, "utf8");
+    if (!/lib\/supabase\/(server|client)/.test(src)) continue;
+    const receptores: string[] = ["(?:createClient|createBrowserSupabaseClient|createBrowserClient)\\(\\s*\\)"];
+    for (const m of src.matchAll(/(?:const|let)\s+(\w+)\s*=\s*(?:await\s+)?(?:createClient|createBrowserSupabaseClient|createBrowserClient)\(\s*\)/g)) receptores.push(`\\b${m[1]}`);
+    for (const recep of receptores) {
+      const re = new RegExp(`${recep}\\s*\\n?\\s*\\.storage([\\s\\S]{0,200})`, "g");
+      for (const m of src.matchAll(re)) {
+        if (!/^\s*\n?\s*\.from\([^)]*\)\s*\n?\s*\.uploadToSignedUrl\(/.test(m[1])) ruins.push(`${r}: .storage${m[1].slice(0, 60).replace(/\s+/g, " ")}`);
+      }
+    }
+  }
+  assert.deepEqual(ruins, [], "o navegador só pode enviar por link assinado; leitura, listagem e remoção passam pelo servidor");
+});

@@ -87,7 +87,9 @@ function StatusBadge({ status }: { status: Registration["status"] }) {
 }
 
 function DocLink({ path, label }: { path: string; label: string }) {
-  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/partner-docs/${path}`;
+  // Política de sigilo (31/10/2026): o bucket partner-docs é privado; o documento abre pela rota do servidor
+  // (só ADMIN, acesso registrado, link assinado de 60 segundos), nunca por endereço direto do Storage.
+  const url = `/api/admin/cadastros/documento?path=${encodeURIComponent(path)}`;
   return (
     <a
       href={url}

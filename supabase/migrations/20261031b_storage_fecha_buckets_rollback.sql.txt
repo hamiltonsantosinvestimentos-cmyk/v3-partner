@@ -1,0 +1,23 @@
+-- ROLLBACK de 20261031b_storage_fecha_buckets.sql
+-- Recria as políticas exatamente como estavam em 31/10/2026 (conferidas em pg_policies) e devolve o flag público.
+-- ATENÇÃO: reabre o acesso de qualquer usuário logado aos documentos de crédito e aos contratos, e deixa o
+-- partner-docs público. Só usar em emergência e depois de avisar o João.
+
+create policy "Autenticados podem ler" on storage.objects for select to authenticated
+  using (bucket_id = 'credit-documents'::text);
+create policy "Autenticados podem visualizar documentos" on storage.objects for select to authenticated
+  using (bucket_id = 'credit-documents'::text);
+create policy "Autenticados podem fazer upload de documentos" on storage.objects for insert to authenticated
+  with check (bucket_id = 'credit-documents'::text);
+create policy "Autenticados podem upload" on storage.objects for insert to authenticated
+  with check (bucket_id = 'credit-documents'::text);
+create policy "Autenticados podem deletar" on storage.objects for delete to authenticated
+  using (bucket_id = 'credit-documents'::text);
+create policy "Autenticados podem deletar documentos" on storage.objects for delete to authenticated
+  using (bucket_id = 'credit-documents'::text);
+create policy "Autenticados fazem upload de contratos" on storage.objects for insert to authenticated
+  with check (bucket_id = 'contratos'::text);
+create policy "Autenticados visualizam contratos" on storage.objects for select to authenticated
+  using (bucket_id = 'contratos'::text);
+
+update storage.buckets set public = true where id in ('partner-docs', 'team-chat-attachments');
