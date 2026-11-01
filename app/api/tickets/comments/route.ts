@@ -1,10 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { resolverAcessoTickets } from "@/lib/mesa-operacional/acesso";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
+
+// Política de sigilo (BRIEF 01/11/2026): a rota usa chave de serviço, então confere aqui quem pode ver o ticket.
+// Equipe (ADMIN, GESTAO, MESA_OPERACIONAL) acessa qualquer ticket; os demais só se forem solicitante ou responsável.
+// Qualquer outro caso é 404 genérico, sem revelar se o ticket existe.
+async function autorizarTicket(svc: ReturnType<typeof serviceClient>, userId: string, ticketId: string) {
+  const { data: perfil } = await svc.from("profiles").select("id, role").eq("id", userId).maybeSingle();
+  const acesso = resolverAcessoTickets({ id: userId }, perfil);
+  if (acesso.tipo === "negado") return { ok: false as const, equipe: false };
+  if (acesso.tipo === "equipe") return { ok: true as const, equipe: true };
+  const { data: ticket } = await svc
+    .from("operational_tickets")
+    .select("requester_id, assigned_to")
+    .eq("id", ticketId)
+    .maybeSingle();
+  const dono = !!ticket && (ticket.requester_id === userId || ticket.assigned_to === userId);
+  return { ok: dono as boolean, equipe: false } as { ok: boolean; equipe: boolean };
+}
+
+const TICKET_NAO_ENCONTRADO = { error: "Ticket não encontrado" };
 
 /** GET /api/tickets/comments?ticket_id=xxx */
 export async function GET(req: NextRequest) {
@@ -17,6 +37,9 @@ export async function GET(req: NextRequest) {
   if (!ticket_id) return NextResponse.json({ error: "ticket_id obrigatório" }, { status: 400 });
 
   const svc = serviceClient();
+  const auth = await autorizarTicket(svc, user.id, ticket_id);
+  if (!auth.ok) return NextResponse.json(TICKET_NAO_ENCONTRADO, { status: 404 });
+
   const { data, error } = await svc
     .from("ticket_comments")
     .select(`id, content, created_at, author:profiles(id, full_name)`)
@@ -39,6 +62,12 @@ export async function POST(req: NextRequest) {
   }
 
   const svc = serviceClient();
+  const auth = await autorizarTicket(svc, user.id, ticket_id);
+  if (!auth.ok) return NextResponse.json(TICKET_NAO_ENCONTRADO, { status: 404 });
+  // Enviar e-mail e mensagem de chat ao solicitante é prerrogativa da equipe: de um partner (que só pode ser
+  // solicitante ou responsável do ticket) as duas opções são ignoradas, sem erro.
+  const enviarEmail = auth.equipe && !!send_email;
+  const enviarChat = auth.equipe && !!send_chat;
 
   // Busca perfil do autor para incluir no sender_name do chat
   const { data: authorProfile } = await svc
@@ -59,7 +88,7 @@ export async function POST(req: NextRequest) {
   let emailSent = false;
   let chatSent = false;
 
-  if (send_email || send_chat) {
+  if (enviarEmail || enviarChat) {
     // Busca ticket + solicitante
     const { data: ticket } = await svc
       .from("operational_tickets")
@@ -79,7 +108,7 @@ export async function POST(req: NextRequest) {
       const authorName = authorProfile?.full_name ?? "Mesa Operacional V3";
 
       // ── Email ────────────────────────────────────────────────────────────────
-      if (send_email && requesterId && process.env.RESEND_API_KEY) {
+      if (enviarEmail && requesterId && process.env.RESEND_API_KEY) {
         try {
           const { data: authUser } = await svc.auth.admin.getUserById(requesterId);
           const partnerEmail = authUser?.user?.email ?? null;
@@ -165,7 +194,7 @@ export async function POST(req: NextRequest) {
       }
 
       // ── Chat ─────────────────────────────────────────────────────────────────
-      if (send_chat && requesterId) {
+      if (enviarChat && requesterId) {
         try {
           const chatContent = `💬 Comentário no ticket ${ticket.code} — ${ticket.title}:\n\n${content.trim()}`;
           const { error: chatErr } = await svc

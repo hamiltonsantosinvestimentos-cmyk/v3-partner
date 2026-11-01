@@ -19,6 +19,8 @@ const SENSIVEIS = [
   "deal_qa_threads", "deal_qa_messages", "meeting_action_items", "docs_ingeridos", "generated_reports",
   "consorcio_cartas", "deal_intakes", "deal_partner_submissions", "portfolio_linhas", "integration_partners",
   "mesa_sla_config", "platform_settings",
+  // Tickets operacionais (BRIEF 01/11/2026): leitura e escrita pela rota com chave de serviço.
+  "operational_tickets", "ticket_comments",
 ];
 
 // Tabelas com leitura aberta deixadas por desenho (BRIEF 01/11/2026, seção 2.2), sem dado de cliente, deal ou pessoa:
@@ -187,4 +189,48 @@ test("nenhuma leitura de tabela sensível com createClient() direto", () => {
     for (const m of src.matchAll(re)) ruins.push(`${r}: createClient().from("${m[1]}")`);
   }
   assert.deepEqual(ruins, [], "leitura de tabela sensível pelo cliente de sessão: use o carregador do servidor ou a chave de serviço com recorte por papel");
+});
+
+// Tickets operacionais (BRIEF 01/11/2026): regra por RECEPTOR, que cobre o que o scanner por variável não vê (cliente
+// obtido por desestruturação ou recebido por parâmetro). Todo X.from("operational_tickets") ou X.from("ticket_comments")
+// precisa ter como receptor svc, svc2, db, svc() ou serviceClient(); qualquer outro (por exemplo supabase) falha.
+// Limitação declarada: uma variável com nome permitido que na verdade seja cliente de sessão não é pega aqui; o scanner
+// por variável do teste anterior cobre esse caso quando o cliente nasce de createClient() no mesmo arquivo.
+const RECEPTORES_SERVICO = new Set(["svc", "svc2", "db"]);
+
+function receptoresInvalidos(src: string, tabelas: string[]): string[] {
+  const re = new RegExp("(\\w+|\\))\\s*\\n?\\s*\\.from\\(\\s*[\"'`](" + tabelas.join("|") + ")[\"'`]", "g");
+  const ruins: string[] = [];
+  for (const m of src.matchAll(re)) {
+    const receptor = m[1];
+    if (RECEPTORES_SERVICO.has(receptor)) continue;
+    if (receptor === ")") {
+      const antes = src.slice(Math.max(0, (m.index ?? 0) - 40), m.index ?? 0);
+      if (/(svc|serviceClient)\(\s*$/.test(antes)) continue;
+    }
+    ruins.push(`${receptor}.from("${m[2]}")`);
+  }
+  return ruins;
+}
+
+test("receptoresInvalidos pega o cliente de sessão e aceita o de serviço (caso negativo e positivo)", () => {
+  const tabelas = ["operational_tickets", "ticket_comments"];
+  assert.equal(receptoresInvalidos('const { user, supabase } = await getAuthedUser();\n  await supabase.from("operational_tickets").insert({})', tabelas).length, 1);
+  assert.equal(receptoresInvalidos('const { data } = await (await createClient()).from("ticket_comments").select("*")', tabelas).length, 1);
+  assert.equal(receptoresInvalidos('await supabase\n    .from("ticket_comments")', tabelas).length, 1);
+  assert.equal(receptoresInvalidos('await svc().from("operational_tickets").select("id")', tabelas).length, 0);
+  assert.equal(receptoresInvalidos('await svc\n    .from("operational_tickets")', tabelas).length, 0);
+  assert.equal(receptoresInvalidos('await db.from("ticket_comments").insert({})', tabelas).length, 0);
+  assert.equal(receptoresInvalidos('await serviceClient()\n    .from("operational_tickets")', tabelas).length, 0);
+  assert.equal(receptoresInvalidos('await supabase.from("profiles").select("id")', tabelas).length, 0);
+});
+
+test("tickets: todo acesso às duas tabelas usa cliente de serviço", () => {
+  const ruins: string[] = [];
+  for (const f of todos) {
+    const src = fs.readFileSync(f, "utf8");
+    if (!/operational_tickets|ticket_comments/.test(src)) continue;
+    for (const r of receptoresInvalidos(src, ["operational_tickets", "ticket_comments"])) ruins.push(`${rel(f)}: ${r}`);
+  }
+  assert.deepEqual(ruins, [], "tickets: leitura e escrita só com cliente de serviço e filtro por papel na rota");
 });

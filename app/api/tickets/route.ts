@@ -12,9 +12,11 @@ function serviceClient() {
 async function getAuthedUser() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { user: null, profile: null, supabase };
+  if (!user) return { user: null, profile: null };
   const { data: profile } = await supabase.from("profiles").select("id, full_name, role").eq("id", user.id).single();
-  return { user, profile, supabase };
+  // Política de sigilo (BRIEF 01/11/2026): o cliente de sessão não sai daqui, para nenhuma rota do arquivo ler ou
+  // gravar tickets com ele. Toda leitura e escrita usa o cliente de serviço, com o filtro por papel na própria rota.
+  return { user, profile };
 }
 
 const ADMIN_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
@@ -81,7 +83,7 @@ export async function GET(req: NextRequest) {
 
 // POST — cria novo ticket
 export async function POST(req: NextRequest) {
-  const { user, supabase } = await getAuthedUser();
+  const { user } = await getAuthedUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json();
@@ -91,11 +93,15 @@ export async function POST(req: NextRequest) {
   }
   const d = parsed.data;
 
-  const { count } = await supabase
+  const svc = serviceClient();
+  // Mantém o código TICK-26-NNNN como está (a numeração pelo emissor único é item de Roadmap, 15/11/2026). A contagem
+  // com a chave de serviço enxerga todas as linhas; com a sessão, depois que a política de leitura caísse, o partner
+  // contaria 0 e o segundo ticket de qualquer um bateria na restrição UNIQUE de code.
+  const { count } = await svc
     .from("operational_tickets").select("*", { count: "exact", head: true });
   const code = `TICK-26-${String((count ?? 0) + 1).padStart(4, "0")}`;
 
-  const { data, error } = await supabase.from("operational_tickets").insert({
+  const { data, error } = await svc.from("operational_tickets").insert({
     code,
     title:        d.title,
     description:  d.description ?? null,
