@@ -10,6 +10,7 @@ import { X } from "lucide-react";
 import { AVISO_EVENT, CONFIRMAR_EVENT, PEDIR_MOTIVO_EVENT, type AvisoDetail, type ConfirmarDetail, type PedirMotivoDetail } from "@/lib/aviso";
 import { MOTIVO_MAX, MOTIVO_MIN, motivoValido } from "@/lib/motivo";
 import { Dica } from "@/components/shared/dica";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 
 type Toast = { id: number; message: string; isError: boolean };
 type HostWindow = Window & { __v3ConfirmHost?: boolean };
@@ -122,10 +123,11 @@ export function Toaster() {
   );
 }
 
-// Modal de motivo (pedirMotivo, lib/aviso.ts). Cuidados com o Dialog Radix que pode estar aberto por baixo (ex.: o card do
-// deal na Mesa M&A): o overlay fica fora dele, então (1) pointer-events-auto no overlay, (2) os eventos de foco e de clique
-// não sobem até o document, onde o Radix decide "interação fora" e fecharia o Dialog de baixo, e (3) Esc é capturado em
-// fase de captura na window, antes do listener do Radix, e não faz nada (o modal só fecha pelos botões).
+// Modal de motivo (pedirMotivo, lib/aviso.ts). Usa um Dialog Radix próprio, o mesmo padrão do modal de Ganho, Perdido e
+// Reabrir (components/mesa-ma/ma-transition-modal.tsx): quando há outro Dialog aberto por baixo (ex.: o card do deal na
+// Mesa M&A), o Radix pausa a armadilha de foco do de baixo e só o de cima recebe foco, clique e teclado. A primeira
+// versão usava um overlay próprio fora do Radix e o card do deal roubava o foco de volta (não dava para digitar),
+// achado no teste na tela de 01/11/2026. Não fecha por clique fora nem por Esc, só pelos botões.
 function ModalMotivo({ detalhe, onResponder }: { detalhe: PedirMotivoDetail; onResponder: (motivo: string | null) => void }) {
   const minimo = detalhe.minimo ?? MOTIVO_MIN;
   const maximo = detalhe.maximo ?? MOTIVO_MAX;
@@ -135,50 +137,34 @@ function ModalMotivo({ detalhe, onResponder }: { detalhe: PedirMotivoDetail; onR
   const perigo = !!detalhe.perigo;
   const tamanho = texto.trim().length;
 
-  useEffect(() => {
-    campo.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        return;
-      }
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (valido) onResponder(valido);
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [valido, onResponder]);
-
   return (
-    <div
-      className="pointer-events-auto fixed inset-0 z-[220] flex items-center justify-center bg-black/75 p-4"
-      onFocus={(e) => e.stopPropagation()}
-      onBlur={(e) => e.stopPropagation()}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={detalhe.titulo}
-        className={`w-full max-w-md space-y-3 rounded-xl border bg-[#09081A] p-4 ${perigo ? "border-[#E24B4A]/60" : "border-[#C9A84C]/40"}`}
+    <Dialog open>
+      <DialogContent
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          campo.current?.focus();
+        }}
+        className={`max-w-md w-[calc(100vw-32px)] border [&>button.absolute]:hidden ${perigo ? "border-[#E24B4A]/60" : "border-[#C9A84C]/40"}`}
       >
-        <div className="flex items-center gap-2">
-          <p className={`text-[14px] font-bold ${perigo ? "text-[#E24B4A]" : "text-[#C9A84C]"}`}>{detalhe.titulo}</p>
+        <DialogTitle className={`flex items-center gap-2 text-base font-bold ${perigo ? "text-[#E24B4A]" : "text-[#C9A84C]"}`}>
+          {detalhe.titulo}
           {detalhe.nota && <Dica id={detalhe.nota} />}
-        </div>
+        </DialogTitle>
         <p className="whitespace-pre-line text-[13px] leading-snug text-[#F5F1E8]">{detalhe.mensagem}</p>
         <div>
           <textarea
             ref={campo}
             value={texto}
             onChange={(e) => setTexto(e.target.value.slice(0, maximo))}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                if (valido) onResponder(valido);
+              }
+            }}
             rows={4}
             maxLength={maximo}
             aria-label="Motivo"
@@ -206,7 +192,7 @@ function ModalMotivo({ detalhe, onResponder }: { detalhe: PedirMotivoDetail; onR
             {detalhe.botao ?? "Confirmar"}
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
