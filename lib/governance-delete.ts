@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { MOTIVO_MAX, MOTIVO_MIN, motivoValido } from "@/lib/motivo";
+import { escapeHtml } from "@/lib/html-escape";
 
 // Padrão de governança de exclusão (soft delete + lixeira 30 dias + email aos
 // 3 diretores) — extraído do que já roda em produção em cm_asset_listings
@@ -42,8 +44,9 @@ async function notifyDeletionGovernance(params: {
     const { Resend } = await import("resend");
     const resend = new Resend(process.env.RESEND_API_KEY);
     const subjectGate = auditText(`Solicitação de exclusão — ${params.vertical}: ${params.itemLabel}`);
-    const htmlGate = auditHtml(`<p><strong>${params.requesterName}</strong> solicitou a exclusão de <strong>${params.itemLabel}</strong> (${params.vertical}).</p>
-             <p><strong>Motivo:</strong> ${params.reason}</p>
+    // Texto livre (nome, rótulo do item e motivo) sempre escapado antes de entrar no HTML do e-mail.
+    const htmlGate = auditHtml(`<p><strong>${escapeHtml(params.requesterName)}</strong> solicitou a exclusão de <strong>${escapeHtml(params.itemLabel)}</strong> (${escapeHtml(params.vertical)}).</p>
+             <p><strong>Motivo:</strong> ${escapeHtml(params.reason)}</p>
              <p>Acesse para aprovar ou rejeitar: ${params.reviewUrl}</p>
              <p style="color:#888;font-size:12px">id: ${params.itemId}</p>`);
     if (htmlGate.blocking.length > 0) console.error(`[governance-delete][${params.vertical}] Brand Guardian bloqueou:`, htmlGate.blocking);
@@ -87,8 +90,8 @@ export function buildDeleteHandlers(config: DeleteRouteConfig) {
 
     const { id } = await params;
     const { reason } = await req.json();
-    if (!reason || typeof reason !== "string" || reason.trim().length < 5) {
-      return NextResponse.json({ error: "Motivo da exclusão é obrigatório (mínimo 5 caracteres)" }, { status: 422 });
+    if (motivoValido(reason) === null) {
+      return NextResponse.json({ error: `Motivo da exclusão é obrigatório (mínimo ${MOTIVO_MIN} e máximo ${MOTIVO_MAX} caracteres)` }, { status: 422 });
     }
 
     const db = svc();
