@@ -15,7 +15,15 @@ const SENSIVEIS = [
   "ma_deals", "ma_documents", "ma_document_requests", "ma_captacao_links", "ma_deal_clients", "v3_clients",
   "cm_asset_listings", "cm_bids", "cm_listing_documents", "cm_deal_room_access", "credit_desk_proposals",
   "consorcio_projetos", "creative_jobs", "creative_files",
+  // Bloco D (BRIEF 01/11/2026): leitura aberta a logado ou anônimo fechada no banco; nenhuma tela lê pela sessão.
+  "deal_qa_threads", "deal_qa_messages", "meeting_action_items", "docs_ingeridos", "generated_reports",
+  "consorcio_cartas", "deal_intakes", "deal_partner_submissions", "portfolio_linhas", "integration_partners",
+  "mesa_sla_config", "platform_settings",
 ];
+
+// Tabelas com leitura aberta deixadas por desenho (BRIEF 01/11/2026, seção 2.2), sem dado de cliente, deal ou pessoa:
+// market_benchmarks, deal_sector_codes, v3_code_series, academy_comments, academy_video_overrides, academy_yt_links,
+// marketplace_product_reviews, ma_origination_units. operational_tickets segue pendente (BRIEF próprio, prazo 08/11/2026).
 
 // Exceções declaradas (arquivo relativo, motivo). Vazia de propósito: nenhuma leitura de sessão é aceita.
 const EXCECOES: Record<string, string> = {};
@@ -164,4 +172,19 @@ test("canal Realtime de chat_messages só para a equipe", () => {
     if (!/if\s*\(\s*!?isAdmin\s*\)/.test(src)) ruins.push(`${r}: assinatura do canal não está condicionada à equipe`);
   }
   assert.deepEqual(ruins, [], "partner lê o chat só pela API; canal do banco só para a equipe");
+});
+
+// Chamada direta com o cliente de sessão (sem variável): createClient().from(...) e (await createClient()).from(...).
+// Limitação declarada: cliente de sessão passado como parâmetro a uma função auxiliar não é detectável por texto.
+test("nenhuma leitura de tabela sensível com createClient() direto", () => {
+  const ruins: string[] = [];
+  const tabelas = SENSIVEIS.join("|");
+  const re = new RegExp("createClient\\(\\s*\\)\\s*\\)?\\s*\\.from\\(\\s*[\"'`](" + tabelas + ")[\"'`]", "g");
+  for (const f of todos) {
+    const r = rel(f);
+    if (r.startsWith("lib/supabase/")) continue;
+    const src = fs.readFileSync(f, "utf8");
+    for (const m of src.matchAll(re)) ruins.push(`${r}: createClient().from("${m[1]}")`);
+  }
+  assert.deepEqual(ruins, [], "leitura de tabela sensível pelo cliente de sessão: use o carregador do servidor ou a chave de serviço com recorte por papel");
 });
