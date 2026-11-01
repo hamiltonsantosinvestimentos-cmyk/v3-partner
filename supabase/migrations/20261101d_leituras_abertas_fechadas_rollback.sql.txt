@@ -1,0 +1,16 @@
+-- ROLLBACK de 20261101d_leituras_abertas_fechadas.sql
+-- Recria as políticas exatamente como estavam em 01/11/2026 (conferidas em pg_policies). Reabre a leitura a logado e a anônimo (Q&A do VDR) e a escrita de generated_reports. Só em emergência.
+
+create policy "qa_threads_anon_select" on public.deal_qa_threads for select to anon using (true);
+create policy "qa_messages_anon_select" on public.deal_qa_messages for select to anon using (true);
+create policy "Authenticated users can manage action items" on public.meeting_action_items for all using ((auth.role() = 'authenticated'::text));
+create policy "docs_authenticated_read" on public.docs_ingeridos for select to authenticated using (true);
+create policy "generated_reports_read" on public.generated_reports for select to authenticated using (true);
+create policy "generated_reports_insert" on public.generated_reports for insert to authenticated with check ((user_id = auth.uid()));
+create policy "autenticados podem ler cartas" on public.consorcio_cartas for select using ((auth.uid() IS NOT NULL));
+create policy "deal_intakes_authenticated_read" on public.deal_intakes for select to authenticated using (true);
+create policy "dps_select_authenticated" on public.deal_partner_submissions for select to authenticated using (true);
+create policy "portfolio_read" on public.portfolio_linhas for select to authenticated using (true);
+create policy "ip_select_authenticated" on public.integration_partners for select to authenticated using (true);
+create policy "mesa_sla_config_read" on public.mesa_sla_config for select to authenticated using (true);
+create policy "authenticated read settings" on public.platform_settings for select using ((auth.role() = 'authenticated'::text));
