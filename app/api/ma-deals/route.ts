@@ -6,6 +6,7 @@ import { logAudit } from "@/lib/audit";
 import { createNotification, notifyByRoles } from "@/lib/notify";
 import { issueV3Code, resolveSectorCode, insertWithLegacyCode } from "@/lib/v3-codes";
 import { anexarTransferencias } from "@/lib/ma/transferir-mesa";
+import { avisarOriginadorDaMudancaDeEtapa } from "@/lib/ma/aviso-originador";
 import {
   LOSS_CATEGORIES, MIN_REASON_LENGTH, DB_TO_PIPELINE, STAGE_DEFAULT_PROBABILITY,
   classifyTransition, stageRoleDenial, validateClosedDate, todaySaoPaulo, isoToBr,
@@ -488,6 +489,9 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: "Não foi possível mudar a fase. Nada foi gravado." }, { status: 500 });
       }
       transition = { kind, from, to: targetStage, reason, category: closed_reason_category };
+
+      // Aviso por e-mail ao partner originador (BRIEF 01/11/2026). Chave desligada por padrão; nunca lança.
+      await avisarOriginadorDaMudancaDeEtapa(svc, id, targetStage);
 
       // Client 360, Fase B (10-11/08/2026): deal Ganho promove os clientes vinculados a
       // "performado". Reabertura de Ganho (só ADMIN) rebaixa para "a_performar" se o deal

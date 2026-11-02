@@ -6,6 +6,7 @@ import { notifyDealTimeline } from "@/lib/ma-negociacao-notify";
 import { recordSignatureNote, applyEnvelopeClosed, isSafeProviderId } from "@/lib/contract-signature-timeline";
 import { avisarContratoOfertaAssinado } from "@/lib/contrato-oferta-assinado";
 import { STAGE_DEFAULT_PROBABILITY, PRE_NCNDA_DB_STAGES, type DbStage } from "@/lib/ma/pipeline";
+import { avisarOriginadorDaMudancaDeEtapa } from "@/lib/ma/aviso-originador";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -388,6 +389,7 @@ async function handleV1Event(eventName: string, externalId: string, extra?: Webh
           console.error("[clicksign-webhook] ma_deal_transition falhou:", trErr.message);
           return NextResponse.json({ error: "Falha ao mover a fase do deal" }, { status: 500 });
         }
+        await avisarOriginadorDaMudancaDeEtapa(db, deal.id, "QUALIFICATION");
       }
     }
   } catch (err) {

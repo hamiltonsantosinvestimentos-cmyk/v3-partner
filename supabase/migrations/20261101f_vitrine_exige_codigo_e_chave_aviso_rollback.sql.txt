@@ -1,0 +1,3 @@
+-- Rollback da 20261101f.
+alter table public.cm_asset_listings drop constraint if exists chk_listing_vitrine_exige_codigo;
+delete from public.cm_feature_flags where key = 'ma_aviso_email_partner';
