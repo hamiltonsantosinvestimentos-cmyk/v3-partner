@@ -9,7 +9,7 @@ import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 const SOCIOS: { id: string; name: string; email: string; phone: string | null }[] = [
   { id: "d0af8eaa-9f3c-4e7a-b8c6-613736524317", name: "João Lemos", email: "joao.lemos@v3partners.com.br", phone: null },
   { id: "75c6cac4-8d30-436e-b9a6-d5d494d7470b", name: "Hamilton Santos", email: "suporte@v3partners.com.br", phone: "51997466001" },
-  { id: "d5f26efd-8ed5-4d90-b3f4-9ce0004803c5", name: "Robson Lino", email: "robinholino16@gmail.com", phone: "51998556322" },
+  { id: "d5f26efd-8ed5-4d90-b3f4-9ce0004803c5", name: "Robson Lino", email: "robson.lino@v3partners.com.br", phone: "51998556322" },
 ];
 
 function svc() {
