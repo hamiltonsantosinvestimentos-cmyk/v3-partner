@@ -343,6 +343,14 @@ Rodada 6 de 6, a última. Veredito: BLOQUEADO (3 falhas).
 Passaram nessa rodada: moeda, telefone, datas, mascaramento, modais, ordenação, higiene de texto e seção 6. Observação do QA: se o gateway tiver mais de um nó, a limpeza da memória alcança só o nó que atendeu o pedido; conferir a topologia.
 Não verificados: configuração do gateway de produção, versão do Postgres e ids dos modelos, que seguem como dependências. Migration e plano de acesso avaliados só por leitura.
 
+## ALTERAÇÃO DE ESCOPO DE 02/11/2026: CHAVE PRÓPRIA DA ANTHROPIC
+- O que muda: o assistente passa a usar `ASSISTENTE_ANTHROPIC_API_KEY`, chave da conta pessoal do Hamilton, sem reserva na `ANTHROPIC_API_KEY` da V3. Sem a chave própria, responde a mensagem de falha e nada é lançado. Arquivos: `lib/assistente/interpretar.ts` e `tests/unit/assistente-chave-anthropic.test.ts`.
+- Por quê: em 02/11/2026 o log de produção mostrou a chave da V3 sem crédito, e o Hamilton pediu para o uso pessoal ficar separado.
+- Alternativa descartada: usar a chave da V3 como reserva, porque o uso pessoal voltaria a consumir o crédito da empresa sem aviso.
+- Risco: o SDR e as demais funções de IA seguem sem resposta até entrar crédito na conta da V3. Esta alteração não resolve isso.
+- **[VALIDAR COM ROBSON]** o parecer aprovou o envio à Anthropic; o provedor é o mesmo, mas a conta passa a ser pessoal, e os termos e a retenção aplicáveis podem ser outros. Sem resposta registrada até aqui.
+- QA: sem nova auditoria, porque o teto de 6 rodadas foi atingido. Go: "go mesmo assim" digitado na conta do Hamilton em 02/11/2026, depois de avisado desse ponto de compliance.
+
 ## REGISTRO DE LIBERAÇÃO
 - QA: BLOQUEADO (rodadas: 6). Devolvido ao João conforme a regra.
 - Override ("go mesmo assim"): sim, do João, por print enviado pelo Hamilton em 01/11/2026 (`docs/briefs/anexos/2026-11-01_my-assistant-ia_override-joao.png`), sem remetente ou data visíveis. Falhas aceitas: T1, corrigida no texto depois da rodada 6, sem nova auditoria; C1 e C2, tratadas pelo print do Robson, com o mesmo limite de registro. Exceção do DESFAZER: aceita ao dar o go.
