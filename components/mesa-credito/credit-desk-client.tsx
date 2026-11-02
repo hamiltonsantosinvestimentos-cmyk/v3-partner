@@ -15,6 +15,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { STATUS_LABELS, STATUS_COLORS, PARTNER_HE_CREDIT_LINES, type OperationStatus } from "@/lib/constants";
 import { NovaPropostaModal } from "./nova-proposta-modal";
 import { PropostaDetailModal, type ProposalFull } from "./proposta-detail-modal";
+import { SeloClassificacaoPendente } from "@/components/shared/selo-classificacao-pendente";
 import {
   AdvancedFilters, applyFilters, getSLAInfo, SLATargetDate,
   EMPTY_FILTERS, type FilterState,
@@ -22,6 +23,7 @@ import {
 
 interface Proposal {
   id: string; code: string; title: string;
+  classificacao_pendente?: boolean;
   client_name: string; client_type?: string;
   cpf_cnpj?: string; email?: string; telefone?: string;
   credit_line: string; requested_value: number;
@@ -123,6 +125,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
         );
         setProposals(realProposals.map((p: Record<string, unknown>) => ({
           id: p.id as string, code: p.code as string, title: p.title as string,
+          classificacao_pendente: p.classificacao_pendente === true,
           client_name: p.client_name as string,
           cpf_cnpj: (p.client_cpf_cnpj ?? (p.metadata as Record<string, unknown> | null)?.cpf_cnpj) as string | undefined,
           client_type: (p.metadata as Record<string, unknown> | null)?.client_type as string | undefined,
@@ -353,11 +356,12 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                         <div key={p.id} data-flip-id={p.id} onClick={(e) => { registrarOrigemModal(e.currentTarget); setDetailProposal(p); }}
                           className="bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_-18px_rgba(0,0,0,.9)] transition-all duration-300 space-y-2 group">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code}</span>
+                            <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code ?? "código a emitir"}</span>
                             <Badge className={`${STATUS_COLORS[p.status as OperationStatus]} text-[9px] px-1.5 py-0 leading-4`}>
                               {STATUS_LABELS[p.status as OperationStatus]}
                             </Badge>
                           </div>
+                          {p.classificacao_pendente && <SeloClassificacaoPendente />}
                           <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2 group-hover:text-primary transition-colors">{p.client_name}</p>
                           <div className="flex items-center justify-between gap-1">
                             <Badge variant={cfg.badgeVariant} className="text-[9px] truncate max-w-[100px]">{p.credit_line}</Badge>
@@ -417,7 +421,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                       <tr key={p.id}
                         className="border-b border-border/30 cursor-pointer transition-colors hover:bg-secondary/50"
                         onClick={(e) => { registrarOrigemModal(e.currentTarget); setDetailProposal(p); }}>
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code ?? "código a emitir"}{p.classificacao_pendente && <> <SeloClassificacaoPendente /></>}</td>
                         <td className="px-4 py-3 font-medium text-foreground max-w-36 truncate">{p.client_name}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{p.client_type ?? "PJ"}</td>
                         <td className="px-4 py-3"><Badge variant={cfg.badgeVariant}>{p.credit_line}</Badge></td>

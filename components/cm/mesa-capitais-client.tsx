@@ -29,10 +29,12 @@ import { CM_DOCUMENT_CHECKLISTS, type CmAssetType } from "@/lib/cm-checklists";
 import { ASSET_DECLINE_REASONS, BID_DECLINE_REASONS } from "@/lib/cm-decline-reasons";
 import { formatDocumentNumber } from "@/lib/legal-qualification";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
+import { SeloClassificacaoPendente } from "@/components/shared/selo-classificacao-pendente";
 
 interface Listing {
   id: string;
   anonymous_id: string;
+  classificacao_pendente?: boolean;
   apelido: string | null;
   numero_interno: string | null;
   originator_profile_id: string | null;
@@ -2855,6 +2857,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               <div>
                 <div className="text-[10px] text-[#C9A84C] font-bold tracking-wider">
                   {selectedListing.anonymous_id ?? "código a emitir"}
+                  {selectedListing.classificacao_pendente && <> <SeloClassificacaoPendente /></>}
                   {selectedListing.apelido && <span className="text-[#F5F1E8]"> · {selectedListing.apelido}</span>}
                 </div>
                 <div className="text-lg font-bold text-[#F5F1E8]">{formatListingValue(Number(selectedListing.valor_face), selectedListing.currency)}</div>
