@@ -11,10 +11,12 @@
 import { useEffect, useRef, useState } from "react";
 import { MoreVertical, GripVertical, Trash2, ArrowRight } from "lucide-react";
 import { cn, type CmCurrency } from "@/lib/utils";
+import { SeloClassificacaoPendente } from "@/components/shared/selo-classificacao-pendente";
 
 export interface KanbanCardListing {
   id: string;
   anonymous_id: string;
+  classificacao_pendente?: boolean;
   apelido: string | null;
   valor_face: number;
   currency?: CmCurrency;
@@ -151,6 +153,7 @@ export function KanbanCard({
       )}
 
       <div className="text-[9px] text-[#C9A84C] font-bold">{l.anonymous_id ?? "código a emitir"}</div>
+      {l.classificacao_pendente && <SeloClassificacaoPendente />}
       {l.apelido && <div className="text-[10px] text-[#F5F1E8] font-semibold truncate">{l.apelido}</div>}
       <div className="text-xs sm:text-xs text-[#F5F1E8] font-semibold">{valueLabel}</div>
       {l.risk_score && (
