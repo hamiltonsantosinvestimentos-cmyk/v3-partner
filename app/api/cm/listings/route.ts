@@ -1,3 +1,4 @@
+import { recortarTransferenciaPorPapel } from "@/lib/ma/transferencias";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const listings = data ?? [];
+  const listings = (data ?? []).map((l) => recortarTransferenciaPorPapel(l as Record<string, unknown>, caller.role, "anonymous_id") as typeof l);
   return NextResponse.json({ listings: await withDaysInStage(listings) });
 }
 

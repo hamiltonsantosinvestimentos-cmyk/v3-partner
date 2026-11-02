@@ -85,6 +85,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }, { status: 422 });
   }
 
+  // Trava de publicacao (BRIEF Mesa M&A bloco C, segunda entrega, 01/11/2026): registro que veio de
+  // transferencia da Mesa M&A sem codigo (classificacao ainda nao confirmada) nao vai para a vitrine.
+  // Segunda camada: CHECK chk_listing_vitrine_exige_codigo no banco (migration 20261101f).
+  if (["ativo_vitrine", "proposta_recebida"].includes(new_status)) {
+    const { data: alvo } = await svc().from("cm_asset_listings").select("ma_deal_id, anonymous_id").eq("id", id).maybeSingle();
+    if (alvo?.ma_deal_id && !alvo.anonymous_id) {
+      return NextResponse.json({
+        error: "Este ativo veio da Mesa M&A e ainda não tem código. Confirme a classificação antes de publicar na vitrine.",
+      }, { status: 422 });
+    }
+  }
+
   if (nda_signed_at || nda_document_url) {
     // Marcacao retroativa de NDA exige autorizacao de diretor — ver
     // /api/cm/listings/[id]/nda-authorize. So ADMIN pode setar direto aqui.

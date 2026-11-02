@@ -1,3 +1,4 @@
+import { recortarTransferenciaPorPapel } from "@/lib/ma/transferencias";
 import { NextRequest, NextResponse } from "next/server";
 import { ehDaEquipe, idsDaEquipe } from "@/lib/enterprise";
 import { protegerMetadata } from "@/lib/credit-proposal-meta";
@@ -98,7 +99,7 @@ const PROPOSAL_SELECT = `
   instituicao_encaminhada, instituicao_feedback,
   pending_reason, pending_responsible, pending_at,
   pending_resolved_at, pending_resolved_by,
-  documents, checklist, metadata,
+  documents, checklist, metadata, ma_deal_id,
   partner:profiles!partner_id(id, full_name, role)
 `;
 
@@ -127,7 +128,7 @@ export async function GET(req: NextRequest) {
     if (!isAdmin) single = single.in("partner_id", equipeIds);
     const { data, error } = await single.single();
     if (error || !data) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
-    return NextResponse.json({ proposal: data });
+    return NextResponse.json({ proposal: recortarTransferenciaPorPapel(data as unknown as Record<string, unknown>, profile?.role, "code") });
   }
 
   let query = svc
@@ -146,7 +147,8 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // Propostas técnicas de análise comprada no site não são crédito (lib/analise-site.ts).
-  return NextResponse.json({ proposals: semAnaliseDoSite(data as { metadata?: unknown }[] | null) });
+  const recortadas = ((data ?? []) as unknown as Record<string, unknown>[]).map((r) => recortarTransferenciaPorPapel(r, profile?.role, "code"));
+  return NextResponse.json({ proposals: semAnaliseDoSite(recortadas as { metadata?: unknown }[]) });
 }
 
 // POST — cria nova proposta de crédito

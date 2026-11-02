@@ -277,7 +277,8 @@ function ModalClassificar({
   useEffect(() => {
     fetch("/api/ma/setores")
       .then((r) => r.json())
-      .then((j: { setores?: { code: string; label: string }[] }) => setSetores(j.setores ?? []))
+      .then((j: { setores?: { code: string; label: string }[] }) =>
+        setSetores([...(j.setores ?? [])].sort((x, y) => x.label.localeCompare(y.label, "pt-BR"))))
       .catch(() => setSetores([]));
   }, []);
 
@@ -326,6 +327,7 @@ function ModalClassificar({
             <div className="rounded-lg border border-[#F26D6D]/40 bg-[#F26D6D]/5 px-3 py-2.5 text-[12px] leading-relaxed text-[#F5F1E8]">
               Ao confirmar, o código {ehBolsa ? "BA" : "CR"} é emitido e <strong>consome um número da série</strong>, o card do deal passa a mostrar o código e o partner originador recebe um aviso de movimentação.
               Não dá para desfazer: se a classificação estiver errada, a mesa cancela o registro e o número fica aposentado.
+              <strong> O código emitido não muda depois. Confira o setor e o tipo do ativo antes de confirmar.</strong>
             </div>
 
             <div>
@@ -351,7 +353,7 @@ function ModalClassificar({
                 <label htmlFor="cc-tipo" className={labelCls}>Tipo do ativo</label>
                 <select id="cc-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)} className={inputCls}>
                   <option value="">Selecione</option>
-                  {TIPOS_ATIVO.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {[...TIPOS_ATIVO].sort((x, y) => x.label.localeCompare(y.label, "pt-BR")).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
               </div>
             )}
