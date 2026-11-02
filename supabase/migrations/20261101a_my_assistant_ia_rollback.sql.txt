@@ -1,0 +1,7 @@
+-- Reversão de 20261101a_my_assistant_ia.sql.
+-- Apaga os dados destas tabelas. Antes de executar com dados reais, exportar o conteúdo a pedido do dono.
+drop table if exists public.assistente_compromissos;
+drop table if exists public.assistente_lancamentos;
+drop table if exists public.assistente_mensagens;
+drop table if exists public.assistente_verificacao;
+drop table if exists public.assistente_config;

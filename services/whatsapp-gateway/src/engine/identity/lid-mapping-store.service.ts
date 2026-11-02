@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { LidMapping } from './lid-mapping.entity';
 import { createLogger } from '../../common/services/logger.service';
 import { resolveNonNegativeIntEnv } from '../../config/configuration';
@@ -123,6 +123,31 @@ export class LidMappingStoreService implements LidMappingStore, OnModuleInit {
         `Failed to persist lid->phone mapping for ${lid}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  }
+
+  /**
+   * Remove the mappings of these phones and those last written by this session, from the table and
+   * from both in-memory indexes. A row last written by another session for a phone not listed stays.
+   * Unlike remember(), a persistence failure propagates: the caller must know the data is still there.
+   * Returns the count of persisted rows removed.
+   */
+  async forget(phones: string[], sessionId: string): Promise<number> {
+    const criteria = [{ sessionId }, ...(phones.length > 0 ? [{ phone: In(phones) }] : [])];
+    const rows = await this.repo.find({ where: criteria, select: { lid: true } });
+    const lids = new Set(rows.map(row => row.lid));
+    for (const phone of phones) {
+      for (const lid of this.phoneToLids.get(phone) ?? []) lids.add(lid);
+    }
+    if (lids.size > 0) {
+      await this.repo.delete({ lid: In([...lids]) });
+    }
+    for (const lid of lids) {
+      const phone = this.lidToPhone.get(lid);
+      if (phone) this.phoneToLids.get(phone)?.delete(lid);
+      this.lidToPhone.delete(lid);
+    }
+    for (const phone of phones) this.phoneToLids.delete(phone);
+    return rows.length;
   }
 
   /**

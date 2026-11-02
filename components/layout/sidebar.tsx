@@ -38,6 +38,8 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "SDR", "CLOSER"] },
       { href: "/mercado", label: "Mercado", icon: "ChartCandlestick", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "SDR", "CLOSER", "FINANCEIRO"] },
+      // Sem papel: a visibilidade é por usuário autorizado, ver podeVer abaixo.
+      { href: "/meu-assistente", label: "MY ASSISTANT IA", icon: "BotMessageSquare", roles: [] },
       { href: "/crm", label: "CRM", icon: "ContactRound", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
       { href: "/chat", label: "Chat Mesa V3", icon: "MessageSquare", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
       { href: "/chat/admin", label: "Chat Partners", icon: "MessageSquare", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
@@ -240,11 +242,12 @@ interface SidebarProps {
   onClose?: () => void;
   /** White label do Enterprise (lib/enterprise.ts): logo e nome no lugar da marca V3. */
   marca?: { nome: string; logoUrl: string | null } | null;
+  assistenteAutorizado?: boolean;
 }
 
-export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: SidebarProps) {
+export function Sidebar({ role, starterAntigo = false, onClose, marca = null, assistenteAutorizado = false }: SidebarProps) {
   const podeVer = (item: { href: string; roles: string[] }) =>
-    item.roles.includes(role) || (starterAntigo && role === "STARTER" && MENU_STARTER_ANTIGO.has(item.href));
+    (item.href === "/meu-assistente" && assistenteAutorizado) || item.roles.includes(role) || (starterAntigo && role === "STARTER" && MENU_STARTER_ANTIGO.has(item.href));
   const pathname = usePathname();
   const [expandedItems, setExpandedItems] = useState<string[]>(() => {
     const initial = ["/mesa-credito"];

@@ -37,6 +37,21 @@ export async function POST(req: NextRequest) {
 
     console.log(`[SDR Webhook] evento: ${event}`);
 
+    // MY ASSISTANT IA: defesa extra, antes do bloco que trata sessão desconhecida como bot interno, para mensagem
+    // pessoal nunca entrar em sdr_conversas ou sdr_leads. Tabela ausente (migration ainda não aplicada) não trava o
+    // SDR; outro erro devolve 500 para o gateway reentregar, em vez de arriscar gravar.
+    if (sessionId) {
+      const { data: sessaoAssistente, error: erroAssistente } = await supabase
+        .from("assistente_config")
+        .select("user_id")
+        .eq("openwa_session_id", sessionId)
+        .maybeSingle();
+      if (erroAssistente && erroAssistente.code !== "PGRST205" && erroAssistente.code !== "42P01") {
+        return NextResponse.json({ error: "Falha temporária" }, { status: 500 });
+      }
+      if (sessaoAssistente) return NextResponse.json({ ok: true });
+    }
+
     // White label: resolve de qual partner é essa sessão OpenWA (session_id
     // vem em todo evento do gateway). Sessão não encontrada = bot interno da
     // V3 (comportamento de sempre, sessão global via env var).

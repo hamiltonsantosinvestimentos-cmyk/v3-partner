@@ -31,10 +31,12 @@ interface PlatformShellProps {
   notificationCount: number;
   /** White label do Enterprise (null = marca V3). */
   marca?: { nome: string; logoUrl: string | null } | null;
+  /** MY ASSISTANT IA: item de menu só para usuário autorizado (checado no servidor). */
+  assistenteAutorizado?: boolean;
   children: React.ReactNode;
 }
 
-export function PlatformShell({ user, notificationCount, marca = null, children }: PlatformShellProps) {
+export function PlatformShell({ user, notificationCount, marca = null, assistenteAutorizado = false, children }: PlatformShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
@@ -57,7 +59,7 @@ export function PlatformShell({ user, notificationCount, marca = null, children 
       <LocationGate role={user.role} />
       {/* Desktop sidebar */}
       <div className="hidden lg:flex flex-shrink-0">
-        <Sidebar role={user.role} starterAntigo={user.starter_antigo} marca={marca} />
+        <Sidebar role={user.role} starterAntigo={user.starter_antigo} marca={marca} assistenteAutorizado={assistenteAutorizado} />
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -68,7 +70,7 @@ export function PlatformShell({ user, notificationCount, marca = null, children 
             onClick={() => setSidebarOpen(false)}
           />
           <div className="absolute left-0 top-0 bottom-0 z-50">
-            <Sidebar role={user.role} starterAntigo={user.starter_antigo} marca={marca} onClose={() => setSidebarOpen(false)} />
+            <Sidebar role={user.role} starterAntigo={user.starter_antigo} marca={marca} assistenteAutorizado={assistenteAutorizado} onClose={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}

@@ -29,7 +29,9 @@ const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "PARTNER_HE", "STARTER", "ENTER
 // created_by/requester_id em vez de redirect por role) -- auditoria
 // 17/09/2026, verificado manualmente. Adicionar aqui SO depois de conferir
 // de verdade que todo dado sensivel esta escopado ao proprio usuario.
-const EXCEPTIONS = new Set(["/mesa-operacional", "/deal-rooms"]);
+// /meu-assistente (01/11/2026): o gate é por id de usuário, não por papel: exigirUsuarioAutorizado() redireciona
+// para /unauthorized na própria página, as rotas repetem a checagem, e a RLS exige user_id = auth.uid().
+const EXCEPTIONS = new Set(["/mesa-operacional", "/deal-rooms", "/meu-assistente"]);
 
 // Paginas que ja tinham gate real no servidor ANTES desta auditoria (17-
 // 18/09/2026), so que em padroes diferentes de requireRole() -- redirect
