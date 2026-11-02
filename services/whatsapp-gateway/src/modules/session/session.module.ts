@@ -14,6 +14,7 @@ import { SessionErrorStore } from './session-error-store.service';
 import { SessionRestrictionStore } from './session-restriction-store.service';
 import { PresenceStore } from './presence-store.service';
 import { SessionController } from './session.controller';
+import { SessionCleanupController } from './session-cleanup.controller';
 import { WebhookModule } from '../webhook/webhook.module';
 import { StatusStoreModule } from '../status-store/status-store.module';
 import { ChatMediaModule } from '../chat-media/chat-media.module';
@@ -29,7 +30,7 @@ import { AutomationModule } from '../automation/automation.module';
     ChatMediaModule,
     AutomationModule,
   ],
-  controllers: [SessionController],
+  controllers: [SessionController, SessionCleanupController],
   providers: [
     // Global on purpose: any controller may carry a session dimension. Inert unless NODE_URL is set.
     { provide: APP_INTERCEPTOR, useClass: SessionProxyInterceptor },

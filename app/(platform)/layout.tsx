@@ -145,6 +145,10 @@ export default async function PlatformLayout({
       }
     }
 
+    // MY ASSISTANT IA: o menu recebe só o booleano, a lista de ids nunca vai ao navegador.
+    const { usuarioAutorizado } = await import("@/lib/assistente/acesso");
+    const assistenteAutorizado = usuarioAutorizado(user.id);
+
     let notificationCount = 0;
     try {
       const { count } = await supabase
@@ -171,6 +175,7 @@ export default async function PlatformLayout({
             starter_antigo: starterAntigo,
           }}
           marca={marca}
+          assistenteAutorizado={assistenteAutorizado}
           notificationCount={notificationCount}
         >
           {children}

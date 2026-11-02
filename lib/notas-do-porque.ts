@@ -175,6 +175,19 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Confirmar a classificação",
     texto: "Emite o código do registro (BA na Bolsa, CR no Crédito) e consome um número da série. Não dá para desfazer: se a classificação estava errada, a mesa cancela o registro e o número fica aposentado. O partner originador recebe um aviso genérico de movimentação, sem valores nem nomes de investidores.",
   },
+  // MY ASSISTANT IA (BRIEF 01/11/2026).
+  assistente_celular: {
+    titulo: "Celular autorizado",
+    texto: "O assistente só aceita mensagens deste número.",
+  },
+  assistente_qr: {
+    titulo: "QR Code",
+    texto: "Use apenas o chip exclusivo do assistente, nunca o seu WhatsApp pessoal.",
+  },
+  assistente_ia: {
+    titulo: "Uso de IA",
+    texto: "O texto é enviado à Anthropic e o áudio à OpenAI para processar o pedido. O servidor de WhatsApp da V3 mantém uma cópia técnica por até 48 horas. A transcrição fica guardada por até 90 dias, e o arquivo de áudio não fica no painel.",
+  },
 } as const satisfies Record<string, Nota>;
 
 export type NotaId = keyof typeof NOTAS_DO_PORQUE;

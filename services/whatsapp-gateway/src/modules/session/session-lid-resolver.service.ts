@@ -30,6 +30,17 @@ export class SessionLidResolver {
     private readonly lidMappingStore?: LidMappingStoreService,
   ) {}
 
+  /** Drop every cached entry of this session and any entry, from any session, resolving to these phones. */
+  forget(sessionId: string, phones: string[]): void {
+    const targets = new Set(phones);
+    const prefix = `${sessionId}:`;
+    for (const [key, phone] of [...this.cache.entries()]) {
+      if (key.startsWith(prefix) || (phone && targets.has(phone))) {
+        this.cache.delete(key);
+      }
+    }
+  }
+
   /**
    * Best-effort resolution, cached per session (incl. misses). Never throws — returns null on any
    * failure or when the engine isn't available. Gated by the caller on `RESOLVE_LID_TO_PHONE`.
