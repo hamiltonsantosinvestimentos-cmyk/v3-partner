@@ -30,6 +30,7 @@ import { RaioXExtrato } from "@/components/mesa-credito/raio-x-extrato";
 import { AvaliacaoTecnicaCard, type JobAvaliacaoTecnica } from "@/components/mesa-credito/avaliacao-tecnica-card";
 import type { AvaliacaoTecnica, PdfAvaliacaoMeta } from "@/lib/avaliacao-tecnica/tipos";
 import { pegarOrigemModal, recorteDe } from "@/components/motion/origem-modal";
+import { PreAprovacaoPanel } from "@/components/mesa-credito/pre-aprovacao-panel";
 import { isNdaMesaTemplateName, NDA_MESA_NOME } from "@/lib/nda-mesa-operacoes";
 
 export type MesaComment = {
@@ -3215,6 +3216,18 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                 </div>
               </div>
             )
+          )}
+
+          {/* ── Pré-aprovação ── só a equipe da Mesa (a rota repete a checagem de papel) */}
+          {canChangeStage && (
+            <PreAprovacaoPanel
+              proposalId={proposal.id}
+              clientEmail={(((proposal.metadata as Record<string, unknown>)?.email as string | undefined) || proposal.email) ?? null}
+              partnerName={proposal.partner_name ?? null}
+              hasPartner={!!proposal.partner_id}
+              metadata={proposal.metadata as Record<string, unknown> | undefined}
+              onMetadata={(m) => onProposalUpdate?.(proposal.id, { metadata: m } as Partial<ProposalFull>)}
+            />
           )}
 
           {/* ── Banner de Pendência de Stage ── visível quando stage = PENDENCIA */}

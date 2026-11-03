@@ -56,6 +56,11 @@ export function protegerMetadata(banco: Meta | null | undefined, recebido: Meta)
   // Cobranças da avaliação de engenharia: só a rota /api/mesa-credito/cobranca-avaliacao grava.
   if (atual.cobrancas_avaliacao !== undefined) out.cobrancas_avaliacao = atual.cobrancas_avaliacao;
   else delete out.cobrancas_avaliacao;
+  // Pré-aprovação: só a rota /api/credit-proposals/[id]/pre-aprovacao grava (marco da Cláusula 4-A).
+  for (const k of ["pre_aprovacao", "pre_aprovacao_historico"] as const) {
+    if (atual[k] !== undefined) out[k] = atual[k];
+    else delete out[k];
+  }
   const imoveisBanco = Array.isArray(atual.imoveis) ? (atual.imoveis as Imovel[]) : [];
   if (Array.isArray(recebido.imoveis)) {
     out.imoveis = (recebido.imoveis as Imovel[]).map((im, i) => {
