@@ -39,12 +39,6 @@ export async function proxy(request: NextRequest) {
     return response;
   }
 
-  // MY ASSISTANT IA: só o caminho exato, com igualdade e fora de PUBLIC_ROUTES (que usa startsWith), para as
-  // demais rotas de /api/assistente/ continuarem atrás da sessão. A rota se protege pela assinatura do gateway.
-  if (pathname === "/api/assistente/webhook") {
-    return NextResponse.next();
-  }
-
   // Rotas públicas — sem verificação de sessão
   if (PUBLIC_ROUTES.some((r) => pathname.startsWith(r))) {
     return NextResponse.next();
