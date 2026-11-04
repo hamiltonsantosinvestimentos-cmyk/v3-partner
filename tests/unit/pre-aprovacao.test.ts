@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { avisosPreAprovacao, dataHoraBR, mascararEmail, montarEmailPreAprovacao, validarPreAprovacao } from "../../lib/pre-aprovacao";
+import { avisosPreAprovacao, dataHoraBR, mascararEmail, montarEmailPreAprovacao, rotuloRenda, validarPreAprovacao } from "../../lib/pre-aprovacao";
 import { protegerMetadata } from "../../lib/credit-proposal-meta";
 import { valorEmReaisPorExtenso } from "../../lib/utils/valor-extenso";
 
@@ -64,4 +64,31 @@ test("PATCH genérico não grava nem apaga a pré-aprovação", () => {
   const banco = { pre_aprovacao: { valor_pre_aprovado: 2 }, pre_aprovacao_historico: [] };
   const desatualizado = protegerMetadata(banco, { pre_aprovacao: undefined, motivo_reprovacao: "y" });
   assert.deepEqual(desatualizado.pre_aprovacao, { valor_pre_aprovado: 2 });
+});
+
+test("e-mail do cliente usa o rótulo novo da renda; o do partner não traz nenhum dos dois", () => {
+  const r = validarPreAprovacao(base);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  const cli = montarEmailPreAprovacao({ destinatario: "cliente", nome: "Maria", codigo: "CR-1", clienteNome: "Maria", dados: r.dados, enviadoEm: "2026-11-04T17:00:00Z" });
+  const par = montarEmailPreAprovacao({ destinatario: "partner", nome: "João", codigo: "CR-1", clienteNome: "Maria", dados: r.dados, enviadoEm: "2026-11-04T17:00:00Z" });
+  assert.match(cli.html, /Renda média necessária para o crédito pretendido/);
+  assert.doesNotMatch(cli.html, /Renda média aprovada/);
+  assert.doesNotMatch(par.html, /Renda média necessária/);
+  assert.doesNotMatch(par.html, /Renda média aprovada/);
+});
+
+test("registro novo leva rotulo_renda e rotuloRenda separa nome antigo e novo", () => {
+  const r = validarPreAprovacao(base);
+  assert.ok(r.ok);
+  if (r.ok) assert.equal(r.dados.rotulo_renda, "necessaria");
+  assert.equal(rotuloRenda({}), "Renda média aprovada pela instituição");
+  assert.equal(rotuloRenda(null), "Renda média aprovada pela instituição");
+  assert.equal(rotuloRenda({ rotulo_renda: "necessaria" }), "Renda média necessária para o crédito pretendido");
+});
+
+test("renda acima do teto cita o nome novo no erro", () => {
+  const r = validarPreAprovacao({ ...base, renda_aprovada: 10_000_001 });
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.ok(r.erros.some((e) => e.startsWith("Renda média necessária para o crédito pretendido:")));
 });
