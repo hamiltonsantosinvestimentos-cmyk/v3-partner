@@ -7,6 +7,15 @@ import { valorEmReaisPorExtenso } from "@/lib/utils/valor-extenso";
 export const TETO_RENDA = 10_000_000;
 export const TETO_VALOR = 1_000_000_000;
 
+/** Nome do campo renda_aprovada. Registros sem rotulo_renda foram enviados com o nome antigo
+ * (BRIEF 2026-11-04_pre-aprovacao-renda-necessaria.md) e continuam mostrando esse nome. */
+export const ROTULO_RENDA_NECESSARIA = "Renda média necessária para o crédito pretendido";
+export const ROTULO_RENDA_ANTIGO = "Renda média aprovada pela instituição";
+
+export function rotuloRenda(registro: { rotulo_renda?: string } | null | undefined): string {
+  return registro?.rotulo_renda === "necessaria" ? ROTULO_RENDA_NECESSARIA : ROTULO_RENDA_ANTIGO;
+}
+
 export type ProximaEtapa = { avaliacao: boolean; contrato: boolean; outros: boolean; outros_texto: string | null };
 
 export type PreAprovacaoDados = {
@@ -16,6 +25,8 @@ export type PreAprovacaoDados = {
   valor_imovel: number;
   valor_pretendido: number;
   proxima_etapa: ProximaEtapa;
+  /** Todo envio novo grava "necessaria"; ausente = registro enviado com o nome antigo. */
+  rotulo_renda?: "necessaria";
 };
 
 export type PreAprovacaoRegistro = PreAprovacaoDados & {
@@ -43,7 +54,7 @@ export function validarPreAprovacao(body: Record<string, unknown>): { ok: true; 
   const erros: string[] = [];
   const campos = {
     renda_apresentada: valor(body.renda_apresentada, TETO_RENDA, "Renda média apresentada"),
-    renda_aprovada: valor(body.renda_aprovada, TETO_RENDA, "Renda média aprovada"),
+    renda_aprovada: valor(body.renda_aprovada, TETO_RENDA, ROTULO_RENDA_NECESSARIA),
     valor_pre_aprovado: valor(body.valor_pre_aprovado, TETO_VALOR, "Valor pré-aprovado"),
     valor_imovel: valor(body.valor_imovel, TETO_VALOR, "Valor do imóvel"),
     valor_pretendido: valor(body.valor_pretendido, TETO_VALOR, "Valor pretendido"),
@@ -60,7 +71,7 @@ export function validarPreAprovacao(body: Record<string, unknown>): { ok: true; 
   if (proxima.outros && !proxima.outros_texto) erros.push("Informe qual é a próxima etapa em Outros.");
   if (!proxima.outros) proxima.outros_texto = null;
   if (erros.length) return { ok: false, erros };
-  return { ok: true, dados: { ...(campos as Omit<PreAprovacaoDados, "proxima_etapa">), proxima_etapa: proxima } };
+  return { ok: true, dados: { ...(campos as Omit<PreAprovacaoDados, "proxima_etapa">), proxima_etapa: proxima, rotulo_renda: "necessaria" } };
 }
 
 /** Avisos que não bloqueiam o envio. */
@@ -114,7 +125,7 @@ export function montarEmailPreAprovacao(p: {
   const linhas: [string, string][] = [];
   if (p.destinatario === "cliente") {
     linhas.push(["Renda média apresentada", brl(d.renda_apresentada)]);
-    linhas.push(["Renda média aprovada", brl(d.renda_aprovada)]);
+    linhas.push([ROTULO_RENDA_NECESSARIA, brl(d.renda_aprovada)]);
   }
   linhas.push(["Valor pré-aprovado", `${brl(d.valor_pre_aprovado)} (${valorEmReaisPorExtenso(d.valor_pre_aprovado)})`]);
   linhas.push(["Valor do imóvel", brl(d.valor_imovel)]);

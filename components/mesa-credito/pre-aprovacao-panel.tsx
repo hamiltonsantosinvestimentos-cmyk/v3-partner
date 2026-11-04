@@ -4,8 +4,8 @@ import { useState } from "react";
 import { BadgeCheck, Loader2, Send } from "lucide-react";
 import { maskCurrencyBRLInput, parseCurrencyBRLInput, valorParaCampoBRL } from "@/lib/utils";
 import {
-  avisosPreAprovacao, brl, dataHoraBR, mascararEmail, proximaEtapaTexto, validarPreAprovacao,
-  type PreAprovacaoDados, type PreAprovacaoRegistro,
+  avisosPreAprovacao, brl, dataHoraBR, mascararEmail, proximaEtapaTexto, rotuloRenda, validarPreAprovacao,
+  ROTULO_RENDA_NECESSARIA, type PreAprovacaoDados, type PreAprovacaoRegistro,
 } from "@/lib/pre-aprovacao";
 
 // Pré-aprovação da proposta (BRIEF 2026-11-03_pre-aprovacao-mesa-operacional.md): a Mesa preenche à mão e
@@ -16,7 +16,7 @@ type Campo = "renda_apresentada" | "renda_aprovada" | "valor_pre_aprovado" | "va
 
 const CAMPOS: { k: Campo; label: string }[] = [
   { k: "renda_apresentada", label: "Renda média apresentada" },
-  { k: "renda_aprovada", label: "Renda média aprovada pela instituição" },
+  { k: "renda_aprovada", label: ROTULO_RENDA_NECESSARIA },
   { k: "valor_pre_aprovado", label: "Valor pré-aprovado com a renda do cliente" },
   { k: "valor_imovel", label: "Valor do imóvel" },
   { k: "valor_pretendido", label: "Valor pretendido" },
@@ -33,7 +33,13 @@ export function PreAprovacaoPanel({ proposalId, clientEmail, partnerName, hasPar
   const atual = (metadata?.pre_aprovacao ?? null) as PreAprovacaoRegistro | null;
   const historico = (Array.isArray(metadata?.pre_aprovacao_historico) ? metadata!.pre_aprovacao_historico : []) as PreAprovacaoRegistro[];
   const [editando, setEditando] = useState(false);
-  const [valores, setValores] = useState<Record<Campo, string>>(() => Object.fromEntries(CAMPOS.map((c) => [c.k, atual ? valorParaCampoBRL(atual[c.k]) : ""])) as Record<Campo, string>);
+  // Registro enviado com o nome antigo ("aprovada"): no reenvio a renda vem vazia, para o número não sair
+  // com o nome "necessária" sem alguém conferir (BRIEF 2026-11-04_pre-aprovacao-renda-necessaria.md).
+  const atualNomeAntigo = !!atual && atual.rotulo_renda !== "necessaria";
+  const rotuloAtual = (k: Campo, label: string) => (k === "renda_aprovada" ? rotuloRenda(atual) : label);
+  const [valores, setValores] = useState<Record<Campo, string>>(() => Object.fromEntries(CAMPOS.map((c) => [
+    c.k, !atual || (c.k === "renda_aprovada" && atualNomeAntigo) ? "" : valorParaCampoBRL(atual[c.k]),
+  ])) as Record<Campo, string>);
   const [etapa, setEtapa] = useState(() => ({
     avaliacao: atual?.proxima_etapa.avaliacao ?? false,
     contrato: atual?.proxima_etapa.contrato ?? false,
@@ -95,7 +101,7 @@ export function PreAprovacaoPanel({ proposalId, clientEmail, partnerName, hasPar
       {atual && !editando && (
         <div className="space-y-1 text-sm">
           {CAMPOS.map((c) => (
-            <div key={c.k} className="flex justify-between gap-4"><span className="text-[#7A8FA8]">{c.label}</span><span className="text-[#F0ECE4] font-semibold">{brl(atual[c.k])}</span></div>
+            <div key={c.k} className="flex justify-between gap-4"><span className="text-[#7A8FA8]">{rotuloAtual(c.k, c.label)}</span><span className="text-[#F0ECE4] font-semibold">{brl(atual[c.k])}</span></div>
           ))}
           <p className="text-[#F0ECE4]"><span className="text-[#7A8FA8]">Próxima etapa:</span> {proximaEtapaTexto(atual.proxima_etapa).join("; ")}</p>
           <p className="text-xs text-[#7A8FA8]">Enviado em {dataHoraBR(atual.enviado_em)} por {atual.enviado_por_nome ?? "equipe V3"} para {atual.emails.partner ? "cliente e partner" : "cliente"}.</p>
@@ -154,15 +160,24 @@ export function PreAprovacaoPanel({ proposalId, clientEmail, partnerName, hasPar
               Enviar a pré-aprovação para o cliente ({mascararEmail(clientEmail ?? "")}){hasPartner ? ` e para o partner (${partnerName ?? "partner"})` : ""}? Depois de enviado, o e-mail não pode ser desfeito.
             </p>
             <div className="rounded-lg bg-[#162744] p-3 space-y-1 text-sm">
-              {CAMPOS.map((c) => (
-                <div key={c.k} className="flex justify-between gap-3">
-                  <span className="text-[#7A8FA8]">{c.label}</span>
-                  <span className="text-[#F0ECE4] font-semibold text-right">
-                    {atual && atual[c.k] !== confirmando[c.k] && <span className="line-through text-[#7A8FA8] mr-2 font-normal">{brl(atual[c.k])}</span>}
-                    {brl(confirmando[c.k])}
-                  </span>
-                </div>
-              ))}
+              {CAMPOS.map((c) => {
+                // Valor antigo riscado só quando o nome é o mesmo; se o registro atual usava o nome antigo, ele aparece à parte, com esse nome.
+                const nomeMudou = c.k === "renda_aprovada" && atualNomeAntigo;
+                return (
+                  <div key={c.k} className="space-y-0.5">
+                    <div className="flex justify-between gap-3">
+                      <span className="text-[#7A8FA8]">{c.label}</span>
+                      <span className="text-[#F0ECE4] font-semibold text-right">
+                        {atual && !nomeMudou && atual[c.k] !== confirmando[c.k] && <span className="line-through text-[#7A8FA8] mr-2 font-normal">{brl(atual[c.k])}</span>}
+                        {brl(confirmando[c.k])}
+                      </span>
+                    </div>
+                    {atual && nomeMudou && (
+                      <p className="text-xs text-[#7A8FA8]">Envio anterior: {rotuloRenda(atual)} {brl(atual[c.k])}</p>
+                    )}
+                  </div>
+                );
+              })}
               <p className="text-[#F0ECE4]"><span className="text-[#7A8FA8]">Próxima etapa:</span> {proximaEtapaTexto(confirmando.proxima_etapa).join("; ")}</p>
             </div>
             {avisosPreAprovacao(confirmando).map((a) => <p key={a} className="text-xs text-[#E8C97A]">{a}</p>)}
