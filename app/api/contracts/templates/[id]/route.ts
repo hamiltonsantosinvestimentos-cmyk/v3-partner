@@ -5,6 +5,8 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { notifySociosMinutaEmRevisao } from "@/lib/socios-notify";
 import { validateVerticalBlocks, extractPlainVariables } from "@/lib/contract-render";
 import { VERTICAL_LABELS } from "@/lib/contract-verticals";
+import { notifyUser } from "@/lib/contract-notify";
+import { notifyRoundRestart, type QuorumVote } from "@/lib/contract-quorum";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -141,6 +143,28 @@ export async function PATCH(
       templateName: data.template_name ?? current.template_name,
       origem: "manual",
     }).catch((e) => console.error("[templates/[id] PATCH] falha ao notificar sócios:", e));
+  }
+
+  // 04/11/2026: texto editado com a minuta JÁ em revisão reinicia a votação
+  // (rodada nova, acima). Os sócios que haviam aprovado a rodada anterior,
+  // menos quem editou, recebem um aviso genérico (sem nome de minuta). Fica de
+  // fora: reenvio para revisão (o aviso existente acima já cobre), reprovação
+  // seguida de reenvio e force_revalidation (a minuta cai em rascunho, onde
+  // ninguém vota) e edição em rascunho/reprovada. O revision-callback do agente
+  // também fica fora: os aprovadores antigos já foram avisados pelo fluxo de
+  // reprovação. Aguardado com await e best-effort.
+  if (roundBumped && !submit_for_review && data.approval_status === "em_revisao") {
+    const { data: anteriores } = await svc()
+      .from("contract_template_reviews")
+      .select("reviewer_id, reviewer_type, decision")
+      .eq("template_id", id)
+      .eq("review_round", nextRound - 1);
+    await notifyRoundRestart({
+      templateId: id,
+      votosRodadaAnterior: (anteriores ?? []) as QuorumVote[],
+      editorId: userId,
+      notify: notifyUser,
+    }).catch((e) => console.error("[templates/[id] PATCH] falha ao avisar rodada reiniciada:", e));
   }
 
   return NextResponse.json({ template: data });
