@@ -16,6 +16,9 @@ import { PhoneIntlInput } from "@/components/ui/phone-intl-input";
 import { whatsappDigits } from "@/lib/phone";
 import { Dica } from "@/components/shared/dica";
 import { groupQualificationBatches, joinNamesPtBr, formatDateTimeBr, consumedContractStatus } from "@/lib/qualification-batch-groups";
+// Só o TIPO: o quórum chega calculado pelo GET /review. Importar valor de
+// lib/contract-quorum levaria os ids dos sócios para o bundle do navegador.
+import type { QuorumResult } from "@/lib/contract-quorum";
 
 interface RiscoLaudo {
   resumo?: string;
@@ -231,6 +234,10 @@ export function ContractTemplatesClient({ onOpenContract, role }: { onOpenContra
   const [revisionError, setRevisionError] = useState<string | null>(null);
 
   const [reviews, setReviews] = useState<TemplateReview[]>([]);
+  // Quórum da rodada atual, calculado no servidor (lib/contract-quorum.ts).
+  const [quorum, setQuorum] = useState<QuorumResult | null>(null);
+  // Voto pendente de confirmação: o revisor editou o texto, e salvar a edição reinicia a votação.
+  const [confirmReinicio, setConfirmReinicio] = useState<"aprovado" | "reprovado" | null>(null);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [submittingForReview, setSubmittingForReview] = useState(false);
@@ -730,7 +737,8 @@ export function ContractTemplatesClient({ onOpenContract, role }: { onOpenContra
       const res = await fetch(`/api/contracts/templates/${templateId}/review`);
       const json = await res.json();
       setReviews(json.reviews ?? []);
-    } catch { setReviews([]); }
+      setQuorum(json.quorum ?? null);
+    } catch { setReviews([]); setQuorum(null); }
   };
 
   const loadTemplateQualifications = async (templateId: string) => {
@@ -1107,6 +1115,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
     setFormSeries("V3C-PAR");
     setFormBody("");
     setReviews([]);
+    setQuorum(null);
     setQualBatches([]);
   };
 
@@ -1156,12 +1165,24 @@ ${allParties.length > 0 ? `<div class="qualbox">
     finally { setSubmittingForReview(false); }
   };
 
-  const handleReviewDecision = async (decision: "aprovado" | "reprovado") => {
+  // Mesma normalização do servidor (lib/contract-quorum.ts, normalizeBody),
+  // repetida aqui em uma linha de propósito: o módulo do servidor traz os ids
+  // dos sócios e não pode entrar no bundle do navegador.
+  const normBody = (s: string | null | undefined) => (s ?? "").replace(/\r\n?/g, "\n").trim();
+
+  const handleReviewDecision = async (decision: "aprovado" | "reprovado", confirmado = false) => {
     if (!selected) return;
     if (decision === "reprovado" && !reviewComment.trim()) {
       aviso("Reprovação exige comentário explicando o motivo");
       return;
     }
+    // Editou o texto no campo? Salvar a edição reinicia a votação: confirma
+    // antes, em modal próprio (nunca window.confirm).
+    if (!confirmado && formBody.trim() && normBody(formBody) !== normBody(selected.body_text_raw)) {
+      setConfirmReinicio(decision);
+      return;
+    }
+    setConfirmReinicio(null);
     setSubmittingReview(true);
     try {
       const res = await fetch(`/api/contracts/templates/${selected.id}/review`, {
@@ -1365,6 +1386,22 @@ ${allParties.length > 0 ? `<div class="qualbox">
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/40 rounded-lg text-xs font-bold hover:bg-[#C9A84C]/25 transition">
                         <FilePlus2 size={13} /> Gerar Contrato
                       </button>
+                    )}
+                    {/* 04/11/2026: antes, sem aprovação, o botão simplesmente
+                        não existia e nada explicava por quê. O contrato só
+                        sai depois do quórum da rodada atual, porque voto
+                        dado sobre texto antigo não vale para o texto novo. */}
+                    {selected.approval_status === "em_revisao" && (
+                      <p className="basis-full text-[11px] text-[#9BAFC5]">
+                        {quorum && quorum.rodada === selected.review_round
+                          ? `Gerar Contrato é liberado após o quórum da rodada ${quorum.rodada}: ${quorum.faltam.length > 0 ? `faltam ${joinNamesPtBr(quorum.faltam)}` : "faltam aprovações"} (${quorum.sociosAprovaram}/3 sócios aprovaram).`
+                          : "Gerar Contrato é liberado após o quórum da rodada atual de votação dos sócios."}
+                      </p>
+                    )}
+                    {(selected.approval_status === "rascunho" || selected.approval_status === "reprovado") && (
+                      <p className="basis-full text-[11px] text-[#9BAFC5]">
+                        Gerar Contrato é liberado depois de enviar para revisão e fechar o quórum dos sócios.
+                      </p>
                     )}
                   </div>
                 </div>
@@ -1983,38 +2020,34 @@ ${allParties.length > 0 ? `<div class="qualbox">
                       João ("não tenho um painel pra poder justificar") —
                       mostra o placar em tempo real sem precisar contar
                       linha por linha do histórico abaixo. */}
-                  {(() => {
-                    // 04/09/2026: filtra pela rodada atual. Um voto de rodada
-                    // anterior (texto já editado desde então) não conta pro
-                    // quórum de agora — mesma correção do P0 de review_round.
-                    const currentRoundReviews = reviews.filter(r => r.review_round === selected?.review_round);
-                    const sociosAprovados = Array.from(new Set(
-                      currentRoundReviews.filter(r => r.reviewer_type === "compliance_socio" && r.decision === "aprovado").map(r => r.reviewer_name)
-                    ));
-                    const juridicoAprovou = currentRoundReviews.some(r => r.reviewer_type === "juridico" && r.decision === "aprovado");
-                    // Trava dos R$50 mil (30/08/2026): acima do valor
-                    // declarado no upload, maioria de sócios sozinha não
-                    // fecha quórum, precisa do jurídico.
-                    const valorBloqueiaMaioria = (selected?.valor_operacao_estimado ?? 0) > 50000;
-                    const maioriaValida = sociosAprovados.length >= 2 && !valorBloqueiaMaioria;
-                    return (
-                      <div className="flex flex-wrap items-center gap-2 mb-3 p-3 rounded-lg bg-[#09081A] border border-[#9BAFC5]/10">
-                        <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider mr-1">Quórum</span>
-                        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", maioriaValida ? "bg-emerald-500/20 text-emerald-400" : "bg-[#243A66] text-[#9BAFC5]")}>
-                          {sociosAprovados.length}/3 sócios {sociosAprovados.length > 0 ? `(${sociosAprovados.join(", ")})` : ""}
-                        </span>
-                        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", juridicoAprovou ? "bg-emerald-500/20 text-emerald-400" : "bg-[#243A66] text-[#9BAFC5]")}>
-                          Jurídico {juridicoAprovou ? "✓ aprovou" : "pendente"}
-                        </span>
-                        <span className="text-[9px] text-[#9BAFC5]">
-                          {maioriaValida ? "Fechado por maioria de sócios"
-                            : juridicoAprovou && sociosAprovados.length > 0 ? "Fechado por jurídico + sócio"
-                            : valorBloqueiaMaioria && sociosAprovados.length >= 2 ? "Maioria atingida, mas valor > R$50 mil exige jurídico"
-                            : "Falta jurídico + 1 sócio, ou 2 sócios"}
+                  {/* 04/11/2026: o painel espelha a regra real do backend
+                      (3 de 3, ou 2 de 3 se o valor declarado não passa de
+                      R$50 mil). Não existe mais jurídico no quórum desde
+                      29/09/2026. O cálculo vem do GET /review (mesma função
+                      da rota de voto), só filtrando pela rodada atual aqui. */}
+                  {quorum && quorum.rodada === selected?.review_round && (
+                    <div className="mb-3 p-3 rounded-lg bg-[#09081A] border border-[#9BAFC5]/10 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mr-1">Quórum · Rodada {quorum.rodada}</span>
+                        <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded", quorum.met ? "bg-emerald-500/20 text-emerald-400" : "bg-[#243A66] text-[#9BAFC5]")}>
+                          {quorum.sociosAprovaram}/3 sócios aprovaram{quorum.aprovaram.length > 0 ? `: ${joinNamesPtBr(quorum.aprovaram)}` : ""}
                         </span>
                       </div>
-                    );
-                  })()}
+                      <p className="text-[11px] text-[#F5F1E8]">
+                        {quorum.met
+                          ? "Quórum fechado. A minuta está liberada para gerar contrato."
+                          : quorum.faltam.length > 0
+                            ? `Ainda não votaram nesta rodada: ${joinNamesPtBr(quorum.faltam)}.`
+                            : "Todos os sócios já votaram, mas ainda não há aprovações suficientes."}
+                      </p>
+                      <p className="text-[11px] text-[#9BAFC5]">{quorum.regra}</p>
+                      {reviews.some((r) => r.review_round !== quorum.rodada) && (
+                        <p className="text-[11px] text-[#9BAFC5]">
+                          Votos de rodadas anteriores não contam: o texto da minuta mudou desde então e a votação recomeçou.
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <span className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-wider">Histórico de Revisão · Rodada atual: {selected?.review_round}</span>
                   <div className="mt-2 space-y-2">
                     {reviews.map((r) => {
@@ -2041,6 +2074,37 @@ ${allParties.length > 0 ? `<div class="qualbox">
           )}
         </div>
       </div>
+
+      {/* Modal de confirmação da edição durante a revisão (BRIEF 04/11/2026):
+          salvar o texto alterado reinicia a votação. Fecha só pelos botões,
+          nunca clicando fora. */}
+      {confirmReinicio && selected && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 px-4">
+          <div className="w-full max-w-md bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col">
+            <div className="p-4 border-b border-[#C9A84C]/20 text-sm font-bold text-[#F5F1E8] flex items-center gap-2">
+              <Scale size={14} className="text-[#C9A84C]" /> Salvar a edição reinicia a votação
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-[11px] text-[#F5F1E8]">
+                Você alterou o texto da minuta. Ao salvar, a votação recomeça em uma rodada nova: os votos já dados deixam de valer e os outros sócios precisam votar de novo. O seu voto fica registrado na rodada nova.
+              </p>
+              <p className="text-[11px] text-[#9BAFC5]">
+                Os sócios que haviam aprovado a rodada atual recebem um aviso. Se você só quer votar, cancele e desfaça a alteração no campo do texto.
+              </p>
+            </div>
+            <div className="p-4 border-t border-[#C9A84C]/20 flex justify-end gap-2">
+              <button onClick={() => setConfirmReinicio(null)} disabled={submittingReview}
+                className="px-4 py-2 bg-[#162744] text-[#9BAFC5] border border-[#9BAFC5]/20 rounded-lg text-xs font-bold hover:text-[#F5F1E8] hover:bg-[#243A66] transition disabled:opacity-50">
+                Cancelar
+              </button>
+              <button onClick={() => handleReviewDecision(confirmReinicio, true)} disabled={submittingReview}
+                className="px-4 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition disabled:opacity-50">
+                {confirmReinicio === "aprovado" ? "Salvar edição e aprovar" : "Salvar edição e reprovar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Baixar para análise jurídica (BRIEF 21/10/2026): fecha só pelos botões. */}
       {showExportModal && selected && (

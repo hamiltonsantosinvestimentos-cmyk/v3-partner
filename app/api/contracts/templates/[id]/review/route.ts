@@ -6,6 +6,8 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { logAgentAuditEvent } from "@/lib/socios-notify";
 import { notifyUser, SOCIOS_IDS } from "@/lib/contract-notify";
 import { triggerContractRevisionAgent } from "@/lib/contract-revision-agent";
+import { validateVerticalBlocks } from "@/lib/contract-render";
+import { SOCIOS, computeQuorum, isBodyEdited, notifyRoundRestart, type QuorumVote } from "@/lib/contract-quorum";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -18,14 +20,9 @@ function svc() {
 // (entrada 29/09/2026). O grupo JURIDICO e o caminho de quórum que dispensava
 // 1 dos 2 sócios foram removidos; a auditoria de forma continua sendo o
 // @contract-legal-guardian, que roda ANTES do voto (nunca substitui o voto).
-// Hamilton tem 2 contas: 27a8a72e... (hamilton@, PARTNER_PRO, demonstração
-// pra prospects/partners) e 75c6cac4... (suporte@, ADMIN, conta real dele).
-// Usa a real aqui — mesma correção aplicada em contracts/approve/route.ts.
-const COMPLIANCE_SOCIO: Record<string, string> = {
-  "d5f26efd-8ed5-4d90-b3f4-9ce0004803c5": "Robson Lino", // compliance
-  "d0af8eaa-9f3c-4e7a-b8c6-613736524317": "João Lemos", // sócio diretor
-  "75c6cac4-8d30-436e-b9a6-d5d494d7470b": "Hamilton Santos", // sócio diretor
-};
+// Os 3 sócios votantes (e a conta real do Hamilton, suporte@) vivem agora em
+// lib/contract-quorum.ts, fonte única da regra de quórum (04/11/2026).
+const COMPLIANCE_SOCIO: Record<string, string> = Object.fromEntries(SOCIOS.map((s) => [s.id, s.nome]));
 
 async function getReviewer() {
   const supabase = await createClient();
@@ -66,19 +63,58 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: `Minuta não está em revisão (status atual: ${template.approval_status})` }, { status: 409 });
 
   // Revisor pode editar o corpo direto na tela de revisão antes de decidir.
-  const bodyEdited = typeof body_text_raw === "string" && body_text_raw.trim() && body_text_raw !== template.body_text_raw;
+  // 04/11/2026: a tela sempre manda o conteúdo do campo junto do voto, então
+  // só diferença real de texto conta como edição (CRLF, espaço no fim ou linha
+  // em branco extra não reiniciam a votação). Ver lib/contract-quorum.ts.
+  const bodyEdited = isBodyEdited(body_text_raw, template.body_text_raw);
   // Voto de aprovação nunca passa com contato desligado da V3 no texto (lib/contract-revoked-contacts.ts).
   if (decision === "aprovado") {
     const revokedError = revokedContactsError(bodyEdited ? body_text_raw : template.body_text_raw, "minuta");
     if (revokedError) return NextResponse.json({ error: revokedError }, { status: 422 });
   }
+
+  // Rodada em que o voto desta chamada é gravado. 04/11/2026 (fecha o P0 de
+  // 04/09 no caminho que tinha ficado de fora): editar o texto aqui, na tela
+  // de revisão, agora abre rodada nova, igual ao PATCH. Antes, os votos já
+  // dados continuavam valendo sobre o texto alterado.
+  const rodadaLida: number = template.review_round ?? 1;
+  let rodadaDoVoto = rodadaLida;
+  let votosRodadaAnterior: QuorumVote[] = [];
   if (bodyEdited) {
+    // Mesma validação de tag de vertical malformada que o PATCH já faz.
+    const blocksCheck = validateVerticalBlocks(body_text_raw);
+    if (!blocksCheck.valid) return NextResponse.json({ error: blocksCheck.error }, { status: 422 });
+
+    // Quem aprovou a rodada que está sendo superada (para o aviso, abaixo).
+    const { data: anteriores } = await db
+      .from("contract_template_reviews")
+      .select("reviewer_id, reviewer_type, decision")
+      .eq("template_id", id)
+      .eq("review_round", rodadaLida);
+    votosRodadaAnterior = (anteriores ?? []) as QuorumVote[];
+
     const vars = (body_text_raw.match(/\{\{([^}]+)\}\}/g) || []).map((v: string) => v.replace(/\{\{|\}\}/g, "").trim());
-    await db.from("contract_templates").update({
-      body_text_raw,
-      variables_map: vars.map((v: string) => ({ key: v, label: v.replace(/_/g, " "), source: "auto" })),
-      version: (template.version ?? 1) + 1,
-    }).eq("id", id);
+    // Avanço condicional à rodada lida: duas edições simultâneas não pulam
+    // rodada, a segunda recebe 409. O .select() é o que permite saber quantas
+    // linhas mudaram (sem ele o supabase-js não diz, e o 409 nunca dispararia).
+    const { data: atualizada, error: updErr } = await db
+      .from("contract_templates")
+      .update({
+        body_text_raw,
+        variables_map: vars.map((v: string) => ({ key: v, label: v.replace(/_/g, " "), source: "auto" })),
+        version: (template.version ?? 1) + 1,
+        review_round: rodadaLida + 1,
+      })
+      .eq("id", id)
+      .eq("review_round", rodadaLida)
+      .eq("approval_status", "em_revisao")
+      .select("id");
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+    if (!atualizada || atualizada.length === 0)
+      return NextResponse.json({ error: "A minuta mudou enquanto você revisava. Recarregue a tela e vote de novo." }, { status: 409 });
+    rodadaDoVoto = rodadaLida + 1;
+    // O agente de ajuste (reprovação) e o resto do fluxo leem a rodada nova.
+    template.review_round = rodadaDoVoto;
   }
 
   // 17/08/2026: upsert em vez de insert puro. Achado real: Hamilton e
@@ -89,7 +125,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // atualiza a decisão existente em vez de duplicar linha.
   await db.from("contract_template_reviews").upsert({
     template_id: id,
-    review_round: template.review_round,
+    review_round: rodadaDoVoto,
     reviewer_id: reviewer.userId,
     reviewer_name: reviewer.name,
     reviewer_type: reviewer.type,
@@ -174,10 +210,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .from("contract_template_reviews")
     .select("reviewer_id, reviewer_type, decision")
     .eq("template_id", id)
-    .eq("review_round", template.review_round);
+    .eq("review_round", rodadaDoVoto);
 
-  const approvedSocios = (roundReviews ?? []).filter((r) => r.reviewer_type === "compliance_socio" && r.decision === "aprovado");
-  const socioMajority = approvedSocios.length >= 2;
+  // 04/11/2026: a regra saiu desta rota e vive em lib/contract-quorum.ts
+  // (função pura, com teste de paridade contra a regra anterior); a tela
+  // recebe o mesmo cálculo pelo GET, então placar e mensagem nunca divergem.
+  const quorum = computeQuorum((roundReviews ?? []) as QuorumVote[], template.valor_operacao_estimado, rodadaDoVoto);
+  const approvedSocios = { length: quorum.sociosAprovaram };
 
   // Regra de Quórum dos 3 Sócios (atualiza a Regra de Quórum Soberano do
   // BRIEF 2, 30/08/2026, depois da saída do jurídico interno em 29/09/2026):
@@ -189,16 +228,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // esse caso exigia o voto do jurídico + 1 sócio; sem jurídico, exige os
   // 3 sócios). Minutas sem valor declarado (fluxo manual antigo) sempre
   // caem no caminho (b), comportamento idêntico ao que já existia antes.
-  const VALOR_LIMITE_MAIORIA = 50000;
   const valorDeclarado = template.valor_operacao_estimado;
-  const valorAcimaDoLimite = typeof valorDeclarado === "number" && valorDeclarado > VALOR_LIMITE_MAIORIA;
-  const unanimidade = approvedSocios.length >= 3;
-  const maioriaValidaPorValor = socioMajority && !valorAcimaDoLimite;
-  const quorumMet = unanimidade || maioriaValidaPorValor;
+  const valorAcimaDoLimite = quorum.valorAcimaDoLimite;
+  const unanimidade = quorum.unanimidade;
+  const quorumMet = quorum.met;
 
   if (quorumMet) {
     await db.from("contract_templates").update({ approval_status: "aprovado" }).eq("id", id);
   }
+
+  // 04/11/2026: edição de texto durante a revisão reiniciou a votação. Os
+  // sócios que haviam aprovado a rodada anterior (menos quem editou) recebem
+  // só o aviso genérico abaixo, sem nome de minuta, e ficam de fora do "voto
+  // pendente" existente para não receber dois avisos pelo mesmo evento.
+  // Aguardado com await (nunca solto) e best-effort.
+  const avisadosRodadaNova = bodyEdited && !quorumMet
+    ? await notifyRoundRestart({ templateId: id, votosRodadaAnterior, editorId: reviewer.userId, notify: notifyUser })
+    : [];
 
   // Gaps 2 e 3 do Fluxograma de Notificações (11/09/2026): antes disso
   // nenhuma notificação saía daqui, nem pra quem submeteu (não sabia que
@@ -219,7 +265,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // Quórum ainda não fechou: avisa quem falta votar nesta rodada (nunca
     // quem já votou), e também quem submeteu, pra acompanhar o andamento.
     const jaVotaram = new Set((roundReviews ?? []).map((r) => r.reviewer_id));
-    const pendentes = SOCIOS_IDS.filter((sid) => !jaVotaram.has(sid)).filter((uid) => uid !== reviewer.userId);
+    const pendentes = SOCIOS_IDS
+      .filter((sid) => !jaVotaram.has(sid))
+      .filter((uid) => uid !== reviewer.userId)
+      .filter((uid) => !avisadosRodadaNova.includes(uid));
 
     await Promise.all(
       pendentes.map((uid) =>
@@ -278,13 +327,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       unanimidade,
       bloqueado_por_valor: valorAcimaDoLimite && !unanimidade,
     },
-    message: quorumMet
-      ? unanimidade
-        ? `Quórum atingido por unanimidade dos 3 sócios. Minuta aprovada, liberada para gerar contrato.`
-        : `Quórum atingido por maioria de sócios (${approvedSocios.length}/3). Minuta aprovada, liberada para gerar contrato.`
-      : valorAcimaDoLimite && socioMajority && !unanimidade
-        ? `Maioria de sócios atingida (${approvedSocios.length}/3), mas o valor declarado da operação (R$${valorDeclarado?.toLocaleString("pt-BR")}) passa de R$50.000: precisa da unanimidade dos 3 sócios. Aguardando.`
-        : `Aprovação de sócio diretor registrada (${approvedSocios.length}/3 sócios). Aguardando 2 sócios${valorAcimaDoLimite ? " (ou os 3 sócios, dado o valor acima de R$50 mil)" : ""}.`,
+    review_round: rodadaDoVoto,
+    message: bodyEdited
+      ? `O texto foi alterado e a votação recomeçou (rodada ${rodadaDoVoto}). ${quorum.mensagem}`
+      : quorum.mensagem,
   });
 }
 
@@ -303,12 +349,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const { id } = await params;
-  const { data, error } = await svc()
+  const db = svc();
+  const { data, error } = await db
     .from("contract_template_reviews")
     .select("*")
     .eq("template_id", id)
     .order("created_at", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ reviews: data ?? [] });
+
+  // 04/11/2026: o quórum da rodada atual sai calculado daqui (mesma função da
+  // rota de voto), para a tela só exibir e nunca importar os ids dos sócios.
+  const { data: template } = await db
+    .from("contract_templates")
+    .select("review_round, valor_operacao_estimado")
+    .eq("id", id)
+    .maybeSingle();
+  const rodada: number = template?.review_round ?? 1;
+  const votosDaRodada = (data ?? []).filter((r) => r.review_round === rodada) as QuorumVote[];
+  const quorum = computeQuorum(votosDaRodada, template?.valor_operacao_estimado, rodada);
+
+  return NextResponse.json({ reviews: data ?? [], quorum });
 }
