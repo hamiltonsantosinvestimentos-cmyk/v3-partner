@@ -6,8 +6,9 @@ import {
   FileText, Search, Filter, Clock, CheckCircle2, XCircle,
   Send, Eye, MessageSquare, Loader2, ChevronDown, User,
   AlertTriangle, Shield, UserPlus, Plus, X, Copy, Share2, Pencil,
-  Upload, Link2, Crown, Download, ShieldCheck, RefreshCw, Info,
+  Upload, Link2, Crown, Download, ShieldCheck, RefreshCw, Info, Mail,
 } from "lucide-react";
+import { editableParties, validateNewEmail } from "@/lib/signer-email-change";
 import { cn, isValidEmail } from "@/lib/utils";
 import { ROLE_HELP, ROLE_LABELS, roleOptionsSorted, sortQualificationParties } from "@/lib/qualification-roles";
 import { PartyQualificationCardModal } from "./party-qualification-card";
@@ -56,6 +57,7 @@ interface Contract {
   loi_override_justification?: string | null;
   valor_operacao?: number | null;
   esignature_provider?: "clicksign" | "certone" | null;
+  external_envelope_id?: string | null;
 }
 
 interface ContractLink {
@@ -375,6 +377,80 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
       }
     } catch { setEnvError("Erro de conexão ao cancelar o envio."); }
     finally { setEnvBusy(false); }
+  };
+
+  // Alterar e-mail do signatário e reenviar (BRIEF 05/11/2026, só ADMIN). Modal V3 próprio,
+  // só fecha por "Voltar" ou "X". No contrato enviado cancela o envelope e envia de novo;
+  // em rascunho/aprovado só troca o e-mail. O texto do contrato não muda.
+  type ChgParty = { index: number; name: string; role: string; email: string; mentions_in_text: number };
+  type ChgInfo = { mode: "envio" | "rascunho"; blocked: string | null; editable: ChgParty[]; signed: Array<{ name: string; email: string; signed_at_br: string }> };
+  const [showChgEmail, setShowChgEmail] = useState(false);
+  const [chgLoading, setChgLoading] = useState(false);
+  const [chgInfo, setChgInfo] = useState<ChgInfo | null>(null);
+  const [chgError, setChgError] = useState<string | null>(null);
+  const [chgIndex, setChgIndex] = useState<number | null>(null);
+  const [chgEmail, setChgEmail] = useState("");
+  const [chgReason, setChgReason] = useState("");
+  const [chgAckLink, setChgAckLink] = useState(false);
+  const [chgAckPartial, setChgAckPartial] = useState(false);
+  const [chgCode, setChgCode] = useState("");
+  const [chgBusy, setChgBusy] = useState(false);
+  const [chgStep, setChgStep] = useState("");
+  const [chgRetry, setChgRetry] = useState(false);
+  const [chgDone, setChgDone] = useState<{ text: string; warnings: string[] } | null>(null);
+  const [chgTouched, setChgTouched] = useState(false);
+
+  const openChangeEmail = async (c: Contract) => {
+    setShowChgEmail(true); setChgLoading(true); setChgInfo(null); setChgError(null); setChgIndex(null);
+    setChgEmail(""); setChgReason(""); setChgAckLink(false); setChgAckPartial(false); setChgCode("");
+    setChgRetry(false); setChgDone(null); setChgStep(""); setChgTouched(false);
+    try {
+      const res = await fetch(`/api/contracts/${c.id}/change-signer-email`);
+      const json = await res.json();
+      if (!res.ok) setChgError(json.error ?? "Não foi possível carregar os signatários.");
+      else setChgInfo({ mode: json.mode, blocked: json.blocked ?? null, editable: json.editable ?? [], signed: json.signed ?? [] });
+    } catch { setChgError("Erro de conexão ao carregar os signatários."); }
+    finally { setChgLoading(false); }
+  };
+
+  const handleChangeEmail = async (c: Contract) => {
+    if (chgIndex === null || !chgInfo) return;
+    setChgBusy(true); setChgError(null); setChgTouched(true);
+    setChgStep(chgInfo.mode === "envio" ? "Conferindo... Cancelando envio na ClickSign... Reenviando..." : "Conferindo...");
+    try {
+      const res = await fetch(`/api/contracts/${c.id}/change-signer-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          party_index: chgIndex,
+          new_email: chgEmail,
+          reason: chgReason.trim(),
+          contract_code_confirm: chgCode.trim(),
+          ack_link_invalidated: chgAckLink,
+          confirm_partial_signatures: chgAckPartial,
+        }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        const warnings = [json.erro_reenvio, json.aviso_nota].filter(Boolean) as string[];
+        const text = json.modo === "envio"
+          ? (json.reenviado
+            ? `Contrato reenviado para assinatura (${json.signatarios} signatário(s)). E-mail de ${json.party_name} alterado para ${json.new_email}.`
+            : `E-mail de ${json.party_name} alterado para ${json.new_email}. O contrato está em Rascunho.`)
+          : `E-mail de ${json.party_name} alterado para ${json.new_email}. Use Enviar para Assinatura quando estiver pronto.`;
+        setChgDone({ text, warnings });
+      } else {
+        setChgError(json.error ?? "Não foi possível alterar o e-mail.");
+        setChgRetry(!!json.retry);
+      }
+    } catch { setChgError("Erro de conexão. Confira a linha do tempo do contrato antes de tentar de novo."); }
+    finally { setChgBusy(false); setChgStep(""); }
+  };
+
+  // Fechar recarrega a lista sempre que houve tentativa (sucesso ou falha parcial muda o status).
+  const closeChangeEmail = () => {
+    setShowChgEmail(false); setChgDone(null);
+    if (chgTouched) fetchContracts();
   };
 
   const handleCancelDraft = async (contractId: string) => {
@@ -1046,6 +1122,24 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
                     </button>
                   )}
 
+                  {role === "ADMIN" && ["enviado_assinatura", "rascunho", "aprovado"].includes(selected.status_signature)
+                    && !(selected.status_signature === "enviado_assinatura" && !selected.external_envelope_id)
+                    && editableParties(selected.parties).length > 0 && (() => {
+                    const envio = selected.status_signature === "enviado_assinatura";
+                    const certone = envio && selected.esignature_provider === "certone";
+                    return (
+                      <button
+                        onClick={() => openChangeEmail(selected)}
+                        disabled={certone}
+                        title={certone ? "Ainda não disponível para o CertOne" : envio ? "Cancela o envelope atual na ClickSign, corrige o e-mail do signatário e envia de novo." : "Corrige o e-mail do signatário, sem enviar."}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-transparent text-red-300 border border-red-500/50 rounded-lg text-xs hover:bg-red-500/10 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <span className="relative inline-flex"><Mail size={13} /><Pencil size={8} className="absolute -right-1 -bottom-1" /></span>
+                        {envio ? "Alterar e-mail e reenviar" : "Alterar e-mail do signatário"}
+                      </button>
+                    );
+                  })()}
+
                   {selected.status_signature === "rascunho" && (
                     <>
                       <button
@@ -1626,6 +1720,135 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {showChgEmail && selected && (() => {
+        const envio = chgInfo?.mode === "envio";
+        const party = chgInfo?.editable.find((p) => p.index === chgIndex) ?? null;
+        const emailCheck = chgIndex !== null && chgEmail.trim() ? validateNewEmail(selected.parties, chgIndex, chgEmail) : null;
+        const hasSigned = envio && (chgInfo?.signed.length ?? 0) > 0;
+        const codeOk = !!selected.contract_code && chgCode.trim().toUpperCase() === selected.contract_code.toUpperCase();
+        const canSubmit = !!chgInfo && !chgInfo.blocked && !chgLoading && !chgBusy && chgIndex !== null && !!emailCheck?.ok
+          && chgReason.trim().length >= 5 && codeOk && (!envio || chgAckLink) && (!hasSigned || chgAckPartial);
+        return (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-3">
+            <div className="w-full max-w-lg max-h-[92vh] overflow-y-auto bg-[#09081A] border border-red-500/40 rounded-xl">
+              <div className="p-4 border-b border-red-500/30 flex items-center justify-between">
+                <div className="text-sm font-bold text-red-400 flex items-center gap-2">
+                  <Mail size={14} /> {envio ? "Alterar e-mail e reenviar" : "Alterar e-mail do signatário"}
+                </div>
+                <button onClick={closeChangeEmail} disabled={chgBusy} className="text-[#9BAFC5] hover:text-[#F5F1E8] text-xl">&times;</button>
+              </div>
+
+              {chgDone ? (
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-400"><CheckCircle2 size={16} /> <span className="text-sm font-bold">Concluído</span></div>
+                  <p className="text-xs text-[#F5F1E8] leading-relaxed">{chgDone.text}</p>
+                  {chgDone.warnings.map((w) => <p key={w} className="text-[11px] text-amber-400">{w}</p>)}
+                  <button onClick={closeChangeEmail}
+                    className="w-full px-3 py-2 bg-[#C9A84C] text-[#09081A] rounded-lg text-xs font-bold hover:bg-[#E8C97A] transition">Fechar</button>
+                </div>
+              ) : (
+              <div className="p-4 space-y-3">
+                <p className="text-xs text-[#F5F1E8] leading-relaxed">
+                  <span className="font-bold">{selected.contract_code ?? selected.contract_title}</span>:{" "}
+                  {envio
+                    ? "O envelope atual será cancelado na ClickSign e o link de assinatura já enviado deixa de valer. Um envelope novo vai para todos os signatários, que recebem um e-mail novo da ClickSign. O texto do contrato não muda."
+                    : "O e-mail da parte será trocado na lista de signatários. Nada é enviado agora. O texto do contrato não muda."}
+                </p>
+
+                {chgLoading && <span className="flex items-center gap-2 text-xs text-[#9BAFC5]"><Loader2 size={12} className="animate-spin" /> Carregando signatários...</span>}
+                {chgInfo?.blocked && <p className="text-[11px] text-red-400">{chgInfo.blocked}</p>}
+
+                {chgInfo && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-1">Signatário *</label>
+                    <div className="bg-[#162744] border border-[#9BAFC5]/15 rounded-lg divide-y divide-[#9BAFC5]/10">
+                      {chgInfo.editable.map((p) => (
+                        <label key={p.index} className="flex items-start gap-2 p-2 text-xs cursor-pointer">
+                          <input type="radio" name="chg-party" checked={chgIndex === p.index} disabled={chgBusy}
+                            onChange={() => { setChgIndex(p.index); setChgEmail(""); }} className="mt-0.5" />
+                          <span>
+                            <span className="text-[#F5F1E8] font-bold">{p.name || "Sem nome"}</span>
+                            <span className="text-[#9BAFC5]"> · {ROLE_LABELS[p.role] ?? p.role}</span>
+                            <span className="block text-[#9BAFC5]">{p.email || "sem e-mail"}</span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {party && party.mentions_in_text > 0 && (
+                  <p className="text-[11px] text-amber-400">
+                    O texto do contrato ainda cita {party.email} {party.mentions_in_text} vez(es). Para corrigir o texto, use Editar Contrato antes de confirmar.
+                  </p>
+                )}
+
+                {chgIndex !== null && (
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-1">Novo e-mail *</label>
+                    <input value={chgEmail} disabled={chgBusy} inputMode="email" autoComplete="off"
+                      onChange={(e) => setChgEmail(e.target.value.replace(/\s+/g, "").toLowerCase())}
+                      placeholder="nome@empresa.com.br"
+                      className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]" />
+                    {emailCheck && !emailCheck.ok && <p className="text-[11px] text-red-400 mt-1">{emailCheck.error}</p>}
+                  </div>
+                )}
+
+                <div>
+                  <label className="flex items-center gap-1.5 text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-1">
+                    Motivo *
+                    <span tabIndex={0} title="Registrado na linha do tempo e na auditoria, junto com o e-mail antigo e o novo. Obrigatório para que a troca possa ser explicada depois." className="text-[#9BAFC5] normal-case cursor-help"><Info size={12} /></span>
+                  </label>
+                  <textarea value={chgReason} onChange={(e) => setChgReason(e.target.value)} disabled={chgBusy}
+                    placeholder="Ex: contraparte informou o e-mail errado no cadastro"
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8] min-h-[60px] resize-y" />
+                </div>
+
+                {hasSigned && (
+                  <div className="bg-[#162744] border border-amber-500/40 rounded-lg p-3 text-xs space-y-2">
+                    <p className="text-amber-400 font-bold">Já assinaram (todos vão precisar assinar de novo):</p>
+                    <ul className="space-y-0.5 text-[#F5F1E8]">
+                      {chgInfo!.signed.map((s) => <li key={s.email}>{s.name} ({s.email}) em {s.signed_at_br}</li>)}
+                    </ul>
+                    <label className="flex items-start gap-2 text-[11px] text-amber-300 cursor-pointer">
+                      <input type="checkbox" checked={chgAckPartial} onChange={(e) => setChgAckPartial(e.target.checked)} disabled={chgBusy} className="mt-0.5" />
+                      Entendo que as assinaturas já feitas serão perdidas.
+                    </label>
+                  </div>
+                )}
+
+                {envio && (
+                  <label className="flex items-start gap-2 text-[11px] text-[#F5F1E8] cursor-pointer">
+                    <input type="checkbox" checked={chgAckLink} onChange={(e) => setChgAckLink(e.target.checked)} disabled={chgBusy} className="mt-0.5" />
+                    Entendo que o link de assinatura já enviado deixa de valer.
+                  </label>
+                )}
+
+                <div>
+                  <label className="block text-[10px] font-bold text-[#E8C97A] uppercase tracking-wider mb-1">Digite o código do contrato para confirmar *</label>
+                  <input value={chgCode} onChange={(e) => setChgCode(e.target.value)} disabled={chgBusy}
+                    placeholder={selected.contract_code ?? ""}
+                    className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded-lg px-3 py-2 text-xs text-[#F5F1E8]" />
+                </div>
+
+                {chgError && <p className="text-[11px] text-red-400">{chgError}</p>}
+                {chgBusy && chgStep && <p className="flex items-center gap-2 text-[11px] text-[#9BAFC5]"><Loader2 size={12} className="animate-spin" /> {chgStep}</p>}
+
+                <div className="flex gap-2">
+                  <button onClick={closeChangeEmail} disabled={chgBusy}
+                    className="flex-1 px-3 py-2 bg-[#162744] text-[#F5F1E8] rounded-lg text-xs font-bold hover:bg-[#243A66] transition">Voltar</button>
+                  <button onClick={() => handleChangeEmail(selected)} disabled={!canSubmit}
+                    className="flex-1 px-3 py-2 bg-red-500/20 text-red-300 border border-red-500/40 rounded-lg text-xs font-bold hover:bg-red-500/30 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2">
+                    {chgBusy && <Loader2 size={13} className="animate-spin" />} {chgRetry ? "Tentar de novo" : "Confirmar"}
+                  </button>
+                </div>
+              </div>
+              )}
             </div>
           </div>
         );
