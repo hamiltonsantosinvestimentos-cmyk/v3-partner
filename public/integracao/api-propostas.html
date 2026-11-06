@@ -71,6 +71,7 @@ a{color:var(--ouro-claro)}
   <span class="lbl">API de Propostas V3</span>
   <a href="#visao">Visão geral</a>
   <a href="#fluxo">Como funciona</a>
+  <a href="#passo-a-passo">Passo a passo</a>
   <a href="#auth">Autenticação</a>
   <a href="#seguranca">Segurança e termo</a>
   <span class="lbl">Rotas</span>
@@ -104,6 +105,50 @@ a{color:var(--ouro-claro)}
   <p>Endereço base de todas as rotas:</p>
   <pre><code>https://app.v3partners.com.br/api/v1</code></pre>
   <p>Todas as rotas recebem e devolvem JSON em UTF-8. Valores em reais vão como número com ponto decimal (<code>350000.00</code>), nunca como texto formatado. Datas vão no formato <code>AAAA-MM-DD</code>, e data com hora vai em ISO 8601 com fuso.</p>
+</section>
+
+<section id="passo-a-passo">
+  <h2>Passo a passo</h2>
+  <h3>Do lado do partner, na plataforma V3</h3>
+  <ol class="lista">
+    <li><b>Peça ao dev o IP fixo de saída</b> do servidor que vai chamar a API (até 10 IPs ou faixas). Sem IP fixo, a chave não funciona.</li>
+    <li>Na plataforma, abra o menu <b>Integração por API</b>, leia e aceite o Termo de Uso (são três confirmações).</li>
+    <li>Clique em <b>Criar chave</b>: dê um nome, informe os IPs e as permissões, e digite o código de 6 dígitos que chega no seu e-mail.</li>
+    <li><b>Copie a chave na hora</b> (ela aparece uma vez só) e entregue ao dev por um canal seguro.</li>
+  </ol>
+  <h3>Do lado do dev</h3>
+  <ol class="lista">
+    <li><b>Guarde a chave</b> em variável de ambiente ou cofre de segredos do servidor. Exemplo: <code>V3_API_KEY</code>.</li>
+    <li><b>Teste a conexão</b> buscando as linhas de crédito. Resposta 200 com a lista quer dizer que chave, IP e termo estão certos.
+<pre><code>curl https://app.v3partners.com.br/api/v1/linhas \
+  -H "Authorization: Bearer $V3_API_KEY"</code></pre></li>
+    <li><b>Monte o mapeamento</b>: a linha de crédito do seu sistema para o <code>nome</code> exato de <code>GET /linhas</code>, e cada documento do seu sistema para o <code>id</code> do checklist (por exemplo <code>he_pf_1</code>).</li>
+    <li><b>Crie a proposta</b> com um <code>Idempotency-Key</code> novo (um UUID por proposta) e guarde o <code>id</code> devolvido junto com a proposta no seu sistema.
+<pre><code>curl -X POST https://app.v3partners.com.br/api/v1/propostas \
+  -H "Authorization: Bearer $V3_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d @proposta.json</code></pre></li>
+    <li><b>Envie cada documento</b> em três chamadas: pedir o link, subir o arquivo, confirmar.
+<pre><code># 1. pedir o link
+RESP=$(curl -s -X POST https://app.v3partners.com.br/api/v1/propostas/$ID/documentos/upload-url \
+  -H "Authorization: Bearer $V3_API_KEY" -H "Content-Type: application/json" \
+  -d '{"tipo_documento":"he_pf_1","nome_arquivo":"rg.pdf","tamanho_bytes":482113}')
+URL=$(echo "$RESP" | jq -r .url); UPLOAD_ID=$(echo "$RESP" | jq -r .upload_id)
+
+# 2. subir o arquivo (sem a chave da V3)
+curl -X PUT "$URL" -H "Content-Type: application/pdf" --data-binary @rg.pdf
+
+# 3. confirmar
+curl -X POST https://app.v3partners.com.br/api/v1/propostas/$ID/documentos \
+  -H "Authorization: Bearer $V3_API_KEY" -H "Content-Type: application/json" \
+  -d "{\"upload_id\":\"$UPLOAD_ID\"}"</code></pre></li>
+    <li><b>Mande o link da Análise de Crédito ao cliente</b>: ele vem em <code>link_analise_credito</code> na resposta da criação.</li>
+    <li><b>Acompanhe</b>: a cada 15 minutos, chame <code>GET /propostas?atualizado_desde=</code> com a hora da última consulta. Para cada proposta que mudou, atualize a etapa no seu sistema e, se houver pendência, mostre o <code>motivo</code> à sua equipe e reenvie o documento pedido.</li>
+    <li><b>Leia os comentários</b> da mesa com <code>GET /propostas/{id}/comentarios?desde=</code>. Para responder, use a plataforma.</li>
+    <li><b>Trate os erros</b> pelo campo <code>erro.codigo</code> (tabela no fim desta página). Em 429, espere o <code>Retry-After</code>; em 500, reenvie com a mesma <code>Idempotency-Key</code>.</li>
+    <li><b>Antes de a chave vencer</b> (12 meses, com aviso por e-mail 30 dias antes), o partner cria a chave nova, você troca no servidor, e o partner revoga a antiga.</li>
+  </ol>
 </section>
 
 <section id="auth">

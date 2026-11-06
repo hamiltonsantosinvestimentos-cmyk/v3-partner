@@ -53,7 +53,7 @@ export function IntegracaoApiClient({ planoOk }: { planoOk: boolean }) {
         <p className="text-[9px] font-bold tracking-[0.16em] uppercase text-[#C9A84C]">Integração por API</p>
         <h1 className="text-3xl font-bold text-[#F0ECE4]">Conecte o sistema da sua empresa à V3</h1>
         <p className="text-sm text-[#7A8FA8] max-w-2xl">Com uma chave de API, o sistema da sua empresa cadastra propostas de crédito, envia documentos e acompanha o andamento direto na Mesa de Crédito da V3.</p>
-        <a href="/integracao/api-propostas.html" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#E8C97A] hover:underline">
+        <a href="/API" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#E8C97A] hover:underline">
           <Link2 size={13} /> Documentação para o seu dev
         </a>
       </header>

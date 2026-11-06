@@ -72,6 +72,8 @@ const nextConfig: NextConfig = {
     return [
       // Apresentação pública "Estrutura V3" (HTML estático em public/).
       { source: "/apresentacaov3", destination: "/apresentacaov3.html" },
+      // Passo a passo da API de Propostas para o dev do partner (HTML estático em public/integracao).
+      { source: "/API", destination: "/integracao/api-propostas.html" },
     ];
   },
 
