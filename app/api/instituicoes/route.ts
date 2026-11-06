@@ -1,3 +1,4 @@
+import { sincronizarContatosDoCadastro } from "@/lib/encaminhar-instituicao-servidor";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -63,5 +64,8 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // E-mails digitados no cadastro entram sozinhos na lista de contatos (BRIEF encaminhar para instituição).
+  await sincronizarContatosDoCadastro(svc(), data.id, { contato_nome: body.contato_nome, contato_email: body.contato_email, email: body.email })
+    .catch((e) => console.error("[instituicoes POST] contatos", e instanceof Error ? e.message : e));
   return NextResponse.json({ instituicao: data });
 }

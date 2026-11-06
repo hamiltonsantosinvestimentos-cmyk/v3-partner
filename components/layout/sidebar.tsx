@@ -115,6 +115,7 @@ const NAV_SECTIONS: NavSection[] = [
           { href: "/mesa-operacional", label: "Painel", roles: ["ADMIN", "MESA_OPERACIONAL", "GESTAO"] },
           { href: "/mesa-operacional/pedidos", label: "Pedidos de Partners", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
           { href: "/mesa-operacional/relatorio-mensal", label: "Relatório Mensal", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
+          { href: "/mesa-operacional/envios", label: "E-mails enviados", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
         ],
       },
       { href: "/mesa-consorcio-op", label: "Mesa Consórcio", icon: "Settings2", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },

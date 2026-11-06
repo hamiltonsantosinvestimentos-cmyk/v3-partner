@@ -1,0 +1,8 @@
+-- Rollback de 20261107a_instituicao_contatos_envios.sql. Apaga contatos, registros de envio e eventos.
+-- Os e-mails originais continuam em instituicoes.email e instituicoes.contato_email (não foram alterados).
+begin;
+drop table if exists public.email_eventos;
+drop table if exists public.credit_proposal_envio_destinatarios;
+drop table if exists public.credit_proposal_envios;
+drop table if exists public.instituicao_contatos;
+commit;
