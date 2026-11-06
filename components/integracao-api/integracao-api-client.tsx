@@ -53,9 +53,15 @@ export function IntegracaoApiClient({ planoOk }: { planoOk: boolean }) {
         <p className="text-[9px] font-bold tracking-[0.16em] uppercase text-[#C9A84C]">Integração por API</p>
         <h1 className="text-3xl font-bold text-[#F0ECE4]">Conecte o sistema da sua empresa à V3</h1>
         <p className="text-sm text-[#7A8FA8] max-w-2xl">Com uma chave de API, o sistema da sua empresa cadastra propostas de crédito, envia documentos e acompanha o andamento direto na Mesa de Crédito da V3.</p>
-        <a href="/API" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#E8C97A] hover:underline">
-          <Link2 size={13} /> Documentação para o seu dev
-        </a>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <a href="/API" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#E8C97A] hover:underline">
+            <Link2 size={13} /> Documentação para o seu dev
+          </a>
+          {/* Guia em PDF, modelo premium V3 (adendo do BRIEF 2026-11-06_api-v1-ajustes-seguranca). */}
+          <a href="/integracao/V3-Guia-API-Propostas.pdf" download="V3-Guia-API-Propostas.pdf" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#C9A84C]/40 bg-[#C9A84C]/10 text-xs font-semibold text-[#E8C97A] hover:bg-[#C9A84C]/20 transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#C9A84C]">
+            <Download size={13} /> Baixar guia em PDF
+          </a>
+        </div>
       </header>
 
       {!planoOk ? (

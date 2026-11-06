@@ -172,3 +172,28 @@ Go do Hamilton em 06/11/2026: "go BRIEF 2026-11-06_api-v1-ajustes-seguranca". Br
 - **Teste de acesso das 3 tabelas:** `docs/briefs/anexos/2026-11-06_teste-acesso-api-seguranca.sql`, rodado pelo Hamilton no SQL Editor em 06/11/2026: 8 de 8 conforme o esperado. anon e partner logado são negados em leitura das 3 tabelas e em inserção.
 - **Ordem do deploy:** aplicar a migration `20261106b` **antes** do merge. O código novo grava em `partner_api_uploads` e `partner_api_idempotencia`; sem as tabelas, o envio de documento e a criação de proposta pela API respondem 500. Hoje nenhum partner tem chave, então o risco da janela é baixo.
 - **Migration 20261106b aplicada** pelo Hamilton no SQL Editor em 06/11/2026 ("Success. No rows returned"), depois do teste de acesso 8 de 8. O segundo go por escrito ("go migration ...") não foi digitado no chat: a aplicação foi feita diretamente pelo Hamilton, admin do projeto. Conferência pela API REST de produção: as 3 tabelas existem; anon recebe 401 (42501) em todas.
+
+## ADENDO (06/11/2026): guia em PDF na tela do partner
+
+Pedido do Hamilton: "coloca o pdf na aba da API do partner".
+
+- **Escopo:** na tela "Integração por API" (`components/integracao-api/integracao-api-client.tsx`), ao lado do link "Documentação para o seu dev", entra o botão **"Baixar guia em PDF"**. Ele baixa `/integracao/V3-Guia-API-Propostas.pdf`, que é cópia do `docs/integracao/V3-Guia-API-Propostas.pdf` em `public/integracao/`.
+- **UX:**
+  - O botão aparece para todos os planos que abrem a tela, inclusive os que veem o convite para mudar de plano, porque serve para o partner avaliar a integração.
+  - O botão usa o atributo `download`, e o arquivo baixa com o nome `V3-Guia-API-Propostas.pdf`.
+  - Sem estado vazio: o arquivo é estático.
+- **Impacto:** um componente (`integracao-api-client.tsx`) e um arquivo estático. Nenhuma rota, tabela ou permissão nova.
+- **Riscos:**
+  - O PDF fica acessível sem login em `/integracao/` (prefixo já público), como a página `/API`. Ele não tem nenhum dado de partner ou cliente.
+  - Se o guia mudar, o PDF precisa ser gerado de novo (`scripts/gera-pdf-api-propostas.js`) e copiado para `public/integracao/`.
+- **Alternativa descartada:** servir o PDF por uma rota autenticada. Exigiria login do dev, o que vai contra o pedido de o dev ler sem acesso à plataforma.
+- **QA de governança (rodada 1 do adendo):**
+  - Itens 1.x, 2.x, 3.x e 4.1: N/A, porque não há dado, lista nem ação irreversível.
+  - 5.1: o texto do botão não tem travessão nem emoji.
+  - 6.x: N/A, sem banco.
+  - 6.7: arquivo estático público sem dado pessoal.
+  - **Veredito: LIBERADO.**
+- **Estimativa:** S, 15 minutos.
+- **Go do adendo:** Hamilton, 06/11/2026: "go adendo PDF na tela do partner". Implementado na branch `feat/api-guia-pdf-tela-partner`.
+  - O botão "Baixar guia em PDF" fica ao lado de "Documentação para o seu dev", com o atributo `download`.
+  - O arquivo foi copiado para `public/integracao/V3-Guia-API-Propostas.pdf`.
