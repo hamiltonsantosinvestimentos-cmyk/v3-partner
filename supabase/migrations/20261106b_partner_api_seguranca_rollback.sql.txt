@@ -1,0 +1,7 @@
+-- Rollback de 20261106b_partner_api_seguranca.sql. Apaga os registros de controle (envios pendentes,
+-- reservas de idempotência e alertas). Antes de rodar, volte o código para a versão sem essas tabelas.
+begin;
+drop table if exists public.partner_api_alertas;
+drop table if exists public.partner_api_idempotencia;
+drop table if exists public.partner_api_uploads;
+commit;

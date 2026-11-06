@@ -56,6 +56,33 @@ ul.lista b{color:var(--cream);font-weight:600}
 footer{border-top:1px solid var(--card);padding-top:20px;font-size:13px}
 a{color:var(--ouro-claro)}
 @media (max-width:860px){.wrap{grid-template-columns:minmax(0,1fr);gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap;gap:4px 14px}nav .lbl{width:100%;margin:0}nav a{border:0;padding:0}}
+@media print{
+  @page{size:A4;margin:16mm 14mm}
+  body{background:#fff;color:#243A66;font-size:10.5pt}
+  .wrap{display:block;padding:0;max-width:none}
+  nav{display:none}
+  main{gap:22px}
+  h1,h2,h3{color:#09081A}
+  .eyebrow,th,.req,nav .lbl{color:#8a6d1f}
+  .aviso{background:#fff;color:#09081A;border-color:#C9A84C}
+  .aviso b{color:#8a6d1f}
+  pre{background:#f6f4ef;color:#09081A;border-color:#ddd;white-space:pre-wrap;word-break:break-all;page-break-inside:avoid}
+  code{background:#f6f4ef;color:#5a4612}
+  .k{color:#5a4612}.s{color:#2f5d34}.c{color:#666}
+  .tbl{border-color:#ddd;overflow:visible}
+  table{min-width:0}
+  th{background:#f6f4ef}
+  td{border-top-color:#ddd}
+  td:first-child{color:#09081A;white-space:normal}
+  .fluxo li{background:#fff;border-color:#ddd}
+  .fluxo b,ul.lista b{color:#09081A}
+  .ep{color:#09081A}
+  .m{background:#ddd;color:#09081A}.m.post{background:#C9A84C;color:#09081A}
+  .etapas span{color:#09081A;border-color:#999}
+  section{page-break-inside:auto}
+  h2{page-break-after:avoid}
+  a{color:#5a4612}
+}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
 </style>
 
@@ -84,7 +111,7 @@ a{color:var(--ouro-claro)}
   <span class="eyebrow">V3 Partners · Integração para desenvolvedores · v1</span>
   <h1>API de Propostas de Crédito</h1>
   <p>Com esta API, o sistema da sua empresa cadastra propostas de crédito direto na Mesa de Crédito da V3, com os dados do cliente, da operação, dos imóveis em garantia e os documentos. A proposta chega à mesa igual a uma proposta feita pela plataforma, e você acompanha a etapa pela mesma API.</p>
-  <div class="aviso"><b>Versão 1 (06/11/2026).</b> As chaves são liberadas pela V3 depois da publicação do Termo de Uso da API. Até lá, use esta página para planejar a integração.</div>
+  <div class="aviso"><b>Versão 1.1 (06/11/2026).</b> A API está no ar e o Termo de Uso já foi publicado: o partner cria a chave na plataforma, no menu Integração por API, e entrega ao dev junto com este guia.</div>
 </section>
 
 <section id="fluxo">
@@ -166,7 +193,7 @@ Content-Type: application/json</code></pre>
     <li><b>Permissões:</b> a chave pode ter as duas permissões, <code>propostas:criar</code> (criar e enviar documentos) e <code>propostas:ler</code> (consultar), ou só uma delas.</li>
     <li><b>Bloqueio automático:</b> 10 chamadas com chave inválida a partir do mesmo IP em 10 minutos bloqueiam esse IP por 1 hora.</li>
     <li><b>Registro:</b> cada chamada fica registrada com chave, IP, data e hora, rota e resultado, por 12 meses, acima do mínimo do Marco Civil da Internet. O conteúdo da chamada não é copiado para esse registro.</li>
-    <li><b>Só HTTPS.</b> Chamadas sem TLS são recusadas.</li>
+    <li><b>Use sempre <code>https://</code>.</b> A plataforma redireciona <code>http://</code> para <code>https://</code>, mas nesse caso a chave já viajou aberta pela rede. Se alguma chamada saiu por <code>http://</code>, trate a chave como vazada: revogue e crie outra.</li>
     <li><b>Incidente:</b> se a chave vazar ou o seu sistema sofrer um incidente que envolva dados enviados à V3, revogue a chave e avise a V3 em até 24 horas.</li>
   </ul>
 </section>
@@ -344,9 +371,9 @@ Idempotency-Key: 6f1d2c4e-8a7b-4b1e-9c3d-2f5a7e9b0c11
   <h2>Regras dos arquivos</h2>
   <p>Depois de recebidos, os documentos passam por leitura automática (OCR) na V3 para conferir dados e validade. Arquivo fora destas regras atrasa a análise ou volta como pendência.</p>
   <ul class="lista">
-    <li><b>Formatos:</b> PDF, JPG ou PNG. DOC e DOCX são aceitos, mas não passam pelo OCR.</li>
+    <li><b>Formatos:</b> PDF, JPG, PNG ou DOCX sem macro. Arquivo <code>.doc</code> (formato antigo do Word) não é aceito. DOCX não passa pelo OCR, então prefira PDF.</li>
     <li><b>Tamanho:</b> até 25 MB por arquivo.</li>
-    <li><b>PDF sem senha.</b> PDF protegido é recusado no envio.</li>
+    <li><b>PDF sem senha e sem conteúdo ativo.</b> PDF protegido, com script, arquivo anexado dentro dele, formulário XFA ou ação automática ao abrir é recusado. Se o seu sistema gera PDF assim, gere de novo com "imprimir como PDF".</li>
     <li><b>Foto legível:</b> documento inteiro na imagem, sem corte, sem reflexo, de preferência acima de 1.500 pixels no lado maior.</li>
     <li><b>Um documento por arquivo.</b> Não junte RG, comprovante e matrícula num PDF só. Use o <code>tipo_documento</code> certo para cada um.</li>
     <li><b>Prazos:</b> matrícula com no máximo 30 dias e comprovante de residência com no máximo 90 dias, conforme a dica de cada documento em <code>GET /linhas</code>.</li>
@@ -379,10 +406,12 @@ Idempotency-Key: 6f1d2c4e-8a7b-4b1e-9c3d-2f5a7e9b0c11
       <tr><td>403</td><td><code>sem_acesso</code></td><td>O plano do partner não inclui a API, ou a linha não está liberada para ele.</td></tr>
       <tr><td>404</td><td><code>nao_encontrada</code></td><td>A proposta não existe ou é de outro partner.</td></tr>
       <tr><td>409</td><td><code>referencia_repetida</code></td><td>Já existe proposta com esta <code>referencia_externa</code>. A resposta traz o <code>id</code> dela.</td></tr>
+      <tr><td>409</td><td><code>em_processamento</code></td><td>Uma chamada com a mesma <code>Idempotency-Key</code> ainda está em andamento. Espere o <code>Retry-After</code> (2 segundos) e repita: você recebe a proposta criada.</td></tr>
       <tr><td>413</td><td><code>arquivo_grande</code></td><td>Arquivo acima de 25 MB. Reduza ou divida.</td></tr>
-      <tr><td>415</td><td><code>tipo_nao_aceito</code></td><td>Envie PDF, JPG, PNG, DOC ou DOCX. PDF com senha também cai aqui.</td></tr>
+      <tr><td>415</td><td><code>tipo_nao_aceito</code></td><td>Envie PDF, JPG, PNG ou DOCX sem macro. Também cai aqui: arquivo <code>.doc</code>, PDF com senha ou com conteúdo ativo, e arquivo cujo conteúdo não bate com a extensão.</td></tr>
       <tr><td>422</td><td><code>regra_de_credito</code></td><td>Uma regra barrou a proposta, por exemplo valor abaixo do mínimo do nível 3. A mensagem diz qual.</td></tr>
       <tr><td>429</td><td><code>ip_bloqueado</code></td><td>Houve 10 chamadas com chave inválida deste IP em 10 minutos. O IP fica bloqueado por 1 hora; veja o <code>Retry-After</code>.</td></tr>
+      <tr><td>429</td><td><code>limite_de_envios</code></td><td>Há 50 envios de documento pedidos e não confirmados. Confirme os que estão em andamento antes de pedir novos links.</td></tr>
       <tr><td>429</td><td><code>limite_excedido</code></td><td>Espere os segundos indicados no header <code>Retry-After</code> e tente de novo.</td></tr>
       <tr><td>500</td><td><code>erro_interno</code></td><td>Tente de novo em alguns minutos com a mesma <code>Idempotency-Key</code>. Se continuar, fale com a V3.</td></tr>
     </tbody>

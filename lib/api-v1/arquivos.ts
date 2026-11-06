@@ -1,17 +1,19 @@
 // Envio de documentos pela API: identificador de envio assinado, tipo real pelos bytes e
 // recusa de PDF com senha ou com JavaScript embutido (BRIEF 2026-11-06).
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFStream, type PDFObject } from "pdf-lib";
 
 export const MAX_BYTES = 25 * 1024 * 1024;
 export const VALIDADE_UPLOAD_MS = 2 * 3600_000;
 export const BUCKET = "credit-documents";
+export const MAX_PENDENTES = 50;
 
 export const EXTENSOES: Record<string, string> = {
   pdf: "application/pdf",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
   png: "image/png",
-  doc: "application/msword",
+  // .doc (formato antigo) não é aceito: pode trazer macro (BRIEF ajustes de segurança, 06/11/2026).
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 };
 
@@ -53,10 +55,77 @@ export function problemaNoPdf(b: Uint8Array): string | null {
   return null;
 }
 
+// Segredo próprio e obrigatório (BRIEF ajustes de segurança): sem ele, nenhum envio é assinado nem aceito.
 function segredo(): string {
-  const s = process.env.API_V1_UPLOAD_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!s) throw new Error("Segredo de assinatura do envio ausente");
+  const s = process.env.API_V1_UPLOAD_SECRET;
+  if (!s || s.length < 32) throw new Error("API_V1_UPLOAD_SECRET ausente ou curto demais");
   return s;
+}
+
+const CHAVES_PERIGOSAS = new Set(["JS", "JavaScript", "Launch", "EmbeddedFile", "EmbeddedFiles", "RichMedia", "XFA", "AA", "SubmitForm", "ImportData", "GoToR", "GoToE"]);
+const ACOES_PERIGOSAS = new Set(["JavaScript", "Launch", "SubmitForm", "ImportData", "GoToR", "GoToE", "Rendition", "RichMediaExecute"]);
+// "URI" (link comum, presente em extratos e boletos) não entra: recusaria documento legítimo demais.
+
+/**
+ * Abre o PDF (inclusive partes compactadas) e procura script, anexo, formulário XFA, ação
+ * automática ou ação externa. Devolve o motivo da recusa, ou null se o PDF está limpo.
+ * PDF que não abre é recusado: nunca aceito sem análise.
+ */
+export async function analisarPdf(b: Uint8Array): Promise<string | null> {
+  const rapido = problemaNoPdf(b);
+  if (rapido) return rapido;
+  let doc: PDFDocument;
+  try {
+    doc = await PDFDocument.load(b, { updateMetadata: false });
+  } catch (e) {
+    return /encrypt/i.test(String(e)) ? "PDF protegido por senha não é aceito." : "Não foi possível analisar o PDF. Gere o arquivo de novo (por exemplo, imprimindo como PDF).";
+  }
+  if (doc.isEncrypted) return "PDF protegido por senha não é aceito.";
+  // O pdf-lib é tolerante: arquivo sem estrutura abre como documento vazio. PDF sem página é recusado.
+  let paginas = 0;
+  try { paginas = doc.getPageCount(); } catch { paginas = 0; }
+  if (paginas < 1) return "Não foi possível analisar o PDF. Gere o arquivo de novo (por exemplo, imprimindo como PDF).";
+
+  let achado: string | null = null;
+  const vistos = new Set<PDFObject>();
+  const visitar = (o: PDFObject | undefined, nivel: number): void => {
+    if (!o || achado || nivel > 40 || vistos.has(o)) return;
+    vistos.add(o);
+    const dict = o instanceof PDFDict ? o : o instanceof PDFStream ? o.dict : null;
+    if (dict) {
+      for (const [k, v] of dict.entries()) {
+        const nome = k.asString().slice(1);
+        if (CHAVES_PERIGOSAS.has(nome)) { achado = `/${nome}`; return; }
+        if (nome === "S" && v instanceof PDFName && ACOES_PERIGOSAS.has(v.asString().slice(1))) { achado = `ação ${v.asString()}`; return; }
+        if (nome === "OpenAction" && v instanceof PDFDict) {
+          const s = v.get(PDFName.of("S"));
+          if (!(s instanceof PDFName) || s.asString() !== "/GoTo") { achado = "/OpenAction"; return; }
+        }
+        visitar(v, nivel + 1);
+      }
+      return;
+    }
+    if (o instanceof PDFArray) for (const item of o.asArray()) visitar(item, nivel + 1);
+  };
+  for (const [, obj] of doc.context.enumerateIndirectObjects()) {
+    visitar(obj, 0);
+    if (achado) break;
+  }
+  return achado ? `PDF com conteúdo ativo não é aceito (${achado}). Gere o arquivo de novo imprimindo como PDF.` : null;
+}
+
+/** DOCX com macro (vbaProject.bin) é recusado. */
+export function docxComMacro(b: Uint8Array): boolean {
+  const txt = Buffer.from(b).toString("latin1");
+  return /vbaProject\.bin|vbaData\.xml|macroEnabled/i.test(txt);
+}
+
+/** Análise completa por tipo real. Devolve o motivo da recusa, ou null. */
+export async function analisarArquivo(b: Uint8Array, tipoReal: string): Promise<string | null> {
+  if (tipoReal === "application/pdf") return analisarPdf(b);
+  if (tipoReal === "application/msword") return "Arquivo .doc não é aceito. Envie PDF ou DOCX sem macro.";
+  if (tipoReal === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" && docxComMacro(b)) return "DOCX com macro não é aceito.";
+  return null;
 }
 
 export type DadosUpload = { p: string; k: string; d: string; n: string; c: string; path: string; t: number; exp: number };

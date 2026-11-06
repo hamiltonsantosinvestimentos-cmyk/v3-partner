@@ -18,7 +18,7 @@ import { ErroApi } from "../../lib/api-v1/http";
 import { propostaDoPartner } from "../../lib/api-v1/rota";
 import { trechosEmDestaque } from "../../lib/integracao-api";
 
-process.env.API_V1_UPLOAD_SECRET = "segredo-de-teste";
+process.env.API_V1_UPLOAD_SECRET = "segredo-de-teste-com-mais-de-32-caracteres-ok";
 
 // ── Chaves ────────────────────────────────────────────────────────────────────────────────
 test("gerarChave: prefixo v3_live_, hash SHA-256 e chaves diferentes a cada geração", () => {
