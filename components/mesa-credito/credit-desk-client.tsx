@@ -16,6 +16,7 @@ import { STATUS_LABELS, STATUS_COLORS, PARTNER_HE_CREDIT_LINES, type OperationSt
 import { NovaPropostaModal } from "./nova-proposta-modal";
 import { PropostaDetailModal, type ProposalFull } from "./proposta-detail-modal";
 import { SeloClassificacaoPendente } from "@/components/shared/selo-classificacao-pendente";
+import { SeloViaApi } from "@/components/shared/selo-via-api";
 import {
   AdvancedFilters, applyFilters, getSLAInfo, SLATargetDate,
   EMPTY_FILTERS, type FilterState,
@@ -361,7 +362,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                               {STATUS_LABELS[p.status as OperationStatus]}
                             </Badge>
                           </div>
-                          {p.classificacao_pendente && <SeloClassificacaoPendente />}
+                          {p.classificacao_pendente && <SeloClassificacaoPendente />}<SeloViaApi metadata={p.metadata} />
                           <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2 group-hover:text-primary transition-colors">{p.client_name}</p>
                           <div className="flex items-center justify-between gap-1">
                             <Badge variant={cfg.badgeVariant} className="text-[9px] truncate max-w-[100px]">{p.credit_line}</Badge>
@@ -421,7 +422,7 @@ export function CreditDeskClient({ proposals: initial, level, currentUser }: Cre
                       <tr key={p.id}
                         className="border-b border-border/30 cursor-pointer transition-colors hover:bg-secondary/50"
                         onClick={(e) => { registrarOrigemModal(e.currentTarget); setDetailProposal(p); }}>
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code ?? "código a emitir"}{p.classificacao_pendente && <> <SeloClassificacaoPendente /></>}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code ?? "código a emitir"}{p.classificacao_pendente && <> <SeloClassificacaoPendente /></>}{" "}<SeloViaApi metadata={p.metadata} /></td>
                         <td className="px-4 py-3 font-medium text-foreground max-w-36 truncate">{p.client_name}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{p.client_type ?? "PJ"}</td>
                         <td className="px-4 py-3"><Badge variant={cfg.badgeVariant}>{p.credit_line}</Badge></td>

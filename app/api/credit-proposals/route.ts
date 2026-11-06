@@ -8,13 +8,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { logAudit } from "@/lib/audit";
-import { notifyNovaProposta, notifyPropostaAtualizada } from "@/lib/email";
+import { notifyPropostaAtualizada } from "@/lib/email";
 import { createNotification, notifyByRoles } from "@/lib/notify";
-import { issueCreditCode } from "@/lib/v3-codes";
-import { resolveClient } from "@/lib/v3-clients";
 import { gerarComissoesCreditoLiberado } from "@/lib/credit-commissions";
 import { avisarMudancaEtapa } from "@/lib/chat-partners";
-import { PARTNER_HE_CREDIT_LINES } from "@/lib/constants";
+import { criarPropostaCredito } from "@/lib/credit-proposal-create";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -154,7 +152,7 @@ export async function GET(req: NextRequest) {
 // POST — cria nova proposta de crédito
 export async function POST(req: NextRequest) {
   try {
-    const { user, supabase, profile } = await getAuthedUser();
+    const { user, profile } = await getAuthedUser();
     if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
     const body = await req.json();
@@ -168,145 +166,37 @@ export async function POST(req: NextRequest) {
     }
     const d = parsed.data;
 
-    // Trava do papel PARTNER_HE — só pode originar as 4 linhas da família Home
-    // Equity, independente do que o client mandar (não confia na UI).
-    if (profile?.role === "PARTNER_HE") {
-      const normLinha = (x: string) =>
-        x.normalize("NFD").replace(/\p{Diacritic}/gu, "").trim().toLowerCase().replace(/\s+/g, " ");
-      const permitidas = PARTNER_HE_CREDIT_LINES.map(normLinha);
-      if (!permitidas.includes(normLinha(d.credit_line))) {
-        return NextResponse.json(
-          { error: "Seu acesso só permite propostas de Home Equity, HomeCash, Antecipação de Contratos e Crédito no Aval/Recebíveis." },
-          { status: 403 },
-        );
-      }
-    }
-
-    // Valida valor mínimo N3
-    if (d.current_level === "NIVEL_3" && d.requested_value < 5_000_000) {
-      return NextResponse.json(
-        { error: { requested_value: ["Nível 3 exige valor mínimo de R$ 5.000.000"] } },
-        { status: 400 }
-      );
-    }
-
     // Se admin/gestao enviou um partner_id específico no payload (ex: convertendo lead de um partner), usa ele
     // Caso contrário usa o usuário autenticado
     const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
     const effectivePartnerId = (isAdmin && d.partner_id) ? d.partner_id : user.id;
 
-    // Fase 2b (08/08/2026): resolve credit_line_id server-side a partir do
-    // texto de credit_line — nunca aceito do payload, porque é o vínculo que
-    // o gate de Plano de Negócios (linha internacional) usa na aprovação
-    // final. nova-proposta-modal.tsx sempre envia um dos nomes exatos de
-    // LEVEL_LINES (== regras_linhas_credito.nome), então o match direto
-    // cobre 100% do fluxo real de criação; se não casar, fica null e o gate
-    // simplesmente não se aplica (mesmo comportamento fail-open do backfill
-    // histórico da Fase 2a, nunca bloqueia por dado ausente).
-    const { data: linhaMatch } = await serviceClient()
-      .from("regras_linhas_credito")
-      .select("id")
-      .eq("nome", d.credit_line)
-      .maybeSingle();
+    // Travas (PARTNER_HE, mínimo do N3), código, linha, cliente 360, pasta MPS e
+    // notificações ficam em lib/credit-proposal-create.ts, compartilhada com a API v1.
+    const res = await criarPropostaCredito(serviceClient(), {
+      code:            d.code,
+      title:           d.title,
+      client_name:     d.client_name,
+      client_cpf_cnpj: d.client_cpf_cnpj,
+      credit_line:     d.credit_line,
+      requested_value: d.requested_value,
+      current_level:   d.current_level,
+      metadata:        d.metadata,
+      partnerId:       effectivePartnerId,
+      createdBy:       user.id,
+      creatorRole:     profile?.role,
+      creatorName:     profile?.full_name,
+    });
 
-    // Governanca de Numeracao V3, Fase 3 (10/08/2026): codigo emitido pela
-    // serie CR/CRI, sucedendo o formato legado CRED-26-NNNNNN. O bloqueio
-    // original (escopo nacional/internacional inexistente) foi resolvido na
-    // Fase 5 (regras_linhas_credito.escopo, 08/08), entao a escolha entre as
-    // duas series agora e segura: issueCreditCode() le o escopo real da
-    // linha (linhaMatch.id, ja resolvido acima) antes de emitir. Codigo
-    // emitido e imutavel por desenho, propostas antigas em CRED-26 nunca sao
-    // renomeadas, mesmo padrao de congelamento de historico usado em M&A.
-    let code: string;
-    try {
-      // Truthiness, não `??`: um chamador que mande code:"" (string vazia)
-      // gravaria código em branco e derrubaria a próxima inserção no unique.
-      code = d.code || (await issueCreditCode(linhaMatch?.id ?? null, undefined, serviceClient())).code;
-    } catch (codeErr) {
-      const msg = codeErr instanceof Error ? codeErr.message : String(codeErr);
-      return NextResponse.json({ error: `Falha ao emitir código da proposta: ${msg}` }, { status: 500 });
+    if (!res.ok) {
+      // Mesmo formato de antes para o mínimo do N3 (o modal lê error.requested_value).
+      if (res.codigo === "regra_de_credito") {
+        return NextResponse.json({ error: { requested_value: [res.error] } }, { status: 400 });
+      }
+      return NextResponse.json({ error: res.error }, { status: res.status });
     }
 
-    // Client 360, Fase A (10/08/2026): toda proposta nova ja nasce ligada ao
-    // cliente quando ha CPF/CNPJ. Best-effort: nunca bloqueia a criacao da
-    // proposta se a resolucao falhar (mesmo padrao ja usado pra pasta MPS).
-    const v3ClientId = await resolveClient(d.client_cpf_cnpj, { legalName: d.client_name, vertical: "credito" }).catch(() => null);
-
-    const { data: inserted, error } = await serviceClient()
-      .from("credit_desk_proposals")
-      .insert({
-        code,
-        title:           d.title,
-        client_name:     d.client_name,
-        client_cpf_cnpj: d.client_cpf_cnpj ?? null,
-        v3_client_id:    v3ClientId,
-        credit_line:     d.credit_line,
-        credit_line_id:  linhaMatch?.id ?? null,
-        requested_value: d.requested_value,
-        current_level:   d.current_level,
-        status:          "PENDING",
-        stage:           "RECEBIDO",
-        partner_id:      effectivePartnerId,
-        created_by:      user.id,
-        metadata:        d.metadata ?? {},
-      })
-      .select()
-      .single();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    const data = inserted as unknown as {
-      id: string; code: string; title: string; client_name: string; credit_line: string;
-    };
-
-    // Governanca Documental Universal, Fase 2 (10/08/2026): pasta publica do
-    // cliente em Credito. Usa o code ja emitido acima (formato legado
-    // CRED-26-NNNNNN por ora -- ver comentario da emissao acima), porque
-    // create_deal_folder() so usa o codigo como segmento de path, nao
-    // interpreta seu formato. Best-effort, nunca bloqueia a proposta.
-    const { error: folderError } = await serviceClient().rpc("create_deal_folder", {
-      p_vertical: "Credito",
-      p_deal_code: data.code,
-      p_client_name: data.client_name,
-      p_user_id: user.id,
-    });
-    if (folderError) console.error("[credit-proposals POST] falha ao criar pasta MPS", folderError.message);
-
-    // Notifica admin por e-mail — isolado para não crashar o handler
-    try {
-      const adminEmail = process.env.EMAIL_ADMIN;
-      if (adminEmail) {
-        notifyNovaProposta({
-          adminEmail,
-          partnerName:    profile?.full_name ?? "Partner",
-          proposalCode:   data.code,
-          proposalTitle:  data.title,
-          clientName:     data.client_name,
-          creditLine:     data.credit_line,
-          requestedValue: d.requested_value,
-        });
-      }
-    } catch { /* notificação é opcional, nunca bloqueia a resposta */ }
-
-    // Notificações in-app (awaited para evitar cancelamento em serverless Vercel)
-    const partnerName = profile?.full_name ?? "Partner";
-    await Promise.allSettled([
-      createNotification({
-        user_id: user.id,
-        type: "proposal",
-        title: "Proposta de crédito enviada",
-        message: `${data.code} — ${d.client_name} · ${d.credit_line}`,
-        action_url: "/mesa-credito",
-      }),
-      notifyByRoles(["ADMIN", "GESTAO", "MESA_OPERACIONAL"], {
-        type: "proposal",
-        title: `Nova Proposta — ${data.code}`,
-        message: `${partnerName}: ${d.client_name} · ${d.credit_line} · ${new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(d.requested_value)}`,
-        action_url: `/mesa-credito/${d.current_level.toLowerCase().replace("_", "-")}`,
-      }),
-    ]);
-
-    return NextResponse.json({ ok: true, proposal: data });
+    return NextResponse.json({ ok: true, proposal: res.proposal });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[credit-proposals POST]", msg, err);

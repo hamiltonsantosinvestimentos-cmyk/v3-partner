@@ -1,0 +1,16 @@
+-- Rollback de 20261106a_partner_api.sql. Apaga os dados das tabelas novas (chaves, aceites, log).
+begin;
+drop view if exists public.partner_api_keys_minhas;
+drop table if exists public.credit_proposal_pld;
+drop table if exists public.partner_api_incidentes;
+drop table if exists public.partner_api_bloqueios;
+drop table if exists public.partner_api_requests;
+drop table if exists public.partner_api_keys;
+drop table if exists public.partner_api_codigos;
+drop table if exists public.partner_api_termo_aceites;
+drop table if exists public.partner_api_termos;
+drop function if exists public.partner_api_somente_insercao();
+drop index if exists public.credit_desk_proposals_ref_externa_uq;
+alter table public.credit_desk_proposals drop column if exists referencia_externa;
+alter table public.credit_desk_proposals drop column if exists origem;
+commit;

@@ -173,6 +173,9 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/financeiro", label: "Financeiro", icon: "DollarSign", roles: ["ADMIN", "FINANCEIRO"] },
       { href: "/comissoes", label: "Comissões", icon: "Wallet", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE", "FINANCEIRO"] },
       { href: "/minha-assinatura", label: "Minha Assinatura", icon: "BadgeCheck", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
+      // API de Propostas (BRIEF 2026-11-06): os planos sem API veem o convite para mudar de plano.
+      { href: "/integracao-api", label: "Integração por API", icon: "Link2", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
+      { href: "/admin-cadastros/chaves-api", label: "Chaves de API", icon: "ShieldCheck", roles: ["ADMIN"] },
       {
         href: "/academy", label: "V3 Academy", icon: "GraduationCap",
         roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO"],

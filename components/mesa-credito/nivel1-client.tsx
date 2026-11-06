@@ -1,5 +1,6 @@
 "use client";
 import { aviso } from "@/lib/aviso";
+import { SeloViaApi } from "@/components/shared/selo-via-api";
 import { statusAoReabrir } from "@/lib/credit-proposal-status";
 
 import React, { useState, useCallback, useEffect } from "react";
@@ -290,7 +291,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                         <div key={p.id} onClick={() => setDetailProposal(p)}
                           className="bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group">
                           <div className="flex items-center justify-between gap-1">
-                            <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code}</span>
+                            <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code} <SeloViaApi metadata={p.metadata} /></span>
                             <Badge className={`${STATUS_COLORS[p.status as OperationStatus]} text-[9px] px-1.5 py-0 leading-4`}>
                               {STATUS_LABELS[p.status as OperationStatus]}
                             </Badge>
@@ -342,7 +343,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                       <tr key={p.id}
                         className="border-b border-border/30 cursor-pointer transition-colors hover:bg-secondary/50"
                         onClick={() => setDetailProposal(p)}>
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code} <SeloViaApi metadata={p.metadata} /></td>
                         <td className="px-4 py-3 font-medium text-foreground max-w-36 truncate">{p.client_name}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{p.client_type ?? "PF"}</td>
                         <td className="px-4 py-3"><Badge variant="info">{p.credit_line}</Badge></td>

@@ -32,6 +32,8 @@ import type { AvaliacaoTecnica, PdfAvaliacaoMeta } from "@/lib/avaliacao-tecnica
 import { pegarOrigemModal, recorteDe } from "@/components/motion/origem-modal";
 import { PreAprovacaoPanel } from "@/components/mesa-credito/pre-aprovacao-panel";
 import { isNdaMesaTemplateName, NDA_MESA_NOME } from "@/lib/nda-mesa-operacoes";
+import { SeloViaApi } from "@/components/shared/selo-via-api";
+import { PldInformado } from "@/components/mesa-credito/pld-informado";
 
 export type MesaComment = {
   id: string;
@@ -3076,6 +3078,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="font-mono text-xs text-muted-foreground">{proposal.code}</span>
+              <SeloViaApi metadata={proposal.metadata} />
               <Badge className={STATUS_COLORS[proposal.status as OperationStatus]}>
                 {STATUS_LABELS[proposal.status as OperationStatus] ?? proposal.status}
               </Badge>
@@ -3172,6 +3175,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               Crédito do cliente paga, ou autorização explícita de ADMIN — o
               bloqueio de verdade é no backend, isto aqui só deixa o estado
               óbvio antes de tentar. */}
+          {modalTab === "detalhes" && canChangeStage && <PldInformado proposalId={proposal.id} />}
           {modalTab === "detalhes" && analiseOrder !== "loading" && (
             analiseGateOpen ? (
               <div className="rounded-xl border-2 border-emerald-500/50 bg-emerald-500/10 px-5 py-4 flex items-center gap-4">
