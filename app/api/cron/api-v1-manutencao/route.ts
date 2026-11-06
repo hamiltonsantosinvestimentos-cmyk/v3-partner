@@ -28,6 +28,26 @@ export async function GET(req: NextRequest) {
   const { count: bloqueios } = await db.from("partner_api_bloqueios").delete({ count: "exact" }).lt("ate", new Date(agora - 7 * 86_400_000).toISOString());
   if (e1) console.error("[cron api-v1-manutencao] falha na retenção do log", e1.message);
 
+  // Envios pedidos e não confirmados há mais de 24 horas: apaga o arquivo e o registro.
+  const { data: orfaos } = await db.from("partner_api_uploads")
+    .select("id, storage_path").is("confirmado_em", null)
+    .lt("criado_em", new Date(agora - 24 * 3600_000).toISOString()).limit(500);
+  let uploadsApagados = 0;
+  const lista = (orfaos ?? []) as { id: string; storage_path: string }[];
+  if (lista.length) {
+    const { error: eRm } = await db.storage.from("credit-documents").remove(lista.map((o) => o.storage_path));
+    if (!eRm) {
+      await db.from("partner_api_uploads").delete().in("id", lista.map((o) => o.id));
+      uploadsApagados = lista.length;
+    } else console.error("[cron api-v1-manutencao] falha ao apagar envios órfãos", eRm.message);
+  }
+  // Registros de envio confirmados há mais de 30 dias não servem mais para nada.
+  await db.from("partner_api_uploads").delete().not("confirmado_em", "is", null).lt("confirmado_em", new Date(agora - 30 * 86_400_000).toISOString());
+  // Reservas de Idempotency-Key: abandonadas há mais de 1 dia e concluídas há mais de 30 dias.
+  await db.from("partner_api_idempotencia").delete().eq("status", "em_andamento").lt("criado_em", new Date(agora - 86_400_000).toISOString());
+  await db.from("partner_api_idempotencia").delete().eq("status", "concluida").lt("criado_em", new Date(agora - 30 * 86_400_000).toISOString());
+  await db.from("partner_api_alertas").delete().lt("enviado_em", new Date(agora - 30 * 86_400_000).toISOString());
+
   // Aviso de vencimento: uma vez por chave, 30 dias antes.
   const { data: vencendo } = await db.from("partner_api_keys")
     .select("id, partner_id, nome, prefixo, expira_em")
@@ -50,5 +70,5 @@ export async function GET(req: NextRequest) {
     await db.from("partner_api_keys").update({ aviso_vencimento_em: new Date().toISOString() }).eq("id", k.id);
   }
 
-  return NextResponse.json({ ok: !e1, log_apagado: logs ?? 0, codigos_apagados: codigos ?? 0, bloqueios_apagados: bloqueios ?? 0, avisos_vencimento: avisos });
+  return NextResponse.json({ ok: !e1, log_apagado: logs ?? 0, codigos_apagados: codigos ?? 0, bloqueios_apagados: bloqueios ?? 0, avisos_vencimento: avisos, uploads_apagados: uploadsApagados });
 }

@@ -5,7 +5,8 @@ export type CodigoErro =
   | "dados_invalidos" | "documento_estrangeiro_nao_suportado" | "chave_invalida" | "chave_vencida"
   | "ip_nao_permitido" | "ip_bloqueado" | "termo_pendente" | "sem_permissao" | "sem_acesso"
   | "nao_encontrada" | "referencia_repetida" | "arquivo_grande" | "tipo_nao_aceito"
-  | "regra_de_credito" | "limite_excedido" | "idempotency_key_obrigatoria" | "erro_interno";
+  | "regra_de_credito" | "limite_excedido" | "idempotency_key_obrigatoria" | "erro_interno"
+  | "em_processamento" | "limite_de_envios";
 
 export class ErroApi extends Error {
   constructor(

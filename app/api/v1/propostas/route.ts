@@ -6,6 +6,8 @@ import { ErroApi } from "@/lib/api-v1/http";
 import { camposDoZod, converterProposta, propostaSchema, validarRegras } from "@/lib/api-v1/proposta";
 import { COLUNAS_VISAO, visaoDoPartner } from "@/lib/api-v1/visao-partner";
 import { criarPropostaCredito } from "@/lib/credit-proposal-create";
+import { reservarIdempotencia } from "@/lib/api-v1/idempotencia";
+import { alertar } from "@/lib/api-v1/alertas";
 
 export const dynamic = "force-dynamic";
 
@@ -23,20 +25,18 @@ export async function POST(req: NextRequest) {
       throw new ErroApi(400, "idempotency_key_obrigatoria", "Envie o header Idempotency-Key com um valor único por proposta (até 100 caracteres).");
     }
 
-    // Reenvio com a mesma chave: devolve a proposta já criada, sem duplicar.
-    const { data: anterior } = await db
-      .from("partner_api_requests")
-      .select("proposal_id")
-      .eq("key_id", ctx.keyId)
-      .eq("idempotency_key", idem)
-      .not("proposal_id", "is", null)
-      .limit(1)
-      .maybeSingle();
-    if (anterior?.proposal_id) {
-      const p = await propostaDoPartner(db, ctx, anterior.proposal_id as string, COLUNAS_VISAO);
+    // Reserva da Idempotency-Key ANTES de criar (chave primária no banco): duas chamadas iguais
+    // ao mesmo tempo nunca criam duas propostas (BRIEF ajustes de segurança, 06/11/2026).
+    const reserva = await reservarIdempotencia(db, ctx.keyId, idem);
+    if (reserva.tipo === "concluida") {
+      const p = await propostaDoPartner(db, ctx, reserva.proposalId, COLUNAS_VISAO);
       const visao = visaoDoPartner(p, { portfolio: await portfolioAtivo(db), access: await partnerAccess(db, ctx.partnerId) });
       return { status: 200, corpo: visao, headers: { "Idempotent-Replayed": "true" } };
     }
+    if (reserva.tipo === "em_andamento") {
+      throw new ErroApi(409, "em_processamento", "Uma chamada com esta Idempotency-Key ainda está em andamento. Tente de novo em alguns segundos.", undefined, { "Retry-After": "2" });
+    }
+    try {
 
     let body: unknown;
     try { body = await req.json(); } catch { throw new ErroApi(400, "dados_invalidos", "O corpo precisa ser um JSON válido."); }
@@ -94,9 +94,27 @@ export async function POST(req: NextRequest) {
       if (error) console.error("[api-v1 POST /propostas] falha ao gravar PLD", error.message);
     }
 
+    await db.from("partner_api_idempotencia")
+      .update({ status: "concluida", proposal_id: res.proposal.id })
+      .eq("key_id", ctx.keyId).eq("idempotency_key", idem);
+
+    // Alerta ao ADMIN quando a chave passa de 80% do limite diário.
+    if ((count ?? 0) + 1 >= Math.ceil(ctx.limitePropostasDia * 0.8)) {
+      await alertar(db, "limite_diario_80", ctx.keyId, {
+        titulo: "API: chave perto do limite diário",
+        mensagem: `A chave de ${ctx.partnerNome ?? "partner"} já criou ${(count ?? 0) + 1} de ${ctx.limitePropostasDia} propostas hoje.`,
+      });
+    }
+
     const p = await propostaDoPartner(db, ctx, res.proposal.id, COLUNAS_VISAO);
     const visao = visaoDoPartner(p, { portfolio: await portfolioAtivo(db), access: await partnerAccess(db, ctx.partnerId) });
     return { status: 201, corpo: visao, proposalId: res.proposal.id, idempotencyKey: idem };
+    } catch (e) {
+      // Falhou antes de concluir: libera a reserva para o reenvio com a mesma chave funcionar.
+      await db.from("partner_api_idempotencia").delete()
+        .eq("key_id", ctx.keyId).eq("idempotency_key", idem).eq("status", "em_andamento");
+      throw e;
+    }
   });
 }
 

@@ -9,6 +9,7 @@ import {
   hashChave, ipPermitido, lerBearer, normalizarIp, planoTemApi,
 } from "@/lib/api-keys";
 import { ErroApi } from "@/lib/api-v1/http";
+import { alertar } from "@/lib/api-v1/alertas";
 
 export interface ContextoChave {
   keyId: string;
@@ -20,7 +21,7 @@ export interface ContextoChave {
 }
 
 type ChaveRow = {
-  id: string; partner_id: string; escopos: string[]; ips_permitidos: string[]; expira_em: string;
+  id: string; partner_id: string; prefixo: string; escopos: string[]; ips_permitidos: string[]; expira_em: string;
   revogada_em: string | null; limite_por_minuto: number; limite_propostas_dia: number;
 };
 
@@ -82,6 +83,10 @@ async function falhaDeChave(db: SupabaseClient, ip: string | null, rota: string,
       ip, motivo: `${TENTATIVAS_ANTES_DO_BLOQUEIO} chamadas com chave inválida em 10 minutos`,
       ate: new Date(Date.now() + BLOQUEIO_MS).toISOString(),
     });
+    await alertar(db, "ip_bloqueado", ip, {
+      titulo: "API: IP bloqueado por tentativas com chave inválida",
+      mensagem: `O IP ${ip} fez ${TENTATIVAS_ANTES_DO_BLOQUEIO} chamadas com chave inválida em 10 minutos e ficou bloqueado por 1 hora.`,
+    });
   }
   throw new ErroApi(401, codigo, mensagem);
 }
@@ -115,7 +120,7 @@ export async function autenticar(db: SupabaseClient, req: NextRequest, escopo: E
 
   const { data: row } = await db
     .from("partner_api_keys")
-    .select("id, partner_id, escopos, ips_permitidos, expira_em, revogada_em, limite_por_minuto, limite_propostas_dia")
+    .select("id, partner_id, prefixo, escopos, ips_permitidos, expira_em, revogada_em, limite_por_minuto, limite_propostas_dia")
     .eq("key_hash", hashChave(chave))
     .maybeSingle();
   const k = row as ChaveRow | null;
@@ -127,7 +132,18 @@ export async function autenticar(db: SupabaseClient, req: NextRequest, escopo: E
     throw new ErroApi(status, codigo, mensagem, undefined, headers);
   };
 
-  if (!ipPermitido(ip, k.ips_permitidos)) return recusa(403, "ip_nao_permitido", `A chamada saiu do IP ${ip ?? "desconhecido"}, que não está na lista desta chave.`);
+  if (!ipPermitido(ip, k.ips_permitidos)) {
+    // Chave válida vinda de IP fora da lista: possível vazamento. Avisa o ADMIN e o partner.
+    const { data: dono } = await db.from("profiles").select("full_name").eq("id", k.partner_id).maybeSingle();
+    const emailPartner = await Promise.resolve().then(() => db.auth.admin.getUserById(k.partner_id)).then((r) => r.data?.user?.email ?? null).catch(() => null);
+    await alertar(db, "ip_nao_autorizado", k.id, {
+      titulo: "API: chave usada de IP não autorizado (possível vazamento)",
+      mensagem: `A chave ${k.prefixo}… de ${(dono as { full_name?: string } | null)?.full_name ?? "partner"} foi usada do IP ${ip ?? "desconhecido"}, que não está na lista dela. A chamada foi recusada.`,
+      emailPartner,
+      mensagemPartner: `A sua chave de API ${k.prefixo}… foi usada do IP ${ip ?? "desconhecido"}, que não está na lista dela, e a chamada foi recusada. Se você não reconhece esse IP, revogue a chave em app.v3partners.com.br/integracao-api e crie outra.`,
+    });
+    return recusa(403, "ip_nao_permitido", `A chamada saiu do IP ${ip ?? "desconhecido"}, que não está na lista desta chave.`);
+  }
 
   const { data: perfil } = await db.from("profiles").select("full_name, role").eq("id", k.partner_id).maybeSingle();
   const role = (perfil as { role?: string } | null)?.role ?? null;
