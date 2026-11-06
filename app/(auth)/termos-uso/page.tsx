@@ -9,7 +9,7 @@ export default function TermosUsoPage() {
       <div className="max-w-3xl mx-auto">
         <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-[2px]">V3 Partners</p>
         <h1 className="text-3xl font-bold mt-2 mb-1">Termos de Uso</h1>
-        <p className="text-[#7A8FA8] text-sm mb-2">Última atualização: 4 de setembro de 2026</p>
+        <p className="text-[#7A8FA8] text-sm mb-2">Última atualização: 6 de novembro de 2026</p>
         <p className="text-[#7A8FA8] text-xs mb-10">
           Versão inicial deste documento, sujeita a revisão jurídica antes de ser considerada definitiva.
         </p>
@@ -42,6 +42,12 @@ export default function TermosUsoPage() {
               <a href="/politica-privacidade" className="text-[#C9A84C] underline">Política de Privacidade</a>.
               Ao enviar um formulário, você declara que as informações fornecidas são verdadeiras e de
               sua titularidade (ou que possui autorização para informá-las).
+            </p>
+            <p className="mt-2">
+              As conversas trocadas pelo chat da plataforma ficam registradas e são guardadas por até
+              36 meses. Quando um deal que você originou muda de etapa, enviamos um aviso por e-mail
+              ao endereço cadastrado. As regras de tratamento desses dados estão na{" "}
+              <a href="/politica-privacidade" className="text-[#C9A84C] underline">Política de Privacidade</a>.
             </p>
           </section>
 
