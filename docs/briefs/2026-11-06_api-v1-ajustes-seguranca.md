@@ -31,7 +31,7 @@ Fechar os pontos de reforço achados na revisão de segurança da API v1:
 7. **Documentação para o dev em PDF, sem abrir `/api`** (decisão do Hamilton em 06/11/2026: "cria um site que não tem risco então, ou pdf"):
    - O pedido de abrir `/api` em minúsculas foi **retirado**. Nada muda no `proxy.ts` nem no `next.config.ts`.
    - A documentação passa a existir também em **PDF**, gerado da mesma página, para o partner mandar ao dev por e-mail. Não depende de nenhuma rota da plataforma.
-   - Arquivo: `docs/integracao/API-Propostas-V3.pdf`.
+   - Arquivo: `docs/integracao/V3-Guia-API-Propostas.pdf`.
    - `/API` (maiúsculo, já no ar) continua: é um HTML estático, sem dado nem chamada ao banco.
 
 **Fora do escopo:**
@@ -48,7 +48,7 @@ Fechar os pontos de reforço achados na revisão de segurança da API v1:
   - `app/api/cron/api-v1-manutencao/route.ts`: limpeza de envios não confirmados e de reservas antigas.
   - `lib/api-v1/http.ts`: códigos `em_processamento` e `limite_de_envios`.
   - Documentação: `docs/integracao/api-propostas-credito.html` e `public/integracao/api-propostas.html` (HTTPS, DOC, novos códigos).
-  - `docs/integracao/API-Propostas-V3.pdf`: documentação em PDF.
+  - `docs/integracao/V3-Guia-API-Propostas.pdf`: documentação em PDF.
 - **Arquivo novo:** `lib/api-v1/alertas.ts`.
 - **Tabelas novas:**
   - `partner_api_uploads`: `id`, `key_id`, `partner_id`, `proposal_id`, `storage_path` (único), `tipo_documento`, `criado_em`, `expira_em`, `confirmado_em`.
@@ -161,7 +161,7 @@ VEREDITO: LIBERADO PARA "GO"
 
 Go do Hamilton em 06/11/2026: "go BRIEF 2026-11-06_api-v1-ajustes-seguranca". Branch `feat/api-v1-seguranca`.
 
-- **Item 7 trocado** a pedido do Hamilton: em vez de abrir `/api`, documentação em PDF (`docs/integracao/API-Propostas-V3.pdf`, 13 páginas, com versão de impressão clara). Sem mudança em `proxy.ts` nem `next.config.ts`.
+- **Item 7 trocado** a pedido do Hamilton: em vez de abrir `/api`, documentação em PDF (`docs/integracao/V3-Guia-API-Propostas.pdf`, 14 páginas, modelo premium V3: capa com logo, sumário, páginas navy com ouro, cabeçalho e rodapé, contracapa; gerado por `scripts/gera-pdf-api-propostas.js`). Sem mudança em `proxy.ts` nem `next.config.ts`.
 - **Análise de PDF:**
   - Recusa as chaves `/JS`, `/JavaScript`, `/Launch`, `/EmbeddedFile(s)`, `/RichMedia`, `/XFA`, `/AA`, `/SubmitForm`, `/ImportData`, `/GoToR` e `/GoToE`.
   - Recusa também as ações desses tipos e o `/OpenAction` que não seja `/GoTo`.
