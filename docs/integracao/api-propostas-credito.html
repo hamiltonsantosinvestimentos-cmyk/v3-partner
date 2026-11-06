@@ -1,0 +1,406 @@
+<title>API de Propostas V3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+/* Layout: coluna de leitura com índice lateral fixo no desktop; uma coluna no celular. Identidade V3 (navy, ouro, cream). */
+:root{
+  --navy:#09081A; --base:#111F35; --card:#162744; --medio:#243A66;
+  --ouro:#C9A84C; --ouro-claro:#E8C97A; --cream:#F0ECE4; --muted:#7A8FA8;
+  --ok:#6FBF8E; --erro:#E07A6B;
+  --sans:"DM Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,"SFMono-Regular",Consolas,"Liberation Mono",monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--navy);color:var(--muted);font:400 15px/1.65 var(--sans);margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:220px minmax(0,1fr);gap:48px}
+nav{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;display:flex;flex-direction:column;gap:6px;font-size:13px}
+nav a{color:var(--muted);text-decoration:none;padding:4px 0;border-left:2px solid transparent;padding-left:10px}
+nav a:hover,nav a:focus-visible{color:var(--cream);border-left-color:var(--ouro);outline:none}
+nav .lbl{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ouro);margin:14px 0 4px}
+main{min-width:0;display:flex;flex-direction:column;gap:56px}
+h1,h2,h3{color:var(--cream);text-wrap:balance;margin:0}
+h1{font-size:clamp(30px,5vw,44px);font-weight:700;line-height:1.15;letter-spacing:-.01em}
+h2{font-size:24px;font-weight:600;line-height:1.25}
+h3{font-size:16px;font-weight:600;margin-top:8px}
+p{margin:0;max-width:68ch}
+section{display:flex;flex-direction:column;gap:16px;scroll-margin-top:24px}
+.eyebrow{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ouro)}
+.aviso{border:1px solid var(--ouro);background:var(--base);border-radius:8px;padding:14px 16px;color:var(--cream);font-size:14px}
+.aviso b{color:var(--ouro-claro)}
+code{font-family:var(--mono);font-size:.88em;color:var(--ouro-claro);background:var(--base);padding:1px 6px;border-radius:4px}
+pre{margin:0;background:var(--base);border:1px solid var(--card);border-radius:8px;padding:16px;overflow-x:auto;font:13px/1.6 var(--mono);color:var(--cream)}
+pre code{background:none;padding:0;color:inherit;font-size:inherit}
+.k{color:var(--ouro-claro)} .s{color:#A9C7A0} .c{color:var(--muted)}
+.tbl{overflow-x:auto;border:1px solid var(--card);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:560px}
+th{text-align:left;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ouro);background:var(--base);padding:10px 14px}
+td{padding:10px 14px;border-top:1px solid var(--card);vertical-align:top}
+td:first-child{color:var(--cream);white-space:nowrap}
+.req{font-size:11px;font-weight:700;color:var(--ouro)}
+.opt{font-size:11px;color:var(--muted)}
+.fluxo{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;list-style:none;padding:0;margin:0;counter-reset:p}
+.fluxo li{background:var(--base);border:1px solid var(--card);border-radius:8px;padding:14px;counter-increment:p;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.fluxo li::before{content:"Passo " counter(p);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ouro)}
+.fluxo b{color:var(--cream);font-weight:600}
+.ep{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-family:var(--mono);font-size:14px;color:var(--cream)}
+.m{font:700 11px var(--sans);letter-spacing:.08em;padding:3px 8px;border-radius:4px;background:var(--medio);color:var(--cream)}
+.m.post{background:var(--ouro);color:var(--navy)}
+.endpoint{border-top:1px solid var(--card);padding-top:20px;display:flex;flex-direction:column;gap:12px}
+ul.lista{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;max-width:68ch}
+ul.lista b{color:var(--cream);font-weight:600}
+.etapas{display:flex;flex-wrap:wrap;gap:8px}
+.etapas span{font:600 12px var(--mono);border:1px solid var(--medio);border-radius:999px;padding:4px 10px;color:var(--cream)}
+.etapas span.fim{border-color:var(--erro);color:var(--erro)}
+.etapas span.ok{border-color:var(--ok);color:var(--ok)}
+footer{border-top:1px solid var(--card);padding-top:20px;font-size:13px}
+a{color:var(--ouro-claro)}
+@media (max-width:860px){.wrap{grid-template-columns:minmax(0,1fr);gap:24px}nav{position:static;flex-direction:row;flex-wrap:wrap;gap:4px 14px}nav .lbl{width:100%;margin:0}nav a{border:0;padding:0}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+</style>
+
+<div class="wrap">
+<nav aria-label="Índice">
+  <span class="lbl">API de Propostas V3</span>
+  <a href="#visao">Visão geral</a>
+  <a href="#fluxo">Como funciona</a>
+  <a href="#passo-a-passo">Passo a passo</a>
+  <a href="#auth">Autenticação</a>
+  <a href="#seguranca">Segurança e termo</a>
+  <span class="lbl">Rotas</span>
+  <a href="#linhas">Linhas e documentos</a>
+  <a href="#criar">Criar proposta</a>
+  <a href="#docs">Enviar documentos</a>
+  <a href="#consultar">Consultar proposta</a>
+  <span class="lbl">Referência</span>
+  <a href="#arquivos">Regras dos arquivos</a>
+  <a href="#etapas">Etapas da proposta</a>
+  <a href="#erros">Erros</a>
+  <a href="#limites">Limites</a>
+</nav>
+
+<main>
+<section id="visao">
+  <span class="eyebrow">V3 Partners · Integração para desenvolvedores · v1</span>
+  <h1>API de Propostas de Crédito</h1>
+  <p>Com esta API, o sistema da sua empresa cadastra propostas de crédito direto na Mesa de Crédito da V3, com os dados do cliente, da operação, dos imóveis em garantia e os documentos. A proposta chega à mesa igual a uma proposta feita pela plataforma, e você acompanha a etapa pela mesma API.</p>
+  <div class="aviso"><b>Versão 1 (06/11/2026).</b> As chaves são liberadas pela V3 depois da publicação do Termo de Uso da API. Até lá, use esta página para planejar a integração.</div>
+</section>
+
+<section id="fluxo">
+  <h2>Como funciona</h2>
+  <ol class="fluxo">
+    <li><b>Consultar linhas</b>Busque as linhas de crédito liberadas para você e a lista de documentos de cada uma.</li>
+    <li><b>Criar a proposta</b>Envie os dados do cliente e da operação. A V3 devolve o <code>id</code> e o código da proposta.</li>
+    <li><b>Enviar documentos</b>Para cada arquivo, peça um link de envio, suba o arquivo nele e confirme.</li>
+    <li><b>Acompanhar</b>Consulte a etapa, as pendências e os documentos que ainda faltam.</li>
+  </ol>
+  <p>Endereço base de todas as rotas:</p>
+  <pre><code>https://app.v3partners.com.br/api/v1</code></pre>
+  <p>Todas as rotas recebem e devolvem JSON em UTF-8. Valores em reais vão como número com ponto decimal (<code>350000.00</code>), nunca como texto formatado. Datas vão no formato <code>AAAA-MM-DD</code>, e data com hora vai em ISO 8601 com fuso.</p>
+</section>
+
+<section id="passo-a-passo">
+  <h2>Passo a passo</h2>
+  <h3>Do lado do partner, na plataforma V3</h3>
+  <ol class="lista">
+    <li><b>Peça ao dev o IP fixo de saída</b> do servidor que vai chamar a API (até 10 IPs ou faixas). Sem IP fixo, a chave não funciona.</li>
+    <li>Na plataforma, abra o menu <b>Integração por API</b>, leia e aceite o Termo de Uso (são três confirmações).</li>
+    <li>Clique em <b>Criar chave</b>: dê um nome, informe os IPs e as permissões, e digite o código de 6 dígitos que chega no seu e-mail.</li>
+    <li><b>Copie a chave na hora</b> (ela aparece uma vez só) e entregue ao dev por um canal seguro.</li>
+  </ol>
+  <h3>Do lado do dev</h3>
+  <ol class="lista">
+    <li><b>Guarde a chave</b> em variável de ambiente ou cofre de segredos do servidor. Exemplo: <code>V3_API_KEY</code>.</li>
+    <li><b>Teste a conexão</b> buscando as linhas de crédito. Resposta 200 com a lista quer dizer que chave, IP e termo estão certos.
+<pre><code>curl https://app.v3partners.com.br/api/v1/linhas \
+  -H "Authorization: Bearer $V3_API_KEY"</code></pre></li>
+    <li><b>Monte o mapeamento</b>: a linha de crédito do seu sistema para o <code>nome</code> exato de <code>GET /linhas</code>, e cada documento do seu sistema para o <code>id</code> do checklist (por exemplo <code>he_pf_1</code>).</li>
+    <li><b>Crie a proposta</b> com um <code>Idempotency-Key</code> novo (um UUID por proposta) e guarde o <code>id</code> devolvido junto com a proposta no seu sistema.
+<pre><code>curl -X POST https://app.v3partners.com.br/api/v1/propostas \
+  -H "Authorization: Bearer $V3_API_KEY" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d @proposta.json</code></pre></li>
+    <li><b>Envie cada documento</b> em três chamadas: pedir o link, subir o arquivo, confirmar.
+<pre><code># 1. pedir o link
+RESP=$(curl -s -X POST https://app.v3partners.com.br/api/v1/propostas/$ID/documentos/upload-url \
+  -H "Authorization: Bearer $V3_API_KEY" -H "Content-Type: application/json" \
+  -d '{"tipo_documento":"he_pf_1","nome_arquivo":"rg.pdf","tamanho_bytes":482113}')
+URL=$(echo "$RESP" | jq -r .url); UPLOAD_ID=$(echo "$RESP" | jq -r .upload_id)
+
+# 2. subir o arquivo (sem a chave da V3)
+curl -X PUT "$URL" -H "Content-Type: application/pdf" --data-binary @rg.pdf
+
+# 3. confirmar
+curl -X POST https://app.v3partners.com.br/api/v1/propostas/$ID/documentos \
+  -H "Authorization: Bearer $V3_API_KEY" -H "Content-Type: application/json" \
+  -d "{\"upload_id\":\"$UPLOAD_ID\"}"</code></pre></li>
+    <li><b>Mande o link da Análise de Crédito ao cliente</b>: ele vem em <code>link_analise_credito</code> na resposta da criação.</li>
+    <li><b>Acompanhe</b>: a cada 15 minutos, chame <code>GET /propostas?atualizado_desde=</code> com a hora da última consulta. Para cada proposta que mudou, atualize a etapa no seu sistema e, se houver pendência, mostre o <code>motivo</code> à sua equipe e reenvie o documento pedido.</li>
+    <li><b>Leia os comentários</b> da mesa com <code>GET /propostas/{id}/comentarios?desde=</code>. Para responder, use a plataforma.</li>
+    <li><b>Trate os erros</b> pelo campo <code>erro.codigo</code> (tabela no fim desta página). Em 429, espere o <code>Retry-After</code>; em 500, reenvie com a mesma <code>Idempotency-Key</code>.</li>
+    <li><b>Antes de a chave vencer</b> (12 meses, com aviso por e-mail 30 dias antes), o partner cria a chave nova, você troca no servidor, e o partner revoga a antiga.</li>
+  </ol>
+</section>
+
+<section id="auth">
+  <h2>Autenticação</h2>
+  <p>A API está disponível para partners dos planos <b>Partner PRO, Gold, Diamante e Enterprise</b>. O partner cria a chave na plataforma V3, no menu <b>Integração por API</b>, e entrega ao dev. A chave começa com <code>v3_live_</code> e aparece uma vez só. Guarde a chave no servidor, em variável de ambiente ou cofre de segredos. Nunca coloque a chave em aplicativo, site ou repositório de código.</p>
+  <pre><code>Authorization: Bearer v3_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json</code></pre>
+  <ul class="lista">
+    <li>A chave enxerga só as propostas do partner que a criou.</li>
+    <li>Se a chave vazar, o partner revoga na plataforma e cria outra. Uma chave revogada para de funcionar na hora.</li>
+  </ul>
+</section>
+
+<section id="seguranca">
+  <h2>Segurança e termo de uso</h2>
+  <p>A API recebe dados pessoais e documentos de clientes, por isso as regras abaixo são obrigatórias. Combine com o partner antes de começar.</p>
+  <ul class="lista">
+    <li><b>Termo de Uso da API (versão 2.1):</b> o partner aceita o termo na plataforma antes de criar a primeira chave, com uma confirmação separada para as cláusulas em destaque: autorização para consultas de crédito, proibição de cobrança antecipada do cliente, suspensão de comissão em caso de fraude, limitação de responsabilidade, multa e compensação. Quando sai uma versão nova, as chaves ficam suspensas até o partner aceitar de novo.</li>
+    <li><b>Confirmação por e-mail:</b> para criar a chave, o partner digita um código enviado ao e-mail da conta dele.</li>
+    <li><b>IPs permitidos:</b> cada chave aceita chamadas só dos IPs ou faixas (CIDR) cadastrados, de 1 a 10. Informe ao partner os IPs fixos de saída do seu servidor antes de ele criar a chave. Chamada de outro IP recebe 403.</li>
+    <li><b>Validade:</b> a chave vale 12 meses. O partner recebe um aviso 30 dias antes de vencer. Planeje a troca da chave sem parar o sistema.</li>
+    <li><b>Permissões:</b> a chave pode ter as duas permissões, <code>propostas:criar</code> (criar e enviar documentos) e <code>propostas:ler</code> (consultar), ou só uma delas.</li>
+    <li><b>Bloqueio automático:</b> 10 chamadas com chave inválida a partir do mesmo IP em 10 minutos bloqueiam esse IP por 1 hora.</li>
+    <li><b>Registro:</b> cada chamada fica registrada com chave, IP, data e hora, rota e resultado, por 12 meses, acima do mínimo do Marco Civil da Internet. O conteúdo da chamada não é copiado para esse registro.</li>
+    <li><b>Só HTTPS.</b> Chamadas sem TLS são recusadas.</li>
+    <li><b>Incidente:</b> se a chave vazar ou o seu sistema sofrer um incidente que envolva dados enviados à V3, revogue a chave e avise a V3 em até 24 horas.</li>
+  </ul>
+</section>
+
+<section id="linhas">
+  <h2>Linhas de crédito e documentos exigidos</h2>
+  <div class="endpoint">
+    <div class="ep"><span class="m">GET</span>/linhas</div>
+    <p>Devolve as linhas liberadas para o partner, o nível de cada uma, o valor mínimo e os documentos pedidos para cliente PF e PJ. Use o <code>id</code> de cada documento no envio de arquivos.</p>
+<pre><code>{
+  <span class="k">"linhas"</span>: [
+    {
+      <span class="k">"nome"</span>: <span class="s">"Home Equity"</span>,
+      <span class="k">"nivel"</span>: <span class="s">"NIVEL_1"</span>,
+      <span class="k">"valor_minimo"</span>: null,
+      <span class="k">"documentos"</span>: {
+        <span class="k">"PF"</span>: [
+          { <span class="k">"id"</span>: <span class="s">"he_pf_1"</span>, <span class="k">"nome"</span>: <span class="s">"RG e CPF (ou CNH)"</span>, <span class="k">"obrigatorio"</span>: true, <span class="k">"dica"</span>: <span class="s">"Documento de identificação com foto"</span> },
+          { <span class="k">"id"</span>: <span class="s">"he_pf_2"</span>, <span class="k">"nome"</span>: <span class="s">"Comprovante de renda (3 últimos meses)"</span>, <span class="k">"obrigatorio"</span>: true },
+          { <span class="k">"id"</span>: <span class="s">"he_pf_4"</span>, <span class="k">"nome"</span>: <span class="s">"Matrícula do imóvel atualizada (máx. 30 dias)"</span>, <span class="k">"obrigatorio"</span>: true }
+        ],
+        <span class="k">"PJ"</span>: [ <span class="c">/* ... */</span> ]
+      }
+    }
+  ]
+}</code></pre>
+    <p>Hoje são 28 linhas: 8 do nível 1, 13 do nível 2 e 7 do nível 3. Elas vêm ordenadas por nível e, dentro do nível, por nome. A lista de linhas e documentos pode mudar. Consulte esta rota uma vez por dia, ou antes de montar a tela de envio, em vez de fixar os valores no seu sistema.</p>
+  </div>
+</section>
+
+<section id="criar">
+  <h2>Criar a proposta</h2>
+  <div class="endpoint">
+    <div class="ep"><span class="m post">POST</span>/propostas</div>
+    <p>Exige o header <code>Idempotency-Key</code> com um valor único por proposta, por exemplo um UUID gerado pelo seu sistema. Se a chamada cair e você reenviar com a mesma chave, a V3 devolve a proposta já criada, sem duplicar.</p>
+<pre><code>POST /api/v1/propostas
+Authorization: Bearer v3_live_...
+Idempotency-Key: 6f1d2c4e-8a7b-4b1e-9c3d-2f5a7e9b0c11
+
+{
+  <span class="k">"referencia_externa"</span>: <span class="s">"CRM-2026-00412"</span>,
+  <span class="k">"cliente"</span>: {
+    <span class="k">"tipo"</span>: <span class="s">"PF"</span>,
+    <span class="k">"nome"</span>: <span class="s">"Maria Aparecida Souza"</span>,
+    <span class="k">"cpf_cnpj"</span>: <span class="s">"123.456.789-09"</span>,
+    <span class="k">"email"</span>: <span class="s">"maria@exemplo.com.br"</span>,
+    <span class="k">"telefone"</span>: <span class="s">"+5511987654321"</span>,
+    <span class="k">"rg"</span>: <span class="s">"12.345.678-9 SSP/SP"</span>,
+    <span class="k">"nascimento"</span>: <span class="s">"1978-04-22"</span>,
+    <span class="k">"estado_civil"</span>: <span class="s">"CASADO"</span>,
+    <span class="k">"renda_mensal"</span>: 18500.00,
+    <span class="k">"endereco"</span>: { <span class="k">"cep"</span>: <span class="s">"04538-132"</span>, <span class="k">"logradouro"</span>: <span class="s">"Av. Brigadeiro Faria Lima, 3477"</span>, <span class="k">"cidade"</span>: <span class="s">"São Paulo"</span>, <span class="k">"uf"</span>: <span class="s">"SP"</span> }
+  },
+  <span class="k">"operacao"</span>: {
+    <span class="k">"linha"</span>: <span class="s">"Home Equity"</span>,
+    <span class="k">"valor_solicitado"</span>: 350000.00,
+    <span class="k">"prazo_meses"</span>: 120,
+    <span class="k">"finalidade"</span>: <span class="s">"Capital de giro da empresa"</span>,
+    <span class="k">"restricao"</span>: <span class="s">"NAO"</span>,
+    <span class="k">"observacoes"</span>: <span class="s">"Cliente com imóvel quitado."</span>
+  },
+  <span class="k">"imoveis"</span>: [
+    {
+      <span class="k">"cep"</span>: <span class="s">"04538-132"</span>, <span class="k">"endereco"</span>: <span class="s">"Rua Exemplo, 100, Itaim Bibi"</span>,
+      <span class="k">"cidade"</span>: <span class="s">"São Paulo"</span>, <span class="k">"uf"</span>: <span class="s">"SP"</span>, <span class="k">"zona"</span>: <span class="s">"URBANO"</span>,
+      <span class="k">"valor_estimado"</span>: 1200000.00, <span class="k">"proprietario"</span>: <span class="s">"MESMO_TITULAR"</span>
+    }
+  ],
+  <span class="k">"declaracoes"</span>: {
+    <span class="k">"autorizacao_consultas"</span>: { <span class="k">"obtida"</span>: true, <span class="k">"data"</span>: <span class="s">"2026-11-19"</span> }
+  },
+  <span class="k">"pld"</span>: {
+    <span class="k">"pep"</span>: <span class="s">"NAO"</span>,
+    <span class="k">"beneficiario_final"</span>: null,
+    <span class="k">"circunstancia_atipica"</span>: null
+  }
+}</code></pre>
+    <h3>Resposta (201)</h3>
+<pre><code>{
+  <span class="k">"id"</span>: <span class="s">"8a3f0e52-1c7d-4f9b-b1e2-5d6c7a8b9c0d"</span>,
+  <span class="k">"codigo"</span>: <span class="s">"CR-26-000318"</span>,
+  <span class="k">"etapa"</span>: <span class="s">"RECEBIDO"</span>,
+  <span class="k">"referencia_externa"</span>: <span class="s">"CRM-2026-00412"</span>,
+  <span class="k">"documentos_pendentes"</span>: [ <span class="s">"he_pf_1"</span>, <span class="s">"he_pf_2"</span>, <span class="s">"he_pf_3"</span>, <span class="c">/* ... */</span> ],
+  <span class="k">"link_analise_credito"</span>: <span class="s">"https://app.v3partners.com.br/..."</span>
+}</code></pre>
+    <h3>Campos</h3>
+    <div class="tbl"><table>
+      <thead><tr><th>Campo</th><th>Regra</th></tr></thead>
+      <tbody>
+        <tr><td>referencia_externa</td><td><span class="opt">opcional</span> · Código da proposta no seu sistema, até 80 caracteres. Não pode repetir entre as suas propostas.</td></tr>
+        <tr><td>cliente.tipo</td><td><span class="req">obrigatório</span> · <code>PF</code> ou <code>PJ</code>. Define os campos do cliente e os documentos pedidos.</td></tr>
+        <tr><td>cliente.nome</td><td><span class="req">obrigatório para PF</span> · Nome completo, como no documento.</td></tr>
+        <tr><td>cliente.razao_social</td><td><span class="req">obrigatório para PJ</span> · Use também <code>nome_fantasia</code>, <code>socio_responsavel</code> e <code>faturamento_mensal</code>.</td></tr>
+        <tr><td>cliente.cpf_cnpj</td><td><span class="req">obrigatório</span> · Com ou sem pontuação. O dígito verificador é conferido. CNPJ alfanumérico é aceito. PF exige CPF e PJ exige CNPJ. Cliente sem documento brasileiro ainda não é aceito pela API: cadastre pela plataforma.</td></tr>
+        <tr><td>cliente.email</td><td><span class="req">obrigatório</span> · E-mail válido do cliente.</td></tr>
+        <tr><td>cliente.telefone</td><td><span class="req">obrigatório</span> · No formato internacional E.164, com <code>+</code>, DDI, DDD e número, sem espaços. Exemplo: <code>+5511987654321</code>.</td></tr>
+        <tr><td>cliente.rg, nascimento, estado_civil, renda_mensal</td><td><span class="opt">recomendado para PF</span> · Acelera a análise. <code>nascimento</code> em <code>AAAA-MM-DD</code>.</td></tr>
+        <tr><td>cliente.endereco</td><td><span class="opt">recomendado</span> · <code>cep</code>, <code>logradouro</code>, <code>cidade</code>, <code>uf</code> (sigla com 2 letras).</td></tr>
+        <tr><td>operacao.linha</td><td><span class="req">obrigatório</span> · Nome exato de uma linha devolvida por <code>GET /linhas</code>.</td></tr>
+        <tr><td>operacao.valor_solicitado</td><td><span class="req">obrigatório</span> · Número maior que zero, com até 2 casas decimais e no máximo 5000000000.00. Linhas de nível 3 exigem no mínimo R$ 5.000.000,00. Tetos dos outros valores: <code>renda_mensal</code> até 10000000.00, <code>faturamento_mensal</code> até 1000000000.00 e <code>valor_estimado</code> do imóvel até 5000000000.00.</td></tr>
+        <tr><td>operacao.prazo_meses</td><td><span class="opt">opcional</span> · Número inteiro de meses.</td></tr>
+        <tr><td>operacao.finalidade, restricao, observacoes</td><td><span class="opt">opcional</span> · <code>restricao</code> (cliente com restrição de crédito): <code>SIM</code> ou <code>NAO</code>. Texto livre em <code>finalidade</code> e <code>observacoes</code>, até 2.000 caracteres.</td></tr>
+        <tr><td>declaracoes.autorizacao_consultas</td><td><span class="req">obrigatório</span> · <code>obtida: true</code> e a <code>data</code> em que o partner colheu do cliente, e de cada sócio, garantidor ou coobrigado, a autorização para consulta ao SCR do Banco Central, a bureaus de crédito e a serviços antifraude (Termo de Uso, cláusula 4.8). A prova fica com o partner por 5 anos.</td></tr>
+        <tr><td>pld</td><td><span class="opt">opcional, informe sempre que souber</span> · <code>pep</code>: <code>SIM</code>, <code>NAO</code> ou <code>NAO_SEI</code> (cliente, sócios ou representantes como pessoa exposta politicamente). <code>beneficiario_final</code>: <code>{ "nome", "cpf" }</code>, para PJ. <code>circunstancia_atipica</code>: texto sobre origem de recursos, garantias ou operação (cláusula 7.4).</td></tr>
+        <tr><td>imoveis[]</td><td><span class="req">obrigatório quando a linha tem garantia de imóvel</span> · <code>zona</code>: <code>URBANO</code> ou <code>RURAL</code>. <code>proprietario</code>: <code>MESMO_TITULAR</code> ou o nome do proprietário.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Crédito consignado e crédito pessoal não fazem parte do escopo da V3 e são recusados.</p>
+  </div>
+</section>
+
+<section id="docs">
+  <h2>Enviar documentos</h2>
+  <p>O arquivo vai direto para o armazenamento da V3 por um link temporário, sem passar pelo corpo da chamada. São três passos por arquivo. Um mesmo documento pode ter vários arquivos, por exemplo três meses de holerite ou as fotos do imóvel.</p>
+
+  <div class="endpoint">
+    <div class="ep"><span class="m post">POST</span>/propostas/{id}/documentos/upload-url</div>
+<pre><code>{ <span class="k">"tipo_documento"</span>: <span class="s">"he_pf_1"</span>, <span class="k">"nome_arquivo"</span>: <span class="s">"rg-maria.pdf"</span>, <span class="k">"tamanho_bytes"</span>: 482113 }</code></pre>
+    <p>Resposta: <code>upload_id</code>, <code>url</code> e o <code>content_type</code> a usar no envio. O link vale por 2 horas e aceita um arquivo só. O <code>tipo_documento</code> precisa ser um <code>id</code> do checklist da linha (<code>GET /linhas</code>).</p>
+<pre><code>{ <span class="k">"upload_id"</span>: <span class="s">"up_eyJwIjoi..."</span>, <span class="k">"url"</span>: <span class="s">"https://...supabase.co/storage/v1/object/upload/sign/..."</span>, <span class="k">"content_type"</span>: <span class="s">"application/pdf"</span>, <span class="k">"expira_em"</span>: <span class="s">"2026-11-20T16:40:00-03:00"</span> }</code></pre>
+  </div>
+
+  <div class="endpoint">
+    <div class="ep"><span class="m">PUT</span>{url}</div>
+    <p>Suba os bytes do arquivo no link recebido, com o <code>Content-Type</code> devolvido no passo anterior. Não envie o header <code>Authorization</code> da V3 nesta chamada. Na confirmação, a V3 confere o tipo real pelo conteúdo: arquivo cuja extensão não bate com o conteúdo é recusado e apagado.</p>
+<pre><code>curl -X PUT "$URL" -H "Content-Type: application/pdf" --data-binary @rg-maria.pdf</code></pre>
+  </div>
+
+  <div class="endpoint">
+    <div class="ep"><span class="m post">POST</span>/propostas/{id}/documentos</div>
+<pre><code>{ <span class="k">"upload_id"</span>: <span class="s">"up_7Kq2..."</span> }</code></pre>
+    <p>A V3 confere se o arquivo chegou, o tipo real do arquivo e o tamanho, e registra o documento na proposta. Sem esta confirmação, o arquivo não aparece para a mesa. A resposta traz a lista atualizada de <code>documentos_pendentes</code>.</p>
+  </div>
+</section>
+
+<section id="consultar">
+  <h2>Consultar a proposta</h2>
+  <div class="endpoint">
+    <div class="ep"><span class="m">GET</span>/propostas/{id}</div>
+<pre><code>{
+  <span class="k">"id"</span>: <span class="s">"8a3f0e52-..."</span>, <span class="k">"codigo"</span>: <span class="s">"CR-26-000318"</span>, <span class="k">"referencia_externa"</span>: <span class="s">"CRM-2026-00412"</span>,
+  <span class="k">"linha"</span>: <span class="s">"Home Equity"</span>, <span class="k">"nivel"</span>: <span class="s">"NIVEL_1"</span>, <span class="k">"etapa"</span>: <span class="s">"PENDENCIA"</span>, <span class="k">"status"</span>: <span class="s">"PENDING"</span>,
+  <span class="k">"valor_solicitado"</span>: 350000.00, <span class="k">"valor_aprovado"</span>: null, <span class="k">"prazo"</span>: <span class="s">"120 meses"</span>, <span class="k">"finalidade"</span>: <span class="s">"Capital de giro da empresa"</span>,
+  <span class="k">"cliente"</span>: { <span class="k">"tipo"</span>: <span class="s">"PF"</span>, <span class="k">"nome"</span>: <span class="s">"Maria Aparecida Souza"</span>, <span class="k">"cpf_cnpj"</span>: <span class="s">"***.456.789-**"</span> },
+  <span class="k">"pendencia"</span>: { <span class="k">"motivo"</span>: <span class="s">"Matrícula com mais de 30 dias. Enviar atualizada."</span>, <span class="k">"responsavel"</span>: <span class="s">"Partner"</span>, <span class="k">"desde"</span>: <span class="s">"2026-11-21T10:12:00-03:00"</span> },
+  <span class="k">"pendencias_documentos"</span>: [ { <span class="k">"tipo_documento"</span>: <span class="s">"he_pf_4"</span>, <span class="k">"documento"</span>: <span class="s">"Matrícula do imóvel atualizada"</span>, <span class="k">"motivo"</span>: <span class="s">"Emitida há 45 dias"</span>, <span class="k">"desde"</span>: <span class="s">"2026-11-21T10:10:00-03:00"</span> } ],
+  <span class="k">"documentos_recebidos"</span>: [ { <span class="k">"tipo_documento"</span>: <span class="s">"he_pf_1"</span>, <span class="k">"nome_arquivo"</span>: <span class="s">"rg-maria.pdf"</span>, <span class="k">"recebido_em"</span>: <span class="s">"2026-11-20T14:41:03-03:00"</span> } ],
+  <span class="k">"documentos_pendentes"</span>: [ <span class="s">"he_pf_4"</span> ],
+  <span class="k">"link_analise_credito"</span>: <span class="s">"https://app.v3partners.com.br/analise-v2?prop=CR-26-000318&amp;ref=..."</span>,
+  <span class="k">"criada_em"</span>: <span class="s">"2026-11-20T14:38:00-03:00"</span>, <span class="k">"atualizado_em"</span>: <span class="s">"2026-11-21T10:12:00-03:00"</span>
+}</code></pre>
+    <p>A criação (<code>POST /propostas</code>) devolve este mesmo formato, com HTTP 201. Um reenvio com a mesma <code>Idempotency-Key</code> devolve a proposta já criada, com HTTP 200 e o header <code>Idempotent-Replayed: true</code>.</p>
+    <p>A consulta mostra o mesmo que o partner vê na Mesa de Crédito da plataforma, e nada além disso: etapa, pendências, valores solicitado e aprovado, documentos recebidos e faltantes, o link da Análise de Crédito e, numa rota própria, os comentários. Informações internas da mesa da V3 não aparecem. Por segurança, CPF e CNPJ vêm mascarados, e RG e renda não vêm.</p>
+  </div>
+  <div class="endpoint">
+    <div class="ep"><span class="m">GET</span>/propostas/{id}/comentarios</div>
+    <p>Mensagens trocadas com a mesa da V3 sobre a proposta, as mesmas da aba Comentários da plataforma. A rota é <b>só de leitura</b>: para responder, o partner usa a plataforma. Mensagens em ordem de envio, em páginas de 50. Use <code>?desde=</code> com data e hora para buscar só as novas.</p>
+<pre><code>{
+  <span class="k">"comentarios"</span>: [
+    { <span class="k">"em"</span>: <span class="s">"2026-11-21T10:15:00-03:00"</span>, <span class="k">"autor"</span>: <span class="s">"Mesa V3"</span>, <span class="k">"texto"</span>: <span class="s">"Recebemos a documentação. Falta a matrícula atualizada."</span>, <span class="k">"anexos"</span>: [ <span class="s">"modelo-matricula.pdf"</span> ] }
+  ],
+  <span class="k">"proxima_pagina"</span>: null
+}</code></pre>
+    <p>Anexos aparecem só pelo nome. Para abrir o arquivo, use a plataforma.</p>
+  </div>
+  <div class="endpoint">
+    <div class="ep"><span class="m">GET</span>/propostas?referencia_externa=CRM-2026-00412</div>
+    <div class="ep"><span class="m">GET</span>/propostas?atualizado_desde=2026-11-20T00:00:00-03:00</div>
+    <p>Use a segunda forma para sincronizar: a cada 15 minutos, peça o que mudou desde a última consulta. A resposta é <code>{ "propostas": [...], "proxima_pagina": "..." }</code>, em páginas de 50, da mais recente para a mais antiga. Quando <code>proxima_pagina</code> vier preenchida, repita a chamada com <code>&amp;cursor=</code> e esse valor.</p>
+  </div>
+</section>
+
+<section id="arquivos">
+  <h2>Regras dos arquivos</h2>
+  <p>Depois de recebidos, os documentos passam por leitura automática (OCR) na V3 para conferir dados e validade. Arquivo fora destas regras atrasa a análise ou volta como pendência.</p>
+  <ul class="lista">
+    <li><b>Formatos:</b> PDF, JPG ou PNG. DOC e DOCX são aceitos, mas não passam pelo OCR.</li>
+    <li><b>Tamanho:</b> até 25 MB por arquivo.</li>
+    <li><b>PDF sem senha.</b> PDF protegido é recusado no envio.</li>
+    <li><b>Foto legível:</b> documento inteiro na imagem, sem corte, sem reflexo, de preferência acima de 1.500 pixels no lado maior.</li>
+    <li><b>Um documento por arquivo.</b> Não junte RG, comprovante e matrícula num PDF só. Use o <code>tipo_documento</code> certo para cada um.</li>
+    <li><b>Prazos:</b> matrícula com no máximo 30 dias e comprovante de residência com no máximo 90 dias, conforme a dica de cada documento em <code>GET /linhas</code>.</li>
+  </ul>
+</section>
+
+<section id="etapas">
+  <h2>Etapas da proposta</h2>
+  <div class="etapas">
+    <span>RECEBIDO</span><span>TRIAGEM</span><span>ANALISE</span><span>PENDENCIA</span><span>AVALIACAO_IMOVEL</span><span>APROVACAO</span><span>CONTRATO_ASSINADO</span><span>REGISTRO_IMOVEL</span><span class="ok">LIBERADO</span><span class="fim">REPROVADO</span><span class="fim">DECLINADO</span>
+  </div>
+  <p>Em <code>PENDENCIA</code>, o campo <code>pendencia.motivo</code> diz o que a mesa precisa. Envie o documento que falta pela mesma rota de documentos. A mesa volta a analisar quando recebe.</p>
+</section>
+
+<section id="erros">
+  <h2>Erros</h2>
+  <p>Todo erro devolve o mesmo formato, com a mensagem em português e os campos com problema:</p>
+<pre><code>{ <span class="k">"erro"</span>: { <span class="k">"codigo"</span>: <span class="s">"dados_invalidos"</span>, <span class="k">"mensagem"</span>: <span class="s">"Confira os campos indicados."</span>, <span class="k">"campos"</span>: { <span class="k">"cliente.cpf_cnpj"</span>: <span class="s">"CPF inválido"</span> } } }</code></pre>
+  <div class="tbl"><table>
+    <thead><tr><th>HTTP</th><th>Código</th><th>O que fazer</th></tr></thead>
+    <tbody>
+      <tr><td>400</td><td><code>dados_invalidos</code></td><td>Corrija os campos listados em <code>campos</code> e reenvie.</td></tr>
+      <tr><td>400</td><td><code>idempotency_key_obrigatoria</code></td><td>Envie o header <code>Idempotency-Key</code> no <code>POST /propostas</code>.</td></tr>
+      <tr><td>400</td><td><code>documento_estrangeiro_nao_suportado</code></td><td>Cliente sem CPF ou CNPJ. Cadastre esta proposta pela plataforma V3.</td></tr>
+      <tr><td>401</td><td><code>chave_invalida</code></td><td>A chave está errada ou foi revogada. Peça uma nova ao partner.</td></tr>
+      <tr><td>401</td><td><code>chave_vencida</code></td><td>A chave passou de 12 meses. O partner cria uma nova na plataforma.</td></tr>
+      <tr><td>403</td><td><code>ip_nao_permitido</code></td><td>A chamada saiu de um IP fora da lista da chave. Peça ao partner para incluir o IP.</td></tr>
+      <tr><td>403</td><td><code>termo_pendente</code></td><td>Há uma versão nova do Termo de Uso da API. O partner precisa aceitar na plataforma.</td></tr>
+      <tr><td>403</td><td><code>sem_permissao</code></td><td>A chave não tem a permissão desta rota, por exemplo uma chave só de consulta tentando criar proposta.</td></tr>
+      <tr><td>403</td><td><code>sem_acesso</code></td><td>O plano do partner não inclui a API, ou a linha não está liberada para ele.</td></tr>
+      <tr><td>404</td><td><code>nao_encontrada</code></td><td>A proposta não existe ou é de outro partner.</td></tr>
+      <tr><td>409</td><td><code>referencia_repetida</code></td><td>Já existe proposta com esta <code>referencia_externa</code>. A resposta traz o <code>id</code> dela.</td></tr>
+      <tr><td>413</td><td><code>arquivo_grande</code></td><td>Arquivo acima de 25 MB. Reduza ou divida.</td></tr>
+      <tr><td>415</td><td><code>tipo_nao_aceito</code></td><td>Envie PDF, JPG, PNG, DOC ou DOCX. PDF com senha também cai aqui.</td></tr>
+      <tr><td>422</td><td><code>regra_de_credito</code></td><td>Uma regra barrou a proposta, por exemplo valor abaixo do mínimo do nível 3. A mensagem diz qual.</td></tr>
+      <tr><td>429</td><td><code>ip_bloqueado</code></td><td>Houve 10 chamadas com chave inválida deste IP em 10 minutos. O IP fica bloqueado por 1 hora; veja o <code>Retry-After</code>.</td></tr>
+      <tr><td>429</td><td><code>limite_excedido</code></td><td>Espere os segundos indicados no header <code>Retry-After</code> e tente de novo.</td></tr>
+      <tr><td>500</td><td><code>erro_interno</code></td><td>Tente de novo em alguns minutos com a mesma <code>Idempotency-Key</code>. Se continuar, fale com a V3.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="limites">
+  <h2>Limites</h2>
+  <ul class="lista">
+    <li><b>60 chamadas por minuto</b> por chave.</li>
+    <li><b>200 propostas por dia</b> por chave.</li>
+    <li>Ao receber 429, respeite o <code>Retry-After</code>. Reenvio imediato em sequência pode bloquear a chave por alguns minutos.</li>
+  </ul>
+  <p>Os limites podem ser ajustados com a V3 conforme o volume do partner.</p>
+</section>
+
+<footer>
+  <p>V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · Dúvidas técnicas: fale com o seu contato na V3 informando o código da proposta e o horário da chamada.</p>
+</footer>
+</main>
+</div>
