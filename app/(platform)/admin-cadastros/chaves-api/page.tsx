@@ -1,14 +1,10 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
 import { ChavesApiAdminClient } from "@/components/integracao-api/chaves-api-admin-client";
+import { requireRole } from "@/lib/auth/require-role";
 
 export const dynamic = "force-dynamic";
 
+// Chaves de API dos partners (BRIEF 2026-11-06): só ADMIN. As rotas /api/admin/api-* conferem de novo.
 export default async function ChavesApiAdminPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "ADMIN") redirect("/unauthorized");
+  await requireRole(["ADMIN"]);
   return <ChavesApiAdminClient />;
 }
