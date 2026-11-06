@@ -39,6 +39,38 @@ async function send(
   } catch { /* silent */ }
 }
 
+/**
+ * Envio que CONFIRMA (BRIEF encaminhar proposta para instituição, 06/11/2026): devolve o id do
+ * Resend ou lança o erro. A `send` acima engole falhas de propósito (notificação nunca derruba a
+ * operação); aqui a operação é o próprio envio, então quem chama precisa saber se saiu.
+ * Mesmo gate Brand Guardian. Sem white label: o destinatário é uma instituição, não um partner.
+ */
+export async function enviarEmailRegistrado(opts: {
+  to: string;
+  subject: string;
+  html: string;
+  attachments?: MailAttachment[];
+  replyTo?: string | null;
+}): Promise<string> {
+  if (!process.env.RESEND_API_KEY) throw new Error("RESEND_API_KEY ausente");
+  const subjectGate = auditText(opts.subject);
+  const htmlGate = auditHtml(opts.html);
+  if (htmlGate.blocking.length > 0) console.error("[lib/email] Brand Guardian bloqueou:", htmlGate.blocking);
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  const { data, error } = await resend.emails.send({
+    from: FROM,
+    to: opts.to,
+    subject: subjectGate.corrected,
+    html: htmlGate.corrected,
+    ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
+    ...(opts.attachments && opts.attachments.length > 0
+      ? { attachments: opts.attachments.map(a => ({ filename: a.filename, content: a.content })) }
+      : {}),
+  });
+  if (error || !data?.id) throw new Error(error?.message ?? "Resend não devolveu o id do e-mail");
+  return data.id;
+}
+
 /** E-mail com HTML já montado (ex.: relatório mensal de partners), pelo mesmo ponto de saída/gate. */
 export async function enviarEmailHtml(to: string, subject: string, html: string): Promise<void> {
   await send(to, subject, html);

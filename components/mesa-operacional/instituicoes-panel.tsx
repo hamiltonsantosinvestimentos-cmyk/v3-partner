@@ -8,6 +8,7 @@ import {
   Paperclip, Upload, FileText, ShieldCheck, ExternalLink, Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ContatosInstituicao } from "@/components/mesa-operacional/contatos-instituicao";
 import { createClient as createBrowserSupabaseClient } from "@/lib/supabase/client";
 
 // ─── Tipos ─────────────────────────────────────────────────────────────────
@@ -671,18 +672,7 @@ function InstituicaoCard({
         <div className="px-5 pb-5 border-t border-[#1B3050] pt-4 space-y-4">
           {/* Contato + Portal */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-[#111F35] border border-[#243A66] rounded-xl p-3.5">
-              <p className="text-[9px] font-bold text-[#C9A84C] uppercase tracking-widest mb-2">Contato Responsável</p>
-              {inst.contato_nome || inst.contato_telefone || inst.contato_email ? (
-                <div className="space-y-1.5">
-                  {inst.contato_nome && <p className="text-xs text-foreground flex items-center gap-1.5"><User className="w-3 h-3 text-muted-foreground" /> {inst.contato_nome}</p>}
-                  {inst.contato_telefone && <p className="text-xs text-foreground flex items-center gap-1.5"><Phone className="w-3 h-3 text-muted-foreground" /> {inst.contato_telefone}</p>}
-                  {inst.contato_email && <p className="text-xs text-foreground flex items-center gap-1.5"><Mail className="w-3 h-3 text-muted-foreground" /> {inst.contato_email}</p>}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground italic">Nenhum contato cadastrado</p>
-              )}
-            </div>
+            <ContatosInstituicao instituicaoId={inst.id} canManage={canManage} />
             <div className="bg-[#111F35] border border-[#243A66] rounded-xl p-3.5">
               <p className="text-[9px] font-bold text-[#C9A84C] uppercase tracking-widest mb-2">Acesso ao Portal</p>
               {inst.portal_url || inst.portal_usuario ? (
