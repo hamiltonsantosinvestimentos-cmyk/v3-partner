@@ -13,7 +13,7 @@ function svc() {
 const MESA_V3_EMAILS = [
   "joao.lemos@v3partners.com.br",
   "suporte@v3partners.com.br",
-  "robinholino16@gmail.com",
+  "robson.lino@v3partners.com.br",
 ];
 
 async function sendNdaCopyByEmail(params: {

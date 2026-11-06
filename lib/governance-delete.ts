@@ -17,7 +17,7 @@ function svc() {
 export const GOVERNANCE_EMAILS = [
   "joao.lemos@v3partners.com.br",
   "suporte@v3partners.com.br",
-  "robinholino16@gmail.com",
+  "robson.lino@v3partners.com.br",
 ];
 
 export const TRASH_RETENTION_DAYS = 30;
