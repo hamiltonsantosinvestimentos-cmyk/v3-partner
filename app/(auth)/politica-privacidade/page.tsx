@@ -80,7 +80,12 @@ export default function PoliticaPrivacidadePage() {
               etapa e um link para a plataforma; ela não traz nome de empresa, valor, código da
               operação, mesa de destino nem motivo. Quando a operação é encerrada, a mensagem é
               neutra e não informa o resultado, que fica disponível somente dentro da plataforma. A
-              base legal é a execução do contrato de parceria (LGPD, art. 7º, V).
+              base legal é a execução do contrato de parceria (LGPD, art. 7º, V). O pedido de
+              descadastro, e o descredenciamento do parceiro, são feitos por e-mail para{" "}
+              <a href="mailto:compliance@v3partners.com.br" className="text-[#C9A84C] underline">
+                compliance@v3partners.com.br
+              </a>
+              {" "}e ficam documentados por escrito pela V3.
             </p>
           </section>
 
@@ -132,8 +137,8 @@ export default function PoliticaPrivacidadePage() {
               Você pode solicitar a qualquer momento a confirmação, o acesso, a correção, a
               anonimização, a portabilidade ou a exclusão dos seus dados pessoais, além de revogar
               consentimentos, entrando em contato pelo e-mail{" "}
-              <a href="mailto:deal@v3partners.com.br" className="text-[#C9A84C] underline">
-                deal@v3partners.com.br
+              <a href="mailto:compliance@v3partners.com.br" className="text-[#C9A84C] underline">
+                compliance@v3partners.com.br
               </a>
               .
             </p>
@@ -143,8 +148,8 @@ export default function PoliticaPrivacidadePage() {
             <h2 className="text-lg font-semibold text-[#F0ECE4] mb-2">9. Contato</h2>
             <p>
               Dúvidas sobre esta Política de Privacidade podem ser enviadas para{" "}
-              <a href="mailto:deal@v3partners.com.br" className="text-[#C9A84C] underline">
-                deal@v3partners.com.br
+              <a href="mailto:compliance@v3partners.com.br" className="text-[#C9A84C] underline">
+                compliance@v3partners.com.br
               </a>
               .
             </p>
