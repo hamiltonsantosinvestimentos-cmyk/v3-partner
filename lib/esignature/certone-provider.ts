@@ -143,7 +143,17 @@ export async function sendToCertOne(input: SendEnvelopeInput): Promise<SendEnvel
       user: { identifier: extractCpfDigits(s.document), name: s.name, email: s.email },
     }));
 
-    const observers = watcherEmail ? [{ user: { email: watcherEmail } }] : undefined;
+    // Observador (achado real 06/11/2026, teste V3C-NDA-2026-0061): a CertOne devolve 400 se o
+    // observador for só e-mail, exige user.name e user.identifier (CPF válido, como nos signatários).
+    // Sem nome ou CPF válido, não manda observador: o envio não pode cair por causa da cópia.
+    const watcherCpf = extractCpfDigits(input.watcherDocument);
+    const observers =
+      watcherEmail && input.watcherName && watcherCpf
+        ? [{ user: { identifier: watcherCpf, name: input.watcherName, email: watcherEmail } }]
+        : undefined;
+    if (watcherEmail && !observers) {
+      console.warn("[esignature/certone] observador omitido: falta nome ou CPF válido (watcherName/watcherDocument)");
+    }
 
     const createRes = await fetch(`${BASE_URL}/api/documents`, {
       method: "POST",
