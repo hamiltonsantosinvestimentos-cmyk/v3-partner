@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
+import { createClient as sc } from "@supabase/supabase-js";
 import { parseCertOneWebhookEvent } from "@/lib/esignature/certone-provider";
+import { isSafeProviderId } from "@/lib/contract-signature-timeline";
+import { syncCertOneContract } from "@/lib/certone-signature-sync";
 
 // POST /api/webhooks/certone (Fase 2 do BRIEF "ClickSign vs CertOne",
 // 08/09/2026). A CertOne não oferece HMAC nativo (confirmado por Gustavo/
@@ -43,31 +46,56 @@ function isAuthorized(req: NextRequest): boolean {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+function svc() {
+  return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+}
+
+// Eventos reais observados em 07/11/2026 (V3C-NDA-2026-0061): a CertOne manda um DocumentSigned por
+// assinatura (data.id = id do documento = external_document_id do contrato) e NÃO manda evento de
+// conclusão. Por isso cada evento dispara uma leitura do documento na API: ela grava as notas que
+// faltam e fecha o contrato quando o documento conclui. Nunca loga o payload bruto: ele traz o CPF
+// do signatário (LGPD).
 export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
   const rawBody = await req.text();
-
-  // Nenhum evento real da CertOne foi recebido ainda (webhook não
-  // cadastrado no painel deles). Loga o payload bruto no primeiro evento
-  // real para permitir ajustar parseCertOneWebhookEvent() a partir do dado
-  // de verdade, em vez de mais uma rodada de suposição — mesmo padrão já
-  // usado para o webhook v3 da ClickSign em 28/07/2026.
-  console.log("[webhooks/certone] payload bruto:", rawBody.slice(0, 2000));
-
   const parsed = parseCertOneWebhookEvent(rawBody);
   if (!parsed) {
     return NextResponse.json({ ok: true, skipped: true, reason: "payload não é JSON válido" });
   }
 
-  // TODO (Fase 3, quando o roteamento por provedor estiver ligado): usar
-  // parsed.envelopeId/parsed.status para atualizar operation_contracts,
-  // mesmo formato que app/api/cron/clicksign-sync já grava hoje. Não
-  // implementado ainda porque nenhum contrato real é enviado via CertOne
-  // até a Fase 3 (switch no painel) existir.
-  console.log("[webhooks/certone] evento normalizado:", JSON.stringify(parsed).slice(0, 500));
+  const documentId = parsed.envelopeId;
+  console.log(`[webhooks/certone] evento ${parsed.status} documento ${documentId ? documentId.slice(0, 8) : "sem id"}`);
 
+  if (!documentId || !isSafeProviderId(documentId) || !["signed", "closed"].includes(parsed.status)) {
+    return NextResponse.json({ ok: true, skipped: true });
+  }
+
+  try {
+    const db = svc();
+    const { data: contract } = await db
+      .from("operation_contracts")
+      .select("id, status_signature, parties")
+      .eq("external_document_id", documentId)
+      .eq("esignature_provider", "certone")
+      .maybeSingle();
+    if (!contract) return NextResponse.json({ ok: true, skipped: true, reason: "contrato não encontrado" });
+    if (contract.status_signature !== "enviado_assinatura") {
+      return NextResponse.json({ ok: true, skipped: true, reason: `contrato em ${contract.status_signature}` });
+    }
+
+    const result = await syncCertOneContract(
+      db,
+      { id: contract.id, status_signature: contract.status_signature, parties: contract.parties as Array<{ email?: string | null; name?: string | null }> | null },
+      documentId,
+    );
+    if (!result.ok) console.error(`[webhooks/certone] falha ao sincronizar o contrato ${contract.id}: ${result.error}`);
+  } catch (err) {
+    console.error("[webhooks/certone] erro:", err instanceof Error ? err.message : err);
+  }
+
+  // 200 sempre: o sync é idempotente e o botão "Atualizar status das assinaturas" recupera o que falhar.
   return NextResponse.json({ ok: true });
 }

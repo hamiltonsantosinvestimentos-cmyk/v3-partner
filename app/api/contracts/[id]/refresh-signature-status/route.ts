@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { listClickSignSignEvents } from "@/lib/esignature/clicksign-provider";
 import { applyEnvelopeClosed, recordSignatureNote } from "@/lib/contract-signature-timeline";
+import { syncCertOneContract } from "@/lib/certone-signature-sync";
 import { avisarContratoOfertaAssinado } from "@/lib/contrato-oferta-assinado";
 import { detectExternalCancel } from "@/lib/contract-envelope-cancel";
 import { MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
@@ -48,7 +49,22 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Este contrato não tem envelope de assinatura." }, { status: 409 });
   }
   if (contract.esignature_provider === "certone") {
-    return NextResponse.json({ error: "Consulta de assinaturas ainda não implementada para o CertOne." }, { status: 501 });
+    const documentId = (contract.external_document_id ?? contract.external_envelope_id) as string;
+    const r = await syncCertOneContract(
+      db,
+      { id: contract.id, status_signature: contract.status_signature as string, parties: contract.parties as Array<{ email?: string | null; name?: string | null }> | null },
+      documentId,
+    );
+    if (!r.ok) return NextResponse.json({ error: r.status === 409 ? `Este contrato não está em envio para assinatura (${contract.status_signature}).` : `Falha ao consultar a CertOne: ${r.error}` }, { status: r.status === 409 ? 409 : 502 });
+    return NextResponse.json({
+      ok: true,
+      envelope_status: r.documentStatus,
+      total: r.total,
+      assinaram: r.assinaram,
+      pendentes: r.pendentes,
+      novas_notas: r.novasNotas,
+      contrato_marcado_como_assinado: r.fechado,
+    });
   }
 
   const result = await listClickSignSignEvents(contract.external_envelope_id);
