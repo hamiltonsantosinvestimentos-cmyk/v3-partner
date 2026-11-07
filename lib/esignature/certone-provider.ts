@@ -140,6 +140,10 @@ export async function sendToCertOne(input: SendEnvelopeInput): Promise<SendEnvel
     }
     const flowActions = signatories.map((s) => ({
       type: "Signer",
+      // Assinatura avançada (06/11/2026, suporte CertOne + Swagger): sem este campo o signatário só
+      // vê a opção de certificado digital ("Nenhum certificado foi encontrado"). Com true, assina
+      // eletronicamente (autenticação padrão por e-mail com código); quem tem certificado ainda pode usá-lo.
+      allowElectronicSignature: true,
       user: { identifier: extractCpfDigits(s.document), name: s.name, email: s.email },
     }));
 
