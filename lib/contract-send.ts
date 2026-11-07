@@ -246,6 +246,7 @@ export async function sendContractToSignature(db: SupabaseClient, contract: Send
     }
   }
 
+  const headParty = (parties as Array<{ role?: string; name?: string; doc?: string | null }>).find((p) => p.role === "head_mesa");
   const provider = await getProvider({ contractId: id, vertical: contract.vertical });
   const result = await provider.send({
     dealId: id,
@@ -263,6 +264,9 @@ export async function sendContractToSignature(db: SupabaseClient, contract: Send
     // observadora em todos os pontos de envio para o poller cobrir 100% dos
     // contratos, não só os das 4 rotas públicas de intake.
     watcherEmail: "deal@v3partners.com.br",
+    // CertOne exige nome e CPF do observador (06/11/2026): usa o Head da Mesa do próprio contrato.
+    watcherName: headParty?.name,
+    watcherDocument: headParty?.doc ?? null,
     // Item 4 dos ajustes de governança (19/08/2026): mensagem customizada
     // para a série V3C-REG (regularização de contrato manual), explicando
     // ao signatário que se trata de revalidação/integração ao sistema V3.

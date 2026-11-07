@@ -66,6 +66,9 @@ export interface SendEnvelopeInput {
   documentUrl?: string;
   documentLabel?: string;
   watcherEmail?: string;
+  /** Nome e CPF do observador. A CertOne exige os dois (observers[].user.name e identifier); a ClickSign ignora. */
+  watcherName?: string;
+  watcherDocument?: string | null;
   signatureMessage?: string;
   signatureSubject?: string;
   documentContentBase64?: string;
