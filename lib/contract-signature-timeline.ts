@@ -45,6 +45,7 @@ export async function recordSignatureNote(
   db: SupabaseClient,
   contract: ContractForTimeline,
   ev: SignatureEvent,
+  provider: string = SIGNATURE_AUTHOR_NAME,
 ): Promise<RecordResult> {
   const nome = (ev.name ?? "").trim() || ev.email;
 
@@ -64,7 +65,7 @@ export async function recordSignatureNote(
     .select("content")
     .eq("contract_id", contract.id)
     .eq("note_type", "sistema")
-    .eq("author_name", SIGNATURE_AUTHOR_NAME);
+    .eq("author_name", provider);
   if (desde) consulta = consulta.gte("created_at", desde);
   const { data: existentes, error: readError } = await consulta;
   if (readError) {
@@ -76,12 +77,12 @@ export async function recordSignatureNote(
   if (assinaturas.some((n) => (n.content as string).startsWith(`${nome} assinou digitalmente`))) return "ja_registrada";
 
   const total = signatoryCount(contract.parties);
-  const content = `${nome} assinou digitalmente no ClickSign${total > 0 ? ` (${assinaturas.length + 1} de ${total})` : ""}.`;
+  const content = `${nome} assinou digitalmente no ${provider}${total > 0 ? ` (${assinaturas.length + 1} de ${total})` : ""}.`;
 
   const { error } = await db.from("contract_notes").insert({
     contract_id: contract.id,
     author_id: SYSTEM_USER_ID,
-    author_name: SIGNATURE_AUTHOR_NAME,
+    author_name: provider,
     note_type: "sistema",
     content,
     ...(ev.signedAt ? { created_at: ev.signedAt } : {}),
@@ -102,19 +103,27 @@ export async function applyEnvelopeClosed(
   db: SupabaseClient,
   contract: { id: string; status_signature: string },
   signedAtIso: string,
+  provider: string = SIGNATURE_AUTHOR_NAME,
+  requireSent = false,
 ): Promise<boolean> {
   if (contract.status_signature === "assinado") return false;
 
-  const { error } = await db
+  // requireSent (CertOne): só fecha contrato que ainda está em envio, e só devolve true se uma linha mudou.
+  // Evita marcar como assinado contrato cancelado ou em rascunho cujo documento antigo concluiu, e fecha a
+  // corrida entre eventos simultâneos.
+  let atualizacao = db
     .from("operation_contracts")
     .update({ status_signature: "assinado", signed_at: signedAtIso })
     .eq("id", contract.id);
+  if (requireSent) atualizacao = atualizacao.eq("status_signature", "enviado_assinatura");
+  const { data: alteradas, error } = await atualizacao.select("id");
+  if (!error && requireSent && (!alteradas || alteradas.length === 0)) return false;
   if (error) {
     console.error(`[contract-signature-timeline] falha ao marcar o contrato ${contract.id} como assinado:`, error.message);
     return false;
   }
 
-  const content = "Envelope fechado no ClickSign: todos os signatários assinaram.";
+  const content = `Envelope fechado no ${provider}: todos os signatários assinaram.`;
   const { data: jaTem } = await db
     .from("contract_notes")
     .select("id")
@@ -126,7 +135,7 @@ export async function applyEnvelopeClosed(
     const { error: noteError } = await db.from("contract_notes").insert({
       contract_id: contract.id,
       author_id: SYSTEM_USER_ID,
-      author_name: SIGNATURE_AUTHOR_NAME,
+      author_name: provider,
       note_type: "sistema",
       content,
       created_at: signedAtIso,
