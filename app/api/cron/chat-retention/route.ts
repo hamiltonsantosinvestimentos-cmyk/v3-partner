@@ -57,8 +57,9 @@ export async function GET(req: NextRequest) {
   const dryRequested = req.nextUrl.searchParams.get("dry") === "1";
   const real = !dryRequested && process.env.CHAT_RETENTION_ENABLED === "true";
   const { resultado, erro } = await executarRetencao(porta(), { real, corteIso: mesesAtras(RETENCAO_MESES) });
-  if (erro) {
-    return NextResponse.json({ error: "Falha na retenção do chat", detalhe: erro, ...(resultado ?? {}) }, { status: 500 });
+  // Falha de lote também vira 500, para a Vercel e o monitoramento não verem a execução como saudável.
+  if (erro || (resultado && resultado.lotes_com_falha > 0)) {
+    return NextResponse.json({ error: "Falha na retenção do chat", detalhe: erro ?? "lote com falha", ...(resultado ?? {}) }, { status: 500 });
   }
   return NextResponse.json({ ok: true, ...resultado, aviso: !real && !dryRequested ? "CHAT_RETENTION_ENABLED não está como true: rodou como simulação" : undefined });
 }

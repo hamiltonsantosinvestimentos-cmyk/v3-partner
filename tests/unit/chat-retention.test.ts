@@ -3,17 +3,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { executarRetencao, mesesAtras, RETENCAO_MESES, type PortaRetencao, type MensagemVencida } from "../../lib/chat-retention";
 
-function fake(msgs: MensagemVencida[], opt: { storageFalha?: boolean; auditoriaInicioFalha?: boolean } = {}) {
+function fake(msgs: MensagemVencida[], opt: { storageFalha?: boolean; auditoriaInicioFalha?: boolean; auditoriaLoteFalha?: boolean; apagarFalha?: boolean; lerNulo?: boolean } = {}) {
   const fila = [...msgs];
   const log: string[] = [];
   const apagadas: string[] = [];
   const anexos: string[] = [];
   const porta: PortaRetencao = {
     async contarVencidas() { return fila.length; },
-    async lerLote(_c, n) { return fila.slice(0, n); },
+    async lerLote(_c, n) { return opt.lerNulo ? null : fila.slice(0, n); },
     async removerAnexos(p) { if (opt.storageFalha) return false; anexos.push(...p); return true; },
-    async apagarMensagens(ids) { for (const id of ids) { fila.splice(fila.findIndex((m) => m.id === id), 1); apagadas.push(id); } return true; },
-    async auditar(a) { log.push(a); return !(opt.auditoriaInicioFalha && a === "chat_retencao_inicio"); },
+    async apagarMensagens(ids) { if (opt.apagarFalha) return false; for (const id of ids) { fila.splice(fila.findIndex((m) => m.id === id), 1); apagadas.push(id); } return true; },
+    async auditar(a) { log.push(a); return !((opt.auditoriaInicioFalha && a === "chat_retencao_inicio") || (opt.auditoriaLoteFalha && a === "chat_retencao_lote")); },
   };
   return { porta, log, apagadas, anexos, restante: () => fila.length };
 }
@@ -72,4 +72,36 @@ test("modo real sem mensagens vencidas: só a linha final, nada de início ou lo
   const f = fake([]);
   await executarRetencao(f.porta, { real: true, corteIso: "x" });
   assert.deepEqual(f.log, ["chat_retencao_execucao"]);
+});
+
+test("falha da auditoria do lote depois de apagar: para, não apaga o lote seguinte, tenta a linha final e devolve erro", async () => {
+  const f = fake([M("a"), M("b"), M("c")], { auditoriaLoteFalha: true });
+  const { resultado, erro } = await executarRetencao(f.porta, { real: true, corteIso: "x", tamanhoLote: 2 });
+  assert.ok(erro);
+  assert.equal(resultado?.mensagens_apagadas, 2);
+  assert.equal(resultado?.auditoria_lote_falhou, true);
+  assert.equal(f.restante(), 1);
+  assert.deepEqual(f.log, ["chat_retencao_inicio", "chat_retencao_lote", "chat_retencao_execucao"]);
+});
+
+test("falha ao apagar as mensagens depois de remover os anexos: linhas mantidas e falha contada", async () => {
+  const f = fake([M("a", "r/a.pdf")], { apagarFalha: true });
+  const { resultado } = await executarRetencao(f.porta, { real: true, corteIso: "x" });
+  assert.equal(resultado?.lotes_com_falha, 1);
+  assert.equal(resultado?.mensagens_apagadas, 0);
+  assert.equal(f.restante(), 1);
+});
+
+test("falha ao ler o lote conta a falha e não apaga nada", async () => {
+  const f = fake([M("a")], { lerNulo: true });
+  const { resultado } = await executarRetencao(f.porta, { real: true, corteIso: "x" });
+  assert.equal(resultado?.lotes_com_falha, 1);
+  assert.equal(f.restante(), 1);
+});
+
+test("o limite de lotes por execução é respeitado", async () => {
+  const f = fake([M("a"), M("b"), M("c"), M("d"), M("e")]);
+  const { resultado } = await executarRetencao(f.porta, { real: true, corteIso: "x", tamanhoLote: 1, maxLotes: 2 });
+  assert.equal(resultado?.mensagens_apagadas, 2);
+  assert.equal(f.restante(), 3);
 });

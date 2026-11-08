@@ -33,6 +33,7 @@ export interface ResultadoRetencao {
   anexos_apagados: number;
   lotes_com_falha: number;
   interrompida_por_tempo: boolean;
+  auditoria_lote_falhou: boolean;
 }
 
 export function mesesAtras(n: number, base = new Date()): string {
@@ -62,6 +63,7 @@ export async function executarRetencao(
     anexos_apagados: 0,
     lotes_com_falha: 0,
     interrompida_por_tempo: false,
+    auditoria_lote_falhou: false,
   };
 
   if (op.real && total > 0) {
@@ -83,6 +85,10 @@ export async function executarRetencao(
       r.anexos_apagados += paths.length;
 
       if (!(await porta.auditar("chat_retencao_lote", { mensagens: ids.length, anexos: paths.length }))) {
+        // O lote já foi apagado e não tem linha própria: para, tenta registrar a linha final com o total e o
+        // marcador auditoria_lote_falhou (a gestão enxerga a lacuna) e devolve erro.
+        r.auditoria_lote_falhou = true;
+        await porta.auditar("chat_retencao_execucao", { ...r });
         return { resultado: r, erro: "falha ao gravar a auditoria do lote" };
       }
       if (lote.length < tamanho) break;
