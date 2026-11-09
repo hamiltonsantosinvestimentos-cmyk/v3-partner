@@ -1,0 +1,3 @@
+-- Rollback de 20261108b (volta ao estado de 08/11/2026: trigger com search_path = public, funcao SQL sem search_path).
+alter function public.trg_nda_to_blockchain() set search_path = public;
+alter function public.vdr_compute_event_hash(text, text, text, timestamp with time zone, text) reset search_path;
