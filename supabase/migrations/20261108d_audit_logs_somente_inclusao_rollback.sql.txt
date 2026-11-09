@@ -1,0 +1,6 @@
+-- Rollback de 20261108d (volta ao estado de 08/11/2026).
+drop trigger if exists audit_logs_bloqueia_update_delete on public.audit_logs;
+drop trigger if exists audit_logs_bloqueia_truncate on public.audit_logs;
+drop function if exists public.audit_logs_somente_inclusao();
+grant all on table public.audit_logs to anon;
+grant update, delete, truncate, references, trigger on table public.audit_logs to authenticated;
