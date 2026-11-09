@@ -14,6 +14,7 @@
     { "path": "/api/cron/dd-retention",           "schedule": "15 6 * * *" },
     { "path": "/api/cron/chat-retention",         "schedule": "20 6 * * *" },
     { "path": "/api/cron/lembrete-pagamento-parceria", "schedule": "0 12 * * *" },
-    { "path": "/api/cron/api-v1-manutencao",       "schedule": "30 6 * * *" }
+    { "path": "/api/cron/api-v1-manutencao",       "schedule": "30 6 * * *" },
+    { "path": "/api/cron/nomear-documentos",       "schedule": "30 5 * * *" }
   ]
 }

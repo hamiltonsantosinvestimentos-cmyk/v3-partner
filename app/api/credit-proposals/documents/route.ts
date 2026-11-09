@@ -1,21 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { ehDaEquipe } from "@/lib/enterprise";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { logAudit } from "@/lib/audit";
 import { resolveContentType } from "@/lib/credit-documents/content-type";
+import { DEFAULT_BUCKET, resolveBucket } from "@/lib/documentos/bucket";
+import { nomesDeExibicao, ordenarParaExibicao, dataLeituraBR } from "@/lib/documentos/nome-arquivo";
+import { nomearDocumentosPendentes, nomesGravados } from "@/lib/documentos/nomear-proposta";
 
 export const dynamic = "force-dynamic";
+// A leitura do nome roda no after() do upload (BRIEF 09/11/2026, nomear documentos).
+export const maxDuration = 60;
 
-const DEFAULT_BUCKET = "credit-documents";
-const GOVERNED_BUCKET = "v3-docs-publico";
 const SIGNED_URL_EXPIRES = 20 * 24 * 60 * 60;
-
-function resolveBucket(doc: { storage_path?: string; bucket?: string }): string {
-  if (doc.bucket) return doc.bucket;
-  if (doc.storage_path?.startsWith("Credito/") || doc.storage_path?.startsWith("MA/") || doc.storage_path?.startsWith("Administracao/")) return GOVERNED_BUCKET;
-  return DEFAULT_BUCKET;
-}
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -127,6 +124,9 @@ export async function POST(req: NextRequest) {
     entityId: proposalId, newData: { doc_id: docId, file_name: file.name },
   });
 
+  // Nome automático do arquivo, depois da resposta (não atrasa o upload). O que não terminar, o cron pega.
+  after(() => nomearDocumentosPendentes({ proposalId, limite: 5, prazoMs: 45_000 }).then(() => undefined).catch((e) => console.error("[documents] nomear falhou", e instanceof Error ? e.message : e)));
+
   return NextResponse.json({
     ok: true,
     document: { ...newDoc, url: signedData?.signedUrl ?? null, file_key: storagePath },
@@ -156,18 +156,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
-  const docs: DocEntry[] = Array.isArray(proposal.documents) ? proposal.documents : [];
+  const docs: DocEntry[] = ordenarParaExibicao(Array.isArray(proposal.documents) ? proposal.documents : []);
 
-  // Gera signed URLs para todos os documentos
-  const docsWithUrls = await Promise.all(
-    docs.map(async (doc) => {
-      const bucket = resolveBucket(doc);
-      const { data } = await svc.storage
-        .from(bucket)
-        .createSignedUrl(doc.storage_path, SIGNED_URL_EXPIRES);
-      return { ...doc, file_key: doc.storage_path, url: data?.signedUrl ?? null };
-    })
-  );
+  // Signed URLs de abrir em lote, uma chamada por bucket (a de baixar com o nome novo é gerada só no clique,
+  // em /api/credit-proposals/documents/download).
+  const urlPorPath = new Map<string, string | null>();
+  const porBucket = new Map<string, string[]>();
+  for (const d of docs) {
+    const b = resolveBucket(d);
+    porBucket.set(b, [...(porBucket.get(b) ?? []), d.storage_path]);
+  }
+  for (const [bucket, paths] of porBucket) {
+    const { data } = await svc.storage.from(bucket).createSignedUrls(paths, SIGNED_URL_EXPIRES);
+    for (const item of data ?? []) if (item.path) urlPorPath.set(item.path, item.signedUrl ?? null);
+  }
+
+  // Nome de exibição (BRIEF 09/11/2026): nome base gravado + desempate calculado aqui.
+  const gravados = await nomesGravados(svc, proposalId);
+  const nomes = nomesDeExibicao(docs, new Map([...gravados].map(([k, v]) => [k, v.nome])));
+  const docsWithUrls = docs.map((doc) => {
+    const g = gravados.get(doc.storage_path);
+    return {
+      ...doc,
+      file_key: doc.storage_path,
+      url: urlPorPath.get(doc.storage_path) ?? null,
+      nome_exibicao: nomes.get(doc.storage_path) ?? doc.file_name,
+      tipo_detectado: g?.tipo ?? null,
+      lido_em: g ? dataLeituraBR(g.lido_em) : null,
+    };
+  });
 
   const checklist = (proposal as any).checklist ?? {};
   const mesa_comments = Array.isArray((proposal as any).mesa_comments) ? (proposal as any).mesa_comments : [];
@@ -220,6 +237,10 @@ export async function DELETE(req: NextRequest) {
     .from("credit_desk_proposals")
     .update({ documents: updatedDocs, updated_at: new Date().toISOString() })
     .eq("id", proposalId);
+
+  // Nome de exibição do arquivo apagado (o cron também limpa órfãos).
+  const { error: nomeErr } = await svc.from("credit_document_names").delete().in("storage_path", [...storagesToRemove]);
+  if (nomeErr) console.error("[documents] falha ao apagar nome de exibição", { code: nomeErr.code });
 
   logAudit({
     userId: user.id, userName: profile?.full_name,

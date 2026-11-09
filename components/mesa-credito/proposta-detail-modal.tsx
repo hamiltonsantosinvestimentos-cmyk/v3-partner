@@ -1326,7 +1326,8 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
   const [portfolioDocs, setPortfolioDocs] = useState<Record<string, { PF: { id: string; label: string; required: boolean; hint?: string; aplica?: string }[]; PJ: { id: string; label: string; required: boolean; hint?: string; aplica?: string }[] }>>({});
   // docId → array de { name, url, key }
-  interface DocFile { name: string; url: string | null; key: string; }
+  // original/tipo/lidoEm: nome automático do arquivo (BRIEF 09/11/2026, nomear documentos).
+  interface DocFile { name: string; url: string | null; key: string; original?: string; tipo?: string | null; lidoEm?: string | null; }
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, DocFile[]>>({});
   const [isUploading, setIsUploading] = useState<string | null>(null); // docId em upload
 
@@ -1645,12 +1646,15 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         .then((r) => r.json())
         .then(({ documents, checklist, mesa_comments }) => {
           const savedChecks: Record<string, boolean> = (checklist && typeof checklist === "object") ? checklist : {};
-          const files: Record<string, { name: string; url: string | null; key: string }[]> = {};
+          const files: Record<string, DocFile[]> = {};
           if (Array.isArray(documents)) {
-            documents.forEach((d: { doc_id: string; file_name: string; url: string | null; file_key?: string }) => {
+            documents.forEach((d: { doc_id: string; file_name: string; url: string | null; file_key?: string; nome_exibicao?: string; tipo_detectado?: string | null; lido_em?: string | null }) => {
               savedChecks[d.doc_id] = true;
               if (!files[d.doc_id]) files[d.doc_id] = [];
-              files[d.doc_id].push({ name: d.file_name, url: d.url ?? null, key: d.file_key ?? d.file_name });
+              files[d.doc_id].push({
+                name: d.nome_exibicao || d.file_name, url: d.url ?? null, key: d.file_key ?? d.file_name,
+                original: d.file_name, tipo: d.tipo_detectado ?? null, lidoEm: d.lido_em ?? null,
+              });
             });
           }
           setCheckedDocs(savedChecks);
@@ -4727,19 +4731,40 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
                               const fileOcrErro = ocrErros[ocrKey];
                               return (
                               <div key={fi} className="space-y-1">
-                              <div className="flex items-center gap-2 px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/30">
-                                <Paperclip className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                                <span className="text-[11px] text-emerald-400 flex-1 truncate">{df.name}</span>
+                              <div className="flex items-center gap-2 px-2 py-1 rounded bg-primary/10 border border-primary/30">
+                                <Paperclip className="w-3 h-3 text-primary flex-shrink-0" />
+                                <span
+                                  className="text-[11px] text-primary flex-1 truncate"
+                                  title={df.tipo && df.original && df.original !== df.name
+                                    ? `Nome original: ${df.original}. Lido como ${df.tipo}${df.lidoEm ? ` em ${df.lidoEm}` : ""}.`
+                                    : df.name}
+                                >{df.name}</span>
                                 {df.url && (
                                   <a
                                     href={df.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="text-blue-400 hover:text-blue-300 transition-colors flex-shrink-0"
+                                    className="text-primary hover:text-[#E8C97A] transition-colors flex-shrink-0"
                                     title="Abrir documento"
                                   >
                                     <ExternalLink className="w-3 h-3" />
                                   </a>
+                                )}
+                                {df.url && (
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      try {
+                                        const r = await fetch(`/api/credit-proposals/documents/download?proposal_id=${encodeURIComponent(proposal.id)}&storage_path=${encodeURIComponent(df.key)}`);
+                                        const j = await r.json();
+                                        if (r.ok && j.url) window.location.href = j.url;
+                                      } catch { /* sem link: o "Abrir" continua disponível */ }
+                                    }}
+                                    className="text-muted-foreground hover:text-primary transition-colors flex-shrink-0"
+                                    title="Baixar com este nome"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                  </button>
                                 )}
                                 {/* Botão OCR — para todos os arquivos */}
                                 {canChangeStage && df.url && (
