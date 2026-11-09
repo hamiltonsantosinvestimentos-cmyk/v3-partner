@@ -101,21 +101,34 @@ const PLANO_LABEL_CADASTRO: Record<string, string> = {
   ENTERPRISE: "V3 Enterprise",
 };
 
+/**
+ * Linha de atenção do alerta interno quando o documento já tem outro cadastro PENDENTE ou APROVADO
+ * (BRIEF 09/11/2026, cadastro Enterprise). Só vai para a equipe: a resposta ao candidato não muda,
+ * para a rota pública não revelar quem tem cadastro na V3.
+ */
+export function linhaDuplicidadeCadastro(duplicado?: { status: string; id: string } | null): string | null {
+  if (!duplicado) return null;
+  return `Atenção: este documento já tem cadastro ${duplicado.status} (id ${duplicado.id.slice(0, 8)}). Não aprovar em duplicidade.`;
+}
+
 export async function notifyNovoCadastroPartner(params: {
   nome: string;
   plano: string;
   tipoPessoa: "PF" | "PJ";
   email: string;
   telefone: string;
+  duplicado?: { status: string; id: string } | null;
 }): Promise<void> {
   const { nome, plano, tipoPessoa, email, telefone } = params;
   const planoLabel = PLANO_LABEL_CADASTRO[plano] ?? plano;
   const link = "https://app.v3partners.com.br/admin-cadastros";
+  const aviso = linhaDuplicidadeCadastro(params.duplicado);
 
-  const subjectGate = auditText(`Novo cadastro de partner: ${nome} (${planoLabel})`);
+  const subjectGate = auditText(`${aviso ? "[DUPLICIDADE] " : ""}Novo cadastro de partner: ${nome} (${planoLabel})`);
   const htmlGate = auditHtml(
     `<p>Olá, Hamilton,</p>
      <p>Um novo cadastro de partner acabou de entrar na aba Cadastros:</p>
+     ${aviso ? `<p><strong>${aviso}</strong></p>` : ""}
      <ul>
        <li><strong>Nome:</strong> ${nome}</li>
        <li><strong>Plano:</strong> ${planoLabel}</li>
@@ -127,7 +140,7 @@ export async function notifyNovoCadastroPartner(params: {
      <p>V3 Partners</p>`
   );
   const whatsappMsg = auditText(
-    `Novo cadastro de partner: ${nome} (${planoLabel}, ${tipoPessoa}). Tel: ${telefone}. Acesse: ${link}`
+    `Novo cadastro de partner: ${nome} (${planoLabel}, ${tipoPessoa}). Tel: ${telefone}. Acesse: ${link}${aviso ? `\n${aviso}` : ""}`
   );
 
   if (process.env.RESEND_API_KEY) {

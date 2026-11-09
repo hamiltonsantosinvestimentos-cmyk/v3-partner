@@ -5,12 +5,16 @@ import { randomUUID } from "crypto";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { PLANO_VALOR } from "@/lib/plano-valor";
 import { notifyNovoCadastroPartner } from "@/lib/socios-notify";
+import { validarDocumentosCadastro } from "@/lib/cadastro-partner/documento";
 
 async function gerarCobrancaCora(params: {
   regId: string;
   plano: string;
   nome: string;
+  // Documento já normalizado (CPF só dígitos; CNPJ com letras maiúsculas e dígitos).
   documento: string;
+  // O tipo vem do tipo de pessoa, nunca da contagem de dígitos (um CNPJ alfanumérico pode ter 11 dígitos).
+  tipoDocumento: "CPF" | "CNPJ";
   email: string;
   valor: number;
 }): Promise<{
@@ -32,8 +36,8 @@ async function gerarCobrancaCora(params: {
       customer: {
         name: params.nome,
         document: {
-          identity: params.documento.replace(/\D/g, ""),
-          type: params.documento.replace(/\D/g, "").length === 11 ? "CPF" : "CNPJ",
+          identity: params.documento,
+          type: params.tipoDocumento,
         },
         contacts: params.email ? [{ contact: params.email, type: "EMAIL" }] : [],
       },
@@ -120,6 +124,16 @@ export async function POST(req: NextRequest) {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return NextResponse.json({ error: "E-mail inválido" }, { status: 400 });
     }
+    // CPF/CNPJ pelo dígito verificador (CNPJ alfanumérico aceito). A mensagem só diz que o dígito
+    // não confere: não revela nada sobre cadastro existente.
+    const docs = validarDocumentosCadastro(tipoPessoa as "PF" | "PJ", {
+      cpf: formData.get("cpf") as string | null,
+      cnpj: formData.get("cnpj") as string | null,
+      cpfSocio: formData.get("cpf_socio") as string | null,
+    });
+    if (!docs.ok) {
+      return NextResponse.json({ error: docs.erro, campo: docs.campo }, { status: 400 });
+    }
 
     const svc = serviceClient();
 
@@ -183,17 +197,18 @@ export async function POST(req: NextRequest) {
       ...(referredByPartnerId ? { referred_by_partner_id: referredByPartnerId } : {}),
     };
 
+    // Documentos no formato canônico (lib/cadastro-partner/documento.ts). No PJ, cpf é o do sócio.
     if (tipoPessoa === "PF") {
       payload.nome_completo   = formData.get("nome_completo");
-      payload.cpf             = formData.get("cpf");
+      payload.cpf             = docs.cpf;
       payload.data_nascimento = formData.get("data_nascimento");
     } else {
       payload.razao_social  = formData.get("razao_social");
       payload.nome_fantasia = formData.get("nome_fantasia");
-      payload.cnpj          = formData.get("cnpj");
+      payload.cnpj          = docs.cnpj;
       // sócios PJ
       payload.nome_completo = formData.get("nome_socio");
-      payload.cpf           = formData.get("cpf_socio");
+      payload.cpf           = docs.cpf;
     }
 
     const { error } = await svc.from("partner_registrations").insert(payload);
@@ -207,9 +222,26 @@ export async function POST(req: NextRequest) {
     const nome = tipoPessoa === "PF"
       ? (formData.get("nome_completo") as string ?? "")
       : (formData.get("razao_social") as string ?? "");
-    const documento = tipoPessoa === "PF"
-      ? (formData.get("cpf") as string ?? "")
-      : (formData.get("cnpj") as string ?? "");
+    const documento = tipoPessoa === "PF" ? docs.cpf : (docs.cnpj ?? "");
+    const tipoDocumento: "CPF" | "CNPJ" = tipoPessoa === "PF" ? "CPF" : "CNPJ";
+
+    // Duplicidade (BRIEF 09/11/2026): outro cadastro PENDENTE ou APROVADO com o mesmo documento vira
+    // aviso SÓ no alerta interno. A resposta, a gravação e a cobrança não mudam, para a rota pública
+    // não revelar quem tem cadastro na V3. Best-effort: erro na consulta segue sem o aviso.
+    let duplicado: { status: string; id: string } | null = null;
+    try {
+      const { data: dup } = await svc
+        .from("partner_registrations")
+        .select("id, status")
+        .eq("tipo_pessoa", tipoPessoa)
+        .eq(tipoPessoa === "PF" ? "cpf" : "cnpj", documento)
+        .in("status", ["PENDENTE", "APROVADO"])
+        .neq("id", regId)
+        .limit(1);
+      if (dup?.[0]) duplicado = { status: String(dup[0].status), id: String(dup[0].id) };
+    } catch (e) {
+      console.error("[cadastro-partner] falha na checagem de duplicidade:", e);
+    }
 
     // Alerta pro Hamilton (WhatsApp + e-mail) assim que o cadastro entra na
     // aba Cadastros — pedido dele, 13/09/2026. Best-effort (nunca bloqueia o
@@ -219,7 +251,7 @@ export async function POST(req: NextRequest) {
     // sai de verdade (mesmo problema já documentado em
     // credit-engine/intake/[token]/route.ts).
     try {
-      await notifyNovoCadastroPartner({ nome, plano, tipoPessoa: tipoPessoa as "PF" | "PJ", email, telefone });
+      await notifyNovoCadastroPartner({ nome, plano, tipoPessoa: tipoPessoa as "PF" | "PJ", email, telefone, duplicado });
     } catch (e) {
       console.error("[cadastro-partner] falha ao notificar novo cadastro:", e);
     }
@@ -245,7 +277,7 @@ export async function POST(req: NextRequest) {
     // aprovação — não gera cobrança Cora nesse caso.
     const cora = planoRecorrencia === "ANUAL_CARTAO" || trialOferta
       ? {}
-      : await gerarCobrancaCora({ regId, plano, nome, documento, email, valor: valorFinal });
+      : await gerarCobrancaCora({ regId, plano, nome, documento, tipoDocumento, email, valor: valorFinal });
 
     if (cora.invoiceId) {
       await svc.from("partner_registrations").update({
