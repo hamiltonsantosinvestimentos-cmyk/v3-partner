@@ -1,0 +1,3 @@
+-- Rollback de 20261108c. Só vale se nenhum código V3C-ICM ou V3C-CVC tiver sido emitido.
+-- Conferir antes: select count(*) from operation_contracts where contract_code like 'V3C-ICM-%' or contract_code like 'V3C-CVC-%';
+delete from public.v3_code_series where id in ('V3C-ICM', 'V3C-CVC');

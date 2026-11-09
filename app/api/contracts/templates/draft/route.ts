@@ -21,7 +21,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 // sobrecarregar o tempo do Dr. Athaydes com rascunho comercial imaturo.
 
 const WRITE_ROLES = ["ADMIN", "GESTAO"] as const;
-const VALID_SERIES = ["V3C-ORG", "V3C-MAN", "V3C-PAR", "V3C-CES", "V3C-NDA", "V3C-LOI", "V3C-FPA", "V3C-FOR", "V3C-FUN"];
+const VALID_SERIES = ["V3C-ORG", "V3C-MAN", "V3C-PAR", "V3C-CES", "V3C-NDA", "V3C-LOI", "V3C-FPA", "V3C-FOR", "V3C-FUN", "V3C-ICM", "V3C-CVC"];
 const VALID_VERTICALS = ["capital_markets", "credito", "ma", "institucional", "clientes", "talent_pool", "colaboradores"];
 
 // Série V3C nunca é escolhida pelo agente (governança de numeração,

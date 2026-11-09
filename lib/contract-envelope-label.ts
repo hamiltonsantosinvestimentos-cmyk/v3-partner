@@ -19,6 +19,8 @@ const SERIES_LABEL: Record<string, string> = {
   "V3C-FOR": "Fornecedor",
   "V3C-PAR": "Adesão de Partner",
   "V3C-REG": "Regularização",
+  "V3C-ICM": "Intermediação e Compliance de Commodities",
+  "V3C-CVC": "Compra e Venda de Commodities",
 };
 
 export interface ContractForEnvelopeLabel {
