@@ -252,6 +252,47 @@ export async function getCertOneStatus(documentId: string): Promise<EnvelopeStat
   }
 }
 
+export interface CertOneSignature {
+  name: string;
+  email: string;
+  signedAt: string | null;
+}
+
+export type CertOneSignaturesResult =
+  | { ok: true; status: string; isConcluded: boolean; signatures: CertOneSignature[]; lastSignedAt: string | null }
+  | { ok: false; error: string; status: number };
+
+/**
+ * Lê o documento na CertOne e devolve quem já assinou (flowActions Signer com status "Completed",
+ * data em updateDate) e se o documento concluiu. Confirmado ao vivo em 07/11/2026 (V3C-NDA-2026-0061):
+ * a CertOne não manda evento de conclusão no webhook, só um DocumentSigned por assinatura, então o
+ * fechamento do contrato sai daqui. Nunca devolve CPF.
+ */
+export async function getCertOneSignatures(documentId: string): Promise<CertOneSignaturesResult> {
+  const apiKey = process.env.CERTONE_API_KEY;
+  if (!apiKey) return { ok: false, error: "CERTONE_API_KEY não configurado", status: 500 };
+  try {
+    const res = await fetch(`${BASE_URL}/api/documents/${documentId}`, { headers: headers() });
+    if (!res.ok) return { ok: false, error: `CertOne getDocument: HTTP ${res.status}`, status: res.status };
+    const data = await res.json();
+    const actions: any[] = Array.isArray(data?.flowActions) ? data.flowActions : [];
+    const signatures: CertOneSignature[] = actions
+      .filter((a) => a?.type === "Signer" && a?.status === "Completed")
+      .map((a) => ({
+        name: String(a?.user?.name ?? a?.user?.email ?? "").trim(),
+        email: String(a?.user?.email ?? "").trim(),
+        signedAt: (a?.updateDate as string | undefined) ?? null,
+      }))
+      .filter((x) => x.email);
+    const dates = signatures.map((x) => x.signedAt).filter((d): d is string => !!d).sort();
+    const status: string = data?.status ?? "desconhecido";
+    const isConcluded = data?.isConcluded === true || status === "Concluded" || status === "FlowConcluded";
+    return { ok: true, status, isConcluded, signatures, lastSignedAt: dates.length ? dates[dates.length - 1] : null };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Erro desconhecido", status: 500 };
+  }
+}
+
 // Cancela o documento — CONFIRMADO 08/09/2026: cancelar 1 documento cancela
 // o ENVELOPE/FLUXO INTEIRO, diferente da ClickSign (só o documento
 // individual). Hoje o V3 sempre envia 1 documento por envelope, então não
