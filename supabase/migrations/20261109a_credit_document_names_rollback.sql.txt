@@ -1,0 +1,4 @@
+-- Rollback da migration 20261109a_credit_document_names.sql
+-- (BRIEF docs/briefs/2026-11-09_nomear-documentos-propostas.md).
+-- Apaga só os nomes de exibição; os arquivos e a lista documents das propostas não são tocados.
+drop table if exists public.credit_document_names;

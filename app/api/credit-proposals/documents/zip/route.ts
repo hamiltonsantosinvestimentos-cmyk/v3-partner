@@ -3,18 +3,12 @@ import { ehDaEquipe } from "@/lib/enterprise";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { ZipArchive } from "archiver";
+import { resolveBucket } from "@/lib/documentos/bucket";
+import { nomesDeExibicao } from "@/lib/documentos/nome-arquivo";
+import { nomesGravados } from "@/lib/documentos/nomear-proposta";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-
-const DEFAULT_BUCKET = "credit-documents";
-const GOVERNED_BUCKET = "v3-docs-publico";
-
-function resolveBucket(doc: { storage_path?: string; bucket?: string }): string {
-  if (doc.bucket) return doc.bucket;
-  if (doc.storage_path?.startsWith("Credito/") || doc.storage_path?.startsWith("MA/") || doc.storage_path?.startsWith("Administracao/")) return GOVERNED_BUCKET;
-  return DEFAULT_BUCKET;
-}
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -96,12 +90,17 @@ export async function GET(req: NextRequest) {
   const usedNames = new Set<string>();
   let anyAdded = false;
 
+  // Mesmos nomes do modal (BRIEF 09/11/2026): nome base gravado + desempate de nomesDeExibicao.
+  // uniqueZipName fica só como rede contra colisão com os anexos de metadata.documentos.
+  const gravados = await nomesGravados(svc, proposalId);
+  const nomes = nomesDeExibicao(docs, new Map([...gravados].map(([k, v]) => [k, v.nome])));
+
   for (const doc of docs) {
     const bucket = resolveBucket(doc);
     const { data, error } = await svc.storage.from(bucket).download(doc.storage_path);
     if (error || !data) continue; // arquivo pode ter sido removido do storage manualmente -- não derruba o zip inteiro
     const buffer = Buffer.from(await data.arrayBuffer());
-    archive.append(buffer, { name: uniqueZipName(doc.file_name, usedNames) });
+    archive.append(buffer, { name: uniqueZipName(nomes.get(doc.storage_path) ?? doc.file_name, usedNames) });
     anyAdded = true;
   }
 

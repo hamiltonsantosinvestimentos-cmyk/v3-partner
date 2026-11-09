@@ -1,10 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { ehDaEquipe } from "@/lib/enterprise";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { logAudit } from "@/lib/audit";
+import { nomearDocumentosPendentes } from "@/lib/documentos/nomear-proposta";
 
 export const dynamic = "force-dynamic";
+// A leitura do nome roda no after() (BRIEF 09/11/2026, nomear documentos).
+export const maxDuration = 60;
 
 const BUCKET = "credit-documents";
 const SIGNED_URL_EXPIRES = 20 * 24 * 60 * 60;
@@ -85,6 +88,9 @@ export async function POST(req: NextRequest) {
     action: "CREATE", entity: "credit_documents" as never,
     entityId: proposal_id, newData: { doc_id, file_name },
   });
+
+  // Nome automático do arquivo, depois da resposta. O que não terminar, o cron pega.
+  after(() => nomearDocumentosPendentes({ proposalId: proposal_id, limite: 5, prazoMs: 45_000 }).then(() => undefined).catch((e) => console.error("[documents/register] nomear falhou", e instanceof Error ? e.message : e)));
 
   return NextResponse.json({
     ok: true,
