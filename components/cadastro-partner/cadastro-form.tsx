@@ -9,13 +9,24 @@ import {
   MapPin, FileText, Loader2, Home, Crown, Gem,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ERRO_CNPJ, mascaraCnpj, normalizarCnpj, normalizarCpf, validarDocumentosCadastro } from "@/lib/cadastro-partner/documento";
+import { isValidCNPJ } from "@/lib/validators/cpf-cnpj";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function fmtCPF(v: string) {
   return v.replace(/\D/g, "").replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 }
-function fmtCNPJ(v: string) {
-  return v.replace(/\D/g, "").replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+// CNPJ: preserva letra (CNPJ alfanumérico desde 31/07/2026). Nunca replace(/\D/g, "") aqui.
+const fmtCNPJ = mascaraCnpj;
+// Erro de dígito só quando o documento está completo (não acusa erro no meio da digitação).
+function erroCpf(v: string): string | undefined {
+  if (normalizarCpf(v).length < 11) return undefined;
+  const r = validarDocumentosCadastro("PF", { cpf: v });
+  return r.ok ? undefined : r.erro;
+}
+function erroCnpj(v: string): string | undefined {
+  if (normalizarCnpj(v).length < 14) return undefined;
+  return isValidCNPJ(v) ? undefined : ERRO_CNPJ;
 }
 function fmtTel(v: string) {
   const d = v.replace(/\D/g, "");
@@ -184,6 +195,33 @@ const PLANOS: Array<{
     ],
   },
 ];
+
+// ─── Garantias dos planos anuais ─────────────────────────────────────────────
+// Enterprise (BRIEF 09/11/2026): 10 acessos, então o KPI da garantia é o do Partner PRO x 10,
+// somando a originação dos 10 acessos (decisões 5 e 6 do Hamilton). A cláusula correspondente
+// precisa estar no contrato do Enterprise (ver o BRIEF).
+function Garantias({ enterprise = false }: { enterprise?: boolean }) {
+  return (
+    <div className="pt-2 space-y-2">
+      <div className="flex items-start gap-2">
+        <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-[#7A8FA8] leading-relaxed">
+          <strong className="text-[#F0ECE4]">Fidelidade de 12 meses</strong>: parceria de médio prazo, para dar tempo real de originação e resultado.
+        </p>
+      </div>
+      <div className="flex items-start gap-2">
+        <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
+        <p className="text-xs text-[#7A8FA8] leading-relaxed">
+          {enterprise ? (
+            <><strong className="text-[#F0ECE4]">Garantia de retorno</strong>: o Enterprise tem 10 acessos, então o KPI de originação é o do Partner PRO multiplicado por 10, somando a originação dos 10 acessos, conforme definido em contrato. Mantido esse KPI, se em 12 meses não houver retorno sobre o valor investido, devolvemos o seu investimento.</>
+          ) : (
+            <><strong className="text-[#F0ECE4]">Garantia de retorno</strong>: mantido o KPI de originação definido em contrato, se em 12 meses não houver retorno sobre o valor investido, devolvemos o seu investimento.</>
+          )}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 // ─── Campo Input ─────────────────────────────────────────────────────────────
 function Field({
@@ -405,6 +443,8 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
     if (step === 1) return !!plano;
     if (step === 2) return !!tipoPessoa;
     if (step === 3) {
+      // Documento só passa com dígito verificador válido (lib/cadastro-partner/documento.ts).
+      if (!tipoPessoa || !validarDocumentosCadastro(tipoPessoa, { cpf, cnpj, cpfSocio }).ok) return false;
       if (tipoPessoa === "PF") return !!(nomeCompleto && cpf && dataNasc && email && telefone);
       return !!(razaoSocial && cnpj && nomeSocio && cpfSocio && email && telefone);
     }
@@ -440,14 +480,14 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
 
       if (tipoPessoa === "PF") {
         fd.append("nome_completo", nomeCompleto);
-        fd.append("cpf", cpf.replace(/\D/g, ""));
+        fd.append("cpf", normalizarCpf(cpf));
         fd.append("data_nascimento", dataNasc);
       } else {
         fd.append("razao_social", razaoSocial);
         fd.append("nome_fantasia", nomeFantasia);
-        fd.append("cnpj", cnpj.replace(/\D/g, ""));
+        fd.append("cnpj", normalizarCnpj(cnpj));
         fd.append("nome_socio", nomeSocio);
-        fd.append("cpf_socio", cpfSocio.replace(/\D/g, ""));
+        fd.append("cpf_socio", normalizarCpf(cpfSocio));
       }
 
       docIdentidade.forEach((f) => fd.append("doc_identidade", f));
@@ -732,6 +772,9 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
                           ))}
                         </div>
                       </div>
+                      {/* Plano travado anual (Enterprise, V3 Access): mesmas garantias do /cadastro-partner público.
+                          Mensal (HE) e trial (Gold, Diamante) não têm fidelidade nem garantia. */}
+                      {!p.mensal && !p.trial && <Garantias enterprise={p.id === "ENTERPRISE"} />}
                     </>
                   );
                 })()
@@ -805,20 +848,7 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
               </div>
 
               {/* Garantias (planos anuais; não vale para a oferta de 30 dias) */}
-              {!planosOferta && <div className="pt-2 space-y-2">
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-[#7A8FA8] leading-relaxed">
-                    <strong className="text-[#F0ECE4]">Fidelidade de 12 meses</strong> — parceria de médio prazo, para dar tempo real de originação e resultado
-                  </p>
-                </div>
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#C9A84C] flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-[#7A8FA8] leading-relaxed">
-                    <strong className="text-[#F0ECE4]">Garantia de retorno</strong>: mantido o KPI de originação definido em contrato, se em 12 meses não houver retorno sobre o valor investido, devolvemos o seu investimento.
-                  </p>
-                </div>
-              </div>}
+              {!planosOferta && <Garantias />}
               </>
               )}
 
@@ -934,7 +964,7 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
                     <Input value={nomeCompleto} onChange={setNomeCompleto} placeholder="Como no documento de identidade" />
                   </Field>
                 </div>
-                <Field label="CPF" required>
+                <Field label="CPF" required error={erroCpf(cpf)}>
                   <Input
                     value={cpf}
                     onChange={(v) => setCpf(fmtCPF(v))}
@@ -975,7 +1005,7 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
                 <Field label="Nome Fantasia">
                   <Input value={nomeFantasia} onChange={setNomeFantasia} placeholder="Nome fantasia (opcional)" />
                 </Field>
-                <Field label="CNPJ" required>
+                <Field label="CNPJ" required error={erroCnpj(cnpj)}>
                   <Input
                     value={cnpj}
                     onChange={(v) => setCnpj(fmtCNPJ(v))}
@@ -1002,7 +1032,7 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
                     <Input value={nomeSocio} onChange={setNomeSocio} placeholder="Nome conforme RG/CNH" />
                   </Field>
                 </div>
-                <Field label="CPF do Sócio" required>
+                <Field label="CPF do Sócio" required error={erroCpf(cpfSocio)}>
                   <Input
                     value={cpfSocio}
                     onChange={(v) => setCpfSocio(fmtCPF(v))}
@@ -1140,6 +1170,17 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
                   </div>
                 ))}
               </div>
+
+              {/* Cobrança imediata (plano anual à vista): a Cora gera o boleto/Pix no envio. */}
+              {(() => {
+                const pl = PLANOS.find((p) => p.id === plano);
+                if (!pl || pl.mensal || pl.trial || planoRecorrencia !== "ANUAL_PIX_BOLETO") return null;
+                return (
+                  <div className="p-3 rounded-xl border border-[#C9A84C]/40 bg-[#C9A84C]/10 text-xs text-[#F0ECE4]">
+                    Ao enviar, geramos agora a cobrança de <strong className="text-[#C9A84C]">{pl.precoAnual}</strong> por Pix ou boleto, com vencimento em 3 dias.
+                  </div>
+                );
+              })()}
 
               {erro && (
                 <div className="flex items-center gap-2 p-3 rounded-xl bg-red-900/20 border border-red-800/40 text-red-400 text-xs">
