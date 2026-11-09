@@ -2489,14 +2489,26 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                               <Link2 className="w-2.5 h-2.5" />{p.partner_name}
                             </p>
                           )}
-                          {typeof p.docs_uploaded === "number" && (
-                            <div className="mt-1.5 flex items-center gap-1">
-                              <div className="flex-1 h-1 bg-secondary rounded-full">
-                                <div className="h-1 bg-emerald-500 rounded-full"
-                                  style={{ width: `${Math.min(100, ((p.docs_uploaded ?? 0) / (p.docs_required || 1)) * 100)}%` }} />
-                              </div>
-                              <span className="text-[10px] text-muted-foreground">{p.docs_uploaded}/{p.docs_required}</span>
-                            </div>
+                          {/* Contador da aba Documentos do modal (lib/mesa-operacional/contador-docs.ts). */}
+                          {typeof p.docs_uploaded === "number" && typeof p.docs_required === "number" && (
+                            p.docs_required > 0 ? (() => {
+                              const completo = p.docs_uploaded >= p.docs_required;
+                              return (
+                                <div className="mt-1.5 flex items-center gap-1"
+                                  title={`${p.docs_uploaded} de ${p.docs_required} documentos do checklist enviados (mesma contagem da aba Documentos)`}>
+                                  <div className="flex-1 h-1 bg-secondary rounded-full">
+                                    <div className={`h-1 rounded-full ${completo ? "bg-primary" : "bg-muted-foreground"}`}
+                                      style={{ width: `${Math.min(100, (p.docs_uploaded / p.docs_required) * 100)}%` }} />
+                                  </div>
+                                  <span className={`text-[10px] ${completo ? "text-primary font-semibold" : "text-muted-foreground"}`}>
+                                    {p.docs_uploaded}/{p.docs_required} enviados
+                                  </span>
+                                </div>
+                              );
+                            })() : (
+                              <p className="mt-1.5 text-[10px] text-muted-foreground"
+                                title="Esta linha não tem documentos de checklist para este tipo de cliente">sem checklist</p>
+                            )
                           )}
                           {(p.mesa_comments_count ?? 0) > 0 && (
                             <div className="mt-1 flex items-center gap-1">

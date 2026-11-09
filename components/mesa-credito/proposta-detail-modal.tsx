@@ -4608,6 +4608,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           })()}
 
           {/* ── Checklist de Documentos ── */}
+          {/* O card da Mesa Operacional repete esta contagem em lib/mesa-operacional/contador-docs.ts: mudou a regra aqui, mude lá. */}
           {modalTab === "documentos" && (() => {
             const meta = proposal.metadata ?? {};
             const clientType = ((meta.client_type ?? proposal.client_type) === "PJ" ? "PJ" : "PF") as "PF" | "PJ";

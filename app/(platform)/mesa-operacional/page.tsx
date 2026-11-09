@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { resolverAcessoTickets } from "@/lib/mesa-operacional/acesso";
 import { createClient as sc } from "@supabase/supabase-js";
+import { contarDocsChecklist, montarMapaPortfolio, type LinhaPortfolioDocs } from "@/lib/mesa-operacional/contador-docs";
 
 export const dynamic = "force-dynamic";
 
@@ -81,17 +82,30 @@ export default async function MesaOperacionalPage() {
   if (!isAdmin) proposalsQuery = proposalsQuery.eq("partner_id", currentUser.id);
   const { data: proposalsData } = await proposalsQuery;
 
+  // Checklist do portfólio para o contador "X/Y enviados" do card (mesma consulta e regra da aba Documentos do modal).
+  // Erro: segue com mapa vazio e cai nas listas fixas, como o modal quando o fetch falha. Só os números vão ao navegador.
+  const { data: portfolioData } = await svc
+    .from("portfolio_linhas")
+    .select("nome, documentos_pf, documentos_pj")
+    .eq("ativo", true)
+    .order("ordem", { ascending: true })
+    .order("nome", { ascending: true });
+  const mapaPortfolio = montarMapaPortfolio(portfolioData as LinhaPortfolioDocs[] | null);
+
   // Propostas técnicas de análise comprada no site não são crédito (lib/analise-site.ts).
-  const proposals = semAnaliseDoSite(proposalsData as { metadata?: unknown }[] | null).map((p: any) => ({
+  const proposals = semAnaliseDoSite(proposalsData as { metadata?: unknown }[] | null).map((p: any) => {
+    const docs = contarDocsChecklist(p, mapaPortfolio);
+    return {
     ...p,
     // Normaliza nome do campo CPF/CNPJ (coluna real no BD é client_cpf_cnpj)
     cpf_cnpj: p.client_cpf_cnpj ?? p.cpf_cnpj,
     // Resolve nome do partner via JOIN
     partner_name: (p.partner as any)?.full_name ?? p.partner_name,
-    docs_uploaded: Array.isArray(p.documents) ? p.documents.length : 0,
-    docs_required: 8,
+    docs_uploaded: docs.enviados,
+    docs_required: docs.total,
     mesa_comments_count: Array.isArray(p.mesa_comments) ? p.mesa_comments.length : 0,
-  }));
+    };
+  });
 
   return (
     <MesaOpClient
