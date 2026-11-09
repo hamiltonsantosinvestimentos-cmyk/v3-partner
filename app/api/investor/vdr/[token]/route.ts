@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { montarDealPublico, nomeSalaPublico, sanitizarGrupo } from "@/lib/vdr-identidade";
 
 // Rota pública — sem Supabase Auth. Acesso via token único.
 function svc() {
@@ -14,9 +15,9 @@ type RouteContext = { params: Promise<{ token: string }> };
 export async function GET(req: NextRequest, ctx: RouteContext) {
   const { token } = await ctx.params;
 
-  // Captura headers injetados pelo middleware (rastreamento de grupo)
-  const sourceGroup = req.headers.get("x-vdr-group") ?? "direct";
-  const accessSide  = req.headers.get("x-vdr-side")  ?? "buyer";
+  // Rastreamento de grupo. O cabeçalho vem de ?grp= e é forjável: só vale no formato esperado.
+  // O lado do acesso (access_side) vem SÓ do convite, nunca da URL nem de cabeçalho do cliente.
+  const sourceGroup = sanitizarGrupo(req.headers.get("x-vdr-group"));
   const ipAddress   = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
                    ?? req.headers.get("x-real-ip")
                    ?? "unknown";
@@ -88,7 +89,6 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
     first_accessed_at: invite.access_count === 0 ? new Date().toISOString() : undefined,
     access_count:      (invite.access_count ?? 0) + 1,
     source_group:      invite.source_group ?? (sourceGroup !== "direct" ? sourceGroup : null),
-    access_side:       invite.access_side  ?? accessSide,
   }).eq("id", invite.id);
 
   // 4. Log de acesso (pre-NDA)
@@ -133,17 +133,13 @@ export async function GET(req: NextRequest, ctx: RouteContext) {
   return NextResponse.json({
     room: {
       id:           room.id,
-      name:         room.name,
+      // O nome da sala costuma levar o código do deal: genérico até o NDA ser assinado.
+      name:         nomeSalaPublico(nda_signed, room.name),
       nda_required: room.nda_required,
       nda_text:     room.nda_required ? (room.nda_text ?? DEFAULT_NDA_TEXT) : null,
     },
-    deal: {
-      id:             room.deal_id,
-      v3_code:        deal?.v3_code ?? null,
-      legacy_code:    deal?.code ?? null,
-      target_company: deal?.target_company ?? null,
-      sector:         deal?.sector ?? null,
-    },
+    // Identidade do deal (id, nomes, setor e códigos) só depois do NDA assinado.
+    deal: montarDealPublico(nda_signed, room.deal_id, deal),
     investor: {
       name:    invite.investor_name,
       company: invite.investor_company,

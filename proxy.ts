@@ -42,8 +42,9 @@ export async function proxy(request: NextRequest) {
   // Rotas VDR — captura parâmetros de rastreamento de grupo antes de liberar
   if (pathname.startsWith("/vdr/") || pathname.startsWith("/api/investor/")) {
     const response = NextResponse.next();
+    // Só o grupo de rastreamento (analítico, validado na rota). O lado do acesso NÃO vem da URL:
+    // quem define o lado é o convite, gravado pela V3 (BRIEF de segurança do Deal Room, 08/11/2026).
     response.headers.set("x-vdr-group", searchParams.get("grp") ?? "direct");
-    response.headers.set("x-vdr-side",  searchParams.get("side") ?? "buyer");
     return response;
   }
 

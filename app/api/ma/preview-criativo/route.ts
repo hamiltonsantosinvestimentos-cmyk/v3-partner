@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { DEMO_DEALS } from "@/lib/demo-data";
 import { auditHtml } from "@/lib/brand-guardian-gate";
+import { montarLogCimAcesso } from "@/lib/vdr-identidade";
 
 const IS_DEMO = false;
 
@@ -1686,6 +1687,12 @@ export async function GET(request: Request) {
       company: inv.investor_company ?? null,
       token:   inv.token,
     };
+  }
+
+  // Monitoramento até o B2 fechar esta rota pública (BRIEF de segurança do Deal Room, 08/11/2026):
+  // sem IP, sem o dealId completo e sem dado pessoal. Só o CIM leva a identidade; teaser e posts são cegos.
+  if (type === "cim") {
+    console.log(JSON.stringify(montarLogCimAcesso("preview-criativo", dealId, !!vdrToken, !!investor)));
   }
 
   let html = "";

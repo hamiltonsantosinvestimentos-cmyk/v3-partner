@@ -1,0 +1,13 @@
+-- Rollback de 20261108a (devolve os privilégios do estado de 08/11/2026). Não recria as duas políticas
+-- "user reads own nda" e "authenticated insert doc view": nunca estiveram ativas no banco vivo.
+grant all on table public.deal_rooms           to anon;
+grant all on table public.deal_room_invites    to anon;
+grant all on table public.deal_room_documents  to anon;
+grant all on table public.nda_signatures       to anon;
+grant all on table public.document_views       to anon;
+
+grant truncate, references, trigger on table public.deal_rooms           to authenticated;
+grant truncate, references, trigger on table public.deal_room_invites    to authenticated;
+grant truncate, references, trigger on table public.deal_room_documents  to authenticated;
+grant truncate, references, trigger on table public.nda_signatures       to authenticated;
+grant truncate, references, trigger on table public.document_views       to authenticated;
