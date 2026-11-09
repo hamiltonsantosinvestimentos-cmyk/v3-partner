@@ -49,7 +49,9 @@ export type V3Series =
   | "V3C-FOR"   // Contrato de Fornecedor (idem)
   | "V3C-FUN"   // Contrato de Fundo (idem)
   | "V3C-REG"   // Regularização de contrato manual pré-Central de Contratos (19/08/2026)
-  | "V3C-ADE";  // Termo de Adesão a Acordo Mestre (06/10/2026)
+  | "V3C-ADE"   // Termo de Adesão a Acordo Mestre (06/10/2026)
+  | "V3C-ICM"   // Contrato de Intermediação e Compliance de Commodities, cada ponta, Fase 1 (08/11/2026)
+  | "V3C-CVC";  // Contrato de Compra e Venda de Commodities com Intermediação e Monitoria, Fase 2 (08/11/2026)
 
 export type V3Esfera = "FED" | "EST" | "MUN";
 

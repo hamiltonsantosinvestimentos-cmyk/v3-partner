@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 // 11/08/2026, ao testar "Nova Minuta" pela UI: 500 "null value in column
 // contract_series"). Toda minuta criada até hoje foi inserida via SQL direto,
 // nunca por esta rota, por isso o bug nunca apareceu em produção antes.
-const VALID_SERIES = ["V3C-ORG", "V3C-MAN", "V3C-PAR", "V3C-CES", "V3C-NDA", "V3C-LOI", "V3C-FPA", "V3C-FOR", "V3C-FUN"];
+const VALID_SERIES = ["V3C-ORG", "V3C-MAN", "V3C-PAR", "V3C-CES", "V3C-NDA", "V3C-LOI", "V3C-FPA", "V3C-FOR", "V3C-FUN", "V3C-ICM", "V3C-CVC"];
 
 export async function POST(req: NextRequest) {
   const caller = await requireAdmin(req);

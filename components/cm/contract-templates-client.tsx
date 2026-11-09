@@ -124,6 +124,8 @@ const SERIES_LABELS: Record<string, string> = {
   "V3C-FOR": "V3C-FOR · Fornecedor",
   "V3C-FUN": "V3C-FUN · Fundo",
   "V3C-REG": "V3C-REG · Regularização de Contrato Manual",
+  "V3C-ICM": "V3C-ICM · Intermediação e Compliance de Commodities",
+  "V3C-CVC": "V3C-CVC · Compra e Venda de Commodities",
 };
 
 // Qualificação Antecipada vinculada à Minuta (02/09/2026, P1): /api/cm/qualifications
