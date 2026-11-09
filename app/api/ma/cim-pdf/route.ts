@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { montarLogCimAcesso } from "@/lib/vdr-identidade";
 
 export const maxDuration = 300;
 export const dynamic    = "force-dynamic";
@@ -105,6 +106,10 @@ export async function GET(request: NextRequest) {
       .from("deal_room_invites").select("investor_name, investor_company").eq("token", vdrToken).single();
     if (inv) investorParam = `&vdr_token=${encodeURIComponent(vdrToken)}`;
   }
+
+  // Monitoramento até o B2 fechar esta rota pública (BRIEF de segurança do Deal Room, 08/11/2026):
+  // sem IP, sem o dealId completo e sem dado pessoal.
+  console.log(JSON.stringify(montarLogCimAcesso("cim-pdf", dealId, !!vdrToken, !!investorParam)));
 
   // Logo base64 para o timbrado
   let logoBase64 = "";

@@ -10,6 +10,9 @@ function svc() {
 
 type RouteContext = { params: Promise<{ token: string; doc_id: string }> };
 
+// Link assinado de arquivo de Storage: 5 minutos (BRIEF de segurança do Deal Room, 08/11/2026).
+const SIGNED_URL_SECONDS = 300;
+
 // ── POST — obter URL assinada para documento ───────────────────────────────────
 export async function POST(req: NextRequest, ctx: RouteContext) {
   const { token, doc_id } = await ctx.params;
@@ -23,12 +26,22 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
   // 1. Validar token e invite
   const { data: invite, error: invErr } = await db
     .from("deal_room_invites")
-    .select("id, status, token_expires_at, deal_rooms(id)")
+    .select("id, status, token_expires_at, deal_rooms(id, status, expires_at)")
     .eq("token", token)
     .single();
 
   if (invErr || !invite) {
     return NextResponse.json({ error: "Token inválido." }, { status: 404 });
+  }
+
+  // Sala encerrada ou expirada não entrega documento, igual ao GET da sala.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const roomInfo = invite.deal_rooms as any;
+  if (!roomInfo || roomInfo.status === "closed") {
+    return NextResponse.json({ error: "Esta sala de investimento foi encerrada." }, { status: 410 });
+  }
+  if (roomInfo.expires_at && new Date(roomInfo.expires_at) < new Date()) {
+    return NextResponse.json({ error: "A sala expirou." }, { status: 410 });
   }
 
   if (["revoked", "expired"].includes(invite.status)) {
@@ -90,17 +103,19 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
   // 5. Gerar URL — URL direta (CIM dinâmico) ou Storage assinada
   let docUrl: string;
+  let expiresIn: number | null = null; // só arquivo de Storage expira; URL direta (CIM dinâmico) não, até o B2
   if (doc.storage_path.startsWith("http://") || doc.storage_path.startsWith("https://")) {
     // CIM gerado on-demand — injeta vdr_token para watermark personalizada
     const sep = doc.storage_path.includes("?") ? "&" : "?";
     docUrl = `${doc.storage_path}${sep}vdr_token=${encodeURIComponent(token)}`;
   } else {
-    // Path de Storage Supabase — gera signed URL por 1 hora
+    // Path de Storage Supabase — signed URL de 5 minutos (era 1 hora)
+    expiresIn = SIGNED_URL_SECONDS;
     const vdrBucket = (doc.storage_path.startsWith("MA/") || doc.storage_path.startsWith("Credito/") || doc.storage_path.startsWith("Administracao/"))
       ? "v3-docs-publico" : "ma-documents";
     const { data: signedData, error: urlErr } = await db.storage
       .from(vdrBucket)
-      .createSignedUrl(doc.storage_path, 3600);
+      .createSignedUrl(doc.storage_path, SIGNED_URL_SECONDS);
     if (urlErr || !signedData?.signedUrl) {
       return NextResponse.json({ error: "Erro ao gerar URL de acesso." }, { status: 500 });
     }
@@ -127,7 +142,7 @@ export async function POST(req: NextRequest, ctx: RouteContext) {
 
   return NextResponse.json({
     url:         docUrl,
-    expires_in:  3600,
+    expires_in:  expiresIn,
     view_id:     viewRecord?.id ?? null,
     doc_label:   doc.label,
     doc_type:    doc.doc_type,
