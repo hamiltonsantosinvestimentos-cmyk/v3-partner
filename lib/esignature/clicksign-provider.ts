@@ -174,7 +174,7 @@ export async function htmlToPdfBase64(html: string, opts?: { letterhead?: string
       ? `<div style="position:relative;width:100%;height:100%">${note}<img src="${logoUri}" style="position:absolute;left:8.06cm;top:0.73cm;width:4.89cm;height:2.33cm"></div>`
       : "<div></div>";
     const footerTemplate = rodapeUri
-      ? `<div style="position:relative;width:100%;height:100%"><img src="${rodapeUri}" style="position:absolute;left:2.85cm;top:0.51cm;width:15.98cm;height:1.64cm"></div>`
+      ? `<div style="position:relative;width:100%;height:100%"><img src="${rodapeUri}" style="position:absolute;left:0;top:0.68cm;width:21cm;height:2.153cm"></div>`
       : "<div></div>";
 
     const pdfBuffer = await page.pdf({
@@ -183,7 +183,7 @@ export async function htmlToPdfBase64(html: string, opts?: { letterhead?: string
       displayHeaderFooter,
       headerTemplate,
       footerTemplate,
-      margin: displayHeaderFooter ? { top: "3.6cm", bottom: "3.8cm", left: "0", right: "0" } : { top: "0", bottom: "0", left: "0", right: "0" },
+      margin: displayHeaderFooter ? { top: "3.6cm", bottom: "4.5cm", left: "0", right: "0" } : { top: "0", bottom: "0", left: "0", right: "0" },
     });
     return `data:application/pdf;base64,${Buffer.from(pdfBuffer).toString("base64")}`;
   } finally {
