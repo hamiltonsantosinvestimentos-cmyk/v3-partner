@@ -1646,7 +1646,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
         .then((r) => r.json())
         .then(({ documents, checklist, mesa_comments }) => {
           const savedChecks: Record<string, boolean> = (checklist && typeof checklist === "object") ? checklist : {};
-          const files: Record<string, { name: string; url: string | null; key: string }[]> = {};
+          const files: Record<string, DocFile[]> = {};
           if (Array.isArray(documents)) {
             documents.forEach((d: { doc_id: string; file_name: string; url: string | null; file_key?: string; nome_exibicao?: string; tipo_detectado?: string | null; lido_em?: string | null }) => {
               savedChecks[d.doc_id] = true;

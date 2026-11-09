@@ -22,5 +22,5 @@ export async function GET(req: NextRequest) {
 
   const orfaos = await limparOrfaos();
   const resumo = await nomearDocumentosPendentes({ limite, prazoMs: 250_000 });
-  return NextResponse.json({ ok: true, corte: NOMEAR_A_PARTIR_DE, orfaos_apagados: orfaos, ...resumo });
+  return NextResponse.json({ ok: true, corte: NOMEAR_A_PARTIR_DE, orfaos_apagados: orfaos, resumo });
 }

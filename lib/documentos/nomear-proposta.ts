@@ -101,7 +101,7 @@ export async function nomearDocumentosPendentes(opts: { proposalId?: string; lim
       console.log("[nomear-documentos] leitura", { status: r.status, chamadas: r.uso.chamadas, entrada: r.uso.entrada, saida: r.uso.saida, modelo: r.modelo });
     } else {
       linha = { nome_exibicao: null, tipo: null, periodo: null, titular: null, confianca: null, status: r.status, modelo: null };
-      console.warn("[nomear-documentos] sem nome", { status: r.status, motivo: r.motivo });
+      console.warn("[nomear-documentos] sem nome", { status: r.status, motivo: "motivo" in r ? r.motivo : "" });
     }
 
     if (!(await aindaExiste(svc, proposalId, doc.storage_path))) continue;
