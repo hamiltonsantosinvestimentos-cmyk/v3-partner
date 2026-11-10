@@ -307,7 +307,7 @@ body{font-family:'DM Sans',sans-serif;background:#FFFFFF;color:#13223A;padding:1
    Chromium, documentada e testada em htmlToPdfBase64). */
 @media screen{
 .timbrado-logo{position:fixed;left:8.06cm;top:1.25cm;width:4.89cm;height:2.33cm;z-index:2}
-.timbrado-rodape{position:fixed;left:2.85cm;top:25.91cm;width:15.98cm;height:1.64cm;z-index:2}
+.timbrado-rodape{position:fixed;left:0;top:25.35cm;width:21cm;height:2.153cm;z-index:2}
 }
 @media print{.timbrado-logo,.timbrado-rodape{display:none}}
 .header,h1,h2,h3,p,.parties,.footer{position:relative;z-index:1}
