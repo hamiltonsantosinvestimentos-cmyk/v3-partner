@@ -1,5 +1,6 @@
 "use client";
-import { aviso } from "@/lib/aviso";
+import { aviso, confirmar } from "@/lib/aviso";
+import { textoConfirmacaoEnterprise } from "@/lib/enterprise/comunicado-aprovacao";
 
 import { useState } from "react";
 import {
@@ -123,6 +124,15 @@ function ModalDetalhe({
   const podeAprovar = !isCartaoRecorrente || cartaoLink.trim().length > 0;
 
   const acionar = async (acao: "APROVAR" | "REPROVAR" | "EM_ANALISE") => {
+    // Enterprise (BRIEF 10/11/2026): aprovar envia e-mail e WhatsApp na hora, sem volta. Modal vermelho antes.
+    if (acao === "APROVAR" && reg.plano === "ENTERPRISE") {
+      const empresa = reg.razao_social ?? reg.nome_completo ?? reg.email;
+      const ok = await confirmar(
+        textoConfirmacaoEnterprise({ empresa, email: reg.email, telefone: reg.telefone }),
+        { perigo: true, titulo: "Aprovar e enviar comunicado", botao: "Aprovar e enviar" },
+      );
+      if (!ok) return;
+    }
     setLoading(acao);
     await onAcao(reg.id, acao, obs, isCartaoRecorrente ? cartaoLink.trim() : undefined);
     setLoading(null);
@@ -505,6 +515,18 @@ export function AdminCadastrosClient({
       body: JSON.stringify({ id, acao, observacao: obs, cartao_recorrente_link: cartaoRecorrenteLink }),
     });
     if (res.ok) {
+      // Enterprise: resultado do comunicado por canal (BRIEF 10/11/2026).
+      const d = await res.json().catch(() => ({})) as {
+        comunicado?: { email: { ok: boolean; motivo?: string }; whatsapp: { ok: boolean; motivo?: string; telefone?: string } };
+      };
+      if (d.comunicado) {
+        const { email, whatsapp } = d.comunicado;
+        const partEmail = email.ok ? "e-mail enviado" : `e-mail NÃO enviado (${email.motivo ?? "falha"})`;
+        const partWhats = whatsapp.ok
+          ? `WhatsApp enviado${whatsapp.telefone ? ` para ${whatsapp.telefone}` : ""}${whatsapp.motivo ? `. ${whatsapp.motivo}` : ""}`
+          : `WhatsApp NÃO enviado${whatsapp.telefone ? ` (${whatsapp.telefone})` : ""}: ${whatsapp.motivo ?? "falha"}`;
+        aviso(`Comunicado do white label: ${partEmail}; ${partWhats}.`);
+      }
       const novoStatus = acao === "APROVAR" ? "APROVADO" : acao === "REPROVAR" ? "REPROVADO" : "EM_ANALISE";
       setRegs((prev) => prev.map((r) => r.id === id ? { ...r, status: novoStatus as Registration["status"], observacao: obs, ...(cartaoRecorrenteLink ? { cartao_recorrente_link: cartaoRecorrenteLink } : {}) } : r));
       setSelecionado((prev) => prev?.id === id ? { ...prev, status: novoStatus as Registration["status"], observacao: obs } : prev);
