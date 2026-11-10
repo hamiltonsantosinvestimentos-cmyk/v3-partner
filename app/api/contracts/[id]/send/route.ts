@@ -57,7 +57,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const gate = await checkSendGates(db, contract as SendContract);
   if (gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
 
-  const sent = await sendContractToSignature(db, contract as SendContract);
+  const sent = await sendContractToSignature(db, contract as SendContract, { userId: caller.userId, label: caller.role });
   if (!sent.ok) return NextResponse.json({ error: sent.error }, { status: sent.status });
 
   return NextResponse.json({ ok: true, envelope_id: sent.envelopeId, signatarios: sent.signatarios });

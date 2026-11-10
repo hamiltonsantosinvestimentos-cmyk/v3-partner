@@ -15,9 +15,12 @@ import { getProvider, type SendEnvelopeInput } from "@/lib/esignature";
 import { renderContractDocx } from "@/lib/contract-docx-render";
 import type { ContractParty } from "@/lib/contract-render";
 import { buildEnvelopeLabel } from "@/lib/contract-envelope-label";
+import { getCmFlag, FLAG_CERTONE_CPF_REPRESENTANTE } from "@/lib/cm-flags";
+import { normalizeCpf, resolveCertOneSigners, type QualificationRow } from "@/lib/esignature/certone-signer";
+import { SYSTEM_USER_ID } from "@/lib/contract-signature-timeline";
 
 export const SEND_CONTRACT_COLUMNS =
-  "id, template_id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification, rendered_html";
+  "id, template_id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification, rendered_html, qualification_batch_id";
 
 export type SendParty = { role: string; name: string | null; email?: string | null; doc?: string | null };
 
@@ -37,6 +40,7 @@ export interface SendContract {
   loi_matching_status?: string | null;
   loi_override_justification?: string | null;
   rendered_html?: string | null;
+  qualification_batch_id?: string | null;
 }
 
 export type GateError = { status: number; error: string };
@@ -175,7 +179,64 @@ export type SendResult =
  * Envia o contrato para assinatura e grava o envelope. Pressupõe que
  * checkSendGates já passou para este mesmo `contract`.
  */
-export async function sendContractToSignature(db: SupabaseClient, contract: SendContract): Promise<SendResult> {
+export type PrepareResult =
+  | { ok: true; signatories: Array<{ name: string; email: string; document: string | null }>; cpfRepresentante: Array<{ role: string; email: string }> }
+  | { ok: false; status: number; error: string };
+
+/**
+ * CertOne (BRIEF 09/11/2026): parte PJ só tem o CNPJ em `doc`; o signatário passa a ser o
+ * representante pessoa física da qualificação (nome e CPF). Só com a chave de compliance
+ * ligada. ClickSign nunca consulta a qualificação nem recebe CPF (devolve a lista intacta).
+ */
+export async function prepareSignatoriesForProvider(
+  db: SupabaseClient,
+  providerName: string,
+  contract: SendContract,
+  parties: SendParty[],
+  signatories: Array<{ name: string; email: string; document: string | null }>,
+  flag: (key: string) => Promise<boolean> = (key) => getCmFlag(key),
+): Promise<PrepareResult> {
+  const cpfRepresentante: Array<{ role: string; email: string }> = [];
+  if (providerName !== "certone") return { ok: true, signatories, cpfRepresentante };
+  const semCpf = signatories.filter((s) => !normalizeCpf(s.document));
+  if (semCpf.length === 0) return { ok: true, signatories, cpfRepresentante };
+
+  const papelDe = (email: string) => parties.find((p) => p.email === email)?.role ?? "parte";
+  if (!(await flag(FLAG_CERTONE_CPF_REPRESENTANTE))) {
+    return {
+      ok: false,
+      status: 422,
+      error: `Envio pela CertOne bloqueado: o uso do CPF do representante das partes PJ aguarda validação de compliance (${semCpf.map((s) => `${papelDe(s.email)} (${s.email})`).join(", ")}).`,
+    };
+  }
+  if (!contract.qualification_batch_id) {
+    return { ok: false, status: 422, error: "Contrato sem lote de qualificação: não há representante cadastrado para as partes PJ. Complete a qualificação antes de enviar pela CertOne." };
+  }
+  const { data: quals, error: qualErr } = await db
+    .from("cm_party_qualifications")
+    .select("role_in_document, email, person_type, representation")
+    .eq("batch_id", contract.qualification_batch_id)
+    .is("deleted_at", null);
+  if (qualErr) return { ok: false, status: 500, error: "Falha ao ler a qualificação das partes para o envio pela CertOne." };
+  const resolved = resolveCertOneSigners(
+    signatories.map((s) => ({ role: papelDe(s.email), name: s.name, email: s.email, document: s.document })),
+    (quals ?? []) as QualificationRow[],
+  );
+  if (!resolved.ok) return { ok: false, status: 422, error: resolved.error };
+  for (const r of resolved.signers) if (r.fromRepresentative) cpfRepresentante.push({ role: r.role, email: r.email });
+  return {
+    ok: true,
+    signatories: resolved.signers.map((r) => ({ name: r.name, email: r.email, document: r.document })),
+    cpfRepresentante,
+  };
+}
+
+export interface SendActor {
+  userId: string;
+  label: string;
+}
+
+export async function sendContractToSignature(db: SupabaseClient, contract: SendContract, actor?: SendActor): Promise<SendResult> {
   const id = contract.id;
   const parties = contract.parties ?? [];
 
@@ -185,6 +246,35 @@ export async function sendContractToSignature(db: SupabaseClient, contract: Send
   const signatories = parties
     .filter((p) => p.email?.trim())
     .map((p) => ({ name: p.name ?? "", email: p.email!, document: p.doc ?? null }));
+  const provider = await getProvider({ contractId: id, vertical: contract.vertical });
+
+  // CertOne (BRIEF 09/11/2026): parte PJ só tem o CNPJ em `doc`; o signatário passa a ser o
+  // representante pessoa física da qualificação (nome e CPF). Só com a chave de compliance
+  // ligada; ClickSign nunca consulta a qualificação nem recebe CPF.
+  const prep = await prepareSignatoriesForProvider(db, provider.name, contract, parties, signatories);
+  if (!prep.ok) return { ok: false, status: prep.status, error: prep.error };
+  const envioSignatories = prep.signatories;
+  const cpfRepresentante = prep.cpfRepresentante;
+
+  // Trilha da transmissão do CPF a terceiro (sem o número). Se não gravar, nada sai.
+  const notaTransmissao = async (texto: (r: { role: string; email: string }) => string) => {
+    for (const r of cpfRepresentante) {
+      const { error } = await db.from("contract_notes").insert({
+        contract_id: id,
+        author_id: actor?.userId ?? SYSTEM_USER_ID,
+        author_name: actor?.label ?? "Sistema",
+        note_type: "sistema",
+        content: texto(r),
+      });
+      if (error) return false;
+    }
+    return true;
+  };
+  if (cpfRepresentante.length > 0) {
+    const quando = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+    const ok = await notaTransmissao((r) => `CPF do representante da parte ${r.role} (${r.email}) enviado ao CertOne por ${actor?.label ?? "sistema"} em ${quando}.`);
+    if (!ok) return { ok: false, status: 500, error: "Não foi possível registrar a trilha de envio do CPF do representante. Nada foi enviado à CertOne." };
+  }
 
   const signingToken = contract.signing_token ?? randomUUID().replace(/-/g, "");
   if (!contract.signing_token) {
@@ -247,7 +337,6 @@ export async function sendContractToSignature(db: SupabaseClient, contract: Send
   }
 
   const headParty = (parties as Array<{ role?: string; name?: string; doc?: string | null }>).find((p) => p.role === "head_mesa");
-  const provider = await getProvider({ contractId: id, vertical: contract.vertical });
   const result = await provider.send({
     dealId: id,
     documentType: resolveDocumentType(contract.contract_title, contract.vertical),
@@ -256,7 +345,7 @@ export async function sendContractToSignature(db: SupabaseClient, contract: Send
     documentDocxBase64,
     positionedParties,
     documentLabel,
-    signatories,
+    signatories: envioSignatories,
     // 14/08/2026: apontado para deal@v3partners.com.br (era
     // joao.lemos@v3partners.com.br). Mudança deliberada: lib/clicksign-archive.ts
     // (Fase 2, arquivamento automático) só tem credencial IMAP testada para
@@ -278,6 +367,9 @@ export async function sendContractToSignature(db: SupabaseClient, contract: Send
   });
 
   if (!result.ok) {
+    if (cpfRepresentante.length > 0) {
+      await notaTransmissao((r) => `Falha no envio ao CertOne do contrato com o representante da parte ${r.role} (${r.email}); a CertOne recusou o envio.`);
+    }
     return { ok: false, status: 502, error: `Falha ao enviar para o ClickSign: ${result.error}` };
   }
 

@@ -17,3 +17,10 @@ export async function getCmFlag(key: string, fallback = false): Promise<boolean>
 
 /** Gatilho automatico da reuniao inicial (Etapa 2), ambos os lados. Ver migration 20260920b. */
 export const FLAG_MEETING_AUTOTRIGGER = "meeting_autotrigger";
+
+/**
+ * Envio pela CertOne usando o CPF do representante das partes PJ (nome e CPF vindos da
+ * qualificacao). Desligada ate a resposta escrita do Robson (base legal) e o registro da
+ * CertOne como operador. Ver lib/esignature/certone-signer.ts.
+ */
+export const FLAG_CERTONE_CPF_REPRESENTANTE = "certone_cpf_representante";
