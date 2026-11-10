@@ -421,10 +421,10 @@ async function buildLetterheadHeader(opts?: DocxRenderOptions): Promise<Header> 
       new ImageRun({
         data: rodape,
         type: "jpg",
-        transformation: { width: 21 * 96 / 2.54, height: 2.153 * 96 / 2.54 },
+        transformation: { width: 21 * 96 / 2.54, height: 5 * 96 / 2.54 },
         floating: {
           horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, offset: 0 },
-          verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: 25.35 * CM },
+          verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: 24.7 * CM },
           wrap: { type: TextWrappingType.TOP_AND_BOTTOM },
         },
       }),
@@ -542,7 +542,7 @@ export async function renderContractDocx(fullHtml: string, parties?: ContractPar
           // da lib docx (que já é A4 hoje, mas sem garantia contra mudança
           // futura da dependência).
           size: { width: 11910, height: 16840 },
-          margin: { top: 2020, right: 708, bottom: 2550, left: 425, header: 709, footer: 1573, gutter: 0 },
+          margin: { top: 2020, right: 708, bottom: 2835, left: 425, header: 709, footer: 1573, gutter: 0 },
         },
       },
       children,
