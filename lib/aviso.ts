@@ -21,14 +21,24 @@ export function aviso(message: unknown): void {
 // Sem o <Toaster /> montado nao ha quem responda: resolve false por seguranca (nao executa a acao).
 export const CONFIRMAR_EVENT = "v3:confirmar";
 
-export type ConfirmarDetail = { message: string; resolve: (ok: boolean) => void };
+/** Opções do confirmar(). Sem opções, o modal é o dourado de sempre. */
+export type ConfirmarOpcoes = {
+  /** Modal vermelho, para ação irreversível (BRIEF 10/11/2026, aprovação do Enterprise). */
+  perigo?: boolean;
+  /** Título opcional acima da mensagem. */
+  titulo?: string;
+  /** Rótulo do botão de ação (padrão "Confirmar"). */
+  botao?: string;
+};
 
-export function confirmar(message: unknown): Promise<boolean> {
+export type ConfirmarDetail = ConfirmarOpcoes & { message: string; resolve: (ok: boolean) => void };
+
+export function confirmar(message: unknown, opcoes?: ConfirmarOpcoes): Promise<boolean> {
   if (typeof window === "undefined") return Promise.resolve(false);
   if (!(window as unknown as { __v3ConfirmHost?: boolean }).__v3ConfirmHost) return Promise.resolve(false);
   const text = typeof message === "string" ? message : String(message ?? "");
   return new Promise<boolean>((resolve) => {
-    window.dispatchEvent(new CustomEvent<ConfirmarDetail>(CONFIRMAR_EVENT, { detail: { message: text, resolve } }));
+    window.dispatchEvent(new CustomEvent<ConfirmarDetail>(CONFIRMAR_EVENT, { detail: { ...opcoes, message: text, resolve } }));
   });
 }
 

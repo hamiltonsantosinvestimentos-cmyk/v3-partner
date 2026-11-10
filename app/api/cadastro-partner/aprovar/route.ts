@@ -3,6 +3,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { cadastroStarterAntigo, rotuloStarter } from "@/lib/v3-access-rotulos";
 import { OFERTA } from "@/lib/oferta-trial";
+import { sendText, verificarWhatsapp } from "@/lib/whatsapp/openwa-client";
+import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
+import {
+  ASSUNTO_BOAS_VINDAS, blocoWhiteLabelEmailHtml, mensagemWhatsappEnterprise, phoneParaHistorico, telefoneBrasilParaEnvio,
+} from "@/lib/enterprise/comunicado-aprovacao";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -11,9 +16,10 @@ function serviceClient() {
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com.br";
 
 // ─── E-mail de boas-vindas via Resend ─────────────────────────────────────────
-async function enviarBoasVindas(email: string, nome: string, plano: string, cartaoRecorrenteLink?: string | null, starterAntigo = false) {
+// Devolve se a Resend aceitou o envio (res.ok). O Enterprise usa o resultado no aviso ao ADMIN.
+async function enviarBoasVindas(email: string, nome: string, plano: string, cartaoRecorrenteLink?: string | null, starterAntigo = false): Promise<{ ok: boolean; motivo?: string }> {
   const resendKey = process.env.RESEND_API_KEY;
-  if (!resendKey) return; // sem chave, ignora silenciosamente
+  if (!resendKey) return { ok: false, motivo: "RESEND_API_KEY ausente" };
 
   const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise" : plano === "PARTNER_PRO" ? "V3 Partner PRO" : plano === "PARTNER_HE" ? "Partner HE" : plano === "GOLD" ? "V3 Gold" : plano === "DIAMANTE" ? "V3 Diamante" : plano === "STARTER" ? rotuloStarter(starterAntigo) : "V3 Partner";
   const comissao   = plano === "ENTERPRISE" ? "55%" : plano === "PARTNER_PRO" ? "50%" : plano === "PARTNER_HE" ? "50%" : plano === "GOLD" ? "25%" : plano === "DIAMANTE" ? "40%" : plano === "STARTER" ? "20%" : "35%";
@@ -45,6 +51,7 @@ async function enviarBoasVindas(email: string, nome: string, plano: string, cart
           <strong style="color:#C9A84C;">${plano === "GOLD" ? "R$ 397" : "R$ 897"}/mês</strong>, sem fidelidade: você pode interromper quando quiser.
         </p>
       </div>` : ""}
+      ${plano === "ENTERPRISE" ? blocoWhiteLabelEmailHtml() : ""}
 
       <!-- Credenciais -->
       <div style="background:#0A1628;border:1px solid #243A66;border-radius:12px;padding:20px;margin-bottom:24px;">
@@ -99,7 +106,7 @@ async function enviarBoasVindas(email: string, nome: string, plano: string, cart
 </html>`;
 
   try {
-    await fetch("https://api.resend.com/emails", {
+    const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${resendKey}`,
@@ -108,12 +115,52 @@ async function enviarBoasVindas(email: string, nome: string, plano: string, cart
       body: JSON.stringify({
         from: process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>",
         to: [email],
-        subject: `Bem-vindo à V3 Partners — Cadastro Aprovado!`,
+        subject: ASSUNTO_BOAS_VINDAS,
         html,
       }),
     });
+    return res.ok ? { ok: true } : { ok: false, motivo: `Resend respondeu ${res.status}` };
   } catch {
-    // silencioso — não bloqueia a aprovação
+    // não bloqueia a aprovação
+    return { ok: false, motivo: "falha de rede na Resend" };
+  }
+}
+
+type ResultadoCanal = { ok: boolean; motivo?: string; telefone?: string };
+
+// WhatsApp do comunicado do Enterprise (BRIEF 10/11/2026). Nunca lança: a aprovação já aconteceu.
+// Grava o phone como o webhook do SDR vai montar (chatIdToPhone do JID canônico) e marca humano_ativo,
+// para a IA do SDR não responder ao cliente Enterprise.
+async function enviarWhatsappEnterprise(svc: ReturnType<typeof serviceClient>, telefone: string | null, dados: { nome: string; empresa: string; email: string }): Promise<ResultadoCanal> {
+  const t = telefoneBrasilParaEnvio(telefone);
+  if (!t.ok) return { ok: false, motivo: t.motivo };
+  try {
+    const check = await verificarWhatsapp(t.digitos);
+    if (check && !check.existe) return { ok: false, motivo: "número sem WhatsApp", telefone: t.exibicao };
+    const msg = mensagemWhatsappEnterprise(dados);
+    // Com "+", o openwa-client usa os dígitos como estão (sem renormalizar): JID canônico ou 55+DDD+número.
+    const destino = `+${phoneParaHistorico(check, t.digitos)}`;
+    const enviado = await Promise.race([
+      sendText(destino, msg),
+      new Promise<boolean>((r) => setTimeout(() => r(false), 15_000)),
+    ]).catch(() => false);
+    if (!enviado) return { ok: false, motivo: "o WhatsApp da V3 não aceitou o envio (sessão fora do ar?)", telefone: t.exibicao };
+    const phone = phoneParaHistorico(check, t.digitos);
+    const agora = new Date().toISOString();
+    const { error: e1 } = await svc.from("sdr_conversas").insert({
+      phone, canal: "whatsapp", role: "assistant", content: `[Comunicado Enterprise] ${msg}`, instance: "openwa", partner_id: null,
+    });
+    if (e1) console.error("[aprovar] falha ao gravar sdr_conversas", { code: e1.code });
+    const { error: e2 } = await svc.from("sdr_leads").upsert({
+      phone, partner_id: SDR_INTERNO_PARTNER_ID, canal: "whatsapp", humano_ativo: true,
+      last_message_at: agora, last_message_preview: "[Comunicado Enterprise]", updated_at: agora,
+    }, { onConflict: "phone,partner_id", ignoreDuplicates: false });
+    if (e2) console.error("[aprovar] falha ao marcar humano_ativo", { code: e2.code });
+    if (!check) return { ok: true, telefone: t.exibicao, motivo: "WhatsApp enviado, mas a trava do bot pode não valer para este número: marque Atendimento humano no inbox do SDR" };
+    if (e2) return { ok: true, telefone: t.exibicao, motivo: "WhatsApp enviado, mas não foi possível marcar Atendimento humano: marque no inbox do SDR" };
+    return { ok: true, telefone: t.exibicao };
+  } catch {
+    return { ok: false, motivo: "erro inesperado no envio do WhatsApp", telefone: t.exibicao };
   }
 }
 
@@ -170,9 +217,14 @@ export async function POST(req: NextRequest) {
   const email     = reg.email;
   const nome      = reg.nome_completo ?? reg.razao_social ?? "Parceiro";
 
-  // Verifica se já existe
-  const { data: existing } = await svc.auth.admin.listUsers();
-  const jaExiste = existing?.users?.some((u) => u.email === email);
+  // Verifica se já existe. profiles primeiro: listUsers() só devolve a primeira página (BRIEF 10/11/2026, risco c).
+  const { data: perfilExistente } = await svc.from("profiles").select("id").ilike("email", String(email ?? "").replace(/[\\%_]/g, "\\$&")).limit(1).maybeSingle();
+  let jaExiste = !!perfilExistente;
+  if (!jaExiste) {
+    const { data: existing } = await svc.auth.admin.listUsers();
+    jaExiste = !!existing?.users?.some((u) => u.email === email);
+  }
+  let comunicado: { email: ResultadoCanal; whatsapp: ResultadoCanal } | undefined;
 
   if (!jaExiste) {
     // Cria o usuário com senha padrão + flag para trocar no primeiro acesso
@@ -216,8 +268,15 @@ export async function POST(req: NextRequest) {
       }, { onConflict: "id" });
     }
 
-    // Envia e-mail de boas-vindas (async, não bloqueia)
-    enviarBoasVindas(email, nome, reg.plano, linkCartaoFinal, cadastroStarterAntigo(reg.plano, reg.created_at)).catch(() => {});
+    if (planoRole === "ENTERPRISE") {
+      // Enterprise (BRIEF 10/11/2026): e-mail com o bloco do white label + WhatsApp, e o resultado volta ao ADMIN.
+      const resEmail = await enviarBoasVindas(email, nome, reg.plano, linkCartaoFinal, false).catch(() => ({ ok: false, motivo: "falha no envio" }));
+      const resWhats = await enviarWhatsappEnterprise(svc, reg.telefone ?? null, { nome, empresa: reg.razao_social ?? nome, email });
+      comunicado = { email: resEmail, whatsapp: resWhats };
+    } else {
+      // Envia e-mail de boas-vindas (async, não bloqueia)
+      enviarBoasVindas(email, nome, reg.plano, linkCartaoFinal, cadastroStarterAntigo(reg.plano, reg.created_at)).catch(() => {});
+    }
   }
 
   // Atualiza o cadastro
@@ -230,5 +289,5 @@ export async function POST(req: NextRequest) {
     ...(cartao_recorrente_link ? { cartao_recorrente_link } : {}),
   }).eq("id", id);
 
-  return NextResponse.json({ ok: true, status: "APROVADO", email, role: planoRole });
+  return NextResponse.json({ ok: true, status: "APROVADO", email, role: planoRole, ...(comunicado ? { comunicado } : {}) });
 }

@@ -104,6 +104,24 @@ async function resolveChatId(phone: string, sessionId?: string): Promise<string>
   return `${digits}@c.us`;
 }
 
+// Consulta /contacts/check e devolve o JID canônico, sem fallback: null quando a checagem falha
+// (gateway fora do ar, timeout, resposta não ok). Quem precisa gravar o mesmo phone que o webhook
+// do SDR vai usar (chatIdToPhone do chatId recebido) usa o chatId daqui. BRIEF 10/11/2026.
+export async function verificarWhatsapp(phone: string, sessionId?: string, timeoutMs = 10_000): Promise<{ existe: boolean; chatId: string | null } | null> {
+  const digits = toDialDigits(phone);
+  try {
+    const res = await fetch(`${BASE_URL}/api/sessions/${resolveSessionId(sessionId)}/contacts/check/${digits}`, {
+      headers: headers(),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { exists?: boolean; whatsappId?: string };
+    return { existe: !!data.exists, chatId: data.exists && data.whatsappId ? data.whatsappId : null };
+  } catch {
+    return null;
+  }
+}
+
 // Strips the OpenWA/Baileys chatId suffix back to plain digits
 export function chatIdToPhone(chatId: string): string {
   return chatId.replace(/@(c\.us|s\.whatsapp\.net|g\.us)$/, "");

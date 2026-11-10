@@ -85,14 +85,17 @@ export function Toaster() {
       {motivoAtual && <ModalMotivo detalhe={motivoAtual} onResponder={responderMotivo} />}
       {atual && (
         <div className="pointer-events-auto fixed inset-0 z-[210] flex items-center justify-center bg-black/75 p-4">
-          <div role="dialog" aria-modal="true" aria-label="Confirmação" className="w-full max-w-md space-y-3 rounded-xl border border-[#C9A84C]/40 bg-[#09081A] p-4">
+          <div role="dialog" aria-modal="true" aria-label={atual.titulo ?? "Confirmação"} className={`w-full max-w-md space-y-3 rounded-xl border bg-[#09081A] p-4 ${atual.perigo ? "border-[#E24B4A]/60" : "border-[#C9A84C]/40"}`}>
+            {atual.titulo && (
+              <p className={`text-base font-bold ${atual.perigo ? "text-[#E24B4A]" : "text-[#C9A84C]"}`}>{atual.titulo}</p>
+            )}
             <p className="whitespace-pre-line text-[13px] leading-snug text-[#F5F1E8]">{atual.message}</p>
             <div className="flex justify-end gap-2">
               <button type="button" autoFocus onClick={() => responder(false)} className="rounded border border-[#9BAFC5]/30 px-3 py-1.5 text-[12px] font-semibold text-[#F5F1E8]">
                 Cancelar
               </button>
-              <button type="button" onClick={() => responder(true)} className="rounded bg-[#C9A84C] px-3 py-1.5 text-[12px] font-semibold text-[#09081A]">
-                Confirmar
+              <button type="button" onClick={() => responder(true)} className={`rounded px-3 py-1.5 text-[12px] font-semibold text-[#09081A] ${atual.perigo ? "bg-[#E24B4A]" : "bg-[#C9A84C]"}`}>
+                {atual.botao ?? "Confirmar"}
               </button>
             </div>
           </div>
