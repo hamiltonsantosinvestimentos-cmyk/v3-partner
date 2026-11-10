@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FileSignature, Loader2, Send, CheckCircle2, AlertTriangle, ExternalLink, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
-  PLANO_LABEL, TITULO_CONTRATO, camposDoPlano, camposFaltantes, dadosDoCadastro, familiaDoPlano, pickContratoParceriaTemplate,
+  PLANO_LABEL, TITULO_CONTRATO, itemAcordoEnterprise, versaoDaMinuta, camposDoPlano, camposFaltantes, dadosDoCadastro, familiaDoPlano, pickContratoParceriaTemplate,
   type CadastroParaContrato, type DadosLicenciado, type ParceriaTemplate, type PlanoContratoParceria,
 } from "@/lib/contrato-parceria-partner";
 
@@ -43,6 +43,7 @@ export function EnviarContratoParceria({
 }) {
   const [contratos, setContratos] = useState<Contrato[] | null>(null);
   const [template, setTemplate] = useState<ParceriaTemplate | null | undefined>(undefined);
+  const [itemAcordo, setItemAcordo] = useState<string | null>(null);
   const [aberto, setAberto] = useState(false);
   const [dados, setDados] = useState<DadosLicenciado>(() => dadosDoCadastro(cadastro));
   const [tentou, setTentou] = useState(false);
@@ -61,7 +62,12 @@ export function EnviarContratoParceria({
     carregarContratos();
     fetch("/api/contracts/templates?vertical=clientes")
       .then((r) => r.json())
-      .then((j) => setTemplate(pickContratoParceriaTemplate((j.templates ?? []) as ParceriaTemplate[], plano)))
+      .then((j) => {
+        const t = pickContratoParceriaTemplate((j.templates ?? []) as ParceriaTemplate[], plano);
+        // Guarda só o que a tela usa, não o HTML da minuta (BRIEF 2026-11-10, item 3.1 do Enterprise).
+        setItemAcordo(t ? itemAcordoEnterprise(t.body_text_raw) : null);
+        setTemplate(t ? { ...t, body_text_raw: null } : null);
+      })
       .catch(() => setTemplate(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registrationId]);
@@ -118,7 +124,9 @@ export function EnviarContratoParceria({
         <div className="flex items-start gap-2">
           <FileSignature className="w-4 h-4 text-[#C9A84C] mt-0.5" />
           <div>
-            <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wide">{TITULO_CONTRATO[familia]}</p>
+            <p className="text-xs font-semibold text-[#C9A84C] uppercase tracking-wide">
+              {TITULO_CONTRATO[familia]}{familia === "parceria" && template ? ` ${versaoDaMinuta(template.template_name) ?? ""}` : ""}
+            </p>
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {familia === "oferta" ? `Plano ${PLANO_LABEL[plano]}, mentoria + plataforma, sem fidelidade` : `Licenciamento ${PLANO_LABEL[plano]}`}. Sai com os dados do cadastro, vai para assinatura no ClickSign e fica na Central de Contratos.
             </p>
@@ -138,6 +146,9 @@ export function EnviarContratoParceria({
 
       {template === null && (
         <p className="text-[11px] text-amber-400">Minuta do {TITULO_CONTRATO[familia]} não encontrada (ou inativa) na Central de Contratos.</p>
+      )}
+      {template && plano === "ENTERPRISE" && !itemAcordo && (
+        <p className="text-[11px] text-amber-400">Esta minuta não tem o item de acordo comercial do Enterprise; o 3.1 sai sem a citação ao acordo.</p>
       )}
       {template && !templateAprovado && (
         <p className="text-[11px] text-amber-400">A minuta ainda não está aprovada em Central de Contratos › Minutas (status: {template.approval_status}).</p>

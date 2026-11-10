@@ -13,6 +13,9 @@
 // Mentoria + Licença de Uso da Plataforma V3, Planos V3 Gold e V3 Diamante").
 // Cada família de plano só aceita a sua minuta (familiaDoPlano).
 
+import { valorEmReaisPorExtenso } from "@/lib/utils/valor-extenso";
+import { dateExtensoBR } from "@/lib/contract-adhesion";
+
 export const PARCERIA_TEMPLATE_MARCA = "licenciamento partner / partner pro / enterprise";
 export const OFERTA_TEMPLATE_MARCA = "planos v3 gold e v3 diamante";
 
@@ -27,12 +30,33 @@ export const PLANO_LABEL: Record<PlanoContratoParceria, string> = {
   DIAMANTE: "V3 Diamante",
 };
 
-// Anuidade de cada plano (Anexo III da minuta v2.3), impressa no item 3.1.
-export const PLANO_ANUIDADE: Partial<Record<PlanoContratoParceria, string>> = {
-  PARTNER: "R$ 10.897,00",
-  PARTNER_PRO: "R$ 15.897,00",
-  ENTERPRISE: "R$ 49.897,00",
+// Anuidade de cada plano (Anexo III da minuta), impressa no item 3.1 em BRL e por extenso,
+// sempre a partir do número (BRIEF 2026-11-10_contrato-enterprise-item-3-1-acordo-comercial).
+export const PLANO_ANUIDADE_NUM: Partial<Record<PlanoContratoParceria, number>> = {
+  PARTNER: 10897,
+  PARTNER_PRO: 15897,
+  ENTERPRISE: 49897,
 };
+// Enterprise a partir da v2.4 (12 x R$ 4.158,08). Só vale com a minuta que tem o item de acordo
+// comercial do Enterprise, porque o Anexo III da v2.3 diz R$ 49.897,00.
+export const ANUIDADE_ENTERPRISE_V24 = 49896.96;
+
+const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+/** "R$ 49.896,96" com espaço comum (o Intl usa espaço não separável). */
+export function formatarBRL(v: number): string {
+  return BRL.format(v).replace(/\s/g, " ");
+}
+
+/** Anuidade numérica do plano para a minuta usada (null = plano sem anuidade). */
+export function anuidadeDoPlano(plano: PlanoContratoParceria, itemAcordo: string | null): number | null {
+  if (plano === "ENTERPRISE" && itemAcordo) return ANUIDADE_ENTERPRISE_V24;
+  return PLANO_ANUIDADE_NUM[plano] ?? null;
+}
+
+/** Compatibilidade: anuidade formatada pelo Anexo III original. */
+export const PLANO_ANUIDADE: Partial<Record<PlanoContratoParceria, string>> = Object.fromEntries(
+  Object.entries(PLANO_ANUIDADE_NUM).map(([k, v]) => [k, formatarBRL(v as number)]),
+);
 
 // Gold/Diamante: mensalidade e comissão (item 3.2 da minuta deles), impressas no item 3.1.
 const PLANO_MENSAL: Partial<Record<PlanoContratoParceria, { mensalidade: string; comissao: string }>> = {
@@ -47,7 +71,7 @@ export function familiaDoPlano(plano: PlanoContratoParceria): FamiliaContrato {
 }
 
 export const TITULO_CONTRATO: Record<FamiliaContrato, string> = {
-  parceria: "Contrato de Parceria v2.3",
+  parceria: "Contrato de Parceria",
   oferta: "Contrato V3 Gold / V3 Diamante",
 };
 
@@ -74,7 +98,13 @@ export function familiaDoTemplate(name: string | null | undefined): FamiliaContr
   return null;
 }
 
-export type ParceriaTemplate = { id: string; template_name: string; approval_status?: string | null; version?: number | null; created_at?: string | null };
+export type ParceriaTemplate = { id: string; template_name: string; approval_status?: string | null; version?: number | null; created_at?: string | null; body_text_raw?: string | null };
+
+/** Versão lida do nome da minuta ("... v2.4" → "v2.4"), para o título do card. */
+export function versaoDaMinuta(name: string | null | undefined): string | null {
+  const m = (name ?? "").match(/\bv(\d+(?:\.\d+)*)\s*$/i);
+  return m ? `v${m[1]}` : null;
+}
 
 /** Minuta ativa mais recente da família do plano (aprovada primeiro). */
 export function pickContratoParceriaTemplate<T extends ParceriaTemplate>(templates: T[], plano: PlanoContratoParceria): T | null {
@@ -236,13 +266,10 @@ export function preencherContratoParceria(minuta: string, plano: PlanoContratoPa
 
   const planoLabel = PLANO_LABEL[plano];
   html = trocar(html, "Licenciamento [PLANO]", `Licenciamento ${esc(planoLabel)}`);
-  const pagamento = dataBR(d.data_pagamento);
-  if (!pagamento) throw new Error("Data prevista de pagamento inválida.");
-  html = trocar(
-    html,
-    "Plano contratado: [plano]",
-    `Plano contratado: ${esc(planoLabel)}, anuidade de ${PLANO_ANUIDADE[plano]} (Anexo III). Data prevista de pagamento: ${pagamento}.`,
-  );
+  if (!dataBR(d.data_pagamento)) throw new Error("Data prevista de pagamento inválida.");
+  const itemAcordo = itemAcordoEnterprise(html);
+  conferirAnexoIII(html, plano, itemAcordo);
+  html = trocar(html, "Plano contratado: [plano]", textoItem31(plano, d.data_pagamento, itemAcordo));
   html = trocarLicenciante(html);
   html = trocar(
     html,
@@ -252,6 +279,47 @@ export function preencherContratoParceria(minuta: string, plano: PlanoContratoPa
   html = trocar(html, "([nº] módulos)", `(${esc(d.modulos)} módulos)`);
 
   return semMarcadores(html);
+}
+
+// ── Item 3.1 (BRIEF 2026-11-10_contrato-enterprise-item-3-1-acordo-comercial) ──
+
+/**
+ * Número do item "Condições do Plano Enterprise" (acordo comercial), lido da própria minuta.
+ * null = a minuta não tem o item (v2.3): o 3.1 do Enterprise sai sem citar o acordo.
+ */
+export function itemAcordoEnterprise(html: string | null | undefined): string | null {
+  const m = (html ?? "").match(/(\d+(?:\.\d+)+)\s*<(?:b|strong)>\s*Condições do Plano Enterprise/i);
+  return m ? m[1] : null;
+}
+
+/** Texto do item 3.1 (sem o "3.1"), com valor e data também por extenso. dataIso = "yyyy-mm-dd". */
+export function textoItem31(plano: PlanoContratoParceria, dataIso: string, itemAcordo: string | null): string {
+  const valor = anuidadeDoPlano(plano, itemAcordo);
+  if (valor == null) throw new Error(`Plano ${plano} sem anuidade no Contrato de Parceria.`);
+  const dataNum = dataBR(dataIso);
+  if (!dataNum) throw new Error("Data prevista de pagamento inválida.");
+  // Meio-dia UTC: dateExtensoBR formata em Brasília e meia-noite UTC recuaria um dia.
+  const dataExt = dateExtensoBR(`${dataIso}T12:00:00Z`);
+  const acordo = plano === "ENTERPRISE" && itemAcordo
+    ? `, ou o valor e as condições de pagamento do acordo comercial firmado entre as partes por WhatsApp ou por e-mail (item ${itemAcordo})`
+    : "";
+  return `Plano contratado: ${esc(PLANO_LABEL[plano])}, anuidade de ${formatarBRL(valor)} (${valorEmReaisPorExtenso(valor)}) (Anexo III)${acordo}. Data prevista de pagamento: ${dataNum} (${dataExt}).`;
+}
+
+/**
+ * Trava: o valor do 3.1 precisa estar na linha do plano no Anexo III da minuta. Se não estiver,
+ * a geração para (nada vai ao ClickSign) para o contrato nunca sair com dois preços.
+ */
+export function conferirAnexoIII(html: string, plano: PlanoContratoParceria, itemAcordo: string | null): void {
+  const valor = anuidadeDoPlano(plano, itemAcordo);
+  if (valor == null) return;
+  const label = PLANO_LABEL[plano];
+  const brl = formatarBRL(valor);
+  const linhas = html.match(/<tr>[\s\S]*?<\/tr>/gi) ?? [];
+  const linha = linhas.find((tr) => new RegExp(`<td>\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*</td>`, "i").test(tr));
+  if (!linha || !linha.includes(`<td>${brl}</td>`)) {
+    throw new Error(`O valor da anuidade do ${label} no 3.1 (${brl}) não bate com o Anexo III da minuta; revise a minuta na Central ou o código.`);
+  }
 }
 
 function semMarcadores(html: string): string {
