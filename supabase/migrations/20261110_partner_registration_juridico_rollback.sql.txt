@@ -1,0 +1,6 @@
+-- Reversão de 20261110_partner_registration_juridico.sql
+-- Atenção: apaga o histórico das consultas jurídicas pagas. Exportar antes, se houver linhas.
+drop trigger if exists partner_registration_juridico_sem_truncate on public.partner_registration_juridico;
+drop trigger if exists partner_registration_juridico_somente_inclusao on public.partner_registration_juridico;
+drop table if exists public.partner_registration_juridico;
+drop function if exists public.partner_registration_juridico_somente_inclusao();
