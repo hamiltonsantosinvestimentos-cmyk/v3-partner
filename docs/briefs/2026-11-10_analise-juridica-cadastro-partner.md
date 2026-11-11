@@ -1,6 +1,6 @@
 # BRIEF: Botão "Análise jurídica" no cadastro de partner (CheckTudo, PJ + PF ou só PF)
 
-> Data: 2026-11-10 | Autor: Claude Code (pedido do Hamilton) | Status: GO MESMO ASSIM (Hamilton, 10/11/2026), migration aguardando segundo go
+> Data: 2026-11-10 | Autor: Claude Code (pedido do Hamilton) | Status: GO MESMO ASSIM (Hamilton, 10/11/2026); migration aplicada em 10/11/2026
 > Pedido literal (10/11/2026): "no cadastro de partner, colocar um botao de analise juridica, onde deve analisar a PJ E PF, ou somente PF, pelo checktudo".
 
 ## SCOPE
@@ -195,4 +195,4 @@ M, cerca de 3 h, confiança alta (a integração já existe).
 - Override: sim, "go mesmo assim" do Hamilton em 10/11/2026, aceitando **só** o item de compliance (base legal da consulta, aviso ao candidato no formulário e retenção dos totais). As perguntas seguem abertas para o Robson; se ele pedir o aviso no formulário, entra em BRIEF próprio; se negar a base legal, o card é desligado.
 - Go dado por: Hamilton, 10/11/2026 ("go mesmo assim", registrado pelo hook)
 - Prova de acesso (item 6.8), rodada pelo Hamilton no SQL Editor de produção em 10/11/2026, transação desfeita: "anon select: negado | anon insert: negado | partner select: negado | partner insert: negado | admin (PostgREST) select: negado | admin (PostgREST) insert: negado | service_role select: 1 linha(s) | service_role update: bloqueado | service_role delete: bloqueado | service_role truncate: bloqueado". Conferido depois pelo PostgREST: a tabela não ficou criada (PGRST205).
-- Migration aplicada em produção: não (exige segundo go)
+- Migration aplicada em produção: sim, em 2026-11-10, arquivo `supabase/migrations/20261110_partner_registration_juridico.sql`, rodada pelo próprio Hamilton no SQL Editor ("Success. No rows returned"), o que vale como o segundo go. Conferido pelo PostgREST: service_role lê (200, vazia); anon select e anon insert negados (401, 42501).
