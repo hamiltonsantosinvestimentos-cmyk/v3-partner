@@ -30,33 +30,14 @@ export const PLANO_LABEL: Record<PlanoContratoParceria, string> = {
   DIAMANTE: "V3 Diamante",
 };
 
-// Anuidade de cada plano (Anexo III da minuta), impressa no item 3.1 em BRL e por extenso,
-// sempre a partir do número (BRIEF 2026-11-10_contrato-enterprise-item-3-1-acordo-comercial).
-export const PLANO_ANUIDADE_NUM: Partial<Record<PlanoContratoParceria, number>> = {
-  PARTNER: 10897,
-  PARTNER_PRO: 15897,
-  ENTERPRISE: 49897,
-};
-// Enterprise a partir da v2.4 (12 x R$ 4.158,08). Só vale com a minuta que tem o item de acordo
-// comercial do Enterprise, porque o Anexo III da v2.3 diz R$ 49.897,00.
-export const ANUIDADE_ENTERPRISE_V24 = 49896.96;
+// A anuidade impressa no item 3.1 vem da linha do plano no Anexo III da própria minuta aprovada
+// (BRIEF 2026-11-10_contrato-parceria-anuidade-do-anexo-iii): o 3.1 nunca diverge do Anexo III.
 
 const BRL = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 /** "R$ 49.896,96" com espaço comum (o Intl usa espaço não separável). */
 export function formatarBRL(v: number): string {
   return BRL.format(v).replace(/\s/g, " ");
 }
-
-/** Anuidade numérica do plano para a minuta usada (null = plano sem anuidade). */
-export function anuidadeDoPlano(plano: PlanoContratoParceria, itemAcordo: string | null): number | null {
-  if (plano === "ENTERPRISE" && itemAcordo) return ANUIDADE_ENTERPRISE_V24;
-  return PLANO_ANUIDADE_NUM[plano] ?? null;
-}
-
-/** Compatibilidade: anuidade formatada pelo Anexo III original. */
-export const PLANO_ANUIDADE: Partial<Record<PlanoContratoParceria, string>> = Object.fromEntries(
-  Object.entries(PLANO_ANUIDADE_NUM).map(([k, v]) => [k, formatarBRL(v as number)]),
-);
 
 // Gold/Diamante: mensalidade e comissão (item 3.2 da minuta deles), impressas no item 3.1.
 const PLANO_MENSAL: Partial<Record<PlanoContratoParceria, { mensalidade: string; comissao: string }>> = {
@@ -268,8 +249,8 @@ export function preencherContratoParceria(minuta: string, plano: PlanoContratoPa
   html = trocar(html, "Licenciamento [PLANO]", `Licenciamento ${esc(planoLabel)}`);
   if (!dataBR(d.data_pagamento)) throw new Error("Data prevista de pagamento inválida.");
   const itemAcordo = itemAcordoEnterprise(html);
-  conferirAnexoIII(html, plano, itemAcordo);
-  html = trocar(html, "Plano contratado: [plano]", textoItem31(plano, d.data_pagamento, itemAcordo));
+  const anuidade = anuidadeDoAnexoIII(html, plano);
+  html = trocar(html, "Plano contratado: [plano]", textoItem31(plano, d.data_pagamento, itemAcordo, anuidade));
   html = trocarLicenciante(html);
   html = trocar(
     html,
@@ -293,9 +274,7 @@ export function itemAcordoEnterprise(html: string | null | undefined): string | 
 }
 
 /** Texto do item 3.1 (sem o "3.1"), com valor e data também por extenso. dataIso = "yyyy-mm-dd". */
-export function textoItem31(plano: PlanoContratoParceria, dataIso: string, itemAcordo: string | null): string {
-  const valor = anuidadeDoPlano(plano, itemAcordo);
-  if (valor == null) throw new Error(`Plano ${plano} sem anuidade no Contrato de Parceria.`);
+export function textoItem31(plano: PlanoContratoParceria, dataIso: string, itemAcordo: string | null, valor: number): string {
   const dataNum = dataBR(dataIso);
   if (!dataNum) throw new Error("Data prevista de pagamento inválida.");
   // Meio-dia UTC: dateExtensoBR formata em Brasília e meia-noite UTC recuaria um dia.
@@ -306,20 +285,41 @@ export function textoItem31(plano: PlanoContratoParceria, dataIso: string, itemA
   return `Plano contratado: ${esc(PLANO_LABEL[plano])}, anuidade de ${formatarBRL(valor)} (${valorEmReaisPorExtenso(valor)}) (Anexo III)${acordo}. Data prevista de pagamento: ${dataNum} (${dataExt}).`;
 }
 
+/** Valores em R$ de uma linha de tabela, em centavos, na ordem em que aparecem. Sem faixa. */
+export function valoresBRLDaLinha(tr: string): number[] {
+  return [...tr.matchAll(/R\$(?:\s|&nbsp;)*(\d{1,3}(?:\.\d{3})*,\d{2})/g)].map((m) => Number(m[1].replace(/\./g, "").replace(",", "")));
+}
+
+const ANUIDADE_MIN_CENT = 100_000;      // R$ 1.000,00
+const ANUIDADE_MAX_CENT = 100_000_000;  // R$ 1.000.000,00
+
 /**
- * Trava: o valor do 3.1 precisa estar na linha do plano no Anexo III da minuta. Se não estiver,
- * a geração para (nada vai ao ClickSign) para o contrato nunca sair com dois preços.
+ * Anuidade do plano lida da linha dele no Anexo III da minuta: (a), (b), (c) e Total Anual.
+ * Para a geração (nada vai ao ClickSign) se a linha faltar, estiver incompleta, zerada,
+ * fora da faixa ou com soma diferente do total.
  */
-export function conferirAnexoIII(html: string, plano: PlanoContratoParceria, itemAcordo: string | null): void {
-  const valor = anuidadeDoPlano(plano, itemAcordo);
-  if (valor == null) return;
+export function anuidadeDoAnexoIII(html: string, plano: PlanoContratoParceria): number {
   const label = PLANO_LABEL[plano];
-  const brl = formatarBRL(valor);
   const linhas = html.match(/<tr>[\s\S]*?<\/tr>/gi) ?? [];
-  const linha = linhas.find((tr) => new RegExp(`<td>\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*</td>`, "i").test(tr));
-  if (!linha || !linha.includes(`<td>${brl}</td>`)) {
-    throw new Error(`O valor da anuidade do ${label} no 3.1 (${brl}) não bate com o Anexo III da minuta; revise a minuta na Central ou o código.`);
+  const linha = linhas.find((tr) => {
+    const primeira = tr.match(/<td[^>]*>([\s\S]*?)<\/td>/i);
+    return !!primeira && primeira[1].replace(/<[^>]+>/g, "").trim() === label;
+  });
+  if (!linha) throw new Error(`O Anexo III da minuta não tem a linha do plano ${label}; revise a minuta na Central.`);
+  const v = valoresBRLDaLinha(linha);
+  if (v.length < 4) throw new Error(`A linha do plano ${label} no Anexo III da minuta não tem os quatro valores (a), (b), (c) e Total; revise a minuta na Central.`);
+  const [a, b, c, total] = v;
+  const nomes = ["(a)", "(b)", "(c)"];
+  [a, b, c].forEach((x, i) => {
+    if (x <= 0) throw new Error(`No Anexo III da minuta, a parcela ${nomes[i]} do ${label} está zerada; revise a minuta na Central.`);
+  });
+  if (total < ANUIDADE_MIN_CENT || total > ANUIDADE_MAX_CENT) {
+    throw new Error(`No Anexo III da minuta, o Total Anual do ${label} (${formatarBRL(total / 100)}) está fora da faixa aceita (de R$ 1.000,00 a R$ 1.000.000,00); revise a minuta na Central.`);
   }
+  if (a + b + c !== total) {
+    throw new Error(`No Anexo III da minuta, as parcelas (a), (b) e (c) do ${label} somam ${formatarBRL((a + b + c) / 100)}, diferente do Total Anual ${formatarBRL(total / 100)}; revise a minuta na Central.`);
+  }
+  return total / 100;
 }
 
 function semMarcadores(html: string): string {
