@@ -194,4 +194,5 @@ M, cerca de 3 h, confiança alta (a integração já existe).
 - QA: BLOQUEADO (rodadas: 2). Única falha: [VALIDAR COM ROBSON], coberta pelo override abaixo.
 - Override: sim, "go mesmo assim" do Hamilton em 10/11/2026, aceitando **só** o item de compliance (base legal da consulta, aviso ao candidato no formulário e retenção dos totais). As perguntas seguem abertas para o Robson; se ele pedir o aviso no formulário, entra em BRIEF próprio; se negar a base legal, o card é desligado.
 - Go dado por: Hamilton, 10/11/2026 ("go mesmo assim", registrado pelo hook)
+- Prova de acesso (item 6.8), rodada pelo Hamilton no SQL Editor de produção em 10/11/2026, transação desfeita: "anon select: negado | anon insert: negado | partner select: negado | partner insert: negado | admin (PostgREST) select: negado | admin (PostgREST) insert: negado | service_role select: 1 linha(s) | service_role update: bloqueado | service_role delete: bloqueado | service_role truncate: bloqueado". Conferido depois pelo PostgREST: a tabela não ficou criada (PGRST205).
 - Migration aplicada em produção: não (exige segundo go)
