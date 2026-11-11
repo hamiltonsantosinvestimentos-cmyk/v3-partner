@@ -5,6 +5,8 @@ import { MESA_OPERACIONAL_VERTICALS } from "@/lib/contract-verticals";
 import { isNdaMesaContract } from "@/lib/nda-mesa-operacoes";
 import { isMandatoCreditoContract } from "@/lib/mandato-credito";
 import { SEND_CONTRACT_COLUMNS, checkSendGates, sendContractToSignature, type SendContract } from "@/lib/contract-send";
+import { checkQualificationGate } from "@/lib/contract-qualification-gate";
+import { logAuditStrict } from "@/lib/audit";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -14,11 +16,11 @@ async function requireRole(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data: profile } = await svc().from("profiles").select("role").eq("id", user.id).single();
+  const { data: profile } = await svc().from("profiles").select("role, full_name").eq("id", user.id).single();
   // MESA_OPERACIONAL (analista, ex: Taisa Pedroso) passa a poder enviar (24/09/2026, urgência de João):
   // ficava barrada aqui mesmo com acesso a gerar e listar. O escopo de vertical é conferido abaixo.
   if (!profile || !["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(profile.role as string)) return null;
-  return { userId: user.id, role: profile.role as string };
+  return { userId: user.id, role: profile.role as string, name: (profile.full_name as string | null) ?? null };
 }
 
 // POST /api/contracts/[id]/send — dispara o contrato gerado pela Central de
@@ -56,6 +58,38 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const gate = await checkSendGates(db, contract as SendContract);
   if (gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
+
+  // Conferência da qualificação, regras Q-01 a Q-07 (BRIEF 11/11/2026). Só neste envio: a troca de
+  // e-mail em contrato já enviado (change-signer-email) não passa por aqui, para o legado com defeito
+  // antigo nunca ficar sem como corrigir um e-mail. Override só do ADMIN e só para o Q-02, com
+  // justificativa registrada antes do envio. O corpo da resposta traz IDs e papéis, nunca dado pessoal.
+  const body = (await _req.json().catch(() => null)) as { override?: { justificativa?: string } } | null;
+  const qual = await checkQualificationGate(db, contract as SendContract, {
+    role: caller.role,
+    justificativa: body?.override?.justificativa ?? null,
+  });
+  if (!qual.ok) {
+    return NextResponse.json({ error: qual.error, findings: qual.findings, pode_override: qual.podeOverride }, { status: qual.status });
+  }
+  if (qual.overridden.length > 0) {
+    try {
+      await logAuditStrict({
+        userId: caller.userId,
+        userName: caller.name,
+        action: "OVERRIDE",
+        entity: "operation_contracts",
+        entityId: id,
+        newData: {
+          tipo: "conferencia_qualificacao_envio",
+          regras: qual.overridden,
+          papeis: Array.from(new Set(qual.findings.filter((f) => qual.overridden.includes(f.id)).map((f) => f.role))),
+          justificativa: (body?.override?.justificativa ?? "").trim(),
+        },
+      });
+    } catch {
+      return NextResponse.json({ error: "Não foi possível registrar o envio com override. Nada foi enviado." }, { status: 500 });
+    }
+  }
 
   const sent = await sendContractToSignature(db, contract as SendContract, { userId: caller.userId, label: caller.role });
   if (!sent.ok) return NextResponse.json({ error: sent.error }, { status: sent.status });

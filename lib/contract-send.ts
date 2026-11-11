@@ -20,7 +20,7 @@ import { normalizeCpf, resolveCertOneSigners, type QualificationRow } from "@/li
 import { SYSTEM_USER_ID } from "@/lib/contract-signature-timeline";
 
 export const SEND_CONTRACT_COLUMNS =
-  "id, template_id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification, rendered_html, qualification_batch_id";
+  "id, template_id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification, rendered_html, qualification_batch_id, created_at";
 
 export type SendParty = { role: string; name: string | null; email?: string | null; doc?: string | null };
 
@@ -41,6 +41,8 @@ export interface SendContract {
   loi_override_justification?: string | null;
   rendered_html?: string | null;
   qualification_batch_id?: string | null;
+  /** Usada só pela Q-01 (a regra vale para contratos criados depois da data de corte). */
+  created_at?: string | null;
 }
 
 export type GateError = { status: number; error: string };
