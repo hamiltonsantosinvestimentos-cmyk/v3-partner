@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { cadastroStarterAntigo } from "@/lib/v3-access-rotulos";
 import { isPlanoContratoParceria } from "@/lib/contrato-parceria-partner";
 import { EnviarContratoParceria } from "./enviar-contrato-parceria";
+import { AnaliseJuridicaCadastro } from "./analise-juridica-cadastro";
 
 interface Registration {
   id: string;
@@ -259,6 +260,9 @@ function ModalDetalhe({
               )}
             </div>
           </div>
+
+          {/* Análise jurídica (BRIEF 2026-11-10_analise-juridica-cadastro-partner) */}
+          <AnaliseJuridicaCadastro registrationId={reg.id} cadastro={reg} />
 
           {/* Cobrança Cora */}
           <div>

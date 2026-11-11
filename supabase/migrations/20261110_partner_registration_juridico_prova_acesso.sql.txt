@@ -1,0 +1,100 @@
+-- PROVA DE ACESSO (transação desfeita) para 20261110_partner_registration_juridico.sql
+-- BRIEF docs/briefs/2026-11-10_analise-juridica-cadastro-partner.md (QA, item 6.8).
+-- Colar no SQL Editor do Supabase e rodar. O script SEMPRE termina com erro proposital
+-- ("PROVA DE ACESSO ...") que desfaz tudo: a tabela NÃO fica criada. O resultado vem na mensagem do erro.
+begin;
+
+create table if not exists public.partner_registration_juridico (
+  id uuid primary key default gen_random_uuid(),
+  registration_id uuid not null references public.partner_registrations(id) on delete restrict,
+  doc_tipo text not null check (doc_tipo in ('cpf', 'cnpj')),
+  doc_mascarado text not null,
+  escopo text not null check (escopo in ('PJ_PF', 'PF', 'PJ')),
+  ok boolean not null,
+  resultado jsonb,
+  erro text,
+  consultado_por uuid references public.profiles(id),
+  consultado_por_nome text,
+  consultado_em timestamptz not null default now()
+);
+
+create index if not exists partner_registration_juridico_reg_idx
+  on public.partner_registration_juridico (registration_id, consultado_em desc);
+
+alter table public.partner_registration_juridico enable row level security;
+revoke all on public.partner_registration_juridico from anon, authenticated;
+
+create or replace function public.partner_registration_juridico_somente_inclusao()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  raise exception 'partner_registration_juridico é somente inclusão (histórico de consultas pagas)';
+end $$;
+revoke all on function public.partner_registration_juridico_somente_inclusao() from public, anon, authenticated;
+
+drop trigger if exists partner_registration_juridico_somente_inclusao on public.partner_registration_juridico;
+create trigger partner_registration_juridico_somente_inclusao
+  before update or delete on public.partner_registration_juridico
+  for each row execute function public.partner_registration_juridico_somente_inclusao();
+
+drop trigger if exists partner_registration_juridico_sem_truncate on public.partner_registration_juridico;
+create trigger partner_registration_juridico_sem_truncate
+  before truncate on public.partner_registration_juridico
+  for each statement execute function public.partner_registration_juridico_somente_inclusao();
+
+comment on table public.partner_registration_juridico is
+  'Histórico das análises jurídicas (CheckTudo, querycode 200) dos cadastros de partner. Só a service role acessa (rota ADMIN). Somente inclusão. BRIEF 2026-11-10_analise-juridica-cadastro-partner.';
+
+do $$
+declare
+  r text := '';
+  reg uuid;
+  partner_id uuid;
+  admin_id uuid;
+  n int;
+begin
+  select id into reg from public.partner_registrations limit 1;
+  select id into partner_id from public.profiles where role = 'PARTNER' limit 1;
+  select id into admin_id from public.profiles where role = 'ADMIN' limit 1;
+  insert into public.partner_registration_juridico (registration_id, doc_tipo, doc_mascarado, escopo, ok)
+    values (reg, 'cpf', '***.000.000-**', 'PF', true);
+
+  -- anon
+  set local role anon;
+  begin perform 1 from public.partner_registration_juridico limit 1; r := r || 'anon select: PERMITIDO (FALHA) | ';
+  exception when insufficient_privilege then r := r || 'anon select: negado | '; end;
+  begin insert into public.partner_registration_juridico (registration_id, doc_tipo, doc_mascarado, escopo, ok) values (reg, 'cpf', 'x', 'PF', true); r := r || 'anon insert: PERMITIDO (FALHA) | ';
+  exception when insufficient_privilege then r := r || 'anon insert: negado | '; end;
+  reset role;
+
+  -- authenticated com perfil PARTNER
+  perform set_config('request.jwt.claims', json_build_object('sub', partner_id, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin perform 1 from public.partner_registration_juridico limit 1; r := r || 'partner select: PERMITIDO (FALHA) | ';
+  exception when insufficient_privilege then r := r || 'partner select: negado | '; end;
+  begin insert into public.partner_registration_juridico (registration_id, doc_tipo, doc_mascarado, escopo, ok) values (reg, 'cpf', 'x', 'PF', true); r := r || 'partner insert: PERMITIDO (FALHA) | ';
+  exception when insufficient_privilege then r := r || 'partner insert: negado | '; end;
+  reset role;
+
+  -- authenticated com perfil ADMIN (acesso só pela service role da rota)
+  perform set_config('request.jwt.claims', json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin perform 1 from public.partner_registration_juridico limit 1; r := r || 'admin (PostgREST) select: PERMITIDO (FALHA) | ';
+  exception when insufficient_privilege then r := r || 'admin (PostgREST) select: negado | '; end;
+  begin insert into public.partner_registration_juridico (registration_id, doc_tipo, doc_mascarado, escopo, ok) values (reg, 'cpf', 'x', 'PF', true); r := r || 'admin (PostgREST) insert: PERMITIDO (FALHA) | ';
+  exception when insufficient_privilege then r := r || 'admin (PostgREST) insert: negado | '; end;
+  reset role;
+
+  -- service role (a rota)
+  set local role service_role;
+  select count(*) into n from public.partner_registration_juridico;
+  r := r || 'service_role select: ' || n || ' linha(s) | ';
+  begin update public.partner_registration_juridico set erro = 'x'; r := r || 'service_role update: PERMITIDO (FALHA) | ';
+  exception when others then r := r || 'service_role update: bloqueado | '; end;
+  begin delete from public.partner_registration_juridico; r := r || 'service_role delete: PERMITIDO (FALHA) | ';
+  exception when others then r := r || 'service_role delete: bloqueado | '; end;
+  begin truncate public.partner_registration_juridico; r := r || 'service_role truncate: PERMITIDO (FALHA)';
+  exception when others then r := r || 'service_role truncate: bloqueado'; end;
+  reset role;
+
+  raise exception 'PROVA DE ACESSO (transação desfeita, nada foi gravado): %', r;
+end $$;
