@@ -141,6 +141,20 @@ S/M, cerca de 2 h, confiança alta.
 2. A frase "com os 10 acessos previstos em contrato" pode sair na aprovação, antes de existir a minuta Enterprise com a cláusula? Ou ela deve virar "com os 10 acessos do plano V3 Enterprise" até a minuta ficar pronta?
 - Data, quem respondeu e texto da resposta: (pendente)
 
+### Parecer do Robson Lino (10/11/2026, 21:28)
+Texto literal, enviado pelo Hamilton no chat da sessão (print da resposta do Robson às 3 perguntas sobre a v2.4 do Contrato de Parceria):
+
+> a. LGPD no white label: quem é controlador e quem é operador; LGPD momento que entrou na plataoforma, responsabilidade da V3.
+> b. enquadramento dos usuários do Enterprise (correspondente ou intermediação); intermediação
+> c. garantia de retorno na página pública do Enterprise. aprovado.
+> resumido e aprovado por robson lino dia 10/11/2026 as 21:28
+
+- Contexto: no mesmo dia, o Robson e o Hamilton aprovaram por quórum (2 de 3) a minuta de Parceria v2.4 (`contract_templates` `874abe53-11c0-41d6-a0a4-f44b286a3cad`), que traz os 10 acessos do Enterprise, o KPI x10 da garantia e o item 6.8.
+- Efeito neste BRIEF:
+  - pergunta 2 ("10 acessos previstos em contrato" antes da minuta): **resolvida**, porque a minuta v2.4 aprovada agora prevê o acesso do master e até 10 licenças de usuário. A frase do comunicado pode continuar;
+  - pergunta 1 (base legal do WhatsApp e do histórico no SDR): o parecer diz que, a partir da entrada na plataforma, a responsabilidade LGPD é da V3. Isso confirma a V3 como responsável pelo tratamento, mas **não cita expressamente** a base legal (execução de contrato, art. 7º, V). Fica registrado para o Robson confirmar em uma linha, sem bloquear o que já está em produção (override do Hamilton de 10/11 mantido só para esse ponto).
+
+
 ---
 
 ## RELATÓRIO DO QA DE GOVERNANÇA
