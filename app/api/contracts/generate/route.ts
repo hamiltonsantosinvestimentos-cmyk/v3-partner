@@ -6,6 +6,7 @@ import { resolveContractVariables, resolveVerticalBlocks, wrapContractInV3Html }
 import type { V3Series } from "@/lib/v3-codes";
 import { resolveDeskHead, VERTICAL_TO_DESK_ORIGIN, isHeadGatedVertical, headSignatureLabel } from "@/lib/ncnda-desk-head";
 import { formatDocumentNumber, cleanPartyText } from "@/lib/legal-qualification";
+import { partyListMarker } from "@/lib/contract-qualification-check";
 import {
   renderPartyQualificationProse,
   sortQualificationParties,
@@ -673,14 +674,23 @@ export async function POST(req: NextRequest) {
       // de diagramação, item 1): "<br/><br/>" juntava as 8 qualificações num
       // único parágrafo -- cada nome saía flush na margem esquerda, sem recuo
       // nem numeração, inconsistente com o resto do corpo numerado da minuta.
-      // Cada parte agora é o seu próprio <p> com marcador "N) " sequencial,
+      // Cada parte agora é o seu próprio <p> com marcador sequencial,
       // reaproveitando o mesmo motor de recuo francês do corpo (ver
       // CLAUSE_MARKER_RE/applyClauseHangingIndent em lib/contract-render.ts)
-      // em vez de duplicar a lógica de indentação aqui. Números "N)" numeram
-      // as PARTES entre si (integridade referencial pedida na auditoria); não
-      // são cláusula do corpo, então nunca colidem com a numeração digitada
-      // pelo Dr. Luis em outro lugar da minuta.
-      variables.party_qualifications_block = partyProseLines.map((line, i) => `<p>${i + 1}) ${line}</p>`).join("");
+      // em vez de duplicar a lógica de indentação aqui.
+      //
+      // 11/11/2026 (BRIEF de conferência de qualificação, decisão do João): o marcador
+      // passou de "N)" para alíneas "a)", "b)", "c)". O "N)" misturava, na mesma cláusula,
+      // com a numeração decimal "1.2" do corpo (achado da auditoria do NCNDA 0063). As
+      // alíneas continuam reconhecidas pelo mesmo CLAUSE_MARKER_RE (padrão [a-z])), então o
+      // recuo francês não muda. Contratos já gerados não são alterados (histórico congelado).
+      let blocoDePartes: string;
+      try {
+        blocoDePartes = partyProseLines.map((line, i) => `<p>${partyListMarker(i)} ${line}</p>`).join("");
+      } catch (e) {
+        return NextResponse.json({ error: (e as Error).message }, { status: 422 });
+      }
+      variables.party_qualifications_block = blocoDePartes;
       variables.official_emails_protocol = Array.from(new Set([
         "joao.lemos@v3partners.com.br",
         typeof variables.head_email === "string" ? variables.head_email : null,
