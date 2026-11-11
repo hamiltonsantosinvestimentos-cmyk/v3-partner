@@ -45,6 +45,54 @@ const PLANO_MENSAL: Partial<Record<PlanoContratoParceria, { mensalidade: string;
   DIAMANTE: { mensalidade: "R$ 897,00", comissao: "40%" },
 };
 
+/** Mensalidade do Gold/Diamante (null nos planos de anuidade). */
+export function mensalidadeDoPlano(plano: PlanoContratoParceria): string | null {
+  return PLANO_MENSAL[plano]?.mensalidade ?? null;
+}
+
+/**
+ * Texto do modal vermelho antes de "Gerar e enviar para assinatura"
+ * (BRIEF 2026-11-10_modal-confirmacao-enviar-contrato). Nada vira "null".
+ */
+export function textoConfirmacaoEnvio(d: {
+  plano: PlanoContratoParceria;
+  templateName: string | null | undefined;
+  anuidade: number | null;
+  itemAcordo: string | null;
+  dataPagamento: string;
+  razaoSocial: string;
+  email: string;
+  /** undefined = lista ainda não carregou; null = nenhum contrato ativo. */
+  contratoAtivo: { codigo: string | null; status: string } | null | undefined;
+}): string {
+  const familia = familiaDoPlano(d.plano);
+  const versao = versaoDaMinuta(d.templateName);
+  const linhas = [
+    "Isso gera o contrato e envia na hora para assinatura no ClickSign, sem volta. Para desfazer, só cancelando o contrato na Central de Contratos.",
+    "",
+    `Contrato: ${TITULO_CONTRATO[familia]}${versao ? ` ${versao}` : ""}`,
+    `Plano: ${PLANO_LABEL[d.plano]}`,
+  ];
+  if (familia === "parceria") {
+    const valor = d.anuidade != null ? `${formatarBRL(d.anuidade)} (Anexo III da minuta)` : "conforme o Anexo III da minuta";
+    const acordo = d.plano === "ENTERPRISE" && d.itemAcordo ? `, ou o valor do acordo comercial (item ${d.itemAcordo})` : "";
+    linhas.push(`Anuidade: ${valor}${acordo}`);
+    linhas.push(`Data prevista de pagamento: ${dataBR(d.dataPagamento) ?? "não informada"}`);
+    linhas.push(`Licenciado: ${d.razaoSocial.trim().toUpperCase()}`);
+  } else {
+    const m = mensalidadeDoPlano(d.plano);
+    if (m) linhas.push(`Mensalidade: ${m}, após 30 dias grátis`);
+    linhas.push(`Contratante: ${d.razaoSocial.trim().toUpperCase()}`);
+  }
+  linhas.push(`Assinatura enviada para: ${d.email.trim()}`);
+  if (d.contratoAtivo === undefined) {
+    linhas.push("", "Não foi possível verificar contratos anteriores deste cadastro.");
+  } else if (d.contratoAtivo) {
+    linhas.push("", `Atenção: este cadastro já tem o contrato ${d.contratoAtivo.codigo ?? "sem código"} (${d.contratoAtivo.status}). Enviar de novo gera um segundo contrato.`);
+  }
+  return linhas.join("\n");
+}
+
 export type FamiliaContrato = "parceria" | "oferta";
 
 export function familiaDoPlano(plano: PlanoContratoParceria): FamiliaContrato {

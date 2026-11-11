@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { FileSignature, Loader2, Send, CheckCircle2, AlertTriangle, ExternalLink, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { confirmar } from "@/lib/aviso";
 import {
-  PLANO_LABEL, TITULO_CONTRATO, itemAcordoEnterprise, versaoDaMinuta, camposDoPlano, camposFaltantes, dadosDoCadastro, familiaDoPlano, pickContratoParceriaTemplate,
+  PLANO_LABEL, TITULO_CONTRATO, anuidadeDoAnexoIII, itemAcordoEnterprise, textoConfirmacaoEnvio, versaoDaMinuta, camposDoPlano, camposFaltantes, dadosDoCadastro, familiaDoPlano, pickContratoParceriaTemplate,
   type CadastroParaContrato, type DadosLicenciado, type ParceriaTemplate, type PlanoContratoParceria,
 } from "@/lib/contrato-parceria-partner";
 
@@ -32,6 +33,15 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 
 const INPUT = "w-full px-3 py-2 rounded-lg border border-[#243A66] bg-[#09081A] text-foreground text-xs placeholder:text-muted-foreground focus:outline-none focus:border-[#C9A84C] transition-colors";
 
+// Anuidade da minuta para o modal de confirmação; null se a leitura falhar (o servidor continua sendo a trava).
+function tentarAnuidade(html: string | null | undefined, plano: PlanoContratoParceria): number | null {
+  try {
+    return html ? anuidadeDoAnexoIII(html, plano) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function EnviarContratoParceria({
   registrationId,
   plano,
@@ -44,6 +54,7 @@ export function EnviarContratoParceria({
   const [contratos, setContratos] = useState<Contrato[] | null>(null);
   const [template, setTemplate] = useState<ParceriaTemplate | null | undefined>(undefined);
   const [itemAcordo, setItemAcordo] = useState<string | null>(null);
+  const [anuidade, setAnuidade] = useState<number | null>(null);
   const [aberto, setAberto] = useState(false);
   const [dados, setDados] = useState<DadosLicenciado>(() => dadosDoCadastro(cadastro));
   const [tentou, setTentou] = useState(false);
@@ -58,17 +69,24 @@ export function EnviarContratoParceria({
       .catch(() => setContratos([]));
   }
 
-  useEffect(() => {
-    carregarContratos();
+  // Recarregada na abertura da página e a cada abertura do formulário, para o modal de
+  // confirmação mostrar a anuidade da minuta vigente (BRIEF 2026-11-10_modal-confirmacao-enviar-contrato).
+  function carregarMinuta() {
     fetch("/api/contracts/templates?vertical=clientes")
       .then((r) => r.json())
       .then((j) => {
         const t = pickContratoParceriaTemplate((j.templates ?? []) as ParceriaTemplate[], plano);
-        // Guarda só o que a tela usa, não o HTML da minuta (BRIEF 2026-11-10, item 3.1 do Enterprise).
+        // Guarda só o que a tela usa, não o HTML da minuta.
         setItemAcordo(t ? itemAcordoEnterprise(t.body_text_raw) : null);
+        setAnuidade(t && familiaDoPlano(plano) === "parceria" ? tentarAnuidade(t.body_text_raw, plano) : null);
         setTemplate(t ? { ...t, body_text_raw: null } : null);
       })
       .catch(() => setTemplate(null));
+  }
+
+  useEffect(() => {
+    carregarContratos();
+    carregarMinuta();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registrationId]);
 
@@ -82,7 +100,26 @@ export function EnviarContratoParceria({
   async function gerarEEnviar() {
     setTentou(true);
     if (!template || faltam.length > 0) return;
+    if (enviando) return;
+    // Liga antes do modal: o botão fica travado e dois cliques não geram dois contratos.
     setEnviando(true);
+    const confirmado = await confirmar(
+      textoConfirmacaoEnvio({
+        plano,
+        templateName: template.template_name,
+        anuidade,
+        itemAcordo,
+        dataPagamento: dados.data_pagamento,
+        razaoSocial: dados.razao_social,
+        email: dados.email,
+        contratoAtivo: contratos === null ? undefined : ativo ? { codigo: ativo.contract_code, status: (STATUS[ativo.status_signature]?.label ?? ativo.status_signature).toLowerCase() } : null,
+      }),
+      { perigo: true, titulo: "Enviar contrato para assinatura", botao: "Gerar e enviar" },
+    );
+    if (!confirmado) {
+      setEnviando(false);
+      return;
+    }
     setErro(null);
     setOk(null);
     try {
@@ -134,7 +171,7 @@ export function EnviarContratoParceria({
         </div>
         {!aberto && (
           <button
-            onClick={() => { setAberto(true); setErro(null); setOk(null); setTentou(false); }}
+            onClick={() => { setAberto(true); setErro(null); setOk(null); setTentou(false); carregarMinuta(); carregarContratos(); }}
             disabled={template === undefined || !templateAprovado}
             className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#C9A84C] hover:bg-[#E8C97A] text-[#09081A] text-xs font-bold disabled:opacity-50 transition-colors"
           >
