@@ -121,6 +121,18 @@ M. ~2 h. Confiança alta no código; a divulgação depende da cláusula de cont
 - Duplicidade (rodada 2): a enumeração de documento pela rota pública foi eliminada no desenho (resposta idêntica; aviso só interno). Não há mais pergunta ao Robson sobre esse ponto.
 - Garantia de retorno em página pública: [VALIDAR COM ROBSON]. Pergunta: "Podemos exibir na página pública do Enterprise a garantia de devolução do investimento condicionada a um KPI de originação igual ao do Partner PRO multiplicado por 10, somando a originação dos 10 acessos, definido em contrato?" Resposta: (pendente). Data: (pendente). Quem respondeu: (pendente).
 
+### Parecer do Robson Lino (10/11/2026, 21:28)
+Texto literal, enviado pelo Hamilton no chat da sessão (print da resposta do Robson às 3 perguntas sobre a v2.4 do Contrato de Parceria):
+
+> a. LGPD no white label: quem é controlador e quem é operador; LGPD momento que entrou na plataoforma, responsabilidade da V3.
+> b. enquadramento dos usuários do Enterprise (correspondente ou intermediação); intermediação
+> c. garantia de retorno na página pública do Enterprise. aprovado.
+> resumido e aprovado por robson lino dia 10/11/2026 as 21:28
+
+- Contexto: no mesmo dia, o Robson e o Hamilton aprovaram por quórum (2 de 3) a minuta de Parceria v2.4 (`contract_templates` `874abe53-11c0-41d6-a0a4-f44b286a3cad`), que traz os 10 acessos do Enterprise, o KPI x10 da garantia e o item 6.8.
+- Efeito neste BRIEF: a pergunta "garantia de retorno em página pública" foi **respondida: aprovado**. O override do Hamilton deixa de ser necessário para este item, e a cláusula da garantia (KPI do PRO x10, soma dos acessos) passou a constar da minuta v2.4 aprovada.
+
+
 ---
 
 ## RELATÓRIO DO QA DE GOVERNANÇA
