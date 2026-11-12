@@ -387,5 +387,28 @@ export async function sendContractToSignature(db: SupabaseClient, contract: Send
     esignature_provider: provider.name,
   }).eq("id", id);
 
+  // Vínculo permanente "já houve envio" (BRIEF Trava de Liberação, decisão 17):
+  // grava na primeira vez, em todas as qualificações dos lotes consumidos por
+  // este contrato. A coluna é append-only no banco (trigger), então cancelar o
+  // envelope depois não apaga este registro. O envelope já foi criado acima,
+  // por isso uma falha aqui não desfaz o envio, mas fica no log para correção.
+  try {
+    const { data: lotes } = await db
+      .from("cm_qualification_batches")
+      .select("id")
+      .eq("consumido_por_contract_id", id);
+    const loteIds = (lotes ?? []).map((l: { id: string }) => l.id);
+    if (loteIds.length > 0) {
+      const { error: vinculoErr } = await db
+        .from("cm_party_qualifications")
+        .update({ contrato_enviado_id: id, primeiro_envio_em: new Date().toISOString() })
+        .in("batch_id", loteIds)
+        .is("contrato_enviado_id", null);
+      if (vinculoErr) console.error("[contract-send] vínculo de envio não gravado:", vinculoErr.message);
+    }
+  } catch (e) {
+    console.error("[contract-send] vínculo de envio não gravado:", e instanceof Error ? e.message : e);
+  }
+
   return { ok: true, envelopeId: result.envelopeId as string, signatarios: signatories.length };
 }
