@@ -1,0 +1,18 @@
+-- Rollback da 20261111a (nao apaga dado de producao alem das colunas novas)
+drop trigger if exists trg_cm_party_qual_envio_append_only on public.cm_party_qualifications;
+drop trigger if exists trg_cm_party_qual_conferencia_guard on public.cm_party_qualifications;
+drop function if exists public.trg_cm_party_qual_envio_append_only();
+drop function if exists public.trg_cm_party_qual_conferencia_guard();
+drop function if exists public.fn_liberar_qualificacao(uuid, uuid, jsonb);
+drop function if exists public.fn_limpar_conferencia(uuid, uuid);
+drop index if exists public.idx_cm_party_qual_docs_ativos;
+alter table public.cm_party_qualification_documents drop constraint if exists chk_cm_party_qual_docs_deletion_status;
+alter table public.cm_party_qualification_documents
+  drop column if exists deleted_at, drop column if exists deleted_by, drop column if exists deletion_reason,
+  drop column if exists deletion_status, drop column if exists deletion_requested_by,
+  drop column if exists deletion_requested_at, drop column if exists deletion_decision_reason,
+  drop column if exists deletion_decided_by, drop column if exists deletion_decided_at,
+  drop column if exists superseded_at;
+alter table public.cm_party_qualifications
+  drop column if exists conferida_por, drop column if exists conferida_em, drop column if exists conferencia,
+  drop column if exists contrato_enviado_id, drop column if exists primeiro_envio_em;

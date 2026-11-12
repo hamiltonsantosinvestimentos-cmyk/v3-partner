@@ -5,7 +5,7 @@ function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 }
 
-export type AuditAction = "CREATE" | "UPDATE" | "DELETE" | "ACCESS" | "LOGIN" | "LOGOUT" | "EXPORT";
+export type AuditAction = "CREATE" | "UPDATE" | "DELETE" | "ACCESS" | "LOGIN" | "LOGOUT" | "EXPORT" | "OVERRIDE";
 export type AuditEntity =
   | "ma_deals"
   | "operational_tickets"
@@ -17,7 +17,9 @@ export type AuditEntity =
   | "kyc"
   | "logistics_items"
   | "partner_service_orders"
-  | "contract_templates";
+  | "contract_templates"
+  | "operation_contracts"
+  | "cm_party_qualifications";
 
 interface AuditParams {
   userId: string;

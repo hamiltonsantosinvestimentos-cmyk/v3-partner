@@ -1,6 +1,7 @@
 // Conferência da qualificação do contrato: regras Q-01 a Q-07 (BRIEF 11/11/2026).
 // Lógica pura: sem banco, sem rede. Rodar com `npm run test:unit`.
-// Os números abaixo são fictícios de teste. Nenhum é de pessoa real.
+// Todos os nomes, números e e-mails abaixo são inventados. Nunca colocar aqui dado real de cliente,
+// parte de contrato ou deal: o repositório é público.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -40,8 +41,8 @@ test("partyListMarker: a) até z), e falha clara a partir da 27ª parte", () => 
 });
 
 const HTML_N_PARENTESES =
-  '<p><span class="clause-num">1)</span>&nbsp;PARTNER: RC27 EMPREENDIMENTOS LTDA, CNPJ 00.000.000/0001-00, e-mail x@y.com</p>' +
-  '<p><span class="clause-num">2)</span>&nbsp;MANDATÁRIO: DIGITAL TECH LTDA, CNPJ 00.000.000/0001-00</p>';
+  '<p><span class="clause-num">1)</span>&nbsp;PARTNER: BETA EMPREENDIMENTOS LTDA, CNPJ 00.000.000/0001-00, e-mail x@y.com</p>' +
+  '<p><span class="clause-num">2)</span>&nbsp;MANDATÁRIO: GAMA TECH LTDA, CNPJ 00.000.000/0001-00</p>';
 const HTML_ALINEAS = HTML_N_PARENTESES.replace(">1)<", ">a)<").replace(">2)<", ">b)<");
 
 test("Q-01: só se aplica depois da data de corte; sem corte configurado, não barra nada", () => {
@@ -104,16 +105,16 @@ test("Q-02: identidades diferentes ou campo vazio não acusam", () => {
 test("Q-03: razão social com apóstrofo igual à da Receita (sem acento) não acusa", () => {
   const r = checarRazaoSocial(parte({
     role: "intermediario_1", nature: "PJ",
-    companyName: "IB'LO GESTÃO PARTICIPAÇÃO E PESQUISAS LTDA",
-    cnpjRazaoSocial: "IB'LO GESTAO PARTICIPACAO E PESQUISAS LTDA",
+    companyName: "ALFA'LO GESTÃO PARTICIPAÇÃO E PESQUISAS LTDA",
+    cnpjRazaoSocial: "ALFA'LO GESTAO PARTICIPACAO E PESQUISAS LTDA",
   }));
   assert.deepEqual(r, []);
 });
 
 test("Q-03: razão social diferente da Receita gera alerta, que não bloqueia", () => {
   const r = checarRazaoSocial(parte({
-    nature: "PJ", companyName: "IBLO GESTÃO PARTICIPAÇÃO E PESQUISAS LTDA",
-    cnpjRazaoSocial: "IB'LO GESTAO PARTICIPACAO E PESQUISAS LTDA",
+    nature: "PJ", companyName: "ALFALO GESTÃO PARTICIPAÇÃO E PESQUISAS LTDA",
+    cnpjRazaoSocial: "ALFA'LO GESTAO PARTICIPACAO E PESQUISAS LTDA",
   }));
   assert.equal(r.length, 1);
   assert.equal(r[0].id, "Q-03");
@@ -123,7 +124,7 @@ test("Q-03: razão social diferente da Receita gera alerta, que não bloqueia", 
 
 test("Q-06: apóstrofo legítimo da razão social não acusa; símbolo estranho acusa", () => {
   assert.deepEqual(checarCaractereEstranho(parte({
-    nature: "PJ", companyName: "IB'LO GESTÃO LTDA", cnpjRazaoSocial: "IB'LO GESTAO LTDA",
+    nature: "PJ", companyName: "ALFA'LO GESTÃO LTDA", cnpjRazaoSocial: "ALFA'LO GESTAO LTDA",
   })), []);
   const r = checarCaractereEstranho(parte({ fullName: "Fulano #Silva" }));
   assert.equal(r.length, 1);
@@ -245,7 +246,7 @@ test("conferirQualificacao: contrato limpo não devolve nada", () => {
 test("conferirQualificacao: reproduz o 0063 (identidade igual ao CPF) e bloqueia", () => {
   const r = conferirQualificacao([
     parte({
-      role: "intermediario_1", nature: "PJ", companyName: "IB'LO GESTÃO LTDA", cnpjRazaoSocial: "IB'LO GESTAO LTDA",
+      role: "intermediario_1", nature: "PJ", companyName: "ALFA'LO GESTÃO LTDA", cnpjRazaoSocial: "ALFA'LO GESTAO LTDA",
       companyCnpj: CNPJ_LEGADO_OK,
       representatives: [{ cpfCnpj: CPF_OK, idType: "rg", rg: "52998224725" }],
     }),

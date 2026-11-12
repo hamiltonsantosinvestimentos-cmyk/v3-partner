@@ -20,7 +20,7 @@ import { normalizeCpf, resolveCertOneSigners, type QualificationRow } from "@/li
 import { SYSTEM_USER_ID } from "@/lib/contract-signature-timeline";
 
 export const SEND_CONTRACT_COLUMNS =
-  "id, template_id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification, rendered_html, qualification_batch_id";
+  "id, template_id, vertical, contract_title, contract_code, status_signature, parties, signing_token, signature_message, signature_subject, is_master_agreement, stamped_document_path, loi_matching_status, loi_override_justification, rendered_html, qualification_batch_id, created_at";
 
 export type SendParty = { role: string; name: string | null; email?: string | null; doc?: string | null };
 
@@ -41,6 +41,8 @@ export interface SendContract {
   loi_override_justification?: string | null;
   rendered_html?: string | null;
   qualification_batch_id?: string | null;
+  /** Usada só pela Q-01 (a regra vale para contratos criados depois da data de corte). */
+  created_at?: string | null;
 }
 
 export type GateError = { status: number; error: string };
@@ -384,6 +386,29 @@ export async function sendContractToSignature(db: SupabaseClient, contract: Send
     // contrato usam sempre este valor, nunca a config atual da vertical.
     esignature_provider: provider.name,
   }).eq("id", id);
+
+  // Vínculo permanente "já houve envio" (BRIEF Trava de Liberação, decisão 17):
+  // grava na primeira vez, em todas as qualificações dos lotes consumidos por
+  // este contrato. A coluna é append-only no banco (trigger), então cancelar o
+  // envelope depois não apaga este registro. O envelope já foi criado acima,
+  // por isso uma falha aqui não desfaz o envio, mas fica no log para correção.
+  try {
+    const { data: lotes } = await db
+      .from("cm_qualification_batches")
+      .select("id")
+      .eq("consumido_por_contract_id", id);
+    const loteIds = (lotes ?? []).map((l: { id: string }) => l.id);
+    if (loteIds.length > 0) {
+      const { error: vinculoErr } = await db
+        .from("cm_party_qualifications")
+        .update({ contrato_enviado_id: id, primeiro_envio_em: new Date().toISOString() })
+        .in("batch_id", loteIds)
+        .is("contrato_enviado_id", null);
+      if (vinculoErr) console.error("[contract-send] vínculo de envio não gravado:", vinculoErr.message);
+    }
+  } catch (e) {
+    console.error("[contract-send] vínculo de envio não gravado:", e instanceof Error ? e.message : e);
+  }
 
   return { ok: true, envelopeId: result.envelopeId as string, signatarios: signatories.length };
 }
