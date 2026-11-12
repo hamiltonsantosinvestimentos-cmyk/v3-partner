@@ -90,6 +90,8 @@ export async function findValidKycDocument(
     .select("*")
     .eq("v3_client_id", v3ClientId)
     .eq("document_kind", kind)
+    .is("deleted_at", null)
+    .is("superseded_at", null)
     .order("uploaded_at", { ascending: false })
     .limit(1)
     .maybeSingle();

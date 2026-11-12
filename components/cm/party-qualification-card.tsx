@@ -15,6 +15,7 @@ import { PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, formatDocumentNumber, 
 import { KYC_DOCUMENT_KIND_LABELS } from "@/lib/kyc-documents";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { PartyDueDiligenceTab, type DdInitial } from "./party-due-diligence-tab";
+import { confirmar, pedirMotivo } from "@/lib/aviso";
 
 type KycDocument = { document_id: string; document_kind: string; original_filename: string | null; mime_type?: string | null; uploaded_at: string; valid_until: string; uploaded_ip?: string | null };
 
@@ -26,7 +27,7 @@ const dateBr = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { time
 // e o documento volta a ficar escondido.
 const OPEN_URL_VALID_MS = 55_000;
 
-function DocumentRow({ qualificationId, doc, onPreview }: { qualificationId: string; doc: KycDocument; onPreview: (url: string) => void }) {
+function DocumentRow({ qualificationId, doc, onPreview, onOpened }: { qualificationId: string; doc: KycDocument; onPreview: (url: string) => void; onOpened?: () => void }) {
   const isImage = doc.mime_type?.startsWith("image/");
   const isPdf = doc.mime_type === "application/pdf";
   const [url, setUrl] = useState<string | null>(null);
@@ -53,6 +54,7 @@ function DocumentRow({ qualificationId, doc, onPreview }: { qualificationId: str
         return;
       }
       setUrl(json.url);
+      onOpened?.();
       if (isPdf && pdfWindow) pdfWindow.location.href = json.url;
       else if (isImage) onPreview(json.url);
     } catch {
@@ -346,10 +348,134 @@ function Cliente360Block({ qualificationId }: { qualificationId: string }) {
   );
 }
 
-function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string) => void }) {
+
+// Bloco "Conferência" (BRIEF Trava de Liberação, seção 2). O progresso vem do servidor: o que é exigido e o que
+// ESTE usuário já abriu e revelou depois do preenchimento. O botão só habilita com tudo provado e as declarações
+// marcadas, e diz em texto o que falta. "Liberar" e "Devolver" abrem modal V3 (só fecham por botão explícito).
+const CAMPO_LABEL: Record<string, string> = { cpf_cnpj: "CPF", rg: "RG", id_number: "Número da identidade" };
+const DECLARACAO_LABEL: Record<string, string> = {
+  nome: "Conferi o nome com o documento",
+  data_nascimento: "Conferi a data de nascimento com o documento",
+  cnpj: "Conferi o CNPJ com a consulta à Receita",
+};
+const DOC_KIND_ROTULO: Record<string, string> = { identificacao_foto: "Documento de identificação", contrato_social: "Contrato social" };
+
+function rotuloCampo(field: string): string {
+  const m = field.match(/^representacao\[(\d+):[^\]]*\]\.(.+)$/);
+  if (m) return `Representante ${m[1]}: ${CAMPO_LABEL[m[2]] ?? m[2]}`;
+  return CAMPO_LABEL[field] ?? field;
+}
+
+const dataHoraBr = (iso: string) =>
+  new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+function ConferenciaBlock({ qualificationId, conferencia, onChanged }: { qualificationId: string; conferencia: any; onChanged: () => void }) {
+  const [marcadas, setMarcadas] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  if (!conferencia) return null;
+
+  const prog = conferencia.progresso as { documentos: { id: string; kind: string; dono: string; aberto: boolean }[]; campos: { field: string; revelado: boolean }[]; completo: boolean };
+  const exigidas: string[] = conferencia.declaracoes_exigidas ?? [];
+  const faltaDoc = prog.documentos.filter((d) => !d.aberto).length;
+  const faltaCampo = prog.campos.filter((c) => !c.revelado).length;
+  const faltaDecl = exigidas.filter((d) => !marcadas.includes(d)).length;
+  const semDocumento = prog.documentos.length === 0;
+
+  let motivoBloqueio: string | null = null;
+  if (!conferencia.pode_liberar) motivoBloqueio = "Só ADMIN e GESTAO podem liberar a qualificação.";
+  else if (semDocumento) motivoBloqueio = "A ficha não tem documento de identificação para conferir.";
+  else if (faltaDoc > 0) motivoBloqueio = `Abra ${faltaDoc === 1 ? "o documento que falta" : `os ${faltaDoc} documentos que faltam`} (ícone do olho).`;
+  else if (faltaCampo > 0) motivoBloqueio = `Revele ${faltaCampo === 1 ? "o campo que falta" : `os ${faltaCampo} campos que faltam`} (ícone do olho ao lado do valor).`;
+  else if (faltaDecl > 0) motivoBloqueio = "Marque a declaração de conferência de cada campo.";
+
+  async function liberar() {
+    const ok = await confirmar("Ao liberar, fica registrado com o seu nome, a data e a hora que você conferiu esta qualificação com o documento. A liberação só pode ser refeita reabrindo a ficha para correção.", { perigo: true, titulo: "Liberar qualificação", botao: "Liberar" });
+    if (!ok) return;
+    setBusy(true); setErro(null);
+    try {
+      const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/conferir`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ declaracoes: marcadas }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) setErro(json.error ?? "Não foi possível liberar.");
+      else onChanged();
+    } catch { setErro("Erro de conexão."); }
+    setBusy(false);
+  }
+
+  async function devolver() {
+    const motivo = await pedirMotivo({ titulo: "Devolver para correção", mensagem: "A parte recebe o mesmo link de novo para corrigir os dados. Informe o motivo da devolução.", botao: "Devolver", perigo: true });
+    if (!motivo) return;
+    setBusy(true); setErro(null);
+    try {
+      const res = await fetch(`/api/cm/qualifications/${qualificationId}/reopen`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) setErro(json.error ?? "Não foi possível devolver.");
+      else onChanged();
+    } catch { setErro("Erro de conexão."); }
+    setBusy(false);
+  }
+
+  const item = (ok: boolean, texto: string, key: string) => (
+    <li key={key} className="flex items-center gap-2 text-[12px]">
+      <span className={ok ? "text-[#4ADE80] font-bold" : "text-[#9BAFC5]"}>{ok ? "FEITO" : "FALTA"}</span>
+      <span className="text-[#F5F1E8]">{texto}</span>
+    </li>
+  );
+
+  return (
+    <div className="rounded-lg border border-[#C9A84C]/25 bg-[#12112A] p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <p className="text-[12px] font-bold uppercase text-[#E8C97A]">Conferência</p>
+        <Dica id="conferencia_qualificacao" />
+      </div>
+
+      {conferencia.liberada ? (
+        <p className="text-[12px] text-[#F5F1E8]">
+          Conferida por <strong>{conferencia.conferida_por_nome ?? "usuário"}</strong> em {conferencia.conferida_em ? dataHoraBr(conferencia.conferida_em) : "-"}.
+        </p>
+      ) : (
+        <>
+          <ol className="space-y-1.5 list-none p-0 m-0">
+            {prog.documentos.map((d, i) => item(d.aberto, `Abrir: ${DOC_KIND_ROTULO[d.kind] ?? d.kind} (${d.dono})`, `d${i}`))}
+            {prog.campos.map((c) => item(c.revelado, `Revelar: ${rotuloCampo(c.field)}`, c.field))}
+          </ol>
+          {exigidas.length > 0 && (
+            <div className="space-y-1.5">
+              {exigidas.map((d) => (
+                <label key={d} className="flex items-center gap-2 text-[12px] text-[#F5F1E8]">
+                  <input type="checkbox" checked={marcadas.includes(d)} disabled={busy || faltaDoc > 0}
+                    onChange={(e) => setMarcadas((m) => (e.target.checked ? [...m, d] : m.filter((x) => x !== d)))} />
+                  {DECLARACAO_LABEL[d] ?? d}
+                </label>
+              ))}
+              {faltaDoc > 0 && <p className="text-[11px] text-[#9BAFC5]">As declarações habilitam depois de abrir o documento.</p>}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 items-center">
+            <button type="button" onClick={liberar} disabled={busy || motivoBloqueio !== null}
+              title={motivoBloqueio ?? "Liberar a qualificação"} aria-describedby="conf-motivo"
+              className="text-[12px] font-bold px-3 py-1.5 rounded bg-[#C9A84C] text-[#09081A] disabled:opacity-40 disabled:cursor-not-allowed">
+              {busy ? "Aguarde" : "Liberar qualificação"}
+            </button>
+            {conferencia.pode_liberar && (
+              <button type="button" onClick={devolver} disabled={busy}
+                className="text-[12px] font-bold px-3 py-1.5 rounded border border-[#C9A84C]/40 text-[#E8C97A] disabled:opacity-40">
+                Devolver para correção
+              </button>
+            )}
+          </div>
+          {motivoBloqueio && <p id="conf-motivo" className="text-[11px] text-[#9BAFC5]">{motivoBloqueio}</p>}
+        </>
+      )}
+      {erro && <p className="text-[11px] text-[#F26D6D]">{erro}</p>}
+    </div>
+  );
+}
+
+function PartyCardBody({ data, onPreview, onChanged }: { data: any; onPreview: (url: string) => void; onChanged: () => void }) {
   const q = data.qualification;
   const [accessBump, setAccessBump] = useState(0);
-  const onRevealed = () => setAccessBump((n) => n + 1);
+  const onRevealed = () => { setAccessBump((n) => n + 1); onChanged(); };
   const canReveal = (f: string) => Array.isArray(q.revealable) && q.revealable.includes(f);
 
   if (!data.filled) {
@@ -373,6 +499,8 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
           {ROLE_LABELS[q.role_in_document] ?? q.role_in_document} · {natureLabel}
         </span>
       </div>
+
+      <ConferenciaBlock qualificationId={q.id} conferencia={data.conferencia} onChanged={onChanged} />
 
       <Cliente360Block qualificationId={q.id} />
 
@@ -432,7 +560,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
       {data.documents?.length > 0 && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
           <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Documentos KYC</p>
-          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} />)}
+          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} />)}
         </div>
       )}
 
@@ -475,7 +603,7 @@ function PartyCardBody({ data, onPreview }: { data: any; onPreview: (url: string
               )}
               {rep.documents?.length > 0 && (
                 <div className="pt-1 space-y-1">
-                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} />)}
+                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} />)}
                 </div>
               )}
             </div>
@@ -510,9 +638,13 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
       .catch(() => {});
   }, [qualificationId]);
 
+  // Recarga silenciosa (sem spinner) para o progresso da conferência acompanhar cada abertura e revelação.
+  const [reloadTick, setReloadTick] = useState(0);
+  const reload = () => setReloadTick((n) => n + 1);
+
   useEffect(() => {
     if (!qualificationId) { setState({ loading: false, data: null, error: null }); return; }
-    setState({ loading: true, data: null, error: null });
+    if (reloadTick === 0) setState({ loading: true, data: null, error: null });
     fetch(`/api/cm/qualifications/party/${qualificationId}`)
       .then(async (res) => {
         const json = await res.json();
@@ -520,7 +652,7 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
         else setState({ loading: false, data: null, error: json.error ?? "Erro ao carregar ficha" });
       })
       .catch(() => setState({ loading: false, data: null, error: "Erro de conexão" }));
-  }, [qualificationId]);
+  }, [qualificationId, reloadTick]);
 
   if (!qualificationId) return null;
 
@@ -551,7 +683,7 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
               </div>
             )}
             {!state.loading && state.data && tab === "ficha" && (
-              <PartyCardBody key={qualificationId} data={state.data} onPreview={setLightboxUrl} />
+              <PartyCardBody key={qualificationId} data={state.data} onPreview={setLightboxUrl} onChanged={reload} />
             )}
             {!state.loading && state.data && tab === "dd" && dd && (
               <PartyDueDiligenceTab key={qualificationId} qualificationId={qualificationId} partyName={state.data.qualification.full_name} initial={dd} />
