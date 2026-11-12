@@ -13,23 +13,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
 import { ForjaPanel } from "@/components/ma/forja-panel";
-import { MA_PIPELINE, DB_TO_PIPELINE } from "@/lib/ma/pipeline";
+import { MA_PIPELINE, MA_ALL_STAGES, DB_TO_PIPELINE } from "@/lib/ma/pipeline";
 
 // ─── Etapas unificadas M&A ────────────────────────────────────────────────────
 // Fonte única em lib/ma/pipeline.ts (BRIEF 28/10/2026). Re-exportado aqui para
 // quem ainda importa daqui.
 export { MA_PIPELINE };
 
-// Visão do partner (/ma): Ganho e Perdido continuam aparecendo em "Fechamento"
-// até o BRIEF próprio da visão do partner (Roadmap). A Mesa já mostra as colunas.
-const STAGE_MAP: Record<string, string> = {
-  ...DB_TO_PIPELINE,
-  CLOSED_WON:    "aprovacao",
-  CLOSED_LOST:   "aprovacao",
-};
-
+// Visão do partner (/ma): mesmas fases da Mesa, inclusive Ganho e Perdido como colunas
+// próprias (12/11/2026, deal MA-26-30823 aparecia como "Fechamento" para o partner).
 function normalizeStage(stage: string): string {
-  return STAGE_MAP[stage] ?? stage ?? "prospeccao";
+  return DB_TO_PIPELINE[stage] ?? stage ?? "prospeccao";
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -242,8 +236,8 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
 
   const normalizedDeals = localDeals.map(d => ({ ...d, stage: normalizeStage(d.stage) }));
   const totalValue = localDeals.reduce((s, d) => s + (d.deal_value ?? 0), 0);
-  const activeDeals = normalizedDeals.filter(d => d.stage !== "aprovacao").length;
-  const closedDeals = normalizedDeals.filter(d => d.stage === "aprovacao").length;
+  const activeDeals = normalizedDeals.filter(d => !["aprovacao", "ganho", "perdido"].includes(d.stage)).length;
+  const closedDeals = normalizedDeals.filter(d => d.stage === "ganho").length;
 
   const handleCreateDeal = async () => {
     if (!newDeal.company || !newDeal.value) return;
@@ -411,7 +405,7 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
         </div>
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {MA_PIPELINE.map(stage => {
+          {MA_ALL_STAGES.map(stage => {
             const stageDeals = normalizedDeals.filter(d => d.stage === stage.id);
             return (
               <div key={stage.id} className="flex-shrink-0 w-60">
@@ -447,7 +441,7 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
       {/* ── Modal Detalhe do Deal ── */}
       {selectedDeal && (() => {
         const normalizedStage = normalizeStage(selectedDeal.stage);
-        const stageInfo = MA_PIPELINE.find(s => s.id === normalizedStage);
+        const stageInfo = MA_ALL_STAGES.find(s => s.id === normalizedStage);
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
             <div className="bg-[#091221] border border-[#122036] rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto">
