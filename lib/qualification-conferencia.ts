@@ -13,27 +13,24 @@ export type FichaParaConferencia = {
 
 const temValor = (v: unknown): boolean => typeof v === "string" && v.trim().length > 0;
 
-/** Campo de identidade a revelar: id_number se houver, senão rg. null se nenhum estiver preenchido. */
-function campoIdentidade(o: { rg?: unknown; id_number?: unknown }): "id_number" | "rg" | null {
-  if (temValor(o.id_number)) return "id_number";
-  if (temValor(o.rg)) return "rg";
-  return null;
+const ehCnpj = (v: unknown): boolean => typeof v === "string" && v.replace(/[^0-9A-Za-z]/g, "").length === 14;
+
+/** Campos revelados de um objeto (principal ou nó), com a mesma regra da ficha: CPF sim, CNPJ não (a Receita confere), rg e id_number se preenchidos. */
+function camposDe(o: { cpf_cnpj?: unknown; rg?: unknown; id_number?: unknown }): string[] {
+  const out: string[] = [];
+  if (temValor(o.cpf_cnpj) && !ehCnpj(o.cpf_cnpj)) out.push("cpf_cnpj");
+  if (temValor(o.rg)) out.push("rg");
+  if (temValor(o.id_number)) out.push("id_number");
+  return out;
 }
 
 /** Nomes de campo exatamente como a rota de revelação os grava em cm_party_qualification_field_views. */
 export function camposExigidos(ficha: FichaParaConferencia): string[] {
-  const campos: string[] = [];
-  if (temValor(ficha.cpf_cnpj)) campos.push("cpf_cnpj");
-  const idPrincipal = campoIdentidade(ficha);
-  if (idPrincipal) campos.push(idPrincipal);
-
+  const campos = camposDe(ficha);
   const cadeia = flattenChain(ficha.representation as Parameters<typeof flattenChain>[0]);
   cadeia.forEach((no, i) => {
     const nodeId = no.v3_client_id ? String(no.v3_client_id).toLowerCase() : "sem-id";
-    const prefixo = `representacao[${i + 1}:${nodeId}]`;
-    if (temValor(no.cpf_cnpj)) campos.push(`${prefixo}.cpf_cnpj`);
-    const idNo = campoIdentidade(no);
-    if (idNo) campos.push(`${prefixo}.${idNo}`);
+    for (const f of camposDe(no)) campos.push(`representacao[${i + 1}:${nodeId}].${f}`);
   });
   return campos;
 }

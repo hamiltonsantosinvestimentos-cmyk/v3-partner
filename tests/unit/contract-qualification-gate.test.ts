@@ -208,3 +208,32 @@ test("gate completo: o mesmo CPF em duas partes que não são o Head bloqueia se
   assert.equal(r.ok, false);
   if (!r.ok) assert.equal(r.podeOverride, false);
 });
+
+import { q08NaoConferidas } from "../../lib/contract-qualification-gate";
+
+const CORTE = "2026-11-12T01:13:56Z";
+const linha = (o: Partial<{ role_in_document: string; status: string; filled_at: string | null; conferida_em: string | null }>) => ({
+  role_in_document: "partner", status: "preenchido", filled_at: "2026-11-12T03:00:00Z", conferida_em: null, ...o,
+});
+
+test("Q-08: parte preenchida depois do corte e sem conferência bloqueia", () => {
+  assert.deepEqual(q08NaoConferidas([linha({})], CORTE).length, 1);
+});
+test("Q-08: parte preenchida antes do corte fica isenta", () => {
+  assert.deepEqual(q08NaoConferidas([linha({ filled_at: "2026-11-10T10:00:00Z" })], CORTE), []);
+});
+test("Q-08: parte conferida passa", () => {
+  assert.deepEqual(q08NaoConferidas([linha({ conferida_em: "2026-11-12T04:00:00Z" })], CORTE), []);
+});
+test("Q-08: sem corte definido não barra", () => {
+  assert.deepEqual(q08NaoConferidas([linha({})], null), []);
+});
+test("Q-08: corte inválido não barra", () => {
+  assert.deepEqual(q08NaoConferidas([linha({})], "texto"), []);
+});
+test("Q-08: pendente não entra (é outro bloqueio)", () => {
+  assert.deepEqual(q08NaoConferidas([linha({ status: "pendente", filled_at: null })], CORTE), []);
+});
+test("Q-08: papel repetido aparece uma vez", () => {
+  assert.equal(q08NaoConferidas([linha({}), linha({})], CORTE).length, 1);
+});

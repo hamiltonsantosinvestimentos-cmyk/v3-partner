@@ -13,3 +13,12 @@
  * emitir alíneas no merge do PR #396, em 11/11/2026). Enquanto for null, a Q-01 não barra nada.
  */
 export const Q01_DATA_DE_CORTE_ISO: string | null = null;
+
+/**
+ * Início de vigência da Q-08 (qualificação conferida antes do envio), em ISO com fuso. Vale para
+ * qualificações com `filled_at` a partir deste instante; as já preenchidas antes ficam isentas.
+ * É o instante em que a migration 20261111a (colunas de conferência) foi aplicada em produção
+ * (versão 20261112011356, 12/11/2026 01:13:56 UTC), registrado no BRIEF. Nunca lido do banco e
+ * nunca alterado depois: mudar exige commit, PR e revisão.
+ */
+export const Q08_DATA_DE_CORTE_ISO: string | null = "2026-11-12T01:13:56Z";

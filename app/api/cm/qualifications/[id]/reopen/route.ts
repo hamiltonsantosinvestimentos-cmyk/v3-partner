@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { logAuditStrict } from "@/lib/audit";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -24,12 +25,14 @@ async function requireMesa() {
 // painel admin não tinha edição nem reset). Reseta o MESMO
 // qualification_token pra pendente, sem gerar link novo: a pessoa reabre
 // o link que já recebeu e reenvia os dados certos.
-export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireMesa();
   if (!userId) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id } = await params;
   const db = svc();
+  const corpo = (await req.json().catch(() => ({}))) as { motivo?: unknown };
+  const motivo = typeof corpo.motivo === "string" ? corpo.motivo.trim().slice(0, 500) : "";
 
   const { data: qualification } = await db
     .from("cm_party_qualifications")
@@ -79,6 +82,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // -- reabrir 1 parte significa que o lote deixou de estar 100% pronto.
   if (batch?.status === "completo") {
     await db.from("cm_qualification_batches").update({ status: "coletando", completed_at: null }).eq("id", qualification.batch_id);
+  }
+
+  // Motivo da devolução (quando informado pela tela de conferência): log sem dado pessoal, com await.
+  if (motivo) {
+    try {
+      await logAuditStrict({ userId, action: "UPDATE", entity: "cm_party_qualifications", entityId: id, newData: { evento: "qualificacao_devolvida_para_correcao", motivo } });
+    } catch { /* a reabertura já foi feita; o log falho não a desfaz */ }
   }
 
   return NextResponse.json({ success: true, full_name: qualification.full_name });

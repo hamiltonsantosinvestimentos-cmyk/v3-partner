@@ -42,6 +42,10 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Revelar dado",
     texto: "Mostra o dado completo. Cada revelação fica registrada com o seu nome, o campo e a hora, e esse registro é guardado por 36 meses. Use só quando precisar para o seu trabalho.",
   },
+  conferencia_qualificacao: {
+    titulo: "Conferência da qualificação",
+    texto: "A conferência existe para reduzir erro humano antes de o dado ir para um contrato. Cada abertura de documento e de campo fica registrada com o seu nome, a data e a hora, por 36 meses. O resultado fica na ficha e só pode ser refeito reabrindo para correção, nunca alterado.",
+  },
   abrir_documento: {
     titulo: "Abrir documento",
     texto: "O documento abre por um link que vale 60 segundos. A abertura fica registrada antes de o arquivo aparecer. Se o registro falhar, o arquivo não abre.",

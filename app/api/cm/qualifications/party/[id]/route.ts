@@ -6,6 +6,7 @@ import type { LegalQualificationRepresentation } from "@/lib/legal-qualification
 import { isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { normalizePhone } from "@/lib/phone";
+import { calcularExigidos, calcularProgresso } from "@/lib/qualification-conferencia-server";
 import { maskCpfCnpj, maskIdentity, maskTail, maskBankData, maskNode, PRINCIPAL_REVEAL_FIELDS, NODE_REVEAL_FIELDS } from "@/lib/qualification-mask";
 
 function svc() {
@@ -21,7 +22,7 @@ async function getCaller() {
   if (!user) return null;
   const { data: profile } = await svc().from("profiles").select("id, role").eq("id", user.id).single();
   if (!profile || !ALLOWED_ROLES.includes(profile.role as string)) return null;
-  return { userId: user.id };
+  return { userId: user.id, role: profile.role as string };
 }
 
 interface DocumentCard {
@@ -80,7 +81,7 @@ async function loadRepresentationChain(db: SupabaseClient, rep: LegalQualificati
 // Colunas lidas da qualificação. Lista explícita (nunca select "*"): o valor real dos campos
 // sensíveis só sai pela rota de revelação, com log (BRIEF 5.12 A).
 const FICHA_COLUMNS =
-  "id, full_name, email, phone, role_in_document, status, filled_at, filled_ip, person_type, party_nature, company_name, company_cnpj, company_address, nationality, marital_status, profession, birth_date, endereco_completo, dados_bancarios, pix_key, cpf_cnpj, rg, id_type, id_number, id_issuer, id_country, email_convite, email_alterado_em, v3_client_id, representation, deleted_at";
+  "id, full_name, email, phone, role_in_document, status, filled_at, conferida_por, conferida_em, filled_ip, person_type, party_nature, company_name, company_cnpj, company_address, nationality, marital_status, profession, birth_date, endereco_completo, dados_bancarios, pix_key, cpf_cnpj, rg, id_type, id_number, id_issuer, id_country, email_convite, email_alterado_em, v3_client_id, representation, deleted_at";
 
 const FICHA_PLAIN_FIELDS = [
   "id", "full_name", "email", "phone", "role_in_document", "status", "filled_at", "filled_ip", "person_type",
@@ -146,7 +147,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const representationChain = await loadRepresentationChain(db, qualification.representation, caller.userId, ip, id);
 
-  return NextResponse.json({ qualification: ficha, documents, representation_chain: representationChain, filled: true }, noStore);
+  // Bloco "Conferência" (BRIEF Trava de Liberação, seção 2): o que é exigido e o que ESTE usuário já provou.
+  const exigidos = await calcularExigidos(db, qualification as never);
+  const progresso = await calcularProgresso(db, qualification as never, exigidos, caller.userId);
+  let conferidaPorNome: string | null = null;
+  if (qualification.conferida_por) {
+    const { data: quem } = await db.from("profiles").select("full_name").eq("id", qualification.conferida_por).single();
+    conferidaPorNome = (quem?.full_name as string | undefined) ?? null;
+  }
+  const conferencia = {
+    liberada: Boolean(qualification.conferida_em),
+    conferida_por_nome: conferidaPorNome,
+    conferida_em: qualification.conferida_em ?? null,
+    pode_liberar: ["ADMIN", "GESTAO"].includes(caller.role),
+    declaracoes_exigidas: exigidos.declaracoes,
+    progresso,
+  };
+
+  return NextResponse.json({ qualification: ficha, documents, representation_chain: representationChain, filled: true, conferencia }, noStore);
 }
 
 /** DELETE /api/cm/qualifications/party/[id] — exclusão individual de um

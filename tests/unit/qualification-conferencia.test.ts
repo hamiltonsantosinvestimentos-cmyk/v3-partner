@@ -9,12 +9,13 @@ import {
 
 // Dados inventados (repositório público: nunca dado real em teste).
 
-test("PF com identidade: exige cpf_cnpj e id_number", () => {
-  assert.deepEqual(camposExigidos({ cpf_cnpj: "111.111.111-11", id_number: "A1", rg: "B2" }), ["cpf_cnpj", "id_number"]);
+test("PF: exige cpf_cnpj (CPF) e as identidades preenchidas", () => {
+  assert.deepEqual(camposExigidos({ cpf_cnpj: "111.111.111-11", id_number: "A1", rg: "B2" }), ["cpf_cnpj", "rg", "id_number"]);
+  assert.deepEqual(camposExigidos({ cpf_cnpj: "111.111.111-11", rg: "B2" }), ["cpf_cnpj", "rg"]);
 });
 
-test("PF só com rg: exige rg", () => {
-  assert.deepEqual(camposExigidos({ cpf_cnpj: "111.111.111-11", rg: "B2" }), ["cpf_cnpj", "rg"]);
+test("PJ: CNPJ não é revelado (declaração), só identidade preenchida", () => {
+  assert.deepEqual(camposExigidos({ cpf_cnpj: "00.000.000/0001-00" }), []);
 });
 
 test("cadeia de representantes: um conjunto de campos por nó, com posição e id", () => {
@@ -28,7 +29,6 @@ test("cadeia de representantes: um conjunto de campos por nó, com posição e i
     },
   };
   assert.deepEqual(camposExigidos(ficha), [
-    "cpf_cnpj",
     "representacao[1:aaa-1].cpf_cnpj",
     "representacao[1:aaa-1].rg",
     "representacao[2:sem-id].cpf_cnpj",

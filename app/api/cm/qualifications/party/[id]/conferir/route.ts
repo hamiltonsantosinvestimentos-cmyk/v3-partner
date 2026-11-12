@@ -2,12 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { logAuditStrict } from "@/lib/audit";
-import {
-  camposExigidos,
-  declaracoesCompletas,
-  declaracoesExigidas,
-  montarConferencia,
-} from "@/lib/qualification-conferencia";
+import { declaracoesCompletas, montarConferencia } from "@/lib/qualification-conferencia";
+import { calcularExigidos } from "@/lib/qualification-conferencia-server";
 
 // "Liberar qualificação" (BRIEF Trava de Liberação, seção 2). Só ADMIN e GESTAO. O servidor calcula o que é
 // exigido (documentos ativos da ficha e campos a revelar, inclusive a cadeia de representantes) e entrega à
@@ -40,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: row } = await db
     .from("cm_party_qualifications")
-    .select("id, status, deleted_at, person_type, cpf_cnpj, rg, id_number, representation, conferida_em")
+    .select("id, status, deleted_at, person_type, v3_client_id, filled_at, cpf_cnpj, rg, id_number, representation, conferida_em")
     .eq("id", id)
     .single();
   if (!row) return NextResponse.json({ error: "Qualificação não encontrada" }, { status: 404, headers: NO_STORE });
@@ -48,24 +44,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Só se libera qualificação preenchida" }, { status: 409, headers: NO_STORE });
   }
 
-  const exigidas = declaracoesExigidas(row.person_type as string | null);
-  if (!declaracoesCompletas(body.declaracoes, exigidas)) {
+  const exigidos = await calcularExigidos(db, row as never);
+  if (!declaracoesCompletas(body.declaracoes, exigidos.declaracoes)) {
     return NextResponse.json({ error: "Marque a declaração de conferência de cada campo exigido." }, { status: 422, headers: NO_STORE });
   }
-
-  const { data: docs } = await db
-    .from("cm_party_qualification_documents")
-    .select("id")
-    .eq("uploaded_by_qualification_id", id)
-    .is("deleted_at", null)
-    .is("superseded_at", null);
-  const documentos = (docs ?? []).map((d: { id: string }) => d.id);
+  const documentos = exigidos.documentos.map((d) => d.id);
   if (documentos.length === 0) {
     return NextResponse.json({ error: "A ficha não tem documento de identificação para conferir." }, { status: 422, headers: NO_STORE });
   }
-
-  const campos = camposExigidos(row);
-  const conferencia = montarConferencia(documentos, campos, exigidas);
+  const campos = exigidos.campos;
+  const conferencia = montarConferencia(documentos, campos, exigidos.declaracoes);
 
   // Log antes do efeito (await): se falhar, a liberação não acontece.
   try {
