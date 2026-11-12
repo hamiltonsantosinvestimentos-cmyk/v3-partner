@@ -19,7 +19,8 @@ import {
   type QRuleId,
 } from "./contract-qualification-check";
 import { loadQualificationParties, type ContractPartyLite } from "./contract-qualification-load";
-import { Q01_DATA_DE_CORTE_ISO } from "./qualification-gate";
+import { Q01_DATA_DE_CORTE_ISO, Q08_DATA_DE_CORTE_ISO } from "./qualification-gate";
+import { ROLE_LABELS } from "./qualification-roles";
 import { normalizeDocument } from "./v3-clients-pure";
 
 export const JUSTIFICATIVA_MIN = 10;
@@ -112,7 +113,30 @@ export function decidirGateDeQualificacao(findings: QFinding[], opts: Qualificat
   return { ok: true, overridden: regras, findings };
 }
 
-/** Lê a qualificação do contrato, confere Q-01 a Q-07 e decide. Falha fechada se não conseguir ler. */
+export interface LinhaQ08 {
+  role_in_document: string;
+  status: string;
+  filled_at: string | null;
+  conferida_em: string | null;
+}
+
+/** Q-08 (pura): partes preenchidas a partir do corte que ainda não foram conferidas. Nunca admite override. */
+export function q08NaoConferidas(linhas: LinhaQ08[], corteIso: string | null): string[] {
+  if (!corteIso) return [];
+  const corte = Date.parse(corteIso);
+  if (!Number.isFinite(corte)) return [];
+  const papeis: string[] = [];
+  for (const l of linhas) {
+    if (l.status !== "preenchido" || !l.filled_at) continue;
+    if (Date.parse(l.filled_at) < corte) continue;
+    if (l.conferida_em) continue;
+    const papel = ROLE_LABELS[l.role_in_document] ?? l.role_in_document;
+    if (!papeis.includes(papel)) papeis.push(papel);
+  }
+  return papeis;
+}
+
+/** Lê a qualificação do contrato, confere Q-01 a Q-08 e decide. Falha fechada se não conseguir ler. */
 export async function checkQualificationGate(
   db: SupabaseClient,
   contract: QualificationGateContract,
@@ -130,5 +154,29 @@ export async function checkQualificationGate(
     // O Head pode também ser representante de uma parte: o mesmo CPF dele não conta como duplicidade.
     documentosPermitidosEmDuplicidade: headDoc ? [headDoc] : [],
   });
-  return decidirGateDeQualificacao(findings, opts);
+  const decisao = decidirGateDeQualificacao(findings, opts);
+
+  // Q-08: toda parte preenchida depois do corte precisa estar conferida. Falha fechada se não conseguir ler.
+  // Não admite override (nem do ADMIN): a conferência é a prova de que uma pessoa comparou com o documento.
+  if (contract.qualification_batch_id && Q08_DATA_DE_CORTE_ISO) {
+    const { data: linhas, error: q08Err } = await db
+      .from("cm_party_qualifications")
+      .select("role_in_document, status, filled_at, conferida_em")
+      .eq("batch_id", contract.qualification_batch_id)
+      .is("deleted_at", null);
+    if (q08Err) {
+      return { ok: false, status: 500, error: "Falha ao ler a conferência da qualificação para o envio.", findings, podeOverride: false };
+    }
+    const faltam = q08NaoConferidas((linhas ?? []) as LinhaQ08[], Q08_DATA_DE_CORTE_ISO);
+    if (faltam.length > 0) {
+      return {
+        ok: false,
+        status: 422,
+        error: `Qualificação de ${faltam.join(", ")} ainda não conferida. Abra a ficha e conclua a conferência.`,
+        findings,
+        podeOverride: false,
+      };
+    }
+  }
+  return decisao;
 }
