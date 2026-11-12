@@ -33,7 +33,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: qualification } = await db
     .from("cm_party_qualifications")
-    .select("id, batch_id, status, full_name")
+    .select("id, batch_id, status, full_name, filled_at")
     .eq("id", id)
     .single();
 
@@ -64,6 +64,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .eq("id", id);
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
+
+  // Limpa a liberação (conferida_*) pela função oficial: o trigger só aceita
+  // limpar com o status já em pendente (BRIEF Trava de Liberação, seção 2.2).
+  // Se a limpeza falhar, desfaz a reabertura para não deixar a qualificação
+  // pendente com liberação antiga.
+  const { error: limpaErr } = await db.rpc("fn_limpar_conferencia", { p_qualification_id: id, p_user_id: userId });
+  if (limpaErr) {
+    await db.from("cm_party_qualifications").update({ status: "preenchido", filled_at: qualification.filled_at }).eq("id", id);
+    return NextResponse.json({ error: "Não foi possível limpar a conferência anterior. A reabertura foi desfeita." }, { status: 500 });
+  }
 
   // Se o lote já estava "completo" (todos preenchidos), volta a "coletando"
   // -- reabrir 1 parte significa que o lote deixou de estar 100% pronto.

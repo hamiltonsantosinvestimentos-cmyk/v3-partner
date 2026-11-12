@@ -18,7 +18,8 @@ export type AuditEntity =
   | "logistics_items"
   | "partner_service_orders"
   | "contract_templates"
-  | "operation_contracts";
+  | "operation_contracts"
+  | "cm_party_qualifications";
 
 interface AuditParams {
   userId: string;
