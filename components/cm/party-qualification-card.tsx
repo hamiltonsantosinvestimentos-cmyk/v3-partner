@@ -27,7 +27,7 @@ const dateBr = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { time
 // e o documento volta a ficar escondido.
 const OPEN_URL_VALID_MS = 55_000;
 
-function DocumentRow({ qualificationId, doc, onPreview, onOpened, podeExcluir, onExcluido }: { qualificationId: string; doc: KycDocument; onPreview: (url: string) => void; onOpened?: () => void; podeExcluir?: boolean; onExcluido?: () => void }) {
+function DocumentRow({ qualificationId, doc, onPreview, onOpened, podeExcluir, onExcluido }: { qualificationId: string; doc: KycDocument; onPreview: (url: string) => void; onOpened?: () => void; podeExcluir?: boolean; onExcluido?: (r: { fichas_reabertas?: number; titulares?: number }) => void }) {
   const isImage = doc.mime_type?.startsWith("image/");
   const isPdf = doc.mime_type === "application/pdf";
   const [url, setUrl] = useState<string | null>(null);
@@ -92,7 +92,7 @@ function DocumentRow({ qualificationId, doc, onPreview, onOpened, podeExcluir, o
       const json = await re.json().catch(() => ({}));
       if (!re.ok) { setError(json.error ?? "Não foi possível excluir o documento."); return; }
       setUrl(null);
-      onExcluido?.();
+      onExcluido?.(json);
     } catch {
       setError("Erro de conexão");
     } finally {
@@ -514,7 +514,7 @@ function ConferenciaBlock({ qualificationId, conferencia, onChanged }: { qualifi
   );
 }
 
-function PartyCardBody({ data, onPreview, onChanged }: { data: any; onPreview: (url: string) => void; onChanged: () => void }) {
+function PartyCardBody({ data, onPreview, onChanged, onExcluido }: { data: any; onPreview: (url: string) => void; onChanged: () => void; onExcluido: (r: { fichas_reabertas?: number; titulares?: number }) => void }) {
   const q = data.qualification;
   const [accessBump, setAccessBump] = useState(0);
   const onRevealed = () => { setAccessBump((n) => n + 1); onChanged(); };
@@ -602,7 +602,7 @@ function PartyCardBody({ data, onPreview, onChanged }: { data: any; onPreview: (
       {data.documents?.length > 0 && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
           <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Documentos KYC</p>
-          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onChanged} />)}
+          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onExcluido} />)}
         </div>
       )}
 
@@ -645,7 +645,7 @@ function PartyCardBody({ data, onPreview, onChanged }: { data: any; onPreview: (
               )}
               {rep.documents?.length > 0 && (
                 <div className="pt-1 space-y-1">
-                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onChanged} />)}
+                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onExcluido} />)}
                 </div>
               )}
             </div>
@@ -672,6 +672,7 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
   const [tab, setTab] = useState<"ficha" | "dd">("ficha");
 
   useEffect(() => {
+    setAvisoExclusao(null);
     setDd(null);
     setTab("ficha");
     if (!qualificationId) return;
@@ -683,6 +684,14 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
   // Recarga silenciosa (sem spinner) para o progresso da conferência acompanhar cada abertura e revelação.
   const [reloadTick, setReloadTick] = useState(0);
   const reload = () => setReloadTick((n) => n + 1);
+  const [avisoExclusao, setAvisoExclusao] = useState<string | null>(null);
+  const aoExcluir = (r: { fichas_reabertas?: number; titulares?: number }) => {
+    const n = r.fichas_reabertas ?? 0;
+    setAvisoExclusao(n > 0
+      ? `Documento excluído. ${n} ${n === 1 ? "ficha foi reaberta" : "fichas foram reabertas"}: o titular usa o mesmo link para enviar outro documento e a conferência anterior foi apagada. Avise o titular.`
+      : "Documento excluído. Nenhuma ficha preenchida foi afetada.");
+    reload();
+  };
 
   useEffect(() => {
     if (!qualificationId) { setState({ loading: false, data: null, error: null }); return; }
@@ -725,7 +734,12 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
               </div>
             )}
             {!state.loading && state.data && tab === "ficha" && (
-              <PartyCardBody key={qualificationId} data={state.data} onPreview={setLightboxUrl} onChanged={reload} />
+              <>
+                {avisoExclusao && (
+                  <p role="status" className="text-[12px] text-[#F5F1E8] bg-[#12112A] border border-[#C9A84C]/30 rounded-lg p-3">{avisoExclusao}</p>
+                )}
+                <PartyCardBody key={qualificationId} data={state.data} onPreview={setLightboxUrl} onChanged={reload} onExcluido={aoExcluir} />
+              </>
             )}
             {!state.loading && state.data && tab === "dd" && dd && (
               <PartyDueDiligenceTab key={qualificationId} qualificationId={qualificationId} partyName={state.data.qualification.full_name} initial={dd} />
