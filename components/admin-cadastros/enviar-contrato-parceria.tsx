@@ -112,6 +112,7 @@ export function EnviarContratoParceria({
         dataPagamento: dados.data_pagamento,
         razaoSocial: dados.razao_social,
         email: dados.email,
+        linkPago: !!cadastro.cora_invoice_id,
         contratoAtivo: contratos === null ? undefined : ativo ? { codigo: ativo.contract_code, status: (STATUS[ativo.status_signature]?.label ?? ativo.status_signature).toLowerCase() } : null,
       }),
       { perigo: true, titulo: "Enviar contrato para assinatura", botao: "Gerar e enviar" },

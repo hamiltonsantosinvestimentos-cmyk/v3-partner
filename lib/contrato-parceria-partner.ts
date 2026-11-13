@@ -62,6 +62,8 @@ export function textoConfirmacaoEnvio(d: {
   dataPagamento: string;
   razaoSocial: string;
   email: string;
+  /** Gold/Diamante que entrou pelo link pago (cadastro com fatura de adesão). */
+  linkPago?: boolean;
   /** undefined = lista ainda não carregou; null = nenhum contrato ativo. */
   contratoAtivo: { codigo: string | null; status: string } | null | undefined;
 }): string {
@@ -81,7 +83,8 @@ export function textoConfirmacaoEnvio(d: {
     linhas.push(`Licenciado: ${d.razaoSocial.trim().toUpperCase()}`);
   } else {
     const m = mensalidadeDoPlano(d.plano);
-    if (m) linhas.push(`Mensalidade: ${m}, após 30 dias grátis`);
+    // Link pago (BRIEF 2026-11-13): a 1ª mensalidade foi cobrada na adesão, sem os 30 dias grátis.
+    if (m) linhas.push(d.linkPago ? `Mensalidade: ${m} (1ª cobrada na adesão)` : `Mensalidade: ${m}, após 30 dias grátis`);
     linhas.push(`Contratante: ${d.razaoSocial.trim().toUpperCase()}`);
   }
   linhas.push(`Assinatura enviada para: ${d.email.trim()}`);
@@ -188,6 +191,7 @@ export function camposDoPlano(plano: PlanoContratoParceria): CampoLicenciado[] {
 export const CAMPOS_EDITAVEIS = CAMPOS_LICENCIADO.filter((c) => c.key !== "email").map((c) => c.key);
 
 export type CadastroParaContrato = {
+  cora_invoice_id?: string | null;
   tipo_pessoa?: string | null;
   plano?: string | null;
   email?: string | null;

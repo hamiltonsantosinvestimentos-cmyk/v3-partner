@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { cadastroStarterAntigo } from "@/lib/v3-access-rotulos";
-import { isPlanoContratoParceria } from "@/lib/contrato-parceria-partner";
+import { dataBR, isPlanoContratoParceria } from "@/lib/contrato-parceria-partner";
+import { vencimentoAdesao } from "@/lib/oferta-trial";
+import { mascararDocumento } from "@/lib/analise-juridica-cadastro";
 import { EnviarContratoParceria } from "./enviar-contrato-parceria";
 import { AnaliseJuridicaCadastro } from "./analise-juridica-cadastro";
 
@@ -49,6 +51,23 @@ interface Registration {
   cora_payment_url?: string | null;
   cora_pix_emv?: string | null;
   cora_boleto_pdf?: string | null;
+}
+
+// Link pago da oferta (BRIEF 2026-11-13): Gold/Diamante com fatura de adesão = 1ª mensalidade cobrada.
+function isLinkPago(r: Pick<Registration, "plano" | "cora_invoice_id">): boolean {
+  return (r.plano === "GOLD" || r.plano === "DIAMANTE") && !!r.cora_invoice_id;
+}
+
+function LinkPagoBadge({ status }: { status?: string | null }) {
+  const pago = status === "PAID";
+  return (
+    <span className={cn(
+      "text-[9px] font-bold px-1.5 py-0.5 rounded border",
+      pago ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-[#E8C97A]/15 text-[#E8C97A] border-[#E8C97A]/30",
+    )}>
+      {pago ? "Link pago · pago" : "Link pago · pendente"}
+    </span>
+  );
 }
 
 const PAGAMENTO_CONFIG: Record<string, { label: string; cls: string }> = {
@@ -124,7 +143,38 @@ function ModalDetalhe({
   const isCartaoRecorrente = reg.plano_recorrencia === "ANUAL_CARTAO";
   const podeAprovar = !isCartaoRecorrente || cartaoLink.trim().length > 0;
 
+  const linkPago = isLinkPago(reg);
+  const adesaoPaga = coraStatus === "PAID";
+  // Vencimento = created_at + 3 dias pelo mesmo helper da cobrança; formatado por texto (sem new Date).
+  const vencimentoAdesaoBR = dataBR(vencimentoAdesao(new Date(reg.created_at))) ?? "—";
+  const valorAdesao = ((reg.cora_amount_cents ?? 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
   const acionar = async (acao: "APROVAR" | "REPROVAR" | "EM_ANALISE") => {
+    // Link pago: aprovar sem a 1ª mensalidade paga dá 30 dias de acesso e deixa a fatura aberta.
+    if (acao === "APROVAR" && linkPago && !adesaoPaga) {
+      const ok = await confirmar(
+        `A 1ª mensalidade (${valorAdesao}) ainda não foi paga. Vencimento: ${vencimentoAdesaoBR}.\n\nAprovar sem pagamento? O partner terá 30 dias de acesso e a fatura de adesão continua aberta.`,
+        { perigo: true, titulo: "Aprovar sem pagamento", botao: "Aprovar sem pagamento" },
+      );
+      if (!ok) return;
+    }
+    // Cadastro pago e reprovado: o Financeiro estorna manualmente (decisão do Hamilton, 13/11/2026).
+    if (acao === "REPROVAR" && adesaoPaga && reg.cora_invoice_id) {
+      const docTipo = reg.tipo_pessoa === "PF" ? "cpf" : "cnpj";
+      const docValor = (reg.tipo_pessoa === "PF" ? reg.cpf : reg.cnpj) ?? "";
+      const ok = await confirmar(
+        [
+          `Cadastro PAGO: ao reprovar, o Financeiro precisa estornar ${valorAdesao} via Pix ao candidato.`,
+          "",
+          `Nome: ${(reg.tipo_pessoa === "PF" ? reg.nome_completo : reg.razao_social) ?? "—"}`,
+          `${docTipo.toUpperCase()}: ${docValor ? mascararDocumento(docTipo, docValor) : "—"}`,
+          `E-mail: ${reg.email}`,
+          `Telefone: ${reg.telefone ?? "—"}`,
+        ].join("\n"),
+        { perigo: true, titulo: "Reprovar cadastro pago", botao: "Reprovar" },
+      );
+      if (!ok) return;
+    }
     // Enterprise (BRIEF 10/11/2026): aprovar envia e-mail e WhatsApp na hora, sem volta. Modal vermelho antes.
     if (acao === "APROVAR" && reg.plano === "ENTERPRISE") {
       const empresa = reg.razao_social ?? reg.nome_completo ?? reg.email;
@@ -373,6 +423,11 @@ function ModalDetalhe({
           </div>
 
           {/* Ações */}
+          {reg.status !== "APROVADO" && linkPago && !adesaoPaga && (
+            <div className="p-3 rounded-xl border border-[#E8C97A]/40 bg-[#E8C97A]/10 text-xs text-[#F0ECE4]">
+              1ª mensalidade ainda não paga (vence {vencimentoAdesaoBR}).
+            </div>
+          )}
           {reg.status !== "APROVADO" && (
             <div className="flex gap-3 flex-wrap">
               <button
@@ -647,6 +702,7 @@ export function AdminCadastrosClient({
                     {reg.plano === "PARTNER_PRO" ? "PRO" : reg.plano === "PARTNER_HE" ? "HE" : reg.plano === "GOLD" ? "GOLD" : reg.plano === "DIAMANTE" ? "DIAMANTE" : "PARTNER"}
                   </span>
                   <PagamentoBadge status={reg.cora_invoice_status} />
+                  {isLinkPago(reg) && <LinkPagoBadge status={reg.cora_invoice_status} />}
                 </div>
                 <p className="text-xs text-muted-foreground mt-0.5">{reg.email} · {doc}</p>
               </div>

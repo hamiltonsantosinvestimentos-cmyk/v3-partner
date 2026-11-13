@@ -148,16 +148,31 @@ export async function POST(req: NextRequest) {
     // 1. Atualiza cadastro pendente de adesão
     const { data: reg } = await db
       .from("partner_registrations")
-      .select("id, plano, email, nome_completo, razao_social, referred_by_partner_id")
+      .select("id, plano, email, nome_completo, razao_social, referred_by_partner_id, status, cora_amount_cents")
       .eq("cora_invoice_id", invoiceId)
       .single();
 
     if (reg) {
+      // Gold/Diamante do link pago (BRIEF 2026-11-13): a fatura de adesão é a 1ª mensalidade.
+      const ofertaPaga = reg.plano === "GOLD" || reg.plano === "DIAMANTE";
+      // Cadastro já APROVADO (ou REPROVADO) antes do pagamento não volta para PAGO: o status da análise fica.
       await db.from("partner_registrations").update({
         cora_invoice_status: "PAID",
         cora_paid_at: paidAt,
-        status: "PAGO",
+        ...(reg.status === "APROVADO" || reg.status === "REPROVADO" ? {} : { status: "PAGO" }),
       }).eq("id", reg.id);
+
+      // Comissão do closer sobre a 1ª mensalidade, se o partner já existe e tem closer (o vínculo em
+      // Usuários cobre o caso comum). Cadastro reprovado não gera. pagamentoId = reg.id evita duplicar.
+      if (ofertaPaga && reg.status !== "REPROVADO" && reg.email) {
+        const { data: perfil } = await db.from("profiles").select("id")
+          .ilike("email", String(reg.email).replace(/[\\%_]/g, "\\$&")).limit(1).maybeSingle();
+        if (perfil?.id) {
+          await gerarComissaoCloserAssinatura(db, {
+            partnerId: perfil.id, valorPago: Number(reg.cora_amount_cents ?? 0) / 100, pagamentoId: reg.id, dataPagamento: paidAt,
+          });
+        }
+      }
 
       // Notifica admins
       const { data: admins } = await db
@@ -177,8 +192,9 @@ export async function POST(req: NextRequest) {
         ).then(null, () => {});
       }
 
-      // Ativa desconto do referenciador (10% por 6 meses)
-      if (reg.referred_by_partner_id) {
+      // Ativa desconto do referenciador (10% por 6 meses). Não vale para a adesão Gold/Diamante
+      // (decisão do Hamilton, 13/11/2026).
+      if (reg.referred_by_partner_id && !ofertaPaga) {
         const nomeIndicado = reg.nome_completo ?? reg.razao_social ?? "Seu indicado";
         await db.from("profiles").update({
           referral_discount_percent: 10,

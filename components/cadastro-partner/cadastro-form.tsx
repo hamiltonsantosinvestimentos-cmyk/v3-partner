@@ -42,13 +42,15 @@ type TipoPessoa = "PF" | "PJ";
 type Step = 1 | 2 | 3 | 4 | 5;
 type PlanoRecorrencia = "ANUAL_PIX_BOLETO" | "ANUAL_CARTAO";
 
-const PLANOS: Array<{
+type PlanoInfo = {
   id: Plano; nome: string; mensal: boolean; preco: string; periodo: string; precoAnual: string;
   // Oferta única (lib/oferta-trial.ts): 30 dias grátis, sem cobrança no cadastro.
   trial?: boolean;
   parcelas?: number; cor: string; icone: React.ReactNode; comissao: string; destaque?: boolean;
   descricao: string; beneficios: string[];
-}> = [
+};
+
+const PLANOS_TODOS: PlanoInfo[] = [
   // V3 Access (02/10/2026, Projeto Repescagem): papel STARTER, só pelo link
   // exclusivo /cadastro-partner-access (fora da lista pública de planos).
   {
@@ -341,13 +343,24 @@ function StepBar({ step, total }: { step: Step; total: number }) {
   );
 }
 
+// Link pago da oferta (BRIEF 2026-11-13, /cadastro-partner-oferta-pagamento): Gold/Diamante sem os
+// 30 dias grátis. A 1ª mensalidade é cobrada no envio, pela Cora; depois, mensal, sem fidelidade.
+const PLANOS_OFERTA_PAGA: PlanoInfo[] = PLANOS_TODOS.map((p) => p.id !== "GOLD" && p.id !== "DIAMANTE" ? p : {
+  ...p,
+  trial: false,
+  descricao: `1ª mensalidade agora por Pix ou boleto. Depois, ${p.preco}/mês sem fidelidade.`,
+  beneficios: ["1ª mensalidade por Pix ou boleto, sem cartão", ...p.beneficios.filter((b) => !/grátis/i.test(b))],
+});
+
 // ─── Main Form ────────────────────────────────────────────────────────────────
 // forcePlano: quando definido (ex: página /cadastro-partner-he), o plano já vem
 // travado e o passo de escolha de plano vira só um resumo — o link é exclusivo
 // daquele plano.
 // planosOferta: o candidato escolhe só entre estes planos (ex: /cadastro-partner-oferta, Gold ou
 // Diamante). Aceita ?plano=gold|diamante para já vir marcado.
-export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?: Plano; planosOferta?: Plano[] }) {
+// ofertaPaga: link pago da oferta. Gold/Diamante sem trial, com a 1ª mensalidade cobrada no envio.
+export function CadastroPartnerForm({ forcePlano, planosOferta, ofertaPaga = false }: { forcePlano?: Plano; planosOferta?: Plano[]; ofertaPaga?: boolean }) {
+  const PLANOS = ofertaPaga ? PLANOS_OFERTA_PAGA : PLANOS_TODOS;
   const searchParams = useSearchParams();
   const referredByPartnerId = searchParams.get("ref");
   const planoQuery = searchParams.get("plano")?.toUpperCase() as Plano | undefined;
@@ -399,6 +412,8 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
     boletoBarcode?: string;
     paymentUrl?: string;
     valor?: number;
+    // DD/MM/AAAA devolvido pelo servidor (mesma data enviada à Cora).
+    vencimento?: string | null;
   } | null>(null);
   const [pixCopiado, setPixCopiado] = useState(false);
   const [invoiceStatus, setInvoiceStatus] = useState<"PENDING" | "PAID" | null>(null);
@@ -495,6 +510,7 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
       docSocio.forEach((f)      => fd.append("doc_socio", f));
 
       if (referredByPartnerId) fd.append("referred_by_partner_id", referredByPartnerId);
+      if (ofertaPaga) fd.append("oferta_paga", "1");
 
       const res = await fetch("/api/cadastro-partner", { method: "POST", body: fd });
       const data = await res.json();
@@ -572,13 +588,13 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
             {/* Valor */}
             <div className="px-6 py-4 border-b border-[#243A66] flex items-center justify-between">
               <div>
-                <p className="text-xs text-[#7A8FA8]">{PLANOS.find((p) => p.id === plano)?.mensal ? "Primeira mensalidade (R$ 97/mês)" : planoRecorrencia === "ANUAL_PIX_BOLETO" ? "Valor da anuidade (12 meses)" : `Valor anual — ${PLANOS.find((p) => p.id === plano)?.parcelas ?? 12}x no cartão`}</p>
+                <p className="text-xs text-[#7A8FA8]">{PLANOS.find((p) => p.id === plano)?.mensal ? `Primeira mensalidade (${PLANOS.find((p) => p.id === plano)!.preco}/mês)` : planoRecorrencia === "ANUAL_PIX_BOLETO" ? "Valor da anuidade (12 meses)" : `Valor anual — ${PLANOS.find((p) => p.id === plano)?.parcelas ?? 12}x no cartão`}</p>
                 <p className="text-2xl font-bold text-[#C9A84C]">{valorFmt}</p>
               </div>
               <div className="text-right">
                 <p className="text-xs text-[#7A8FA8]">Vencimento</p>
                 <p className="text-sm font-semibold text-[#F0ECE4]">
-                  {new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR")}
+                  {cobranca?.vencimento ?? new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                 </p>
               </div>
             </div>
@@ -674,6 +690,10 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
                 <p className="text-sm font-bold text-emerald-400">Pagamento Confirmado!</p>
                 <p className="text-xs text-[#7A8FA8]">Nossa equipe já recebeu a notificação e iniciará a análise.</p>
               </div>
+            </div>
+          ) : cobranca?.invoiceId && ofertaPaga ? (
+            <div className="p-3 rounded-xl border border-[#243A66] text-xs text-[#7A8FA8]">
+              Assim que o pagamento cair, você recebe a confirmação por e-mail.
             </div>
           ) : cobranca?.invoiceId ? (
             <div className="flex items-center gap-2 p-3 rounded-xl border border-[#243A66] text-xs text-[#7A8FA8]">
@@ -782,7 +802,7 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
               <>
               <div>
                 <h2 className="text-xl font-bold text-[#F0ECE4]">Escolha seu plano</h2>
-                <p className="text-sm text-[#7A8FA8] mt-1">{planosOferta ? "Os dois começam com 30 dias grátis, sem pagamento agora. Muda a sua comissão e a mensalidade depois do período grátis." : "Selecione o plano que melhor se adapta ao seu perfil"}</p>
+                <p className="text-sm text-[#7A8FA8] mt-1">{planosOferta && ofertaPaga ? "Escolha o plano. A 1ª mensalidade é paga agora por Pix ou boleto; depois, mensal, sem fidelidade." : planosOferta ? "Os dois começam com 30 dias grátis, sem pagamento agora. Muda a sua comissão e a mensalidade depois do período grátis." : "Selecione o plano que melhor se adapta ao seu perfil"}</p>
               </div>
               <div className={cn("grid grid-cols-1 sm:grid-cols-2 gap-4", !planosOferta && "xl:grid-cols-4")}>
                 {(planosOferta ? PLANOS.filter((p) => planosOferta.includes(p.id)) : PLANOS.filter((p) => p.id !== "PARTNER_HE" && p.id !== "STARTER" && !p.trial)).map((p) => (
@@ -855,13 +875,13 @@ export function CadastroPartnerForm({ forcePlano, planosOferta }: { forcePlano?:
               {/* Forma de pagamento */}
               <div className="pt-2">
                 <h3 className="text-sm font-bold text-[#F0ECE4]">Forma de pagamento</h3>
-                {planosOferta || PLANOS.find((pl) => pl.id === plano)?.trial ? (
+                {(planosOferta && !ofertaPaga) || PLANOS.find((pl) => pl.id === plano)?.trial ? (
                   <p className="text-xs text-[#7A8FA8] mt-1">
                     <strong className="text-[#F0ECE4]">Nenhum pagamento agora.</strong> Os 30 dias grátis começam quando seu cadastro for aprovado. Depois, a mensalidade é de <strong className="text-[#F0ECE4]">{PLANOS.find((pl) => pl.id === plano && pl.trial) ? `${PLANOS.find((pl) => pl.id === plano)!.preco}/mês` : "R$ 397/mês (Gold) ou R$ 897/mês (Diamante)"}</strong> via Pix ou Boleto, sem fidelidade: você pode interromper quando quiser.
                   </p>
-                ) : PLANOS.find((pl) => pl.id === plano)?.mensal ? (
+                ) : PLANOS.find((pl) => pl.id === plano)?.mensal || ofertaPaga ? (
                   <p className="text-xs text-[#7A8FA8] mt-1">
-                    Plano mensal de <strong className="text-[#F0ECE4]">R$ 97,00/mês</strong> via Pix ou Boleto. A primeira mensalidade é gerada agora; as seguintes vencem todo mês, sem fidelidade.
+                    Plano mensal de <strong className="text-[#F0ECE4]">{PLANOS.find((pl) => pl.id === plano)?.preco ? `${PLANOS.find((pl) => pl.id === plano)!.preco}/mês` : "R$ 397,00/mês (Gold) ou R$ 897,00/mês (Diamante)"}</strong> via Pix ou Boleto. A primeira mensalidade é gerada agora{ofertaPaga ? ", com vencimento em 3 dias" : ""}; as seguintes vencem todo mês, sem fidelidade.
                   </p>
                 ) : (
                 <>

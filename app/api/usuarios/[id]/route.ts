@@ -75,6 +75,33 @@ export async function PATCH(
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
+  // Link pago da oferta (BRIEF 2026-11-13): ao vincular o closer a um Gold/Diamante que pagou a 1ª
+  // mensalidade na adesão, gera os 30% dele sobre esse pagamento. Não registra pagamento nem mexe em
+  // trial_expires_at; pagamentoId = id do cadastro, o mesmo do webhook e da aprovação (sem duplicar).
+  const atualizado = data as { role?: string; email?: string | null } | null;
+  if (updateData.closer_id && (atualizado?.role === "GOLD" || atualizado?.role === "DIAMANTE") && atualizado.email) {
+    try {
+      const svc = svcClient();
+      const { data: reg } = await svc.from("partner_registrations")
+        .select("id, cora_amount_cents, cora_paid_at")
+        .ilike("email", String(atualizado.email).replace(/[\\%_]/g, "\\$&"))
+        .eq("cora_invoice_status", "PAID")
+        .neq("status", "REPROVADO")
+        .order("cora_paid_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const r = reg as { id: string; cora_amount_cents: number | null; cora_paid_at: string | null } | null;
+      if (r) {
+        const { gerarComissaoCloserAssinatura } = await import("@/lib/closer-commissions");
+        await gerarComissaoCloserAssinatura(svc, {
+          partnerId: id, valorPago: Number(r.cora_amount_cents ?? 0) / 100, pagamentoId: r.id, dataPagamento: r.cora_paid_at ?? new Date().toISOString(),
+        });
+      }
+    } catch (e) {
+      console.error("[usuarios] comissão do closer da adesão não gerada:", e);
+    }
+  }
+
   // Grava auditoria (fire-and-forget)
   const actionLabel = body.email ? "EDITAR_EMAIL"
     : body.role ? "EDITAR_ROLE"

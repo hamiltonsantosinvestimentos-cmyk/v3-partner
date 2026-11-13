@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { cadastroStarterAntigo, rotuloStarter } from "@/lib/v3-access-rotulos";
-import { OFERTA } from "@/lib/oferta-trial";
+import { OFERTA, vencimentoAdesao } from "@/lib/oferta-trial";
+import { dataBR } from "@/lib/contrato-parceria-partner";
+import { gerarComissaoCloserAssinatura } from "@/lib/closer-commissions";
 import { sendText, verificarWhatsapp } from "@/lib/whatsapp/openwa-client";
 import { SDR_INTERNO_PARTNER_ID } from "@/lib/sdr-agent";
 import {
@@ -17,7 +19,10 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://app.v3partners.com
 
 // ─── E-mail de boas-vindas via Resend ─────────────────────────────────────────
 // Devolve se a Resend aceitou o envio (res.ok). O Enterprise usa o resultado no aviso ao ADMIN.
-async function enviarBoasVindas(email: string, nome: string, plano: string, cartaoRecorrenteLink?: string | null, starterAntigo = false): Promise<{ ok: boolean; motivo?: string }> {
+// adesaoOferta: Gold/Diamante do link pago (BRIEF 2026-11-13). pago = cora_invoice_status PAID; sem fatura = link grátis.
+type AdesaoOferta = { pago: boolean; valor: string; vencimento: string | null; acessoAte: string };
+
+async function enviarBoasVindas(email: string, nome: string, plano: string, cartaoRecorrenteLink?: string | null, starterAntigo = false, adesaoOferta: AdesaoOferta | null = null): Promise<{ ok: boolean; motivo?: string }> {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return { ok: false, motivo: "RESEND_API_KEY ausente" };
 
@@ -44,7 +49,15 @@ async function enviarBoasVindas(email: string, nome: string, plano: string, cart
         Seu cadastro como <strong style="color:#C9A84C;">${planoLabel}</strong> foi aprovado.
         Você já pode acessar a plataforma e começar a gerar operações com até <strong style="color:#C9A84C;">${comissao}</strong> de comissionamento.
       </p>
-      ${plano === "GOLD" || plano === "DIAMANTE" ? `
+      ${(plano === "GOLD" || plano === "DIAMANTE") && adesaoOferta ? `
+      <div style="background:#C9A84C10;border:1px solid #C9A84C35;border-radius:12px;padding:16px;margin:0 0 24px;">
+        <p style="font-size:13px;color:#F0ECE4;margin:0;line-height:1.6;">
+          ${adesaoOferta.pago
+            ? `<strong style="color:#C9A84C;">Sua 1ª mensalidade foi confirmada.</strong> Seu acesso vale até <strong style="color:#C9A84C;">${adesaoOferta.acessoAte}</strong>.`
+            : `<strong style="color:#C9A84C;">Sua 1ª mensalidade (${adesaoOferta.valor}) vence em ${adesaoOferta.vencimento ?? "3 dias"}.</strong> O acesso depende do pagamento.`}
+          Depois, a mensalidade é de <strong style="color:#C9A84C;">${adesaoOferta.valor}/mês</strong>, sem fidelidade: você pode interromper quando quiser.
+        </p>
+      </div>` : plano === "GOLD" || plano === "DIAMANTE" ? `
       <div style="background:#C9A84C10;border:1px solid #C9A84C35;border-radius:12px;padding:16px;margin:0 0 24px;">
         <p style="font-size:13px;color:#F0ECE4;margin:0;line-height:1.6;">
           <strong style="color:#C9A84C;">Seus ${OFERTA.trialDias} dias grátis começam hoje.</strong> Depois, a mensalidade é de
@@ -226,6 +239,18 @@ export async function POST(req: NextRequest) {
   }
   let comunicado: { email: ResultadoCanal; whatsapp: ResultadoCanal } | undefined;
 
+  // Link pago da oferta (BRIEF 2026-11-13): Gold/Diamante com fatura de adesão. O texto só diz "paga"
+  // com cora_invoice_status PAID. Vencimento = created_at + 3 dias pelo mesmo helper da cobrança,
+  // formatado por texto (dataBR); "vale até" = aprovação + 30 dias, em Brasília.
+  const ofertaComFatura = (planoRole === "GOLD" || planoRole === "DIAMANTE") && !!reg.cora_invoice_id;
+  const pagouAdesao = ofertaComFatura && reg.cora_invoice_status === "PAID";
+  const adesaoOferta: AdesaoOferta | null = ofertaComFatura ? {
+    pago: pagouAdesao,
+    valor: (Number(reg.cora_amount_cents ?? 0) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }),
+    vencimento: reg.created_at ? dataBR(vencimentoAdesao(new Date(reg.created_at))) : null,
+    acessoAte: new Date(Date.now() + OFERTA.trialDias * 86400000).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+  } : null;
+
   if (!jaExiste) {
     // Cria o usuário com senha padrão + flag para trocar no primeiro acesso
     const { data: newUser, error: createErr } = await svc.auth.admin.createUser({
@@ -266,6 +291,14 @@ export async function POST(req: NextRequest) {
         ...(trialOferta ? { trial_expires_at: new Date(Date.now() + OFERTA.trialDias * 86400000).toISOString() } : {}),
         ...(reg.referred_by_partner_id ? { referred_by_partner_id: reg.referred_by_partner_id } : {}),
       }, { onConflict: "id" });
+
+      // Adesão paga antes da aprovação: comissão do closer sobre a 1ª mensalidade, se já houver
+      // closer_id (na prática o vínculo em Usuários é quem dispara). pagamentoId = reg.id evita duplicar.
+      if (pagouAdesao) {
+        await gerarComissaoCloserAssinatura(svc, {
+          partnerId: newUser.user.id, valorPago: Number(reg.cora_amount_cents ?? 0) / 100, pagamentoId: reg.id, dataPagamento: reg.cora_paid_at ?? new Date().toISOString(),
+        });
+      }
     }
 
     if (planoRole === "ENTERPRISE") {
@@ -275,7 +308,7 @@ export async function POST(req: NextRequest) {
       comunicado = { email: resEmail, whatsapp: resWhats };
     } else {
       // Envia e-mail de boas-vindas (async, não bloqueia)
-      enviarBoasVindas(email, nome, reg.plano, linkCartaoFinal, cadastroStarterAntigo(reg.plano, reg.created_at)).catch(() => {});
+      enviarBoasVindas(email, nome, reg.plano, linkCartaoFinal, cadastroStarterAntigo(reg.plano, reg.created_at), adesaoOferta).catch(() => {});
     }
   }
 
