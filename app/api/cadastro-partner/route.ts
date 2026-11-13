@@ -6,6 +6,14 @@ import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { PLANO_VALOR } from "@/lib/plano-valor";
 import { notifyNovoCadastroPartner } from "@/lib/socios-notify";
 import { validarDocumentosCadastro } from "@/lib/cadastro-partner/documento";
+import { PLANO_OFERTA_LABEL, vencimentoAdesao } from "@/lib/oferta-trial";
+import { dataBR } from "@/lib/contrato-parceria-partner";
+
+// Nome do plano em e-mail e fatura (um mapa só, para o e-mail e a Cora não divergirem).
+const PLANO_LABEL_COBRANCA: Record<string, string> = {
+  ENTERPRISE: "V3 Enterprise", PARTNER_PRO: "V3 Partner PRO", PARTNER_HE: "Partner HE", STARTER: "V3 Access",
+  PARTNER: "V3 Partner", ...PLANO_OFERTA_LABEL,
+};
 
 async function gerarCobrancaCora(params: {
   regId: string;
@@ -17,6 +25,10 @@ async function gerarCobrancaCora(params: {
   tipoDocumento: "CPF" | "CNPJ";
   email: string;
   valor: number;
+  // AAAA-MM-DD, calculado uma vez em Brasília (vencimentoAdesao) e reaproveitado na tela e no e-mail.
+  vencimento: string;
+  // Gold/Diamante do link pago: a fatura é a 1ª mensalidade, não uma adesão.
+  primeiraMensalidade?: boolean;
 }): Promise<{
   invoiceId?: string;
   pixEmv?: string;
@@ -27,9 +39,7 @@ async function gerarCobrancaCora(params: {
 }> {
   try {
     const valor = params.valor;
-    const vencimento = new Date();
-    vencimento.setDate(vencimento.getDate() + 3); // 3 dias para pagar
-    const vencStr = vencimento.toISOString().split("T")[0];
+    const vencStr = params.vencimento;
 
     const payload = {
       code: params.regId.slice(0, 8).toUpperCase(),
@@ -47,13 +57,9 @@ async function gerarCobrancaCora(params: {
         fine: { type: "PERCENTAGE", value: 2 },
       },
       payment_forms: ["BANK_SLIP", "PIX"],
-      services: [{ name: `V3 Partners — Adesão ${
-        params.plano === "ENTERPRISE" ? "Enterprise"
-        : params.plano === "PARTNER_PRO" ? "Partner PRO"
-        : params.plano === "PARTNER_HE" ? "Partner HE"
-        : params.plano === "STARTER" ? "V3 Access"
-        : "Partner"
-      }`, amount: valor }],
+      services: [{ name: params.primeiraMensalidade
+        ? `V3 Partners - 1a mensalidade ${PLANO_LABEL_COBRANCA[params.plano]}`
+        : `V3 Partners - Adesão ${(PLANO_LABEL_COBRANCA[params.plano] ?? "V3 Partner").replace(/^V3 (?=Enterprise|Partner)/, "")}`, amount: valor }],
       notifications: {
         formats: ["EMAIL"],
         by_email: { should_notify: true },
@@ -106,6 +112,9 @@ export async function POST(req: NextRequest) {
     // Gold/Diamante (oferta única, lib/oferta-trial.ts): mensais, mas o cadastro NÃO gera cobrança.
     // São 30 dias grátis a partir da aprovação; a 1ª mensalidade sai pelo cron assinaturas-vencendo.
     const trialOferta = plano === "GOLD" || plano === "DIAMANTE";
+    // Link pago (/cadastro-partner-oferta-pagamento): Gold/Diamante com a 1ª mensalidade cobrada na hora.
+    const ofertaPaga = trialOferta && formData.get("oferta_paga") === "1";
+    const semCobranca = trialOferta && !ofertaPaga;
     const isMensal = plano === "PARTNER_HE" || trialOferta;
     const planoRecorrencia = isMensal
       ? "MENSAL"
@@ -251,7 +260,7 @@ export async function POST(req: NextRequest) {
     // sai de verdade (mesmo problema já documentado em
     // credit-engine/intake/[token]/route.ts).
     try {
-      await notifyNovoCadastroPartner({ nome, plano, tipoPessoa: tipoPessoa as "PF" | "PJ", email, telefone, duplicado });
+      await notifyNovoCadastroPartner({ nome, plano, tipoPessoa: tipoPessoa as "PF" | "PJ", email, telefone, duplicado, linkPago: ofertaPaga });
     } catch (e) {
       console.error("[cadastro-partner] falha ao notificar novo cadastro:", e);
     }
@@ -275,9 +284,10 @@ export async function POST(req: NextRequest) {
 
     // Cartão recorrente (InfinitePay) é configurado manualmente pelo admin na
     // aprovação — não gera cobrança Cora nesse caso.
-    const cora = planoRecorrencia === "ANUAL_CARTAO" || trialOferta
+    const vencimentoISO = vencimentoAdesao();
+    const cora = planoRecorrencia === "ANUAL_CARTAO" || semCobranca
       ? {}
-      : await gerarCobrancaCora({ regId, plano, nome, documento, tipoDocumento, email, valor: valorFinal });
+      : await gerarCobrancaCora({ regId, plano, nome, documento, tipoDocumento, email, valor: valorFinal, vencimento: vencimentoISO, primeiraMensalidade: ofertaPaga });
 
     if (cora.invoiceId) {
       await svc.from("partner_registrations").update({
@@ -296,18 +306,14 @@ export async function POST(req: NextRequest) {
 
     // Envia e-mail com dados de pagamento (#6) — não se aplica ao cartão recorrente
     // (o link de assinatura é enviado à parte pelo admin após configurar no InfinitePay)
-    if (planoRecorrencia !== "ANUAL_CARTAO" && !trialOferta) try {
+    if (planoRecorrencia !== "ANUAL_CARTAO" && !semCobranca) try {
       const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY);
       const valorFmt = (valorFinal / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-      const planoLabel = plano === "ENTERPRISE" ? "V3 Enterprise"
-        : plano === "PARTNER_PRO" ? "V3 Partner PRO"
-        : plano === "PARTNER_HE" ? "Partner HE"
-        : plano === "STARTER" ? "V3 Access"
-        : "V3 Partner";
-      const vencimento = new Date(Date.now() + 3 * 86400000).toLocaleDateString("pt-BR");
+      const planoLabel = PLANO_LABEL_COBRANCA[plano] ?? "V3 Partner";
+      const vencimento = dataBR(vencimentoISO) ?? vencimentoISO;
 
-      const valorTituloEmail = isMensal ? "PRIMEIRA MENSALIDADE (R$ 97/mês)" : "VALOR DA ANUIDADE (12 MESES)";
+      const valorTituloEmail = isMensal ? `PRIMEIRA MENSALIDADE (${valorFmt}/mês)` : "VALOR DA ANUIDADE (12 MESES)";
       const cadastroSubjectGate = auditText(`Bem-vindo à V3 Partners: conclua seu pagamento de ${valorFmt}`);
       const cadastroHtmlGate = auditHtml(`
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #09081A; color: #F0ECE4; padding: 32px; border-radius: 16px;">
@@ -358,8 +364,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       id: regId,
-      trial: trialOferta,
+      trial: semCobranca,
       cobranca: {
+        vencimento:   cora.invoiceId ? dataBR(vencimentoISO) : null,
         invoiceId:    cora.invoiceId,
         pixEmv:       cora.pixEmv,
         pixQrCode:    cora.pixQrCode,

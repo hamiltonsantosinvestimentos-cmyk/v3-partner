@@ -118,9 +118,13 @@ export async function notifyNovoCadastroPartner(params: {
   email: string;
   telefone: string;
   duplicado?: { status: string; id: string } | null;
+  /** Link pago da oferta (/cadastro-partner-oferta-pagamento): Gold/Diamante com a 1ª mensalidade cobrada. */
+  linkPago?: boolean;
 }): Promise<void> {
   const { nome, plano, tipoPessoa, email, telefone } = params;
-  const planoLabel = PLANO_LABEL_CADASTRO[plano] ?? plano;
+  const planoLabel = params.linkPago && (plano === "GOLD" || plano === "DIAMANTE")
+    ? `${plano === "GOLD" ? "V3 Gold" : "V3 Diamante"} (1ª mensalidade cobrada)`
+    : PLANO_LABEL_CADASTRO[plano] ?? plano;
   const link = "https://app.v3partners.com.br/admin-cadastros";
   const aviso = linhaDuplicidadeCadastro(params.duplicado);
 
