@@ -1,0 +1,22 @@
+-- Rollback da 20261111b: devolve o acesso direto como estava em 13/11/2026 (texto exato lido de pg_policies).
+-- ATENCAO: reabre a leitura direta de dado pessoal pela equipe. Usar so se uma tela quebrar e enquanto o codigo e corrigido.
+grant select, insert, update, delete on public.cm_party_qualifications to anon, authenticated;
+grant select, insert, update, delete on public.cm_party_qualification_documents to anon, authenticated;
+grant select, insert, update, delete on public.cm_party_qualification_document_views to anon, authenticated;
+grant select, insert, update, delete on public.cm_qualification_batches to anon, authenticated;
+
+create policy cm_party_qual_docs_select on public.cm_party_qualification_documents
+  for select to authenticated
+  using (( SELECT get_user_role() AS get_user_role) = ANY (ARRAY['ADMIN'::user_role, 'GESTAO'::user_role, 'MESA_OPERACIONAL'::user_role]));
+create policy cm_party_qual_docs_delete on public.cm_party_qualification_documents
+  for delete to authenticated
+  using (( SELECT get_user_role() AS get_user_role) = ANY (ARRAY['ADMIN'::user_role, 'GESTAO'::user_role, 'MESA_OPERACIONAL'::user_role]));
+create policy cm_qual_batches_select on public.cm_qualification_batches
+  for select to authenticated
+  using (( SELECT get_user_role() AS get_user_role) = ANY (ARRAY['ADMIN'::user_role, 'GESTAO'::user_role, 'MESA_OPERACIONAL'::user_role]));
+create policy cm_qual_batches_insert on public.cm_qualification_batches
+  for insert to authenticated
+  with check (( SELECT get_user_role() AS get_user_role) = ANY (ARRAY['ADMIN'::user_role, 'GESTAO'::user_role, 'MESA_OPERACIONAL'::user_role]));
+create policy cm_qual_batches_update on public.cm_qualification_batches
+  for update to authenticated
+  using (( SELECT get_user_role() AS get_user_role) = ANY (ARRAY['ADMIN'::user_role, 'GESTAO'::user_role, 'MESA_OPERACIONAL'::user_role]));

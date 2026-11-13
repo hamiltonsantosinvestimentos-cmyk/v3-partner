@@ -21,6 +21,9 @@ const SENSIVEIS = [
   "mesa_sla_config", "platform_settings",
   // Tickets operacionais (BRIEF 01/11/2026): leitura e escrita pela rota com chave de serviço.
   "operational_tickets", "ticket_comments",
+  // Qualificação (BRIEF Trava de Liberação, 11/11/2026): lote, ficha, documentos e logs só pela rota com chave de serviço.
+  "cm_qualification_batches", "cm_party_qualifications", "cm_party_qualification_documents",
+  "cm_party_qualification_document_views", "cm_party_qualification_field_views",
 ];
 
 // Tabelas com leitura aberta deixadas por desenho (BRIEF 01/11/2026, seção 2.2), sem dado de cliente, deal ou pessoa:
