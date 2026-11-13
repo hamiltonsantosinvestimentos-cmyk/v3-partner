@@ -41,6 +41,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     .from("cm_party_qualification_documents")
     .select("id, document_kind, owner_label, original_filename, uploaded_at")
     .eq("uploaded_by_qualification_id", qualification!.id)
+    .is("deleted_at", null)
     .order("uploaded_at", { ascending: false });
 
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });

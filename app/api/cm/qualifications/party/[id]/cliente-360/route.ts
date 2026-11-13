@@ -74,6 +74,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .select("uploaded_at")
       .eq("v3_client_id", clientId)
       .eq("document_kind", kind)
+      .is("deleted_at", null)
+      .is("superseded_at", null)
       .order("uploaded_at", { ascending: false })
       .limit(1)
       .maybeSingle();

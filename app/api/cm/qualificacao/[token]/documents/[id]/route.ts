@@ -29,6 +29,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     .from("cm_party_qualification_documents")
     .select("id, storage_path, uploaded_by_qualification_id")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (!doc || doc.uploaded_by_qualification_id !== qualification.id) {

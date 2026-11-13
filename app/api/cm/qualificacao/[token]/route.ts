@@ -59,6 +59,7 @@ async function resolveDocumentSlot(
       .from("cm_party_qualification_documents")
       .select("id, v3_client_id, document_kind, uploaded_by_qualification_id")
       .eq("id", ref.document_id)
+      .is("deleted_at", null)
       .maybeSingle();
     const belongsHere = doc && doc.uploaded_by_qualification_id === qualificationId && doc.document_kind === kind && doc.v3_client_id === v3ClientId;
     return belongsHere ? null : `${label} inválido ou não pertence a esta qualificação.`;

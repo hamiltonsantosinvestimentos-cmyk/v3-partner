@@ -27,7 +27,7 @@ const dateBr = (iso: string) => new Date(iso).toLocaleDateString("pt-BR", { time
 // e o documento volta a ficar escondido.
 const OPEN_URL_VALID_MS = 55_000;
 
-function DocumentRow({ qualificationId, doc, onPreview, onOpened }: { qualificationId: string; doc: KycDocument; onPreview: (url: string) => void; onOpened?: () => void }) {
+function DocumentRow({ qualificationId, doc, onPreview, onOpened, podeExcluir, onExcluido }: { qualificationId: string; doc: KycDocument; onPreview: (url: string) => void; onOpened?: () => void; podeExcluir?: boolean; onExcluido?: (r: { fichas_reabertas?: number; titulares?: number }) => void }) {
   const isImage = doc.mime_type?.startsWith("image/");
   const isPdf = doc.mime_type === "application/pdf";
   const [url, setUrl] = useState<string | null>(null);
@@ -65,6 +65,41 @@ function DocumentRow({ qualificationId, doc, onPreview, onOpened }: { qualificat
     }
   };
 
+  const [excluindo, setExcluindo] = useState(false);
+
+  // Exclusão justificada (BRIEF Trava de Liberação, seção 3): mostra o impacto, pede o motivo e só então exclui.
+  const excluirDocumento = async () => {
+    setExcluindo(true);
+    setError(null);
+    try {
+      const ri = await fetch(`/api/cm/qualifications/party/${qualificationId}/documents/${doc.document_id}/excluir`);
+      const imp = await ri.json().catch(() => ({}));
+      if (!ri.ok) { setError(imp.error ?? "Não foi possível calcular o impacto."); return; }
+      if (imp.bloqueio) { setError(imp.bloqueio); return; }
+      const fichas: { papel: string; estado: string; reabre: boolean }[] = imp.fichas ?? [];
+      const reabrem = fichas.filter((f) => f.reabre);
+      const linhas = reabrem.map((f) => `${f.papel}: perde a liberação, recebe o mesmo link de novo`).join("; ");
+      const motivo = await pedirMotivo({
+        titulo: "Excluir documento",
+        mensagem: `O documento vai para a Lixeira por 30 dias e depois é eliminado.${reabrem.length > 0 ? ` Fichas afetadas (${reabrem.length}): ${linhas}.` : ""} O titular será convidado a enviar outro. Não escreva CPF, CNPJ nem nome de pessoa neste campo.`,
+        botao: "Excluir documento",
+        perigo: true,
+      });
+      if (!motivo) return;
+      const re = await fetch(`/api/cm/qualifications/party/${qualificationId}/documents/${doc.document_id}/excluir`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo }),
+      });
+      const json = await re.json().catch(() => ({}));
+      if (!re.ok) { setError(json.error ?? "Não foi possível excluir o documento."); return; }
+      setUrl(null);
+      onExcluido?.(json);
+    } catch {
+      setError("Erro de conexão");
+    } finally {
+      setExcluindo(false);
+    }
+  };
+
   return (
     <div className="bg-[#09081A] rounded px-2.5 py-2 space-y-1">
       <div className="flex items-center gap-2">
@@ -94,6 +129,13 @@ function DocumentRow({ qualificationId, doc, onPreview, onOpened }: { qualificat
             aria-label="Ver documento (o acesso é registrado)" title="Ver documento (o acesso é registrado)"
             className="flex items-center gap-1 text-[12px] font-semibold text-[#E8C97A] px-2 py-1 rounded border border-[#C9A84C]/40 bg-[#C9A84C]/10 hover:bg-[#C9A84C]/20 transition-colors flex-shrink-0 disabled:opacity-50">
             {loading ? <Loader2 size={12} className="animate-spin" /> : <Eye size={12} />} Ver documento
+          </button>
+        )}
+        {podeExcluir && (
+          <button type="button" onClick={excluirDocumento} disabled={excluindo}
+            aria-label="Excluir documento (exige motivo, vai para a Lixeira por 30 dias)" title="Excluir documento (exige motivo, vai para a Lixeira por 30 dias)"
+            className="flex items-center gap-1 text-[12px] font-semibold text-[#F26D6D] px-2 py-1 rounded border border-[#F26D6D]/40 hover:bg-[#F26D6D]/10 transition-colors flex-shrink-0 disabled:opacity-50">
+            {excluindo ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />} Excluir
           </button>
         )}
       </div>
@@ -472,7 +514,7 @@ function ConferenciaBlock({ qualificationId, conferencia, onChanged }: { qualifi
   );
 }
 
-function PartyCardBody({ data, onPreview, onChanged }: { data: any; onPreview: (url: string) => void; onChanged: () => void }) {
+function PartyCardBody({ data, onPreview, onChanged, onExcluido }: { data: any; onPreview: (url: string) => void; onChanged: () => void; onExcluido: (r: { fichas_reabertas?: number; titulares?: number }) => void }) {
   const q = data.qualification;
   const [accessBump, setAccessBump] = useState(0);
   const onRevealed = () => { setAccessBump((n) => n + 1); onChanged(); };
@@ -560,7 +602,7 @@ function PartyCardBody({ data, onPreview, onChanged }: { data: any; onPreview: (
       {data.documents?.length > 0 && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
           <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Documentos KYC</p>
-          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} />)}
+          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onExcluido} />)}
         </div>
       )}
 
@@ -603,7 +645,7 @@ function PartyCardBody({ data, onPreview, onChanged }: { data: any; onPreview: (
               )}
               {rep.documents?.length > 0 && (
                 <div className="pt-1 space-y-1">
-                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} />)}
+                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onExcluido} />)}
                 </div>
               )}
             </div>
@@ -630,6 +672,7 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
   const [tab, setTab] = useState<"ficha" | "dd">("ficha");
 
   useEffect(() => {
+    setAvisoExclusao(null);
     setDd(null);
     setTab("ficha");
     if (!qualificationId) return;
@@ -641,6 +684,14 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
   // Recarga silenciosa (sem spinner) para o progresso da conferência acompanhar cada abertura e revelação.
   const [reloadTick, setReloadTick] = useState(0);
   const reload = () => setReloadTick((n) => n + 1);
+  const [avisoExclusao, setAvisoExclusao] = useState<string | null>(null);
+  const aoExcluir = (r: { fichas_reabertas?: number; titulares?: number }) => {
+    const n = r.fichas_reabertas ?? 0;
+    setAvisoExclusao(n > 0
+      ? `Documento excluído. ${n} ${n === 1 ? "ficha foi reaberta" : "fichas foram reabertas"}: o titular usa o mesmo link para enviar outro documento e a conferência anterior foi apagada. Avise o titular.`
+      : "Documento excluído. Nenhuma ficha preenchida foi afetada.");
+    reload();
+  };
 
   useEffect(() => {
     if (!qualificationId) { setState({ loading: false, data: null, error: null }); return; }
@@ -683,7 +734,12 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
               </div>
             )}
             {!state.loading && state.data && tab === "ficha" && (
-              <PartyCardBody key={qualificationId} data={state.data} onPreview={setLightboxUrl} onChanged={reload} />
+              <>
+                {avisoExclusao && (
+                  <p role="status" className="text-[12px] text-[#F5F1E8] bg-[#12112A] border border-[#C9A84C]/30 rounded-lg p-3">{avisoExclusao}</p>
+                )}
+                <PartyCardBody key={qualificationId} data={state.data} onPreview={setLightboxUrl} onChanged={reload} onExcluido={aoExcluir} />
+              </>
             )}
             {!state.loading && state.data && tab === "dd" && dd && (
               <PartyDueDiligenceTab key={qualificationId} qualificationId={qualificationId} partyName={state.data.qualification.full_name} initial={dd} />
