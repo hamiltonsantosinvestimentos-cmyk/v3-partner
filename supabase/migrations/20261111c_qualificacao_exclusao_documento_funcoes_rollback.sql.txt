@@ -1,0 +1,3 @@
+-- Rollback da 20261111c (so remove as funcoes; documentos ja excluidos permanecem com deleted_at)
+drop function if exists public.fn_excluir_documento_qualificacao(uuid, uuid, text);
+drop function if exists public.fn_documento_exclusao_impacto(uuid);
