@@ -4,6 +4,8 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { motivoValido } from "@/lib/motivo";
 import { calcularExigidos } from "@/lib/qualification-conferencia-server";
 import { mensagemBloqueio, motivoTemDocumento, papelRotulo, type LinhaImpacto } from "@/lib/qualification-exclusao";
+import { MOTIVOS_EXCLUSAO, fraseMotivo } from "@/lib/comunicacao-externa";
+import { avisarTitularDaQualificacao } from "@/lib/qualificacao/aviso-titular";
 
 // Exclusão justificada de documento de qualificação (BRIEF Trava de Liberação, seção 3).
 // GET  = impacto (quais fichas usam o documento e se há bloqueio), sem efeito algum.
@@ -78,9 +80,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id, docId } = await params;
   if (!UUID_RE.test(docId)) return NextResponse.json({ error: "Documento inválido" }, { status: 422, headers: NO_STORE });
 
-  const body = (await req.json().catch(() => ({}))) as { motivo?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { motivo?: unknown; motivo_codigo?: unknown };
   const motivo = motivoValido(body.motivo);
   if (!motivo) return NextResponse.json({ error: "Informe o motivo, de 5 a 500 caracteres." }, { status: 422, headers: NO_STORE });
+  // Motivo padronizado (BRIEF Aviso ao titular, 15/11/2026): validado no servidor, não só no dropdown. Ausente ou fora do
+  // catálogo: 422, sem alterar nada. O texto livre acima fica só na auditoria e nunca vai ao e-mail.
+  if (!fraseMotivo(MOTIVOS_EXCLUSAO, body.motivo_codigo).ok) {
+    return NextResponse.json({ error: "Escolha o motivo padronizado da exclusão." }, { status: 422, headers: NO_STORE });
+  }
+  const motivoCodigo = body.motivo_codigo as string;
   if (motivoTemDocumento(motivo)) {
     return NextResponse.json({ error: "O motivo não pode conter CPF nem CNPJ. Descreva sem o número do documento." }, { status: 422, headers: NO_STORE });
   }
@@ -90,11 +98,29 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Documento não encontrado" }, { status: 404, headers: NO_STORE });
   }
 
+  // A função de banco devolve só contagens. Para avisar cada titular, capturo ANTES as fichas preenchidas que a exclusão
+  // vai reabrir e o tipo do documento (nome externo vem do catálogo, nunca do arquivo).
+  const { data: impacto } = await db.rpc("fn_documento_exclusao_impacto", { p_document_id: docId });
+  const idsReabertas = ((impacto ?? []) as LinhaImpacto[]).filter((l) => l.status === "preenchido").map((l) => l.qualification_id);
+  const { data: docRow } = await db.from("cm_party_qualification_documents").select("document_kind").eq("id", docId).maybeSingle();
+  const documentKind = (docRow?.document_kind as string | null | undefined) ?? null;
+
   const { data, error } = await db.rpc("fn_excluir_documento_qualificacao", { p_document_id: docId, p_user_id: caller.userId, p_reason: motivo });
   if (error) {
     // 42501 papel; P0001 regra (bloqueio, motivo, já excluído). A mensagem do banco não tem dado pessoal.
     const status = error.code === "42501" ? 403 : error.code === "P0001" ? 409 : 500;
     return NextResponse.json({ error: status === 500 ? "Não foi possível excluir o documento." : error.message }, { status, headers: NO_STORE });
   }
-  return NextResponse.json({ success: true, ...(data as object) }, { headers: NO_STORE });
+  // Aviso ao titular de cada ficha reaberta: última etapa, em paralelo (cada um com o seu tempo limite), nunca lança e nunca
+  // desfaz a exclusão. Chave desligada por padrão. O código do motivo também vai ao log, sem o texto livre.
+  try {
+    await db.from("audit_logs").insert({
+      user_id: caller.userId, action: "UPDATE", entity: "cm_party_qualification_documents", entity_id: docId,
+      new_data: { evento: "documento_qualificacao_motivo_padronizado", motivo_codigo: motivoCodigo, fichas_para_aviso: idsReabertas.length },
+    });
+  } catch { /* o log do código não desfaz a exclusão */ }
+  const avisos = await Promise.all(
+    idsReabertas.map((qualificationId) => avisarTitularDaQualificacao(db, { qualificationId, tipo: "exclusao", motivoCodigo, documentKind })),
+  );
+  return NextResponse.json({ success: true, ...(data as object), avisos_enviados: avisos.filter((a) => a === "enviado").length }, { headers: NO_STORE });
 }

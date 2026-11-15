@@ -1,5 +1,6 @@
 "use client";
-import { aviso, confirmar } from "@/lib/aviso";
+import { aviso, confirmar, pedirMotivoPadronizado } from "@/lib/aviso";
+import { MOTIVOS_DEVOLUCAO } from "@/lib/comunicacao-externa";
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -730,10 +731,21 @@ export function ContractsPanelClient({ role, initialContractId, onInitialContrac
   const [reopeningId, setReopeningId] = useState<string | null>(null);
   const reopenQualification = async (partyId: string) => {
     if (!selected) return;
-    if (!await confirmar("Reabrir esta qualificação para correção? A pessoa vai poder reenviar os dados pelo mesmo link.")) return;
+    const escolha = await pedirMotivoPadronizado({
+      titulo: "Reabrir para correção",
+      mensagem: "A pessoa recebe o mesmo link de novo para corrigir os dados. Escolha o motivo padronizado (será informado ao titular) e descreva o detalhe para a equipe.",
+      botao: "Reabrir",
+      perigo: true,
+      nota: "qualificacao_motivo_devolucao_titular",
+      opcoes: MOTIVOS_DEVOLUCAO.map((o) => ({ codigo: o.codigo, rotulo: o.rotulo })),
+    });
+    if (!escolha) return;
     setReopeningId(partyId);
     try {
-      const res = await fetch(`/api/cm/qualifications/${partyId}/reopen`, { method: "POST" });
+      const res = await fetch(`/api/cm/qualifications/${partyId}/reopen`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivo: escolha.motivo, motivo_codigo: escolha.codigo }),
+      });
       const json = await res.json();
       if (res.ok) await loadQualifications(selected.id);
       else aviso(json.error ?? "Erro ao reabrir qualificação");

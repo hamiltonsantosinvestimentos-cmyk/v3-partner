@@ -179,6 +179,14 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Confirmar a classificação",
     texto: "Emite o código do registro (BA na Bolsa, CR no Crédito) e consome um número da série. Não dá para desfazer: se a classificação estava errada, a mesa cancela o registro e o número fica aposentado. O partner originador recebe um aviso genérico de movimentação, sem valores nem nomes de investidores.",
   },
+  qualificacao_motivo_exclusao_titular: {
+    titulo: "Motivo da exclusão do documento",
+    texto: "O motivo padronizado que você escolher será informado ao titular por e-mail, junto com o link do cadastro dele, para ele saber o que reenviar. O detalhe escrito no campo abaixo fica só na auditoria da V3 e nunca é enviado. O registro do aviso fica guardado por 36 meses. Sai no máximo um e-mail por motivo a cada 24 horas. Sem escolher o motivo, a exclusão não prossegue.",
+  },
+  qualificacao_motivo_devolucao_titular: {
+    titulo: "Motivo da devolução da ficha",
+    texto: "O motivo padronizado que você escolher será informado ao titular por e-mail, junto com o link do cadastro dele, para ele saber o que corrigir. O detalhe escrito no campo abaixo fica só na auditoria da V3 e nunca é enviado. O registro do aviso fica guardado por 36 meses. Sai no máximo um e-mail por motivo a cada 24 horas. Sem escolher o motivo, a devolução não prossegue.",
+  },
 } as const satisfies Record<string, Nota>;
 
 export type NotaId = keyof typeof NOTAS_DO_PORQUE;

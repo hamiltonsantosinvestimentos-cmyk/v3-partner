@@ -60,14 +60,32 @@ export type PedirMotivoOpcoes = {
   perigo?: boolean;
   /** Nota do porquê (lib/notas-do-porque.ts) exibida junto ao título. */
   nota?: NotaId;
+  /** Motivo padronizado (lista fechada): quando presente, o modal exige escolher uma opção antes do texto livre. */
+  opcoes?: { codigo: string; rotulo: string }[];
 };
 
-export type PedirMotivoDetail = PedirMotivoOpcoes & { resolve: (motivo: string | null) => void };
+export type PedirMotivoDetail = PedirMotivoOpcoes & { resolve: (motivo: string | null, codigo?: string) => void };
 
 export function pedirMotivo(opcoes: PedirMotivoOpcoes): Promise<string | null> {
   if (typeof window === "undefined") return Promise.resolve(null);
   if (!(window as unknown as { __v3ConfirmHost?: boolean }).__v3ConfirmHost) return Promise.resolve(null);
   return new Promise<string | null>((resolve) => {
     window.dispatchEvent(new CustomEvent<PedirMotivoDetail>(PEDIR_MOTIVO_EVENT, { detail: { ...opcoes, resolve } }));
+  });
+}
+
+// Motivo padronizado + texto livre (BRIEF Aviso ao titular da qualificação, 15/11/2026). O código vai ao servidor, que o
+// valida contra o catálogo (lib/comunicacao-externa.ts) e monta a frase do e-mail; o texto livre fica só na auditoria.
+export type MotivoPadronizado = { motivo: string; codigo: string };
+
+export function pedirMotivoPadronizado(
+  opcoes: PedirMotivoOpcoes & { opcoes: { codigo: string; rotulo: string }[] },
+): Promise<MotivoPadronizado | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+  if (!(window as unknown as { __v3ConfirmHost?: boolean }).__v3ConfirmHost) return Promise.resolve(null);
+  return new Promise<MotivoPadronizado | null>((resolve) => {
+    window.dispatchEvent(new CustomEvent<PedirMotivoDetail>(PEDIR_MOTIVO_EVENT, {
+      detail: { ...opcoes, resolve: (motivo, codigo) => resolve(motivo && codigo ? { motivo, codigo } : null) },
+    }));
   });
 }

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { logAuditStrict } from "@/lib/audit";
+import { MOTIVOS_DEVOLUCAO, fraseMotivo } from "@/lib/comunicacao-externa";
+import { avisarTitularDaQualificacao } from "@/lib/qualificacao/aviso-titular";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -31,8 +33,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const db = svc();
-  const corpo = (await req.json().catch(() => ({}))) as { motivo?: unknown };
+  const corpo = (await req.json().catch(() => ({}))) as { motivo?: unknown; motivo_codigo?: unknown };
   const motivo = typeof corpo.motivo === "string" ? corpo.motivo.trim().slice(0, 500) : "";
+  // Motivo padronizado (BRIEF Aviso ao titular, 15/11/2026): validado aqui, no servidor, e não só no dropdown.
+  // Ausente ou fora do catálogo: 422, sem alterar nada.
+  if (!fraseMotivo(MOTIVOS_DEVOLUCAO, corpo.motivo_codigo).ok) {
+    return NextResponse.json({ error: "Escolha o motivo padronizado da devolução." }, { status: 422 });
+  }
+  const motivoCodigo = corpo.motivo_codigo as string;
 
   const { data: qualification } = await db
     .from("cm_party_qualifications")
@@ -85,11 +93,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // Motivo da devolução (quando informado pela tela de conferência): log sem dado pessoal, com await.
-  if (motivo) {
+  {
     try {
-      await logAuditStrict({ userId, action: "UPDATE", entity: "cm_party_qualifications", entityId: id, newData: { evento: "qualificacao_devolvida_para_correcao", motivo } });
+      await logAuditStrict({ userId, action: "UPDATE", entity: "cm_party_qualifications", entityId: id, newData: { evento: "qualificacao_devolvida_para_correcao", motivo, motivo_codigo: motivoCodigo } });
     } catch { /* a reabertura já foi feita; o log falho não a desfaz */ }
   }
 
-  return NextResponse.json({ success: true, full_name: qualification.full_name });
+  // Aviso ao titular: última etapa, nunca lança e nunca desfaz a reabertura (chave desligada por padrão).
+  const aviso = await avisarTitularDaQualificacao(db, { qualificationId: id, tipo: "devolucao", motivoCodigo });
+
+  return NextResponse.json({ success: true, full_name: qualification.full_name, aviso });
 }
