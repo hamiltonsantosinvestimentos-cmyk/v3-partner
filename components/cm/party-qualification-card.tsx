@@ -15,7 +15,8 @@ import { PARTY_NATURE_LABELS, REPRESENTATIVE_TYPE_LABELS, formatDocumentNumber, 
 import { KYC_DOCUMENT_KIND_LABELS } from "@/lib/kyc-documents";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { PartyDueDiligenceTab, type DdInitial } from "./party-due-diligence-tab";
-import { confirmar, pedirMotivo } from "@/lib/aviso";
+import { confirmar, pedirMotivoPadronizado } from "@/lib/aviso";
+import { MOTIVOS_DEVOLUCAO, MOTIVOS_EXCLUSAO } from "@/lib/comunicacao-externa";
 
 type KycDocument = { document_id: string; document_kind: string; original_filename: string | null; mime_type?: string | null; uploaded_at: string; valid_until: string; uploaded_ip?: string | null };
 
@@ -79,15 +80,18 @@ function DocumentRow({ qualificationId, doc, onPreview, onOpened, podeExcluir, o
       const fichas: { papel: string; estado: string; reabre: boolean }[] = imp.fichas ?? [];
       const reabrem = fichas.filter((f) => f.reabre);
       const linhas = reabrem.map((f) => `${f.papel}: perde a liberação, recebe o mesmo link de novo`).join("; ");
-      const motivo = await pedirMotivo({
+      const escolha = await pedirMotivoPadronizado({
         titulo: "Excluir documento",
-        mensagem: `O documento vai para a Lixeira por 30 dias e depois é eliminado.${reabrem.length > 0 ? ` Fichas afetadas (${reabrem.length}): ${linhas}.` : ""} O titular será convidado a enviar outro. Não escreva CPF, CNPJ nem nome de pessoa neste campo.`,
+        mensagem: `O documento vai para a Lixeira por 30 dias e depois é eliminado.${reabrem.length > 0 ? ` Fichas afetadas (${reabrem.length}): ${linhas}. Até ${reabrem.length} e-mail(s) de aviso podem ser enviados, um por ficha, se o aviso ao titular estiver ativo.` : ""} O titular será convidado a enviar outro. Não escreva CPF, CNPJ nem nome de pessoa no detalhe.`,
         botao: "Excluir documento",
         perigo: true,
+        nota: "qualificacao_motivo_exclusao_titular",
+        opcoes: MOTIVOS_EXCLUSAO.map((o) => ({ codigo: o.codigo, rotulo: o.rotulo })),
       });
-      if (!motivo) return;
+      if (!escolha) return;
       const re = await fetch(`/api/cm/qualifications/party/${qualificationId}/documents/${doc.document_id}/excluir`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ motivo: escolha.motivo, motivo_codigo: escolha.codigo }),
       });
       const json = await re.json().catch(() => ({}));
       if (!re.ok) { setError(json.error ?? "Não foi possível excluir o documento."); return; }
@@ -445,11 +449,18 @@ function ConferenciaBlock({ qualificationId, conferencia, onChanged }: { qualifi
   }
 
   async function devolver() {
-    const motivo = await pedirMotivo({ titulo: "Devolver para correção", mensagem: "A parte recebe o mesmo link de novo para corrigir os dados. Informe o motivo da devolução.", botao: "Devolver", perigo: true });
-    if (!motivo) return;
+    const escolha = await pedirMotivoPadronizado({
+      titulo: "Devolver para correção",
+      mensagem: "A parte recebe o mesmo link de novo para corrigir os dados. Escolha o motivo padronizado (será informado ao titular, se o aviso estiver ativo) e descreva o detalhe para a equipe.",
+      botao: "Devolver",
+      perigo: true,
+      nota: "qualificacao_motivo_devolucao_titular",
+      opcoes: MOTIVOS_DEVOLUCAO.map((o) => ({ codigo: o.codigo, rotulo: o.rotulo })),
+    });
+    if (!escolha) return;
     setBusy(true); setErro(null);
     try {
-      const res = await fetch(`/api/cm/qualifications/${qualificationId}/reopen`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo }) });
+      const res = await fetch(`/api/cm/qualifications/${qualificationId}/reopen`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ motivo: escolha.motivo, motivo_codigo: escolha.codigo }) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) setErro(json.error ?? "Não foi possível devolver.");
       else onChanged();

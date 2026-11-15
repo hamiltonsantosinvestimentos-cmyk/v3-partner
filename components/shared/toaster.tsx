@@ -53,9 +53,9 @@ export function Toaster() {
   const atual = fila[0] ?? null;
   const motivoAtual = filaMotivo[0] ?? null;
 
-  const responderMotivo = (motivo: string | null) => {
+  const responderMotivo = (motivo: string | null, codigo?: string) => {
     if (!motivoAtual) return;
-    motivoAtual.resolve(motivo);
+    motivoAtual.resolve(motivo, codigo);
     setFilaMotivo((prev) => prev.slice(1));
   };
 
@@ -131,12 +131,15 @@ export function Toaster() {
 // Mesa M&A), o Radix pausa a armadilha de foco do de baixo e só o de cima recebe foco, clique e teclado. A primeira
 // versão usava um overlay próprio fora do Radix e o card do deal roubava o foco de volta (não dava para digitar),
 // achado no teste na tela de 01/11/2026. Não fecha por clique fora nem por Esc, só pelos botões.
-function ModalMotivo({ detalhe, onResponder }: { detalhe: PedirMotivoDetail; onResponder: (motivo: string | null) => void }) {
+function ModalMotivo({ detalhe, onResponder }: { detalhe: PedirMotivoDetail; onResponder: (motivo: string | null, codigo?: string) => void }) {
   const minimo = detalhe.minimo ?? MOTIVO_MIN;
   const maximo = detalhe.maximo ?? MOTIVO_MAX;
   const [texto, setTexto] = useState("");
   const campo = useRef<HTMLTextAreaElement>(null);
-  const valido = motivoValido(texto, minimo, maximo);
+  const [codigo, setCodigo] = useState("");
+  const texto_ok = motivoValido(texto, minimo, maximo);
+  // Com lista padronizada, a opção é obrigatória além do texto livre (que fica só na auditoria interna).
+  const valido = texto_ok && (!detalhe.opcoes || codigo) ? texto_ok : null;
   const perigo = !!detalhe.perigo;
   const tamanho = texto.trim().length;
 
@@ -157,6 +160,21 @@ function ModalMotivo({ detalhe, onResponder }: { detalhe: PedirMotivoDetail; onR
           {detalhe.nota && <Dica id={detalhe.nota} />}
         </DialogTitle>
         <p className="whitespace-pre-line text-[13px] leading-snug text-[#F5F1E8]">{detalhe.mensagem}</p>
+        {detalhe.opcoes && (
+          <div>
+            <label htmlFor="motivo-padronizado" className="mb-1 block text-[12px] font-semibold text-[#E8C97A]">Motivo padronizado (será informado ao titular)</label>
+            <select
+              id="motivo-padronizado"
+              value={codigo}
+              onChange={(e) => setCodigo(e.target.value)}
+              aria-required="true"
+              className="w-full rounded-lg border border-[#9BAFC5]/30 bg-[#13223A] px-3 py-2 text-[13px] text-[#F5F1E8] outline-none focus:border-[#C9A84C]/60"
+            >
+              <option value="">Escolha o motivo</option>
+              {detalhe.opcoes.map((o) => <option key={o.codigo} value={o.codigo}>{o.rotulo}</option>)}
+            </select>
+          </div>
+        )}
         <div>
           <textarea
             ref={campo}
@@ -165,13 +183,13 @@ function ModalMotivo({ detalhe, onResponder }: { detalhe: PedirMotivoDetail; onR
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
-                if (valido) onResponder(valido);
+                if (valido) onResponder(valido, detalhe.opcoes ? codigo : undefined);
               }
             }}
             rows={4}
             maxLength={maximo}
-            aria-label="Motivo"
-            placeholder="Escreva o motivo"
+            aria-label={detalhe.opcoes ? "Detalhe para a equipe (não é enviado ao titular)" : "Motivo"}
+            placeholder={detalhe.opcoes ? "Detalhe para a equipe, não é enviado ao titular" : "Escreva o motivo"}
             className="w-full resize-none rounded-lg border border-[#9BAFC5]/30 bg-[#13223A] px-3 py-2 text-[13px] text-[#F5F1E8] outline-none focus:border-[#C9A84C]/60"
           />
           <p className="mt-1 text-[12px] text-[#9BAFC5]">
@@ -189,7 +207,7 @@ function ModalMotivo({ detalhe, onResponder }: { detalhe: PedirMotivoDetail; onR
           <button
             type="button"
             disabled={!valido}
-            onClick={() => valido && onResponder(valido)}
+            onClick={() => valido && onResponder(valido, detalhe.opcoes ? codigo : undefined)}
             className={`rounded px-3 py-1.5 text-[12px] font-semibold text-[#09081A] disabled:cursor-not-allowed disabled:opacity-40 ${perigo ? "bg-[#E24B4A]" : "bg-[#C9A84C]"}`}
           >
             {detalhe.botao ?? "Confirmar"}
