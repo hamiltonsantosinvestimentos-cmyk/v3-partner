@@ -5,7 +5,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   reservarVagaDeCriacao, devolverVagaDeCriacao, mensagemDeNegacao, ipDaRequisicao, papelIsentoDeCota,
-  camposConfiaveisParaCriacao, portaSupabase, type PortaCota, type ResultadoCota,
+  camposConfiaveisParaCriacao, portaSupabase, validarConteudoMinimoDoDeal, tamanhoDaDescricaoDoDeal,
+  type PortaCota, type ResultadoCota,
 } from "../../lib/creation-quota";
 
 function portaFixa(r: ResultadoCota): PortaCota & { chamadas: unknown[]; liberadas: string[] } {
@@ -129,6 +130,27 @@ test("corpo confiável: partner perde assigned_to, originator_profile_id e code;
   for (const papel of ["ADMIN", "GESTAO", "MESA", "MESA_OPERACIONAL"]) {
     assert.deepEqual(camposConfiaveisParaCriacao(corpo, papel), corpo, papel);
   }
+});
+
+test("conteúdo mínimo: partner precisa de 30 caracteres em notes ou em asset_data.descricao_ptbr; equipe é isenta", () => {
+  const trinta = "a".repeat(30);
+  const vinteENove = "a".repeat(29);
+  for (const papel of ["PARTNER", "PARTNER_PRO", "FINANCEIRO", null]) {
+    assert.match(String(validarConteudoMinimoDoDeal(papel, { notes: "" })), /pelo menos 30 caracteres/, String(papel));
+    assert.match(String(validarConteudoMinimoDoDeal(papel, { notes: vinteENove })), /pelo menos 30/);
+    assert.equal(validarConteudoMinimoDoDeal(papel, { notes: trinta }), null, "30 em notes (CRM e cadastro rápido)");
+    assert.equal(validarConteudoMinimoDoDeal(papel, { notes: "", asset_data: { descricao_ptbr: trinta } }), null, "30 em descricao_ptbr (formulário completo)");
+  }
+  for (const papel of ["ADMIN", "GESTAO", "MESA", "MESA_OPERACIONAL"]) {
+    assert.equal(validarConteudoMinimoDoDeal(papel, { notes: "" }), null, papel);
+  }
+});
+
+test("conteúdo mínimo: espaços não contam e tipo errado em descricao_ptbr é ignorado", () => {
+  assert.equal(tamanhoDaDescricaoDoDeal({ notes: "   abc   " }), 3);
+  assert.equal(tamanhoDaDescricaoDoDeal({ notes: null, asset_data: { descricao_ptbr: 123 } }), 0);
+  assert.equal(tamanhoDaDescricaoDoDeal({ notes: "ab", asset_data: { descricao_ptbr: "abcde" } }), 5);
+  assert.match(String(validarConteudoMinimoDoDeal("PARTNER", { notes: " ".repeat(40) })), /pelo menos 30/, "só espaços não vale");
 });
 
 test("portaSupabase: repassa os parâmetros, devolve o jsonb e trata erro como erro_interno", async () => {

@@ -7,7 +7,7 @@ import { createNotification, notifyByRoles } from "@/lib/notify";
 import { issueV3Code, resolveSectorCode, insertWithLegacyCode } from "@/lib/v3-codes";
 import { anexarTransferencias } from "@/lib/ma/transferir-mesa";
 import { avisarOriginadorDaMudancaDeEtapa } from "@/lib/ma/aviso-originador";
-import { camposConfiaveisParaCriacao } from "@/lib/creation-quota";
+import { camposConfiaveisParaCriacao, validarConteudoMinimoDoDeal } from "@/lib/creation-quota";
 import { reservarVagaOuNegar, type VagaDeCriacao } from "@/lib/creation-quota-route";
 import {
   LOSS_CATEGORIES, MIN_REASON_LENGTH, DB_TO_PIPELINE, STAGE_DEFAULT_PROBABILITY,
@@ -162,6 +162,10 @@ export async function POST(req: NextRequest) {
     }
     // Para papel que não é da equipe, atribuição, originação e código vêm só do servidor (usuário autenticado).
     const d = camposConfiaveisParaCriacao(parsed.data, profile?.role);
+
+    // Conteúdo mínimo: recusa ANTES de reservar a vaga, para uma recusa por falta de descrição não consumir a cota.
+    const faltaConteudo = validarConteudoMinimoDoDeal(profile?.role, d);
+    if (faltaConteudo) return NextResponse.json({ error: faltaConteudo }, { status: 422 });
 
     vaga = await reservarVagaOuNegar(req, svcPost, {
       kind: "user", id: user.id, via: "ma-deals", papel: profile?.role, nomeUsuario: profile?.full_name,

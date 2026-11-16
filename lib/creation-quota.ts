@@ -146,6 +146,29 @@ export function portaSupabase(db: {
   };
 }
 
+// Conteúdo mínimo do deal (BRIEF 15/11/2026, decisão do João): quem não é da equipe só cria o deal com uma descrição de
+// pelo menos 30 caracteres, a mesma regra que o formulário completo já aplica no navegador (nunca confiar só no cliente).
+// A descrição vale em qualquer um dos dois lugares onde as telas a enviam: `asset_data.descricao_ptbr` (formulário
+// completo) ou `notes` (CRM e cadastro rápido). A equipe interna fica isenta (a Mesa cadastra deal de teaser e de
+// reunião sem essa descrição).
+export const DESCRICAO_MINIMA_DEAL = 30;
+
+export function tamanhoDaDescricaoDoDeal(d: { notes?: string | null; asset_data?: Record<string, unknown> | null }): number {
+  const doForm = d.asset_data?.descricao_ptbr;
+  const candidatos = [d.notes, typeof doForm === "string" ? doForm : null];
+  return Math.max(0, ...candidatos.map((t) => (typeof t === "string" ? t.trim().length : 0)));
+}
+
+/** Mensagem de recusa (422) ou null quando o deal pode seguir. Roda ANTES de reservar a vaga: recusa por conteúdo não consome cota. */
+export function validarConteudoMinimoDoDeal(
+  papel: string | null | undefined,
+  d: { notes?: string | null; asset_data?: Record<string, unknown> | null },
+): string | null {
+  if (papelIsentoDeCota(papel)) return null;
+  if (tamanhoDaDescricaoDoDeal(d) >= DESCRICAO_MINIMA_DEAL) return null;
+  return `Descreva a operação com pelo menos ${DESCRICAO_MINIMA_DEAL} caracteres antes de enviar.`;
+}
+
 // Para papel não isento, o servidor ignora o que o corpo diz sobre atribuição, originação e código:
 // partner nunca escolhe quem é o responsável, quem originou nem o código oficial do deal.
 export function camposConfiaveisParaCriacao<T extends { assigned_to?: string; originator_profile_id?: string; code?: string }>(

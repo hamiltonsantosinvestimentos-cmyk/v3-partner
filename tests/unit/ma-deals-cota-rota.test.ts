@@ -17,6 +17,14 @@ test("POST: a vaga é reservada antes de emitir o código oficial", () => {
   assert.ok(reserva < emissao, "reservar a vaga ANTES de issueV3Code, senão a negação queima numeração");
 });
 
+test("POST: o conteúdo mínimo é validado ANTES de reservar a vaga (recusa por conteúdo não consome cota)", () => {
+  const conteudo = post.indexOf("validarConteudoMinimoDoDeal(");
+  const reserva = post.indexOf("reservarVagaOuNegar(");
+  assert.ok(conteudo > 0, "a rota precisa validar o conteúdo mínimo do deal");
+  assert.ok(conteudo < reserva, "validar o conteúdo ANTES de reservar a vaga");
+  assert.match(post, /status:\s*422/);
+});
+
 test("POST: corpo do partner passa por camposConfiaveisParaCriacao antes de qualquer uso", () => {
   assert.match(post, /const d = camposConfiaveisParaCriacao\(parsed\.data, profile\?\.role\)/);
   assert.doesNotMatch(post, /const d = parsed\.data/);
