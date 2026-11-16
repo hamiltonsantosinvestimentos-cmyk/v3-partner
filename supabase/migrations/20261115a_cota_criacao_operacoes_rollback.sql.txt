@@ -1,0 +1,10 @@
+-- Rollback de 20261115a_cota_criacao_operacoes.sql
+-- Só objetos novos: nenhum dado existente é tocado. Rodar o rollback depois de desligar o código que chama
+-- as funções (ou o POST /api/ma-deals fica sem cota e segue o caminho de falha da rota).
+drop trigger if exists trg_partner_creation_controls_updated_at on public.partner_creation_controls;
+drop trigger if exists trg_creation_quota_config_updated_at on public.creation_quota_config;
+drop function if exists public.release_creation_slot(uuid);
+drop function if exists public.reserve_creation_slot(text, text, text, inet);
+drop table if exists public.partner_creation_controls;
+drop table if exists public.ma_deal_creation_log;
+drop table if exists public.creation_quota_config;

@@ -8,6 +8,9 @@ import { issueV3Code, resolveSectorCode, insertWithLegacyCode } from "@/lib/v3-c
 import { anexarTransferencias } from "@/lib/ma/transferir-mesa";
 import { avisarOriginadorDaMudancaDeEtapa } from "@/lib/ma/aviso-originador";
 import {
+  reservarVagaDeCriacao, devolverVagaDeCriacao, portaSupabase, ipDaRequisicao, camposConfiaveisParaCriacao,
+} from "@/lib/creation-quota";
+import {
   LOSS_CATEGORIES, MIN_REASON_LENGTH, DB_TO_PIPELINE, STAGE_DEFAULT_PROBABILITY,
   classifyTransition, stageRoleDenial, validateClosedDate, todaySaoPaulo, isoToBr,
   dbStageLabel, lossCategoryLabel, crossesCreditGate, WORKING_DB_STAGES, CLOSED_DB_STAGES,
@@ -145,6 +148,11 @@ export async function GET(req: NextRequest) {
 
 // POST — cria novo deal M&A
 export async function POST(req: NextRequest) {
+  // Cota de criação (BRIEF 15/11/2026): a vaga é reservada ANTES de emitir o código oficial e devolvida se a
+  // criação falhar. Declarada fora do try para o catch final conseguir devolver a vaga.
+  const svcPost = serviceClient();
+  const portaCota = portaSupabase(svcPost);
+  let vagaCota: string | null = null;
   try {
     const { user, profile } = await getAuthedUser();
     if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -154,9 +162,16 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return NextResponse.json({ error: JSON.stringify(parsed.error.flatten().fieldErrors) }, { status: 400 });
     }
-    const d = parsed.data;
+    // Para papel que não é da equipe, atribuição, originação e código vêm só do servidor (usuário autenticado).
+    const d = camposConfiaveisParaCriacao(parsed.data, profile?.role);
 
-    const svcPost = serviceClient();
+    const decisaoCota = await reservarVagaDeCriacao(portaCota, {
+      kind: "user", id: user.id, via: "ma-deals", papel: profile?.role, ip: ipDaRequisicao(req.headers),
+    });
+    if (!decisaoCota.liberado) {
+      return NextResponse.json(decisaoCota.corpo, { status: decisaoCota.status, headers: decisaoCota.cabecalhos });
+    }
+    vagaCota = decisaoCota.logId;
 
     // Codigo emitido pelo banco (funcao next_v3_code), nunca calculado aqui.
     // O calculo anterior usava COUNT(*)+1, que colide assim que existe qualquer
@@ -208,11 +223,14 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error) {
+      // O detalhe do banco fica só no log do servidor; o cliente recebe mensagem genérica.
       console.error("[ma-deals POST] Supabase error:", JSON.stringify(error));
-      return NextResponse.json({ error: `${error.message} | ${error.details ?? ""} | code: ${error.code ?? ""}` }, { status: 500 });
+      await devolverVagaDeCriacao(portaCota, vagaCota);
+      return NextResponse.json({ error: "Não foi possível criar o deal. Tente novamente em instantes." }, { status: 500 });
     }
     if (!data) {
-      return NextResponse.json({ error: "Nenhum dado retornado após inserção" }, { status: 500 });
+      await devolverVagaDeCriacao(portaCota, vagaCota);
+      return NextResponse.json({ error: "Não foi possível criar o deal. Tente novamente em instantes." }, { status: 500 });
     }
 
     logAudit({
@@ -312,7 +330,8 @@ export async function POST(req: NextRequest) {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[ma-deals POST] Uncaught exception:", msg);
-    return NextResponse.json({ error: `Exceção interna: ${msg}` }, { status: 500 });
+    await devolverVagaDeCriacao(portaCota, vagaCota);
+    return NextResponse.json({ error: "Não foi possível criar o deal. Tente novamente em instantes." }, { status: 500 });
   }
 }
 
