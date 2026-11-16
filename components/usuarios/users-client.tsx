@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { CreationControlDialog } from "@/components/usuarios/creation-control-dialog";
+import { papelIsentoDeCota } from "@/lib/creation-roles";
 import {
   Select,
   SelectContent,
@@ -201,6 +203,7 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
   const [loadingContract, setLoadingContract] = useState<string | null>(null);
   const [renewalUser, setRenewalUser] = useState<User | null>(null);
+  const [controlUser, setControlUser] = useState<User | null>(null);
   const [renewalDate, setRenewalDate] = useState("");
   const [renewingTrial, setRenewingTrial] = useState(false);
 
@@ -572,6 +575,16 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                             ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                             : <FileText className="w-3.5 h-3.5" />}
                         </button>
+                        {!papelIsentoDeCota(user.role) && (
+                          <button
+                            onClick={() => setControlUser(user)}
+                            className="p-1.5 rounded hover:bg-secondary transition-colors text-[#F5B942] hover:text-[#E8C97A]"
+                            title="Criações e bloqueios"
+                            aria-label="Criações e bloqueios"
+                          >
+                            <ShieldOff className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleDelete(user)}
                           className="p-1.5 rounded hover:bg-secondary transition-colors text-red-500 hover:text-red-400"
@@ -588,6 +601,8 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
           </div>
         </CardContent>
       </Card>
+
+      <CreationControlDialog user={controlUser} onClose={() => setControlUser(null)} />
 
       {/* Create User Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>

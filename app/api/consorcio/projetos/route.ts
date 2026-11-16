@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { issueV3Code } from "@/lib/v3-codes";
+import { reservarVagaOuNegar } from "@/lib/creation-quota-route";
 import { resolveClient } from "@/lib/v3-clients";
 
 function serviceClient() {
@@ -33,18 +34,25 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const svc = serviceClient();
   const { data, error } = await svc.from("consorcio_projetos").select("*").is("deleted_at", null).order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[consorcio/projetos GET]", error.message);
+    return NextResponse.json({ error: "Não foi possível carregar os projetos." }, { status: 500 });
+  }
   return NextResponse.json({ projetos: data ?? [] });
 }
 
 export async function POST(req: NextRequest) {
-  const { user } = await getAuthedUser();
+  const { user, profile } = await getAuthedUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
   const d = parsed.data;
   const svc = serviceClient();
+
+  // Cota de criação (BRIEF 15/11/2026): vaga reservada antes de emitir o código e devolvida se a criação falhar.
+  const vaga = await reservarVagaOuNegar(req, svc, { kind: "user", id: user.id, via: "consorcio-projetos", papel: profile?.role, nomeUsuario: profile?.full_name });
+  if (vaga.negado) return vaga.negado;
 
   // Governanca de Numeracao V3, Fase 2b (10/08/2026): codigo emitido pelo
   // banco desde a criacao da tabela (consorcio_projetos nao existia em
@@ -53,8 +61,9 @@ export async function POST(req: NextRequest) {
   try {
     code = await issueV3Code("CS", null, svc);
   } catch (codeErr) {
-    const msg = codeErr instanceof Error ? codeErr.message : String(codeErr);
-    return NextResponse.json({ error: `Falha ao emitir código do projeto: ${msg}` }, { status: 500 });
+    console.error("[consorcio/projetos POST] falha ao emitir código:", codeErr instanceof Error ? codeErr.message : String(codeErr));
+    await vaga.devolver();
+    return NextResponse.json({ error: "Não foi possível concluir o cadastro agora. Tente novamente em instantes." }, { status: 500 });
   }
 
   // Client 360, Fase A (10/08/2026): best-effort, nunca bloqueia a criacao.
@@ -63,7 +72,11 @@ export async function POST(req: NextRequest) {
   const { data, error } = await svc.from("consorcio_projetos").insert({
     code, ...d, v3_client_id: v3ClientId, created_by: user.id,
   }).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[consorcio/projetos POST] falha ao gravar:", error.message);
+    await vaga.devolver();
+    return NextResponse.json({ error: "Não foi possível concluir o cadastro agora. Tente novamente em instantes." }, { status: 500 });
+  }
 
   // Governanca Documental Universal, Fase 2b: cada projeto ja e um cliente
   // real desde a criacao (diferente de carta contemplada, que so vira

@@ -10,11 +10,19 @@ const fonte = readFileSync(join(__dirname, "..", "..", "app", "api", "ma-deals",
 const post = fonte.slice(fonte.indexOf("export async function POST"), fonte.indexOf("export async function PATCH"));
 
 test("POST: a vaga é reservada antes de emitir o código oficial", () => {
-  const reserva = post.indexOf("reservarVagaDeCriacao(");
+  const reserva = post.indexOf("reservarVagaOuNegar(");
   const emissao = post.indexOf("issueV3Code(");
-  assert.ok(reserva > 0, "a rota precisa chamar reservarVagaDeCriacao");
+  assert.ok(reserva > 0, "a rota precisa chamar reservarVagaOuNegar");
   assert.ok(emissao > 0, "issueV3Code não encontrado (a varredura precisa ser atualizada)");
   assert.ok(reserva < emissao, "reservar a vaga ANTES de issueV3Code, senão a negação queima numeração");
+});
+
+test("POST: o conteúdo mínimo é validado ANTES de reservar a vaga (recusa por conteúdo não consome cota)", () => {
+  const conteudo = post.indexOf("validarConteudoMinimoDoDeal(");
+  const reserva = post.indexOf("reservarVagaOuNegar(");
+  assert.ok(conteudo > 0, "a rota precisa validar o conteúdo mínimo do deal");
+  assert.ok(conteudo < reserva, "validar o conteúdo ANTES de reservar a vaga");
+  assert.match(post, /status:\s*422/);
 });
 
 test("POST: corpo do partner passa por camposConfiaveisParaCriacao antes de qualquer uso", () => {
@@ -23,7 +31,7 @@ test("POST: corpo do partner passa por camposConfiaveisParaCriacao antes de qual
 });
 
 test("POST: a vaga é devolvida em toda saída de erro depois da reserva", () => {
-  assert.ok((post.match(/devolverVagaDeCriacao\(/g) ?? []).length >= 3, "erro do insert, retorno vazio e catch final");
+  assert.ok((post.match(/vaga\?\.devolver\(\)/g) ?? []).length >= 3, "erro do insert, retorno vazio e catch final");
 });
 
 test("POST: nenhuma resposta devolve detalhe do banco nem a mensagem da exceção", () => {

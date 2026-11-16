@@ -1,0 +1,4 @@
+-- Rollback de 20261116a_cota_criacao_descarte.sql
+-- Remove só a função de descarte. O log de criação continua existindo, e o descarte deixa de rodar (a rota de cron
+-- passa a devolver erro até ser removida do vercel.json).
+drop function if exists public.creation_log_retention(boolean);

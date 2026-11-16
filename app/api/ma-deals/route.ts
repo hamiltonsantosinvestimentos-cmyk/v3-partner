@@ -7,9 +7,8 @@ import { createNotification, notifyByRoles } from "@/lib/notify";
 import { issueV3Code, resolveSectorCode, insertWithLegacyCode } from "@/lib/v3-codes";
 import { anexarTransferencias } from "@/lib/ma/transferir-mesa";
 import { avisarOriginadorDaMudancaDeEtapa } from "@/lib/ma/aviso-originador";
-import {
-  reservarVagaDeCriacao, devolverVagaDeCriacao, portaSupabase, ipDaRequisicao, camposConfiaveisParaCriacao,
-} from "@/lib/creation-quota";
+import { camposConfiaveisParaCriacao, validarConteudoMinimoDoDeal } from "@/lib/creation-quota";
+import { reservarVagaOuNegar, type VagaDeCriacao } from "@/lib/creation-quota-route";
 import {
   LOSS_CATEGORIES, MIN_REASON_LENGTH, DB_TO_PIPELINE, STAGE_DEFAULT_PROBABILITY,
   classifyTransition, stageRoleDenial, validateClosedDate, todaySaoPaulo, isoToBr,
@@ -151,8 +150,7 @@ export async function POST(req: NextRequest) {
   // Cota de criação (BRIEF 15/11/2026): a vaga é reservada ANTES de emitir o código oficial e devolvida se a
   // criação falhar. Declarada fora do try para o catch final conseguir devolver a vaga.
   const svcPost = serviceClient();
-  const portaCota = portaSupabase(svcPost);
-  let vagaCota: string | null = null;
+  let vaga: VagaDeCriacao | null = null;
   try {
     const { user, profile } = await getAuthedUser();
     if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -165,13 +163,14 @@ export async function POST(req: NextRequest) {
     // Para papel que não é da equipe, atribuição, originação e código vêm só do servidor (usuário autenticado).
     const d = camposConfiaveisParaCriacao(parsed.data, profile?.role);
 
-    const decisaoCota = await reservarVagaDeCriacao(portaCota, {
-      kind: "user", id: user.id, via: "ma-deals", papel: profile?.role, ip: ipDaRequisicao(req.headers),
+    // Conteúdo mínimo: recusa ANTES de reservar a vaga, para uma recusa por falta de descrição não consumir a cota.
+    const faltaConteudo = validarConteudoMinimoDoDeal(profile?.role, d);
+    if (faltaConteudo) return NextResponse.json({ error: faltaConteudo }, { status: 422 });
+
+    vaga = await reservarVagaOuNegar(req, svcPost, {
+      kind: "user", id: user.id, via: "ma-deals", papel: profile?.role, nomeUsuario: profile?.full_name,
     });
-    if (!decisaoCota.liberado) {
-      return NextResponse.json(decisaoCota.corpo, { status: decisaoCota.status, headers: decisaoCota.cabecalhos });
-    }
-    vagaCota = decisaoCota.logId;
+    if (vaga.negado) return vaga.negado;
 
     // Codigo emitido pelo banco (funcao next_v3_code), nunca calculado aqui.
     // O calculo anterior usava COUNT(*)+1, que colide assim que existe qualquer
@@ -225,11 +224,11 @@ export async function POST(req: NextRequest) {
     if (error) {
       // O detalhe do banco fica só no log do servidor; o cliente recebe mensagem genérica.
       console.error("[ma-deals POST] Supabase error:", JSON.stringify(error));
-      await devolverVagaDeCriacao(portaCota, vagaCota);
+      await vaga?.devolver();
       return NextResponse.json({ error: "Não foi possível criar o deal. Tente novamente em instantes." }, { status: 500 });
     }
     if (!data) {
-      await devolverVagaDeCriacao(portaCota, vagaCota);
+      await vaga?.devolver();
       return NextResponse.json({ error: "Não foi possível criar o deal. Tente novamente em instantes." }, { status: 500 });
     }
 
@@ -330,7 +329,7 @@ export async function POST(req: NextRequest) {
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[ma-deals POST] Uncaught exception:", msg);
-    await devolverVagaDeCriacao(portaCota, vagaCota);
+    await vaga?.devolver();
     return NextResponse.json({ error: "Não foi possível criar o deal. Tente novamente em instantes." }, { status: 500 });
   }
 }

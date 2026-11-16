@@ -27,13 +27,10 @@ export interface PortaCota {
   liberar(logId: string): Promise<void>;
 }
 
-// Papéis isentos. A função do banco aplica a mesma lista e nega por padrão (papel desconhecido sofre cota);
-// esta cópia serve só para decidir o que a rota faz se a função falhar e para não forçar o corpo da equipe.
-export const PAPEIS_ISENTOS_COTA = ["ADMIN", "GESTAO", "MESA", "MESA_OPERACIONAL"] as const;
-
-export function papelIsentoDeCota(papel: string | null | undefined): boolean {
-  return !!papel && (PAPEIS_ISENTOS_COTA as readonly string[]).includes(papel);
-}
+// Papéis isentos: lista única em lib/creation-roles.ts (sem dependência de Node, para a tela também usar).
+// A função do banco aplica a mesma lista e nega por padrão (papel desconhecido sofre a cota).
+import { papelIsentoDeCota } from "./creation-roles";
+export { PAPEIS_ISENTOS_COTA, papelIsentoDeCota } from "./creation-roles";
 
 // Só os cabeçalhos que a Vercel injeta e que o cliente não consegue forjar. O primeiro valor de
 // x-forwarded-for é enviado pelo próprio chamador e mascararia a origem, então NÃO é usado.
@@ -77,7 +74,7 @@ export function mensagemDeNegacao(r: ResultadoCota, kind: ActorKind, agora: Date
 
 export type DecisaoCota =
   | { liberado: true; logId: string | null; alertaCota: boolean }
-  | { liberado: false; status: 429 | 503; corpo: { error: string }; cabecalhos: Record<string, string>; alertaCota: boolean };
+  | { liberado: false; status: 429 | 503; corpo: { error: string }; cabecalhos: Record<string, string>; alertaCota: boolean; motivo: MotivoCota };
 
 // Reserva a vaga e traduz o resultado. Quando a função do banco falha (erro_interno) ou a chamada lança:
 //  - equipe isenta e a via "parceria" (etapa obrigatória do cadastro do partner) seguem, para um defeito da
@@ -103,7 +100,7 @@ export async function reservarVagaDeCriacao(
       return { liberado: true, logId: null, alertaCota: false };
     }
     return {
-      liberado: false, status: 503, alertaCota: false,
+      liberado: false, status: 503, alertaCota: false, motivo: "erro_interno",
       corpo: { error: "Não foi possível processar o cadastro agora. Tente novamente em instantes." },
       cabecalhos: { "Retry-After": "30" },
     };
@@ -111,7 +108,7 @@ export async function reservarVagaDeCriacao(
 
   const espera = Math.max(1, Math.ceil(r.retry_after_seconds ?? 60));
   return {
-    liberado: false, status: 429, alertaCota: r.alerta_cota === true,
+    liberado: false, status: 429, alertaCota: r.alerta_cota === true, motivo: r.reason,
     corpo: { error: mensagemDeNegacao(r, p.kind, p.agora) },
     cabecalhos: { "Retry-After": String(espera) },
   };
@@ -147,6 +144,29 @@ export function portaSupabase(db: {
       if (error) console.error("[creation-quota] rpc release_creation_slot falhou", { code: error.code });
     },
   };
+}
+
+// Conteúdo mínimo do deal (BRIEF 15/11/2026, decisão do João): quem não é da equipe só cria o deal com uma descrição de
+// pelo menos 30 caracteres, a mesma regra que o formulário completo já aplica no navegador (nunca confiar só no cliente).
+// A descrição vale em qualquer um dos dois lugares onde as telas a enviam: `asset_data.descricao_ptbr` (formulário
+// completo) ou `notes` (CRM e cadastro rápido). A equipe interna fica isenta (a Mesa cadastra deal de teaser e de
+// reunião sem essa descrição).
+export const DESCRICAO_MINIMA_DEAL = 30;
+
+export function tamanhoDaDescricaoDoDeal(d: { notes?: string | null; asset_data?: Record<string, unknown> | null }): number {
+  const doForm = d.asset_data?.descricao_ptbr;
+  const candidatos = [d.notes, typeof doForm === "string" ? doForm : null];
+  return Math.max(0, ...candidatos.map((t) => (typeof t === "string" ? t.trim().length : 0)));
+}
+
+/** Mensagem de recusa (422) ou null quando o deal pode seguir. Roda ANTES de reservar a vaga: recusa por conteúdo não consome cota. */
+export function validarConteudoMinimoDoDeal(
+  papel: string | null | undefined,
+  d: { notes?: string | null; asset_data?: Record<string, unknown> | null },
+): string | null {
+  if (papelIsentoDeCota(papel)) return null;
+  if (tamanhoDaDescricaoDoDeal(d) >= DESCRICAO_MINIMA_DEAL) return null;
+  return `Descreva a operação com pelo menos ${DESCRICAO_MINIMA_DEAL} caracteres antes de enviar.`;
 }
 
 // Para papel não isento, o servidor ignora o que o corpo diz sobre atribuição, originação e código:
