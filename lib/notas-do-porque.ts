@@ -187,6 +187,19 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Motivo da devolução da ficha",
     texto: "O motivo padronizado que você escolher será informado ao titular por e-mail, junto com o link do cadastro dele, para ele saber o que corrigir. O detalhe escrito no campo abaixo fica só na auditoria da V3 e nunca é enviado. O registro do aviso fica guardado por 36 meses. Sai no máximo um e-mail por motivo a cada 24 horas. Sem escolher o motivo, a devolução não prossegue.",
   },
+  // Cota de criação de operações (BRIEF 15/11/2026).
+  cota_suspender: {
+    titulo: "Suspender criação de operações",
+    texto: "Impede este usuário de criar novos registros pelo prazo definido, para conter cadastro em massa e proteger a numeração oficial. Só administradores usam. O usuário continua com login e vê uma mensagem de suspensão com o contato da compliance. O motivo e o autor ficam no histórico de auditoria. Sem motivo, a suspensão não prossegue.",
+  },
+  cota_liberar: {
+    titulo: "Liberar criação de operações",
+    texto: "Encerra a suspensão antes do prazo. Use depois de revisar o caso. Só administradores usam. O motivo e o autor ficam no histórico de auditoria. Sem motivo, a liberação não prossegue.",
+  },
+  cota_ip_painel: {
+    titulo: "Endereço IP no painel",
+    texto: "O IP só aparece se o registro de IP estiver ligado e serve apenas para apurar a autoria quando houver suspeita de abuso. É guardado por até 90 dias e depois descartado. Só administradores veem, e cada consulta a esta tela fica registrada com o seu nome.",
+  },
 } as const satisfies Record<string, Nota>;
 
 export type NotaId = keyof typeof NOTAS_DO_PORQUE;

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { notifyContratoParceriaAssinado } from "@/lib/email";
 import { issueV3Code } from "@/lib/v3-codes";
+import { reservarVagaOuNegar } from "@/lib/creation-quota-route";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -54,7 +55,18 @@ export async function POST(req: NextRequest) {
   // banco, atomico -- nunca calculado aqui. Adesao nao referencia operacao
   // de origem, por isso operation_code fica sempre nulo (a coluna tem CHECK
   // no banco garantindo isso).
-  const contractCode = await issueV3Code("V3C-PAR", null, svc);
+  // Cota (BRIEF 15/11/2026): a adesão é etapa obrigatória do cadastro, então só sofre o intervalo mínimo e nunca é
+  // barrada por bloqueio de criação. A vaga é reservada aqui, depois do retorno antecipado "já assinou".
+  const vaga = await reservarVagaOuNegar(req, svc, { kind: "user", id: user.id, via: "parceria" });
+  if (vaga.negado) return vaga.negado;
+  let contractCode: string;
+  try {
+    contractCode = await issueV3Code("V3C-PAR", null, svc);
+  } catch (codeErr) {
+    console.error("[contratos/parceria POST] falha ao emitir código:", codeErr instanceof Error ? codeErr.message : String(codeErr));
+    await vaga.devolver();
+    return NextResponse.json({ error: "Não foi possível concluir o cadastro agora. Tente novamente em instantes." }, { status: 500 });
+  }
 
   // Salva contrato
   const { error } = await svc.from("partner_contracts").insert({
@@ -75,7 +87,11 @@ export async function POST(req: NextRequest) {
     contract_html:     body.contract_html ?? null,
   });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[contratos/parceria POST] falha ao gravar:", error.message);
+    await vaga.devolver();
+    return NextResponse.json({ error: "Não foi possível concluir o cadastro agora. Tente novamente em instantes." }, { status: 500 });
+  }
 
   // Marca contrato como assinado no app_metadata
   await svc.auth.admin.updateUserById(user.id, {

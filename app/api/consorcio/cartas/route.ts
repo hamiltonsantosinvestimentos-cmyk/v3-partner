@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { issueV3Code } from "@/lib/v3-codes";
+import { reservarVagaOuNegar } from "@/lib/creation-quota-route";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -33,7 +34,10 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const svc = serviceClient();
   const { data, error } = await svc.from("consorcio_cartas").select("*").is("deleted_at", null).order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[consorcio/cartas GET]", error.message);
+    return NextResponse.json({ error: "Não foi possível carregar as cartas." }, { status: 500 });
+  }
   return NextResponse.json({ cartas: data ?? [] });
 }
 
@@ -46,6 +50,10 @@ export async function POST(req: NextRequest) {
   const d = parsed.data;
   const svc = serviceClient();
 
+  // Cota de criação (BRIEF 15/11/2026): vaga reservada antes de emitir o código e devolvida se a criação falhar.
+  const vaga = await reservarVagaOuNegar(req, svc, { kind: "user", id: user.id, via: "consorcio-cartas", papel: profile?.role, nomeUsuario: profile?.full_name });
+  if (vaga.negado) return vaga.negado;
+
   // Codigo emitido pelo banco. O calculo anterior (COUNT(*)+1) estava a uma
   // exclusao de quebrar: sao 301 cartas com numeracao perfeitamente densa, entao
   // apagar qualquer uma faria COUNT+1 apontar para um codigo ja existente e toda
@@ -53,13 +61,23 @@ export async function POST(req: NextRequest) {
   // ma_deals em 05/08/2026.
   // As 301 cartas no formato CARTA-26-NNN permanecem intocadas: a serie CS vale
   // da emissao em diante, conforme decisao de congelar o historico (05/08/2026).
-  const code = await issueV3Code("CS", null, svc);
+  let code: string;
+  try {
+    code = await issueV3Code("CS", null, svc);
+  } catch (codeErr) {
+    console.error("[consorcio/cartas POST] falha ao emitir código:", codeErr instanceof Error ? codeErr.message : String(codeErr));
+    await vaga.devolver();
+    return NextResponse.json({ error: "Não foi possível concluir o cadastro agora. Tente novamente em instantes." }, { status: 500 });
+  }
 
   const { data, error } = await svc.from("consorcio_cartas").insert({
     code, ...d, created_by: user.id,
   }).select().single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  void profile; // used for auth context
+  if (error) {
+    console.error("[consorcio/cartas POST] falha ao gravar:", error.message);
+    await vaga.devolver();
+    return NextResponse.json({ error: "Não foi possível concluir o cadastro agora. Tente novamente em instantes." }, { status: 500 });
+  }
   return NextResponse.json({ ok: true, carta: data });
 }
 

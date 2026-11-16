@@ -4,6 +4,7 @@ import { notifyMeetingLink } from "@/lib/cm-meeting";
 import { createClient as sc } from "@supabase/supabase-js";
 import { isValidCpfCnpj } from "@/lib/utils";
 import { issueV3Code, resolveSectorCode, resolveEsferaCode } from "@/lib/v3-codes";
+import { reservarVagaOuNegar } from "@/lib/creation-quota-route";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -117,6 +118,11 @@ export async function POST(
   // (antes de existir classificacao) nunca usa um codigo real de serie --
   // so aqui, com o tipo e a esfera que o proprio cedente/partner escolheu,
   // e que o codigo definitivo e emitido.
+  // Cota por link (BRIEF 15/11/2026): link público não tem usuário, o limite é por token (guardado só como hash).
+  // A vaga é reservada ANTES de emitir o código oficial e devolvida se o envio falhar.
+  const vaga = await reservarVagaOuNegar(req, svc(), { kind: "token", id: token, via: "cm-intake" });
+  if (vaga.negado) return vaga.negado;
+
   let anonId: string;
   try {
     if (asset_type === "precatorio" || asset_type === "direito_creditorio") {
@@ -128,8 +134,9 @@ export async function POST(
       anonId = await issueV3Code("BA", sectorCode);
     }
   } catch (codeErr) {
-    const msg = codeErr instanceof Error ? codeErr.message : String(codeErr);
-    return NextResponse.json({ error: `Falha ao emitir código do ativo: ${msg}` }, { status: 500 });
+    console.error("[cm/intake POST] falha ao emitir código do ativo:", codeErr instanceof Error ? codeErr.message : String(codeErr));
+    await vaga.devolver();
+    return NextResponse.json({ error: "Não foi possível concluir o cadastro agora. Tente novamente em instantes." }, { status: 500 });
   }
 
   const { error } = await svc()
@@ -189,7 +196,11 @@ export async function POST(
     })
     .eq("id", listing.id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[cm/intake POST] falha ao gravar o envio:", error.message);
+    await vaga.devolver();
+    return NextResponse.json({ error: "Não foi possível concluir o cadastro agora. Tente novamente em instantes." }, { status: 500 });
+  }
 
   // Fase 5 (19/09/2026, pedido de Joao): Etapa 2 (Reuniao) passa a disparar
   // automaticamente assim que o intake fecha, nao mais so depois da
