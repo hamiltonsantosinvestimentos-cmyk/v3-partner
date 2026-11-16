@@ -9,7 +9,7 @@ export default function PoliticaPrivacidadePage() {
       <div className="max-w-3xl mx-auto">
         <p className="text-[10px] font-bold text-[#C9A84C] uppercase tracking-[2px]">V3 Partners</p>
         <h1 className="text-3xl font-bold mt-2 mb-1">Política de Privacidade</h1>
-        <p className="text-[#7A8FA8] text-sm mb-10">Última atualização: 6 de novembro de 2026</p>
+        <p className="text-[#7A8FA8] text-sm mb-10">Última atualização: 16 de novembro de 2026</p>
 
         <div className="space-y-8 text-sm leading-relaxed text-[#C8D4E3]">
           <section>
@@ -110,7 +110,9 @@ export default function PoliticaPrivacidadePage() {
               Mantemos os dados pelo tempo necessário às finalidades descritas e pelos prazos legais.
               O histórico das conversas do chat é guardado por até 36 meses. Os registros de acesso e
               de revelação de dados são guardados por até 36 meses. Os relatórios de due diligence e
-              o dado bruto de consulta de pessoa física são guardados por até 12 meses. Para proteger
+              o dado bruto de consulta de pessoa física são guardados por até 12 meses. O endereço IP
+              registrado na criação de operações é guardado por até 90 dias e depois descartado; o
+              registro de contagem de cadastros (sem o IP) é guardado por até 12 meses. Para proteger
               os dados, adotamos controle de acesso por perfil, bloqueio de leitura direta ao banco
               para usuários comuns e anônimos, criptografia em trânsito e em repouso, registro de
               acesso a documentos sensíveis e links temporários, de curta duração, para abertura de
@@ -145,7 +147,35 @@ export default function PoliticaPrivacidadePage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-[#F0ECE4] mb-2">9. Contato</h2>
+            <h2 className="text-lg font-semibold text-[#F0ECE4] mb-2">9. Limites de cadastro e registro de IP na criação de operações</h2>
+            <p className="mb-2">
+              Para proteger a base de operações contra cadastro em massa e uso automatizado, a
+              plataforma limita a quantidade de operações que cada usuário pode criar por hora e por
+              dia e mantém um registro de contagem com o usuário, o tipo de cadastro, a data e o
+              horário. Podemos registrar também o endereço IP da requisição de criação, apenas para
+              apurar a autoria quando houver suspeita de abuso. O IP não é usado para definir
+              limites, não é enviado em e-mails nem compartilhado com terceiros, e só a
+              administração da V3 acessa esse registro, com log de cada consulta.
+            </p>
+            <p className="mb-2">
+              A base legal é o legítimo interesse da V3 em prevenir fraude e proteger a segurança e a
+              integridade da plataforma (LGPD, art. 7º, IX, com o art. 10). O IP é guardado por até 90
+              dias e o registro de contagem, por até 12 meses, conforme a seção 6.
+            </p>
+            <p>
+              Quando o limite é ultrapassado, o cadastro é recusado e podemos suspender
+              temporariamente, por até 24 horas, a criação de novos registros daquele usuário. O
+              acesso à plataforma continua ativo. Esse bloqueio é aplicado por critério objetivo e
+              pode ser revisto por uma pessoa da equipe a pedido do titular, pelo e-mail{" "}
+              <a href="mailto:compliance@v3partners.com.br" className="text-[#C9A84C] underline">
+                compliance@v3partners.com.br
+              </a>
+              .
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-[#F0ECE4] mb-2">10. Contato</h2>
             <p>
               Dúvidas sobre esta Política de Privacidade podem ser enviadas para{" "}
               <a href="mailto:compliance@v3partners.com.br" className="text-[#C9A84C] underline">
