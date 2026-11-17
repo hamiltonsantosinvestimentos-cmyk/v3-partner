@@ -8,6 +8,7 @@ import { MOTIVOS_EXCLUSAO, fraseMotivo, nomeExternoDocumentoCadastro } from "@/l
 import { avisarTitularDaQualificacao } from "@/lib/qualificacao/aviso-titular";
 import { PAPEL_ANALISTA, podeExcluirDocumento, statusDoErroDeExclusao } from "@/lib/cm/exclusao-acesso";
 import { notifyByRoles } from "@/lib/notify";
+import { avisarExclusaoDiretaGovernanca } from "@/lib/governance-delete";
 
 // Exclusão justificada de documento de qualificação (BRIEF Trava de Liberação, seção 3).
 // GET  = impacto (quais fichas usam o documento e se há bloqueio), sem efeito algum.
@@ -127,6 +128,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         message: `Tipo: ${nomeExternoDocumentoCadastro(documentKind) ?? "documento de cadastro"}. Motivo: ${rotuloMotivo}. O documento está na Lixeira por 30 dias.`,
         type: "info",
         action_url: "/juridico/contratos",
+      });
+      // E-mail à diretoria (decisão do João, 17/11/2026): a autonomia do analista vem com justificativa, Lixeira e aviso.
+      // O motivo do e-mail é o padronizado; o texto livre (pode ter nome) fica só no log interno.
+      const { data: autor } = await db.from("profiles").select("full_name").eq("id", caller.userId).maybeSingle();
+      await avisarExclusaoDiretaGovernanca({
+        vertical: "Qualificação",
+        itemLabel: nomeExternoDocumentoCadastro(documentKind) ?? "documento de cadastro",
+        autorNome: (autor?.full_name as string | null | undefined) ?? "Analista de Mesa",
+        motivo: rotuloMotivo,
+        lixeiraUrl: `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br"}/juridico/contratos`,
       });
     } catch (e) {
       console.error("[excluir documento] falha ao avisar a governança", e instanceof Error ? e.message : e);
