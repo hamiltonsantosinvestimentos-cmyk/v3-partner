@@ -246,6 +246,44 @@ export function formatCurrencyFromNumber(value: number | null | undefined, curre
   return value.toLocaleString(CM_CURRENCY_LOCALE[currency], { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** Símbolo exibido na Mesa M&A. Padrão visual único: separadores brasileiros (milhar ponto, decimal vírgula) em qualquer moeda. */
+export const MA_CURRENCY_PREFIX: Record<CmCurrency, string> = { BRL: "R$", USD: "US$", EUR: "€" };
+
+/** Valor completo com 2 casas e separadores brasileiros: "R$ 1.234.567,89" ou "US$ 300.000.000,00". */
+export function formatMoney(value: number | null | undefined, currency: CmCurrency = "BRL"): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  const n = value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${MA_CURRENCY_PREFIX[currency]} ${n}`;
+}
+
+/**
+ * Lê valor monetário antigo guardado como texto livre (asset_data) e devolve number, ou null se
+ * não for número claro. Aceita "1.234.567,89" (padrão BR) e "1200000" ou "1200000.50" (só
+ * dígitos, ponto decimal opcional). Texto como "1,5 mi" devolve null: nunca adivinhar escala.
+ */
+export function legacyMoneyToNumber(raw: string | number | null | undefined): number | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw === "number") return Number.isFinite(raw) ? raw : null;
+  const t = raw.trim();
+  if (!t) return null;
+  if (/^\d{1,3}(\.\d{3})*(,\d{1,2})?$/.test(t)) return Number(t.replace(/\./g, "").replace(",", "."));
+  if (/^\d+(\.\d{1,2})?$/.test(t)) return Number(t);
+  if (/^\d+,\d{1,2}$/.test(t)) return Number(t.replace(",", "."));
+  return null;
+}
+
+/** Texto antigo no padrão "1.234.567,89" quando for número claro; senão devolve o texto original, sem mexer. */
+export function normalizeMoneyText(raw: string | number | null | undefined): string {
+  const n = legacyMoneyToNumber(raw);
+  if (n === null) return raw === null || raw === undefined ? "" : String(raw);
+  return formatCurrencyBRLFromNumber(n);
+}
+
+/** Normaliza o texto vindo do banco para uma moeda válida (padrão BRL). */
+export function asCurrency(value: unknown): CmCurrency {
+  return value === "USD" || value === "EUR" ? value : "BRL";
+}
+
 export function abbreviateName(fullName: string): string {
   const parts = fullName.trim().split(" ");
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();

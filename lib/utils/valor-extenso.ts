@@ -65,12 +65,45 @@ function inteiroPorExtenso(n: number): { texto: string; terminaEmMilhaoOuBilhao:
   return { texto: `${resto.join(", ")} e ${ultimo}`, terminaEmMilhaoOuBilhao };
 }
 
+export type MoedaExtenso = "BRL" | "USD" | "EUR";
+
+const MOEDA_EXTENSO: Record<MoedaExtenso, { singular: string; plural: string }> = {
+  BRL: { singular: "real", plural: "reais" },
+  USD: { singular: "dólar americano", plural: "dólares americanos" },
+  EUR: { singular: "euro", plural: "euros" },
+};
+
+// Converte um valor monetário para texto por extenso em pt-BR, na moeda pedida
+// (ex: 300000000 USD -> "trezentos milhões de dólares americanos"). Divide em
+// centavos inteiros antes para não errar com ponto flutuante.
+export function valorPorExtenso(valor: number, moeda: MoedaExtenso = "BRL"): string {
+  if (!Number.isFinite(valor) || valor < 0) return "";
+  const totalCentavos = Math.round(valor * 100);
+  const inteiro = Math.floor(totalCentavos / 100);
+  const centavos = totalCentavos % 100;
+  const nome = MOEDA_EXTENSO[moeda];
+
+  const { texto: principalTexto, terminaEmMilhaoOuBilhao } = inteiroPorExtenso(inteiro);
+  const principalLabel = inteiro === 1 ? nome.singular : nome.plural;
+  // "de" obrigatório depois de milhão/bilhão redondo: "um milhão de reais".
+  const conector = terminaEmMilhaoOuBilhao ? "de" : "";
+
+  if (centavos === 0) {
+    return [principalTexto, conector, principalLabel].filter(Boolean).join(" ");
+  }
+
+  const centavosTexto = tresDigitosPorExtenso(centavos);
+  const centavosLabel = centavos === 1 ? "centavo" : "centavos";
+
+  if (inteiro === 0) return `${centavosTexto} ${centavosLabel}`;
+  return [principalTexto, conector, principalLabel, "e", centavosTexto, centavosLabel].filter(Boolean).join(" ");
+}
+
 // Converte um valor em reais (ex: 2475200.00) para texto por extenso em pt-BR,
 // no padrão usado em instrumentos contratuais V3 (ex: contratos, LOI).
 export function valorEmReaisPorExtenso(valor: number): string {
   const inteiro = Math.floor(valor);
   const centavos = Math.round((valor - inteiro) * 100);
-
   const { texto: reaisTexto, terminaEmMilhaoOuBilhao } = inteiroPorExtenso(inteiro);
   const reaisLabel = inteiro === 1 ? "real" : "reais";
   const conector = terminaEmMilhaoOuBilhao ? "de" : "";

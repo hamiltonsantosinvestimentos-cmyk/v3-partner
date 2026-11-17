@@ -54,6 +54,8 @@ const BusinessPlanContainer = dynamic(
 );
 import { NovoDealForm } from "@/components/ma/novo-deal-form";
 import { DealFormEditorClient } from "@/components/ma/deal-form-editor-client";
+import { MoneyCurrencyField, DealValueText, CambioButton } from "@/components/ma/deal-money";
+import { asCurrency, formatMoney, parseCurrencyBRLInput, MA_CURRENCY_PREFIX, type CmCurrency } from "@/lib/utils";
 import { BuysideDemandPanel } from "@/components/ma/buyside-demand-panel";
 import { InvestorCompliancePanel } from "@/components/mesa-ma/investor-compliance-panel";
 import { LinkServicoStatusBadge } from "@/components/partner/link-servico-status-badge";
@@ -76,6 +78,10 @@ type MaCard = DealClosure & {
   company: string;
   sector: string;
   value: number;
+  // Moeda do valor (BRL padrão) e câmbio do dia gravado pelo botão Atualizar câmbio.
+  currency?: string;
+  fx_rate_brl?: number | null;
+  fx_rate_date?: string | null;
   stage: string;
   dbStage?: string;
   responsible: string;
@@ -125,11 +131,13 @@ const SECTORS = ["Fintech", "Real Estate", "Agronegócio", "Varejo", "Logística
 const ROLES_MA = ["Analista Jr.", "Analista", "Analista Sênior", "Especialista M&A", "Gestor"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function formatM(v: number) {
-  if (v >= 1e9) return `R$ ${(v / 1e9).toFixed(1)}B`;
-  if (v >= 1e6) return `R$ ${(v / 1e6).toFixed(1)}M`;
-  if (v >= 1e3) return `R$ ${(v / 1e3).toFixed(0)}K`;
-  return `R$ ${v}`;
+// Moeda e câmbio de uma linha vinda da API (linha antiga sem moeda é lida como BRL).
+function moedaFromRow(d: Record<string, unknown>) {
+  return {
+    currency: asCurrency(d.currency),
+    fx_rate_brl: d.fx_rate_brl == null ? null : Number(d.fx_rate_brl),
+    fx_rate_date: (d.fx_rate_date ?? null) as string | null,
+  };
 }
 
 function initials(name: string) {
@@ -282,7 +290,7 @@ function MoveToMenu({ card, onMoveRequest }: { card: MaCard; onMoveRequest: (tar
 }
 
 function KanbanCardItem({
-  card, stages, onClick, onOpenForja, canMove, onMoveRequest, onDragStart, onDragEnd,
+  card, stages, onClick, onOpenForja, canMove, onMoveRequest, onDragStart, onDragEnd, onCambio,
 }: {
   card: MaCard;
   stages: MaStage[];
@@ -292,6 +300,7 @@ function KanbanCardItem({
   onMoveRequest: (target: string) => void;
   onDragStart?: (e: React.DragEvent<HTMLDivElement>) => void;
   onDragEnd?: () => void;
+  onCambio?: (fx: { fx_rate_brl: number; fx_rate_date: string }) => void;
 }) {
   const stage = stages.find(s => s.id === card.stage);
   const isInvestidor = card.tipo_participante === "Investidor";
@@ -340,7 +349,10 @@ function KanbanCardItem({
           Transferido: {t.destino === "bolsa" ? "Bolsa de Ativos" : "Mesa de Crédito"}, {t.codigo ?? "código a emitir"}
         </p>
       ))}
-      <p className="text-sm font-bold text-[#C9A84C] mb-2">{formatM(card.value)}</p>
+      <div className="mb-2">
+        <DealValueText value={card.value} currency={card.currency} fxRate={card.fx_rate_brl} fxDate={card.fx_rate_date} className="text-sm font-bold text-[#C9A84C]" />
+        {onCambio && <div className="mt-1.5"><CambioButton dealId={card.id} currency={card.currency} onUpdated={onCambio} size="xs" /></div>}
+      </div>
       {/* Probability bar */}
       <div className="mb-2">
         <div className="flex items-center justify-between mb-1">
@@ -479,6 +491,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
             company: (d.target_company ?? d.title ?? "Sem nome") as string,
             sector: (d.sector ?? "") as string,
             value: (d.deal_value ?? 0) as number,
+            ...moedaFromRow(d),
             stage: DB_TO_PIPELINE[rawStage] ?? rawStage ?? "prospeccao",
             dbStage: rawStage,
             responsible: (() => {
@@ -517,7 +530,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   }, []);
 
   // New card form
-  const [newCard, setNewCard] = useState({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
+  const [newCard, setNewCard] = useState<{ company: string; sector: string; value: string; currency: CmCurrency; stage: string; responsible: string; notes: string }>({ company: "", sector: "Fintech", value: "", currency: "BRL", stage: "", responsible: "", notes: "" });
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -629,7 +642,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [showTeaserCego, setShowTeaserCego] = useState(false);
   const [teaserForm, setTeaserForm] = useState({
     apelido: "", setor: "Real Estate", uf: "", tipo: "Venda de Participação",
-    valor: "", descricao: "", contato_nome: "", contato_telefone: "",
+    valor: "", currency: "BRL" as CmCurrency, descricao: "", contato_nome: "", contato_telefone: "",
   });
   const [teaserSaving, setTeaserSaving] = useState(false);
   const [teaserError, setTeaserError] = useState<string | null>(null);
@@ -774,7 +787,16 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   // Valor em aberto e probabilidade média contam só deals em fase de trabalho:
   // Ganho e Perdido saem do pipeline ativo (BRIEF 28/10/2026, bloco B).
   const workingCards = cards.filter(c => !CLOSED_IDS.includes(c.stage));
-  const totalValue = workingCards.reduce((a, c) => a + c.value, 0);
+  // Totais por moeda, sem conversão: somar reais com dólares daria um número sem sentido.
+  const totalPorMoeda = workingCards.reduce<Record<string, number>>((acc, c) => {
+    const m = asCurrency(c.currency);
+    acc[m] = (acc[m] ?? 0) + c.value;
+    return acc;
+  }, {});
+  const atualizarCambioLocal = (id: string, fx: { fx_rate_brl: number; fx_rate_date: string }) => {
+    setCards(prev => prev.map(c => c.id === id ? { ...c, ...fx } : c));
+    setSelectedCard(prev => prev && prev.id === id ? { ...prev, ...fx } : prev);
+  };
   const avgProb = workingCards.length ? Math.round(workingCards.reduce((a, c) => a + c.probability, 0) / workingCards.length) : 0;
   const canMove = CAN_MOVE_ROLES.includes(userRole);
 
@@ -962,7 +984,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   };
 
   const handleCreateCard = async () => {
-    if (!newCard.company || !newCard.value) return;
+    if (!newCard.company || !parseCurrencyBRLInput(newCard.value)) return;
     const defaultStage = newCard.stage || maStages[0]?.id || "prospeccao";
     setIsCreating(true);
 
@@ -975,7 +997,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         body: JSON.stringify({
           company: newCard.company,
           sector: newCard.sector,
-          value: Number(newCard.value),
+          value: parseCurrencyBRLInput(newCard.value),
+          currency: newCard.currency,
           notes: newCard.notes,
           responsible: newCard.responsible,
         }),
@@ -998,7 +1021,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         code: "NÃO SALVO",
         company: newCard.company,
         sector: newCard.sector,
-        value: Number(newCard.value),
+        value: parseCurrencyBRLInput(newCard.value),
+        currency: newCard.currency,
         stage: defaultStage,
         responsible: userName || newCard.responsible,
         probability: 10,
@@ -1019,7 +1043,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
       }
     }
 
-    setNewCard({ company: "", sector: "Fintech", value: "", stage: "", responsible: "", notes: "" });
+    setNewCard({ company: "", sector: "Fintech", value: "", currency: "BRL", stage: "", responsible: "", notes: "" });
     setPendingFiles([]);
     setIsCreating(false);
     setShowNewCard(false);
@@ -1180,7 +1204,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
                 <p className="text-xs text-[#7A8FA8] mb-1">Volume Total</p>
-                <p className="text-2xl font-bold text-[#C9A84C]">{formatM(totalValue)}</p>
+                <div className="text-lg font-bold text-[#C9A84C] leading-tight">
+                  {(["BRL", "USD", "EUR"] as const).filter(m => totalPorMoeda[m] !== undefined).map(m => (
+                    <p key={m}>{formatMoney(totalPorMoeda[m], m)}</p>
+                  ))}
+                  {Object.keys(totalPorMoeda).length === 0 && <p>{formatMoney(0, "BRL")}</p>}
+                </div>
               </div>
               <div className="rounded-xl border border-[#122036] bg-[#091221] p-4">
                 <p className="text-xs text-[#7A8FA8] mb-1">Em Fechamento</p>
@@ -1236,6 +1265,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                           onMoveRequest={(target) => requestMove(card, target, "menu")}
                           onDragStart={(e) => { e.dataTransfer.setData("text/plain", card.id); e.dataTransfer.effectAllowed = "move"; setDraggingId(card.id); }}
                           onDragEnd={() => setDraggingId(null)}
+                          onCambio={(fx) => atualizarCambioLocal(card.id, fx)}
                         />
                       ))}
                       {stageCards.length === 0 && (
@@ -1291,6 +1321,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                           onOpenForja={() => { setDetailTab("forja"); setSelectedCard(card); }}
                           canMove={canMove}
                           onMoveRequest={(target) => requestMove(card, target, "menu")}
+                          onCambio={(fx) => atualizarCambioLocal(card.id, fx)}
                         />
                       ))}
                       {expanded && stageCards.length === 0 && (
@@ -1361,7 +1392,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                             <ArrowLeftRight size={9} /> INVESTIDOR
                           </p>
                           <p className="text-xs font-semibold text-[#E8EDF5]">{m.investidor.company}</p>
-                          <p className="text-xs text-[#C9A84C] font-bold mt-1">{formatM(m.investidor.value)}</p>
+                          <p className="text-xs text-[#C9A84C] font-bold mt-1">{formatMoney(m.investidor.value, asCurrency(m.investidor.currency))}</p>
                           <p className="text-[10px] text-[#7A8FA8] mt-1">{m.investidor.code}</p>
                         </div>
                         <div className="rounded-lg border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-3">
@@ -1369,7 +1400,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                             <Building2 size={9} /> VENDEDOR
                           </p>
                           <p className="text-xs font-semibold text-[#E8EDF5]">{m.vendedor.company}</p>
-                          <p className="text-xs text-[#C9A84C] font-bold mt-1">{formatM(m.vendedor.value)}</p>
+                          <p className="text-xs text-[#C9A84C] font-bold mt-1">{formatMoney(m.vendedor.value, asCurrency(m.vendedor.currency))}</p>
                           <p className="text-[10px] text-[#7A8FA8] mt-1">{m.vendedor.code}</p>
                         </div>
                       </div>
@@ -2089,7 +2120,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
                     <p className="text-xs text-[#7A8FA8] mb-1">Valor</p>
-                    <p className="text-sm font-bold text-[#C9A84C]">{formatM(selectedCard.value)}</p>
+                    <DealValueText value={selectedCard.value} currency={selectedCard.currency} fxRate={selectedCard.fx_rate_brl} fxDate={selectedCard.fx_rate_date} className="text-sm font-bold text-[#C9A84C]" />
+                    <div className="mt-1.5"><CambioButton dealId={selectedCard.id} currency={selectedCard.currency} onUpdated={(fx) => atualizarCambioLocal(selectedCard.id, fx)} /></div>
                   </div>
                   <div className="rounded-lg bg-[#0F1E35] border border-[#122036] p-3">
                     <p className="text-xs text-[#7A8FA8] mb-1">Etapa atual</p>
@@ -2127,7 +2159,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   const fin = ad.financeiro;
                   const anos = ["2023", "2024", "2025"];
                   const hasFin = fin && anos.some(a => fin.receita?.[a] || fin.ebitda?.[a] || fin.lucro?.[a]);
-                  const fmtV = (v?: string) => v ? `R$ ${v}` : "—";
+                  const fmtV = (v?: string) => v ? `${MA_CURRENCY_PREFIX[asCurrency(selectedCard.currency)]} ${v}` : "—";
                   const jur = ad.juridico;
                   const ct = ad.contato;
                   const difArr = Array.isArray(ad.diferenciais) ? ad.diferenciais : [];
@@ -2193,7 +2225,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                         <div className="grid grid-cols-2 gap-2 mb-3">
                           <div>
                             <p className="text-[10px] text-[#7A8FA8] mb-0.5">Valor Pretendido</p>
-                            <p className="text-xs font-bold text-[#C9A84C]">{formatM(selectedCard.value)}</p>
+                            <DealValueText value={selectedCard.value} currency={selectedCard.currency} fxRate={selectedCard.fx_rate_brl} fxDate={selectedCard.fx_rate_date} className="text-xs font-bold text-[#C9A84C]" />
                           </div>
                           {Boolean(ad.divida_total) && (
                             <div>
@@ -2327,6 +2359,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                     sector:              selectedCard.sector,
                     location:            selectedCard.location ?? "",
                     deal_value:          selectedCard.value,
+                    currency:            asCurrency(selectedCard.currency),
                     probability_percent: selectedCard.probability,
                     notes:               selectedCard.notes ?? null,
                     asset_data:          (selectedCard.asset_data ?? {}) as Parameters<typeof DealFormEditorClient>[0]["dealData"]["asset_data"],
@@ -2339,6 +2372,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       sector:    updated.sector,
                       location:  updated.location,
                       value:     updated.deal_value ?? c.value,
+                      currency:  updated.currency ?? c.currency,
+                      ...(updated.currency && updated.currency !== c.currency ? { fx_rate_brl: null, fx_rate_date: null } : {}),
                       notes:     updated.notes ?? c.notes,
                       asset_data: updated.asset_data,
                     } : c));
@@ -2348,6 +2383,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       sector:     updated.sector,
                       location:   updated.location,
                       value:      updated.deal_value ?? prev.value,
+                      currency:   updated.currency ?? prev.currency,
+                      ...(updated.currency && updated.currency !== prev.currency ? { fx_rate_brl: null, fx_rate_date: null } : {}),
                       notes:      updated.notes ?? prev.notes,
                       asset_data: updated.asset_data,
                     } : null);
@@ -2867,16 +2904,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 </select>
               </div>
             </div>
-            <div>
-              <label className="text-xs text-[#7A8FA8] mb-1.5 block">Valor Estimado (R$) *</label>
-              <input
-                type="number"
-                value={newCard.value}
-                onChange={e => setNewCard(p => ({ ...p, value: e.target.value }))}
-                placeholder="Ex: 50000000"
-                className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#7A8FA8] focus:outline-none focus:border-[#C9A84C] transition-colors"
-              />
-            </div>
+            <MoneyCurrencyField
+              label="Valor Estimado *"
+              value={newCard.value}
+              currency={newCard.currency}
+              onChange={(v, c) => setNewCard(p => ({ ...p, value: v, currency: c }))}
+            />
             <div>
               <label className="text-xs text-[#7A8FA8] mb-1.5 block">Responsável *</label>
               <input
@@ -2941,7 +2974,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               </button>
               <button
                 onClick={handleCreateCard}
-                disabled={!newCard.company || !newCard.value || !newCard.responsible || isCreating}
+                disabled={!newCard.company || !parseCurrencyBRLInput(newCard.value) || !newCard.responsible || isCreating}
                 className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isCreating ? (
@@ -2993,6 +3026,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       company: (d.target_company ?? d.title ?? "Sem nome") as string,
                       sector: (d.sector ?? "") as string,
                       value: (d.deal_value ?? 0) as number,
+                      ...moedaFromRow(d),
                       stage: (d.stage as string) ?? "prospeccao",
                       responsible: (() => {
                         const p = d.partner;
@@ -3497,16 +3531,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
             </div>
 
             {/* Valor */}
-            <div>
-              <label className="text-[10px] font-bold tracking-widest uppercase text-[#7A8FA8] mb-1 block">Valor Aproximado (R$) <span className="text-red-400">*</span></label>
-              <input
-                type="number"
-                placeholder="Ex: 5000000"
-                value={teaserForm.valor}
-                onChange={e => setTeaserForm(p => ({ ...p, valor: e.target.value }))}
-                className="w-full rounded-lg border border-[#243A66] bg-[#09081A] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C] transition-colors placeholder:text-[#7A8FA8]/50"
-              />
-            </div>
+            <MoneyCurrencyField
+              label="Valor Aproximado *"
+              value={teaserForm.valor}
+              currency={teaserForm.currency}
+              onChange={(v, c) => setTeaserForm(p => ({ ...p, valor: v, currency: c }))}
+            />
 
             {/* Descrição cega */}
             <div>
@@ -3559,7 +3589,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 Cancelar
               </button>
               <button
-                disabled={teaserSaving || !teaserForm.apelido || !teaserForm.uf || !teaserForm.valor || !teaserForm.descricao || !teaserForm.contato_nome}
+                disabled={teaserSaving || !teaserForm.apelido || !teaserForm.uf || !parseCurrencyBRLInput(teaserForm.valor) || !teaserForm.descricao || !teaserForm.contato_nome}
                 onClick={async () => {
                   setTeaserSaving(true);
                   setTeaserError(null);
@@ -3572,7 +3602,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                         target_company: "Ativo Confidencial",
                         sector: teaserForm.setor,
                         location: teaserForm.uf,
-                        deal_value: Number(teaserForm.valor),
+                        deal_value: parseCurrencyBRLInput(teaserForm.valor),
+                        currency: teaserForm.currency,
                         deal_type: "TEASER_CEGO",
                         stage: "PROSPECTING",
                         probability_percent: 30,
@@ -3595,7 +3626,8 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                         code: deal.code ?? "TC-" + Date.now().toString().slice(-4),
                         company: teaserForm.apelido,
                         sector: teaserForm.setor,
-                        value: Number(teaserForm.valor),
+                        value: parseCurrencyBRLInput(teaserForm.valor),
+                        currency: teaserForm.currency,
                         stage: "prospeccao",
                         dbStage: "PROSPECTING",
                         responsible: userName,
@@ -3610,7 +3642,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                       setCards(prev => [newCard, ...prev]);
                     }
                     setShowTeaserCego(false);
-                    setTeaserForm({ apelido: "", setor: "Real Estate", uf: "", tipo: "Venda de Participação", valor: "", descricao: "", contato_nome: "", contato_telefone: "" });
+                    setTeaserForm({ apelido: "", setor: "Real Estate", uf: "", tipo: "Venda de Participação", valor: "", currency: "BRL", descricao: "", contato_nome: "", contato_telefone: "" });
                   } catch (e) {
                     setTeaserError(e instanceof Error ? e.message : "Erro ao salvar");
                   } finally {

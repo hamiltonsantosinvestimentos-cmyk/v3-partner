@@ -1,0 +1,7 @@
+alter table public.ma_deals drop constraint if exists ma_deals_fx_rate_chk;
+alter table public.ma_deals drop constraint if exists ma_deals_currency_chk;
+alter table public.ma_deals
+  drop column if exists fx_rate_source,
+  drop column if exists fx_rate_date,
+  drop column if exists fx_rate_brl,
+  drop column if exists currency;
