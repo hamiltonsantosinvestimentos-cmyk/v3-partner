@@ -40,6 +40,7 @@ export interface MaDeal {
   target_company: string;
   sector?: string | null;
   deal_value?: number | null;
+  currency?: string | null;
   ebitda_multiple?: number | null;
   stage: string;
   probability_percent?: number | null;
@@ -87,7 +88,7 @@ function KanbanDealCard({
         </span>
       )}
       {deal.deal_value ? (
-        <p className="text-sm font-bold text-[#C4922E] mb-2">{formatCurrency(deal.deal_value)}</p>
+        <p className="text-sm font-bold text-[#C4922E] mb-2">{formatCurrency(deal.deal_value, deal.currency ?? "BRL")}</p>
       ) : null}
       {deal.probability_percent != null && (
         <div>
@@ -191,6 +192,7 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
           target_company: (d.target_company ?? d.title ?? "Sem nome") as string,
           sector: d.sector as string | null,
           deal_value: d.deal_value as number | null,
+          currency: (d.currency ?? "BRL") as string,
           ebitda_multiple: d.ebitda_multiple as number | null,
           stage: d.stage as string,
           probability_percent: d.probability_percent as number | null,
@@ -235,7 +237,8 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
   }, [selectedDeal?.id]);
 
   const normalizedDeals = localDeals.map(d => ({ ...d, stage: normalizeStage(d.stage) }));
-  const totalValue = localDeals.reduce((s, d) => s + (d.deal_value ?? 0), 0);
+  // Volume Total soma só ativos em reais: somar dólar com real daria um número sem sentido.
+  const totalValue = localDeals.reduce((s, d) => s + ((d.currency ?? "BRL") === "BRL" ? (d.deal_value ?? 0) : 0), 0);
   const activeDeals = normalizedDeals.filter(d => !["aprovacao", "ganho", "perdido"].includes(d.stage)).length;
   const closedDeals = normalizedDeals.filter(d => d.stage === "ganho").length;
 
@@ -460,7 +463,7 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
                   {[
                     { label: "Empresa", value: selectedDeal.target_company },
                     { label: "Setor", value: selectedDeal.sector ?? "—" },
-                    { label: "Valor Estimado", value: selectedDeal.deal_value ? formatCurrency(selectedDeal.deal_value) : "—", gold: true },
+                    { label: "Valor Estimado", value: selectedDeal.deal_value ? formatCurrency(selectedDeal.deal_value, selectedDeal.currency ?? "BRL") : "—", gold: true },
                     { label: "Responsável", value: selectedDeal.responsible ?? "—" },
                     { label: "Probabilidade", value: `${selectedDeal.probability_percent ?? 0}%`, pct: selectedDeal.probability_percent ?? 0 },
                     { label: "Cadastrado em", value: selectedDeal.created_at ? formatDate(selectedDeal.created_at) : "—" },
@@ -822,6 +825,7 @@ export function MaClient({ deals, userId = "", userName = "", userRole = "PARTNE
                       target_company: (d.target_company ?? d.title ?? "Sem nome") as string,
                       sector: d.sector as string | null,
                       deal_value: d.deal_value as number | null,
+          currency: (d.currency ?? "BRL") as string,
                       ebitda_multiple: d.ebitda_multiple as number | null,
                       stage: d.stage as string,
                       probability_percent: d.probability_percent as number | null,

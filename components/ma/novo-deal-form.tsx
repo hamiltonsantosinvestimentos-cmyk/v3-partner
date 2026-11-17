@@ -8,7 +8,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
+import { maskCurrencyBRLInput, parseCurrencyBRLInput, asCurrency, MA_CURRENCY_PREFIX, type CmCurrency } from "@/lib/utils";
+import { MoneyCurrencyField } from "@/components/ma/deal-money";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -50,7 +51,8 @@ const schema = z.object({
   lucro_2024:         z.string().optional(),
   lucro_2025:         z.string().optional(),
   divida_total:       z.string().optional(),
-  deal_value:         z.string().min(1, "Informe o valor pretendido"),
+  deal_value:         z.string().refine(v => parseCurrencyBRLInput(v) > 0, "Informe o valor pretendido"),
+  currency:           z.enum(["BRL", "USD", "EUR"]).optional(),
 
   // Step 4 — Jurídico
   licencas:           z.string().optional(),
@@ -236,16 +238,18 @@ function MoneyInput({ label, name, watch, setValue, placeholder = "0,00", error 
   // mascara precisa interceptar o onChange antes do valor entrar no form state.
   const raw = watch(name);
   const value = typeof raw === "string" ? raw : "";
+  // O prefixo segue a moeda do ativo escolhida no passo Financeiro (R$ por padrão).
+  const prefixo = MA_CURRENCY_PREFIX[asCurrency(watch("currency"))];
   return (
     <FieldGroup label={label}>
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#C9A84C]">R$</span>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#C9A84C]">{prefixo}</span>
         <input
           value={value}
           onChange={e => setValue(name, maskCurrencyBRLInput(e.target.value) as FormData[typeof name], { shouldValidate: true })}
           inputMode="decimal"
           placeholder={placeholder}
-          className={`w-full h-9 rounded-lg border bg-[#162744] pl-9 pr-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition ${error ? "border-red-500/60" : "border-[#243A66]"}`}
+          className={`w-full h-9 rounded-lg border bg-[#162744] ${prefixo.length > 2 ? "pl-11" : "pl-9"} pr-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition ${error ? "border-red-500/60" : "border-[#243A66]"}`}
         />
       </div>
       {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
@@ -304,7 +308,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
 
   const { register, handleSubmit, watch, setValue, trigger, reset, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { tem_processos: "nao", tem_pendencias: "nao", tipo_participante: "Vendedor" },
+    defaultValues: { tem_processos: "nao", tem_pendencias: "nao", tipo_participante: "Vendedor", currency: "BRL" },
   });
 
   const temProcessos = watch("tem_processos");
@@ -469,9 +473,9 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
       },
       divida_total: data.divida_total ?? "",
       metricas: [
-        ...(data.receita_2025 ? [{ label: "Receita 2025", value: `R$ ${data.receita_2025}`, sub: "Receita bruta" }] : []),
-        ...(data.ebitda_2025  ? [{ label: "EBITDA 2025",  value: `R$ ${data.ebitda_2025}`,  sub: "Margem operacional" }] : []),
-        ...(data.divida_total ? [{ label: "Dívida Total", value: `R$ ${data.divida_total}`, sub: "Posição atual" }] : []),
+        ...(data.receita_2025 ? [{ label: "Receita 2025", value: `${MA_CURRENCY_PREFIX[asCurrency(data.currency)]} ${data.receita_2025}`, sub: "Receita bruta" }] : []),
+        ...(data.ebitda_2025  ? [{ label: "EBITDA 2025",  value: `${MA_CURRENCY_PREFIX[asCurrency(data.currency)]} ${data.ebitda_2025}`,  sub: "Margem operacional" }] : []),
+        ...(data.divida_total ? [{ label: "Dívida Total", value: `${MA_CURRENCY_PREFIX[asCurrency(data.currency)]} ${data.divida_total}`, sub: "Posição atual" }] : []),
       ],
 
       // Step 4 — Jurídico
@@ -512,6 +516,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
       sector:         data.sector,
       location:       data.location,
       deal_value:     parseCurrencyBRLInput(data.deal_value),
+      currency:       asCurrency(data.currency),
       stage:          "PROSPECTING" as const,
       status:         "PENDING" as const,
       probability_percent: 10,
@@ -537,6 +542,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
           title:               `${data.deal_type} — ${data.target_company}`,
           sector:              data.sector,
           value:               parseCurrencyBRLInput(data.deal_value),
+          currency:            asCurrency(data.currency),
           notes:               data.info_adicionais ?? "",
           tipo_participante:   data.tipo_participante,
           location:            data.location,
@@ -784,12 +790,15 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
           </div>
 
           <div className="grid grid-cols-2 gap-4 pt-2 border-t border-[#243A66]">
-            <MoneyInput label="Dívida Total Atual (R$)" name="divida_total" watch={watch} setValue={setValue} />
-            <MoneyInput
-              label="Valor Pretendido pelo Ativo (R$) *"
-              name="deal_value"
-              watch={watch}
-              setValue={setValue}
+            <MoneyInput label={`Dívida Total Atual (${MA_CURRENCY_PREFIX[asCurrency(watch("currency"))]})`} name="divida_total" watch={watch} setValue={setValue} />
+            <MoneyCurrencyField
+              label="Valor Pretendido pelo Ativo *"
+              value={typeof watch("deal_value") === "string" ? (watch("deal_value") as string) : ""}
+              currency={asCurrency(watch("currency")) as CmCurrency}
+              onChange={(v, c) => {
+                setValue("deal_value", v, { shouldValidate: true });
+                setValue("currency", c);
+              }}
               error={errors.deal_value?.message}
             />
           </div>
@@ -911,7 +920,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
                 ["Setor", watch("sector")],
                 ["Tipo", watch("deal_type")],
                 ["Localização", watch("location")],
-                ["Valor Pretendido", watch("deal_value") ? `R$ ${watch("deal_value")}` : "—"],
+                ["Valor Pretendido", watch("deal_value") ? `${MA_CURRENCY_PREFIX[asCurrency(watch("currency"))]} ${watch("deal_value")}` : "—"],
                 ["Processos", watch("tem_processos") === "sim" ? "Sim" : "Não"],
               ].map(([k, v]) => (
                 <div key={k}>

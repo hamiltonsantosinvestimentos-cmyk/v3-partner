@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Pencil, X, Check, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { asCurrency, maskCurrencyBRLInput, parseCurrencyBRLInput, normalizeMoneyText, formatCurrencyBRLFromNumber, MA_CURRENCY_PREFIX, type CmCurrency } from "@/lib/utils";
+import { MoneyCurrencyField } from "@/components/ma/deal-money";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -61,11 +63,12 @@ export interface DealFormEditorProps {
     sector: string;
     location: string;
     deal_value: number | null;
+    currency?: CmCurrency;
     probability_percent: number | null;
     notes: string | null;
     asset_data: AssetData;
   };
-  onSaved?: (updated: { target_company: string; sector: string; location: string; deal_value: number | null; notes: string | null; asset_data: AssetData }) => void;
+  onSaved?: (updated: { target_company: string; sector: string; location: string; deal_value: number | null; currency: CmCurrency; notes: string | null; asset_data: AssetData }) => void;
   compact?: boolean; // true = estilo modal (Mesa M&A), false = estilo página (M&A)
 }
 
@@ -78,6 +81,7 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
   const ct = ad.contato;
 
   const [editing, setEditing] = useState(false);
+  const [currency, setCurrency] = useState<CmCurrency>(asCurrency(dealData.currency));
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,11 +111,11 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
 
   // ── Step 3 — Financeiro ──
   const [s3, setS3] = useState({
-    deal_value:   dealData.deal_value ? String(dealData.deal_value) : "",
-    divida_total: String(ad.divida_total ?? ""),
-    r2023: fin?.receita?.["2023"] ?? "", r2024: fin?.receita?.["2024"] ?? "", r2025: fin?.receita?.["2025"] ?? "",
-    e2023: fin?.ebitda?.["2023"]  ?? "", e2024: fin?.ebitda?.["2024"]  ?? "", e2025: fin?.ebitda?.["2025"]  ?? "",
-    l2023: fin?.lucro?.["2023"]   ?? "", l2024: fin?.lucro?.["2024"]   ?? "", l2025: fin?.lucro?.["2025"]   ?? "",
+    deal_value:   dealData.deal_value ? formatCurrencyBRLFromNumber(dealData.deal_value) : "",
+    divida_total: normalizeMoneyText(ad.divida_total as string | number | undefined),
+    r2023: normalizeMoneyText(fin?.receita?.["2023"]), r2024: normalizeMoneyText(fin?.receita?.["2024"]), r2025: normalizeMoneyText(fin?.receita?.["2025"]),
+    e2023: normalizeMoneyText(fin?.ebitda?.["2023"]),  e2024: normalizeMoneyText(fin?.ebitda?.["2024"]),  e2025: normalizeMoneyText(fin?.ebitda?.["2025"]),
+    l2023: normalizeMoneyText(fin?.lucro?.["2023"]),   l2024: normalizeMoneyText(fin?.lucro?.["2024"]),   l2025: normalizeMoneyText(fin?.lucro?.["2025"]),
   });
 
   // ── Step 4 — Jurídico ──
@@ -169,9 +173,9 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
       comissionamento: s5.comissionamento,
       info_adicionais: s5.info_adicionais,
       metricas: [
-        ...(s3.r2025 ? [{ label: "Receita 2025", value: `R$ ${s3.r2025}`, sub: "Receita bruta" }] : []),
-        ...(s3.e2025 ? [{ label: "EBITDA 2025",  value: `R$ ${s3.e2025}`,  sub: "Margem operacional" }] : []),
-        ...(s3.divida_total ? [{ label: "Dívida Total", value: `R$ ${s3.divida_total}`, sub: "Posição atual" }] : []),
+        ...(s3.r2025 ? [{ label: "Receita 2025", value: `${MA_CURRENCY_PREFIX[currency]} ${s3.r2025}`, sub: "Receita bruta" }] : []),
+        ...(s3.e2025 ? [{ label: "EBITDA 2025",  value: `${MA_CURRENCY_PREFIX[currency]} ${s3.e2025}`,  sub: "Margem operacional" }] : []),
+        ...(s3.divida_total ? [{ label: "Dívida Total", value: `${MA_CURRENCY_PREFIX[currency]} ${s3.divida_total}`, sub: "Posição atual" }] : []),
       ],
     };
 
@@ -180,7 +184,8 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
       target_company: s1.target_company,
       sector:         s1.sector,
       location:       s1.location,
-      deal_value:     s3.deal_value ? Number(s3.deal_value) : null,
+      deal_value:     parseCurrencyBRLInput(s3.deal_value) || null,
+      currency,
       notes:          s5.info_adicionais || null,
       asset_data:     newAssetData,
     };
@@ -195,7 +200,7 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
       if (!res.ok) throw new Error(json.error ?? "Erro ao salvar");
       setSuccess(true);
       setEditing(false);
-      onSaved?.({ target_company: s1.target_company, sector: s1.sector, location: s1.location, deal_value: Number(s3.deal_value) || null, notes: s5.info_adicionais || null, asset_data: newAssetData });
+      onSaved?.({ target_company: s1.target_company, sector: s1.sector, location: s1.location, deal_value: parseCurrencyBRLInput(s3.deal_value) || null, currency, notes: s5.info_adicionais || null, asset_data: newAssetData });
       setTimeout(() => setSuccess(false), 3000);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Erro ao salvar");
@@ -327,13 +332,16 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
             {open.s3 && (
               <div className={`p-4 space-y-3 ${bgSection}`}>
                 <div className="grid grid-cols-2 gap-3">
+                  <MoneyCurrencyField
+                    label="Valor Pretendido"
+                    value={s3.deal_value}
+                    currency={currency}
+                    onChange={(v, c) => { setS3(p => ({ ...p, deal_value: v })); setCurrency(c); }}
+                    compact
+                  />
                   <div>
-                    <label className={labelCls}>Valor Pretendido (R$)</label>
-                    <input type="number" value={s3.deal_value} onChange={e => setS3(p => ({ ...p, deal_value: e.target.value }))} className={inputCls} placeholder="Ex: 5000000" />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Dívida Total (R$)</label>
-                    <input value={s3.divida_total} onChange={e => setS3(p => ({ ...p, divida_total: e.target.value }))} className={inputCls} placeholder="Ex: 1200000" />
+                    <label className={labelCls}>Dívida Total ({MA_CURRENCY_PREFIX[currency]})</label>
+                    <input value={s3.divida_total} onChange={e => setS3(p => ({ ...p, divida_total: maskCurrencyBRLInput(e.target.value) }))} inputMode="decimal" className={inputCls} placeholder="0,00" />
                   </div>
                 </div>
                 {/* Tabela de receita / ebitda / lucro */}
@@ -357,9 +365,10 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
                             <td key={k} className="px-1 py-1">
                               <input
                                 value={s3[k]}
-                                onChange={e => setS3(p => ({ ...p, [k]: e.target.value }))}
+                                onChange={e => setS3(p => ({ ...p, [k]: maskCurrencyBRLInput(e.target.value) }))}
+                                inputMode="decimal"
                                 className="w-full rounded border border-[#243A66] bg-[#111F35] text-[#F0ECE4] text-xs px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 placeholder:text-[#7A8FA8]"
-                                placeholder="—"
+                                placeholder="0,00"
                               />
                             </td>
                           ))}
