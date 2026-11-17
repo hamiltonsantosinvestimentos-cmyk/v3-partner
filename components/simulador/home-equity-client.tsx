@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 // components/simulador/home-equity-publico-client.tsx) — nunca duplicar a
 // fórmula/taxa em outro lugar, sempre importar daqui.
 export const LTV_MAX = 0.60;           // 60% máximo
-export const TAXA_BASE_MENSAL = 0.0089; // 0,89% a.m.
+export const TAXA_BASE_MENSAL = 0.0109; // a partir de 1,09% a.m. (Hamilton, 17/11/2026)
 export const IPCA_ANUAL_REF = 0.0483;  // 4,83% a.a. (projeção 2026)
 const IPCA_MENSAL_REF = Math.pow(1 + IPCA_ANUAL_REF, 1 / 12) - 1;
 export const PRAZO_MIN = 12;
@@ -326,7 +326,7 @@ export function HomeEquitySimulator() {
       </div>
       <div>
         ${[
-          ["Taxa Base Mensal", "0,89% a.m."],
+          ["Taxa Base Mensal", "a partir de 1,09% a.m."],
           ["IPCA Projetado (a.a.)", `${ipcaCustom.toFixed(1)}%`],
           ["IPCA Mensal (proj.)", fmtPct(taxaMensalIPCA)],
           ["Taxa Total Mensal", fmtPct(taxaMensalTotal)],
@@ -383,7 +383,7 @@ export function HomeEquitySimulator() {
 
   <div class="footer">
     <strong>V3 Partners Soluções Ltda</strong> — CNPJ 14.219.287/0001-50 · v3partners.com.br<br>
-    Esta simulação foi gerada pela Plataforma V3 PARTNER em ${dataHoje}. Não constitui proposta formal de crédito. Consulte um assessor V3 Partners para proposta definitiva.
+    Esta simulação foi gerada pela Plataforma V3 PARTNER em ${dataHoje}. Não constitui proposta formal de crédito. O crédito ainda será analisado. Esta simulação não constitui aprovação de crédito. Consulte um assessor V3 Partners para proposta definitiva.
   </div>
 </div>
 <script>window.onload = () => { window.print(); }</script>
@@ -406,7 +406,7 @@ export function HomeEquitySimulator() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-foreground">Simulador Home Equity</h1>
-            <p className="text-xs text-muted-foreground">CGI — Crédito com Garantia de Imóvel · Taxa a partir de 0,89% a.m. + IPCA</p>
+            <p className="text-xs text-muted-foreground">CGI — Crédito com Garantia de Imóvel · Taxa a partir de 1,09% a.m. + IPCA</p>
           </div>
         </div>
         {resultado && (
@@ -538,7 +538,7 @@ export function HomeEquitySimulator() {
             <div className="flex items-start gap-2 p-2.5 rounded-lg bg-[#C9A84C]/8 border border-[#C9A84C]/20">
               <Info className="w-3.5 h-3.5 text-[#C9A84C] flex-shrink-0 mt-0.5" />
               <p className="text-[10px] text-muted-foreground">
-                Taxa contratada: <strong className="text-[#E8C97A]">0,89% a.m. + IPCA</strong>. O saldo devedor é corrigido mensalmente pelo IPCA. Projeção atual: <strong className="text-[#E8C97A]">{ipcaCustom.toFixed(1)}% a.a.</strong>
+                Taxa contratada: <strong className="text-[#E8C97A]">a partir de 1,09% a.m. + IPCA</strong>. O saldo devedor é corrigido mensalmente pelo IPCA. Projeção atual: <strong className="text-[#E8C97A]">{ipcaCustom.toFixed(1)}% a.a.</strong>
               </p>
             </div>
           </div>
@@ -578,7 +578,7 @@ export function HomeEquitySimulator() {
                   {[
                     { label: "Valor do empréstimo", value: fmtBRL(emprestimoClamped) },
                     { label: "LTV contratado", value: fmtPct(ltv, 1) },
-                    { label: "Taxa base mensal", value: "0,89% a.m." },
+                    { label: "Taxa base mensal", value: "a partir de 1,09% a.m." },
                     { label: "IPCA mensal (proj.)", value: fmtPct(taxaMensalIPCA) },
                     { label: "Taxa total mensal", value: fmtPct(taxaMensalTotal) },
                     { label: "Taxa total anual", value: fmtPct(taxaAnualTotal) },
