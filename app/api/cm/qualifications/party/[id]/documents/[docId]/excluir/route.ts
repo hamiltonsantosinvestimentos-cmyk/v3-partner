@@ -4,15 +4,19 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { motivoValido } from "@/lib/motivo";
 import { calcularExigidos } from "@/lib/qualification-conferencia-server";
 import { mensagemBloqueio, motivoTemDocumento, papelRotulo, type LinhaImpacto } from "@/lib/qualification-exclusao";
-import { MOTIVOS_EXCLUSAO, fraseMotivo } from "@/lib/comunicacao-externa";
+import { MOTIVOS_EXCLUSAO, fraseMotivo, nomeExternoDocumentoCadastro } from "@/lib/comunicacao-externa";
 import { avisarTitularDaQualificacao } from "@/lib/qualificacao/aviso-titular";
+import { PAPEL_ANALISTA, podeExcluirDocumento, statusDoErroDeExclusao } from "@/lib/cm/exclusao-acesso";
+import { notifyByRoles } from "@/lib/notify";
 
 // Exclusão justificada de documento de qualificação (BRIEF Trava de Liberação, seção 3).
 // GET  = impacto (quais fichas usam o documento e se há bloqueio), sem efeito algum.
 // POST = exclui (lógico, Lixeira de 30 dias), reabre cada ficha preenchida afetada pelo MESMO link e
 //        limpa a conferência, tudo numa função de banco atômica (fn_excluir_documento_qualificacao).
-// Só ADMIN e GESTAO excluem direto. MESA_OPERACIONAL vê o impacto, mas não exclui (a solicitação ao
-// sócio é outra entrega). Nenhum dado pessoal sai daqui: papel, estado e código do contrato.
+// ADMIN e GESTAO excluem pelo papel. O Analista de Mesa (MESA_OPERACIONAL) exclui só com a permissão individual
+// `qualificacao_excluir_documento` (lib/cm/exclusao-acesso.ts), com limite diário aplicado pela função de banco, e a
+// governança é avisada a cada exclusão dele. Sem a permissão ele vê o impacto, mas não exclui. Nenhum dado pessoal sai
+// daqui: papel, estado e código do contrato.
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -20,7 +24,6 @@ function svc() {
 
 const NO_STORE = { "Cache-Control": "no-store" };
 const VIEW_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
-const DELETE_ROLES = ["ADMIN", "GESTAO"];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function getCaller() {
@@ -59,7 +62,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const linhas = (data ?? []) as LinhaImpacto[];
   return NextResponse.json({
-    pode_excluir_direto: DELETE_ROLES.includes(caller.role),
+    pode_excluir_direto: await podeExcluirDocumento(db, caller.userId, caller.role),
     bloqueio: mensagemBloqueio(linhas),
     fichas: linhas.map((l) => ({
       papel: papelRotulo(l.role_in_document),
@@ -74,8 +77,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string; docId: string }> }) {
   const caller = await getCaller();
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401, headers: NO_STORE });
-  if (!DELETE_ROLES.includes(caller.role)) {
-    return NextResponse.json({ error: "Só ADMIN e GESTAO excluem documento. Peça a um deles." }, { status: 403, headers: NO_STORE });
+  if (!(await podeExcluirDocumento(svc(), caller.userId, caller.role))) {
+    return NextResponse.json({ error: "Você não tem permissão para excluir documento. Peça a ADMIN ou GESTAO." }, { status: 403, headers: NO_STORE });
   }
   const { id, docId } = await params;
   if (!UUID_RE.test(docId)) return NextResponse.json({ error: "Documento inválido" }, { status: 422, headers: NO_STORE });
@@ -107,9 +110,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data, error } = await db.rpc("fn_excluir_documento_qualificacao", { p_document_id: docId, p_user_id: caller.userId, p_reason: motivo });
   if (error) {
-    // 42501 papel; P0001 regra (bloqueio, motivo, já excluído). A mensagem do banco não tem dado pessoal.
-    const status = error.code === "42501" ? 403 : error.code === "P0001" ? 409 : 500;
-    return NextResponse.json({ error: status === 500 ? "Não foi possível excluir o documento." : error.message }, { status, headers: NO_STORE });
+    // 42501 papel; P0429 limite diário do analista; P0001 regra (bloqueio, motivo, já excluído). A mensagem do banco não tem dado pessoal.
+    const status = statusDoErroDeExclusao(error.code);
+    const mensagem = status === 429
+      ? "Limite diário de exclusões atingido. Peça a ADMIN ou GESTAO."
+      : status === 500 ? "Não foi possível excluir o documento." : error.message;
+    return NextResponse.json({ error: mensagem }, { status, headers: NO_STORE });
+  }
+  // Aviso à governança a cada exclusão feita por analista (com await: o padrão void nunca envia). Só tipo do documento e
+  // motivo padronizado; o texto livre fica no log interno porque pode conter nome. Falha aqui não desfaz a exclusão.
+  if (caller.role === PAPEL_ANALISTA) {
+    try {
+      const rotuloMotivo = MOTIVOS_EXCLUSAO.find((o) => o.codigo === motivoCodigo)?.rotulo ?? "Motivo padronizado";
+      await notifyByRoles(["ADMIN", "GESTAO"], {
+        title: "Documento de qualificação excluído por analista",
+        message: `Tipo: ${nomeExternoDocumentoCadastro(documentKind) ?? "documento de cadastro"}. Motivo: ${rotuloMotivo}. O documento está na Lixeira por 30 dias.`,
+        type: "info",
+        action_url: "/juridico/contratos",
+      });
+    } catch (e) {
+      console.error("[excluir documento] falha ao avisar a governança", e instanceof Error ? e.message : e);
+    }
   }
   // Aviso ao titular de cada ficha reaberta: última etapa, em paralelo (cada um com o seu tempo limite), nunca lança e nunca
   // desfaz a exclusão. Chave desligada por padrão. O código do motivo também vai ao log, sem o texto livre.

@@ -223,7 +223,7 @@ const ROLE_LABELS: Record<string, string> = {
   GOLD: "V3 Gold",
   DIAMANTE: "V3 Diamante",
   ENTERPRISE: "V3 Enterprise",
-  MESA_OPERACIONAL: "Mesa Operacional",
+  MESA_OPERACIONAL: "Analista de Mesa",
   FINANCEIRO: "Financeiro",
   GESTAO: "Gestão",
   SDR: "SDR",

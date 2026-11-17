@@ -613,7 +613,7 @@ function PartyCardBody({ data, onPreview, onChanged, onExcluido }: { data: any; 
       {data.documents?.length > 0 && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
           <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Documentos KYC</p>
-          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onExcluido} />)}
+          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.pode_excluir_documento)} onExcluido={onExcluido} />)}
         </div>
       )}
 
@@ -656,7 +656,7 @@ function PartyCardBody({ data, onPreview, onChanged, onExcluido }: { data: any; 
               )}
               {rep.documents?.length > 0 && (
                 <div className="pt-1 space-y-1">
-                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onExcluido} />)}
+                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.pode_excluir_documento)} onExcluido={onExcluido} />)}
                 </div>
               )}
             </div>

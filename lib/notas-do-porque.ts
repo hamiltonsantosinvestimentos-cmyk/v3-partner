@@ -163,6 +163,10 @@ export const NOTAS_DO_PORQUE = {
     titulo: "Motivo da exclusão",
     texto: "O motivo registra por que a operação saiu do quadro e evita exclusão sem rastro. Ele vai por e-mail à governança da V3 (os três sócios) e fica guardado junto com o registro da exclusão, por no mínimo 30 dias. Só o ADMIN vê a Lixeira, onde a operação fica por 30 dias antes de ser apagada. Sem o motivo, a exclusão não prossegue. Não escreva dado pessoal de cliente no motivo.",
   },
+  analista_permissao_excluir: {
+    titulo: "Permissão de excluir documento",
+    texto: "Esta permissão deixa um Analista de Mesa excluir um documento recebido errado numa qualificação, quando ele está ilegível, vencido, cortado ou é de outro tipo. O documento vai para a Lixeira por 30 dias, a ficha volta ao titular pelo mesmo link e a governança (ADMIN e GESTAO) é avisada a cada exclusão, com o tipo do documento e o motivo padronizado. Há um limite de 20 exclusões por dia por analista. Só o ADMIN concede ou revoga, e cada mudança fica no log de auditoria. Sem a permissão, o botão Excluir não aparece para o analista.",
+  },
   ma_motivo_reabertura: {
     titulo: "Motivo da reabertura",
     texto: "Reabrir desfaz um encerramento e muda relatórios e o Cliente 360. O motivo fica na Timeline. Visível para ADMIN, GESTAO e Mesa Operacional. Fica guardado enquanto o deal existir. Sem ele, o deal continua encerrado.",

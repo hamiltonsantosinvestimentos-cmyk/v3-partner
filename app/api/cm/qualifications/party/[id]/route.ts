@@ -7,6 +7,7 @@ import { isValidEmail } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { normalizePhone } from "@/lib/phone";
 import { calcularExigidos, calcularProgresso } from "@/lib/qualification-conferencia-server";
+import { podeExcluirDocumento } from "@/lib/cm/exclusao-acesso";
 import { maskCpfCnpj, maskIdentity, maskTail, maskBankData, maskNode, PRINCIPAL_REVEAL_FIELDS, NODE_REVEAL_FIELDS } from "@/lib/qualification-mask";
 
 function svc() {
@@ -164,7 +165,10 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     progresso,
   };
 
-  return NextResponse.json({ qualification: ficha, documents, representation_chain: representationChain, filled: true, conferencia }, noStore);
+  // Excluir documento tem regra própria (papel de sócio ou permissão individual do analista), separada de pode_liberar.
+  const pode_excluir_documento = await podeExcluirDocumento(db, caller.userId, caller.role);
+
+  return NextResponse.json({ qualification: ficha, documents, representation_chain: representationChain, filled: true, conferencia, pode_excluir_documento }, noStore);
 }
 
 /** DELETE /api/cm/qualifications/party/[id] — exclusão individual de um
