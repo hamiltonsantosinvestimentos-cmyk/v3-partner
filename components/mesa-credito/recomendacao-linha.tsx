@@ -111,7 +111,7 @@ const LINHAS: RegraLinha[] = [
     nome: "Home Equity",
     nivel: "NIVEL_1",
     categoria: "Crédito com Garantia Imobiliária",
-    descricao: "Elegibilidade ágil. Aceita empresas em recuperação judicial. CET 0,7–0,9% a.m. + IPCA. Prazo 60 a 240 meses. LTV 30–50%. Aporte R$80K a R$10M.",
+    descricao: "Elegibilidade ágil. Aceita empresas em recuperação judicial. Taxa a partir de 1,09% a.m. + IPCA. Prazo 60 a 240 meses. LTV 30–50%. Aporte R$80K a R$10M.",
     cor: "#60A5FA",
     emoji: "🏡",
     score: (ctx) => {

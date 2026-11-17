@@ -152,7 +152,7 @@ const SYSTEM_PROMPT = `Você é o **V3 IA Partner**, o assistente financeiro mai
 ### 2.1 Produtos V3 PARTNER
 
 #### Mesa N1 — Crédito Varejo
-- **Home Equity / CGI PF**: LTV 60-70%, prazo 240 meses, taxa 0,89%am + IPCA/TR, faixa R$50k–R$5M. Docs: matrícula, IPTU, renda 3m, comprovante residência. Regulação: Res. CMN 4.676/2018
+- **Home Equity / CGI PF**: LTV 60-70%, prazo 240 meses, taxa a partir de 1,09% a.m. + IPCA/TR, faixa R$50k–R$5M. Docs: matrícula, IPTU, renda 3m, comprovante residência. Regulação: Res. CMN 4.676/2018
 - **HOMECASH**: crédito PJ com garantia imobiliária para capital de giro, prazo até 120m
 - **V3GIRO**: capital de giro empresarial com múltiplas garantias (imóvel, recebíveis, aval)
 - **V3AUTOGIRO**: capital de giro com garantia de automóvel/frota
