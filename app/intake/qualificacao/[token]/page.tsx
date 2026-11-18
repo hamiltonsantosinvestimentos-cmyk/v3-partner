@@ -24,6 +24,7 @@ import { LGPD_AVISO_QUALIFICACAO, LGPD_CHECKBOX_TEXT } from "@/lib/lgpd-aviso-qu
 import {
   KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES, UPLOAD_NETWORK_ERROR_MESSAGE, fileTooLargeMessage, formatFileSizePtBr, uploadFailureMessage,
 } from "@/lib/upload-limits";
+import { reduzirImagem } from "@/lib/reduzir-imagem";
 
 /**
  * Botão de saída das telas finais (pedido da Rafael Campos, 29/10/2026: a tela de sucesso não tinha como sair).
@@ -152,14 +153,17 @@ function DocSlot({ token, kind, anchor, anchorHint, value, onChange, showError }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [anchor?.key, kind, token]);
 
-  const upload = async (file: File) => {
+  const upload = async (original: File) => {
     if (!anchor) return;
+    onChange({ status: "uploading", anchorKey: anchor.key });
+    // Foto grande é reduzida aqui mesmo (JPG, até 2.500 px), sem o cliente fazer nada. PDF não é alterado.
+    const reduzido = await reduzirImagem(original);
+    const file = reduzido ?? original;
     // A plataforma recusa corpo acima de 4,5 MB com resposta que não é JSON; checa antes, com o tamanho real.
     if (file.size > KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES) {
       onChange({ status: "error", error: fileTooLargeMessage(file.size), anchorKey: anchor.key });
       return;
     }
-    onChange({ status: "uploading", anchorKey: anchor.key });
     const fd = new FormData();
     fd.append("file", file);
     fd.append("document_kind", kind);
@@ -227,14 +231,14 @@ function DocSlot({ token, kind, anchor, anchorHint, value, onChange, showError }
               e.target.value = "";
               if (f) upload(f);
             }} />
-          Selecionar arquivo (JPG, PNG ou PDF, até {formatFileSizePtBr(KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES)})
+          Selecionar arquivo (foto JPG ou PNG, reduzida automaticamente; PDF até {formatFileSizePtBr(KYC_MAX_UPLOAD_VIA_FUNCTION_BYTES)})
           <Dica id="doc_limite_envio" />
         </label>
       )}
 
       {value.status === "uploading" && (
         <div className="flex items-center gap-2 text-[12px] text-[#9BAFC5] bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2">
-          <Loader2 size={14} className="animate-spin" /> Enviando arquivo...
+          <Loader2 size={14} className="animate-spin" /> Preparando e enviando arquivo...
         </div>
       )}
 
