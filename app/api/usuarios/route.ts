@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { idsStarterAntigo } from "@/lib/v3-access";
+import { exigirAdmin } from "@/lib/usuarios/exigir-admin";
 
 const IS_DEMO = false;
 
@@ -9,16 +10,11 @@ export async function GET() {
   }
 
   // Verifica autenticação e role ADMIN antes de expor todos os perfis
-  const { createClient, createServiceClient } = await import("@/lib/supabase/server");
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const acesso = await exigirAdmin();
+  if (!acesso.ok) return acesso.res;
 
+  const { createServiceClient } = await import("@/lib/supabase/server");
   const svc = await createServiceClient();
-  const { data: caller } = await svc.from("profiles").select("role").eq("id", user.id).single();
-  if (caller?.role !== "ADMIN") {
-    return NextResponse.json({ error: "Acesso restrito a administradores" }, { status: 403 });
-  }
 
   const { data, error } = await svc
     .from("profiles")
@@ -47,6 +43,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  // Só ADMIN cria acesso: antes desta checagem, qualquer usuário logado chegava ao createUser
+  // (BRIEF 2026-11-20_rls-crm-insert-e-profiles-update-own.md).
+  const acesso = await exigirAdmin();
+  if (!acesso.ok) return acesso.res;
+
   const { email, password, full_name, role, phone, document_cpf } = await request.json();
 
   if (IS_DEMO) {
