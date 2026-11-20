@@ -25,10 +25,27 @@ function mesesOpcoes() {
   return out;
 }
 
+/** Modo ADMIN (BRIEF 2026-11-19_admin-configura-white-label-enterprise.md): toda URL de /api/enterprise/* leva ?master=<id>. */
+function api(caminho: string, masterId?: string): string {
+  if (!masterId) return caminho;
+  return `${caminho}${caminho.includes("?") ? "&" : "?"}master=${encodeURIComponent(masterId)}`;
+}
+
 const input = "h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50";
 
 // ─── Usuários ────────────────────────────────────────────────────────────────
-function AbaUsuarios({ limite }: { limite: number }) {
+function fmtTelefone(t: string | null): string {
+  if (!t) return "Não informado";
+  let d = t.replace(/\D/g, "");
+  if (d.length === 13 && d.startsWith("55")) d = d.slice(2);
+  if (d.length === 11) return `+55 (${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `+55 (${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return t;
+}
+
+function AbaUsuarios({ limite, masterId }: { limite: number; masterId?: string }) {
+  // Modo ADMIN: só leitura (sem novo usuário, sem editar %, sem bloquear).
+  const somenteLeitura = !!masterId;
   const [usuarios, setUsuarios] = useState<Usuario[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [novo, setNovo] = useState({ nome: "", email: "", telefone: "", percentual: "" });
@@ -38,11 +55,11 @@ function AbaUsuarios({ limite }: { limite: number }) {
   const [editPct, setEditPct] = useState("");
 
   const carregar = useCallback(async () => {
-    const r = await fetch("/api/enterprise/usuarios");
+    const r = await fetch(api("/api/enterprise/usuarios", masterId));
     const j = await r.json();
     if (!r.ok) { setErro(j.error ?? "Falha ao carregar"); return; }
     setUsuarios(j.usuarios);
-  }, []);
+  }, [masterId]);
   useEffect(() => { carregar(); }, [carregar]);
 
   async function criar() {
@@ -71,6 +88,13 @@ function AbaUsuarios({ limite }: { limite: number }) {
   const usados = usuarios?.length ?? 0;
   return (
     <div className="space-y-4">
+      {somenteLeitura ? (
+        <div className="rounded-xl border border-border/50 bg-card p-4 space-y-1">
+          <p className="text-sm font-semibold text-white flex items-center gap-2"><Users className="w-4 h-4 text-[#C9A84C]" /> Usuários da equipe <span className="text-xs font-normal text-muted-foreground">({usados} de {limite})</span></p>
+          <p className="text-[11px] text-muted-foreground">Somente leitura no modo ADMIN. O cadastro de usuários pela V3 aguarda o parecer de compliance.</p>
+          {erro && <p className="text-xs text-red-400">{erro}</p>}
+        </div>
+      ) : (
       <div className="rounded-xl border border-border/50 bg-card p-4 space-y-3">
         <p className="text-sm font-semibold text-white flex items-center gap-2"><Plus className="w-4 h-4 text-[#C9A84C]" /> Novo usuário <span className="text-xs font-normal text-muted-foreground">({usados}/{limite})</span></p>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
@@ -91,26 +115,29 @@ function AbaUsuarios({ limite }: { limite: number }) {
         {aviso && <p className="text-xs text-emerald-400">{aviso}</p>}
         {erro && <p className="text-xs text-red-400">{erro}</p>}
       </div>
+      )}
 
       <div className="rounded-xl border border-border/50 bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border/50">
-              {["Usuário", "E-mail", "Telefone", "% comissão", "Situação", ""].map((h) => (
+              {["Usuário", "E-mail", "Telefone", "% comissão", "Situação", somenteLeitura ? "Desde" : ""].map((h) => (
                 <th key={h} className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {usuarios === null && <tr><td colSpan={6} className="px-3 py-6 text-center"><Loader2 className="w-4 h-4 animate-spin inline text-muted-foreground" /></td></tr>}
-            {usuarios?.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">Nenhum usuário ainda.</td></tr>}
+            {usuarios?.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-xs text-muted-foreground">{somenteLeitura ? `Nenhum usuário ainda (0 de ${limite})` : "Nenhum usuário ainda."}</td></tr>}
             {usuarios?.map((u) => (
               <tr key={u.id} className="border-b border-border/30">
                 <td className="px-3 py-2 font-medium text-foreground">{u.full_name ?? "—"}</td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">{u.email}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{u.phone ?? "—"}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{somenteLeitura ? fmtTelefone(u.phone) : u.phone ?? "—"}</td>
                 <td className="px-3 py-2">
-                  {editId === u.id ? (
+                  {somenteLeitura ? (
+                    <span className="text-foreground">{u.enterprise_repasse_percent ?? 0}%</span>
+                  ) : editId === u.id ? (
                     <div className="flex items-center gap-1">
                       <input className={`${input} w-20 h-7`} value={editPct} inputMode="decimal" autoFocus onChange={(e) => setEditPct(e.target.value.replace(/[^0-9,.]/g, ""))} />
                       <button onClick={() => atualizar(u.id, { percentual: Number(editPct.replace(",", ".") || 0) })} className="p-1 text-emerald-400"><Check className="w-4 h-4" /></button>
@@ -128,27 +155,32 @@ function AbaUsuarios({ limite }: { limite: number }) {
                   </span>
                 </td>
                 <td className="px-3 py-2 text-right">
+                  {somenteLeitura ? (
+                    <span className="text-xs text-muted-foreground">{new Date(u.created_at).toLocaleDateString("pt-BR")}</span>
+                  ) : (
                   <button
                     onClick={async () => { if (await confirmar(u.is_active === false ? "Reativar o acesso deste usuário?" : "Bloquear o acesso deste usuário? Ele não conseguirá mais entrar.")) atualizar(u.id, { ativo: u.is_active === false }); }}
                     className="text-xs text-muted-foreground hover:text-white"
                   >
                     {u.is_active === false ? "Reativar" : "Bloquear"}
                   </button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className="text-[11px] text-muted-foreground">
+      {!somenteLeitura && <p className="text-[11px] text-muted-foreground">
         Alterar o % vale para as próximas comissões; repasses já gerados mantêm o % da época. O relatório mensal e o Kanban da Mesa de Crédito mostram as propostas de toda a sua equipe.
-      </p>
+      </p>}
     </div>
   );
 }
 
 // ─── Repasses ────────────────────────────────────────────────────────────────
-function AbaRepasses({ ehMaster }: { ehMaster: boolean }) {
+function AbaRepasses({ ehMaster, masterId }: { ehMaster: boolean; masterId?: string }) {
+  const modoAdmin = !!masterId;
   const [mes, setMes] = useState("todos");
   const [dados, setDados] = useState<{ linhas: RepasseLinha[]; porUsuario: ResumoUsuario[]; totais: { total: number; pendente: number; pago: number } } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -157,11 +189,11 @@ function AbaRepasses({ ehMaster }: { ehMaster: boolean }) {
 
   const carregar = useCallback(async () => {
     setDados(null); setErro(null);
-    const r = await fetch(`/api/enterprise/repasses?mes=${mes}`);
+    const r = await fetch(api(`/api/enterprise/repasses?mes=${mes}`, masterId));
     const j = await r.json();
     if (!r.ok) { setErro(j.error ?? "Falha ao carregar"); return; }
     setDados(j); setSel(new Set());
-  }, [mes]);
+  }, [mes, masterId]);
   useEffect(() => { carregar(); }, [carregar]);
 
   async function marcar(status: "PAGO" | "PENDENTE") {
@@ -183,10 +215,11 @@ function AbaRepasses({ ehMaster }: { ehMaster: boolean }) {
         <select value={mes} onChange={(e) => setMes(e.target.value)} className={`${input} capitalize`}>
           {mesesOpcoes().map((m) => <option key={m.chave} value={m.chave}>{m.label}</option>)}
         </select>
-        <a href={`/api/enterprise/repasses/pdf?mes=${mes}`} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
+        <a href={api(`/api/enterprise/repasses/pdf?mes=${mes}`, masterId)} className="h-9 px-3 rounded-lg border border-border text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-secondary">
           <FileDown className="w-3.5 h-3.5" /> Gerar PDF
         </a>
-        {ehMaster && (
+        {modoAdmin && <span className="text-[11px] text-muted-foreground">Somente o master marca repasses como pagos.</span>}
+        {ehMaster && !modoAdmin && (
           <>
             <button onClick={() => marcar("PAGO")} disabled={sel.size === 0 || salvando} className="h-9 px-3 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-xs font-semibold disabled:opacity-40">
               Marcar {sel.size || ""} como pago
@@ -237,13 +270,13 @@ function AbaRepasses({ ehMaster }: { ehMaster: boolean }) {
           <div className="rounded-xl border border-border/50 bg-card overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="border-b border-border/50">
-                {[ehMaster ? "" : null, "Data", ehMaster ? "Usuário" : null, "Operação", "Comissão Enterprise", "%", "Repasse", "Situação"].filter((h) => h !== null).map((h, i) => <th key={i} className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>)}
+                {[ehMaster && !modoAdmin ? "" : null, "Data", ehMaster ? "Usuário" : null, "Operação", "Comissão Enterprise", "%", "Repasse", "Situação"].filter((h) => h !== null).map((h, i) => <th key={i} className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>)}
               </tr></thead>
               <tbody>
-                {dados.linhas.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-xs text-muted-foreground">Nenhum repasse no período. Repasses nascem quando uma venda de usuário tem o recurso liberado.</td></tr>}
+                {dados.linhas.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-xs text-muted-foreground">Nenhum repasse ainda. Repasses nascem quando uma venda de usuário tem o recurso liberado.</td></tr>}
                 {dados.linhas.map((l) => (
                   <tr key={l.id} className="border-b border-border/30">
-                    {ehMaster && <td className="pl-3 py-2"><input type="checkbox" disabled={l.status === "CANCELADO"} checked={sel.has(l.id)} onChange={() => toggle(l.id)} /></td>}
+                    {ehMaster && !modoAdmin && <td className="pl-3 py-2"><input type="checkbox" disabled={l.status === "CANCELADO"} checked={sel.has(l.id)} onChange={() => toggle(l.id)} /></td>}
                     <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">{new Date(l.criadoEm).toLocaleDateString("pt-BR")}</td>
                     {ehMaster && <td className="px-3 py-2">{l.usuarioNome}</td>}
                     <td className="px-3 py-2 text-xs"><span className="font-mono text-[#C9A84C]">{l.operacao ?? "—"}</span> <span className="text-muted-foreground">{l.descricao ?? ""}</span></td>
@@ -268,7 +301,7 @@ function AbaRepasses({ ehMaster }: { ehMaster: boolean }) {
 }
 
 // ─── Marca ───────────────────────────────────────────────────────────────────
-function AbaMarca({ marcaInicial }: { marcaInicial: Marca | null }) {
+function AbaMarca({ marcaInicial, masterId, masterNome }: { marcaInicial: Marca | null; masterId?: string; masterNome?: string }) {
   const [marca, setMarca] = useState<Marca | null>(marcaInicial);
   const [nome, setNome] = useState(marcaInicial?.nome ?? "");
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -276,17 +309,25 @@ function AbaMarca({ marcaInicial }: { marcaInicial: Marca | null }) {
   const [msg, setMsg] = useState<string | null>(null);
 
   async function salvar(removerLogo = false) {
+    if (removerLogo) {
+      const quem = marca?.nome ?? masterNome ?? "Enterprise";
+      const ok = await confirmar(
+        `Remover o logo de ${quem}? A plataforma, os PDFs e os e-mails da equipe voltam a mostrar só o nome.`,
+        { perigo: true, titulo: "Remover logo", botao: "Remover logo" },
+      );
+      if (!ok) return;
+    }
     setSalvando(true); setMsg(null);
     const fd = new FormData();
     fd.append("nome", nome);
     if (arquivo) fd.append("logo", arquivo);
     if (removerLogo) fd.append("remover_logo", "1");
-    const r = await fetch("/api/enterprise/marca", { method: "POST", body: fd });
+    const r = await fetch(api("/api/enterprise/marca", masterId), { method: "POST", body: fd });
     const j = await r.json();
     setSalvando(false);
     if (!r.ok) { setMsg(j.error ?? "Falha ao salvar"); return; }
     setMarca(j.marca); setArquivo(null);
-    setMsg("Marca salva. Recarregue a página para ver no menu.");
+    setMsg(masterId ? "Marca salva. O master e a equipe veem a marca no próximo carregamento." : "Marca salva. Recarregue a página para ver no menu.");
   }
 
   return (
@@ -297,7 +338,7 @@ function AbaMarca({ marcaInicial }: { marcaInicial: Marca | null }) {
           {marca?.logoUrl ? <img src={marca.logoUrl} alt={marca.nome} className="max-w-full max-h-full object-contain" /> : <Palette className="w-8 h-8 text-muted-foreground/40" />}
         </div>
         <div className="text-xs text-muted-foreground">
-          O logo e o nome aparecem para você e para os seus usuários: menu da plataforma, página pública, relatórios/PDFs e e-mails.
+          {masterId ? `O logo e o nome aparecem para ${masterNome ?? "o master"} e para a equipe dele` : "O logo e o nome aparecem para você e para os seus usuários"}: menu da plataforma, página pública, relatórios/PDFs e e-mails.
           <br />PNG, JPG, WEBP ou SVG até 2MB. Fundo transparente fica melhor.
         </div>
       </div>
@@ -341,7 +382,7 @@ function CelulaCopiar({ v, copiado, onCopiar }: { v: string; copiado: string | n
   );
 }
 
-function AbaDominio() {
+function AbaDominio({ masterId, masterNome }: { masterId?: string; masterNome?: string }) {
   const [st, setSt] = useState<StatusDominio | null>(null);
   const [entrada, setEntrada] = useState("");
   const [busy, setBusy] = useState(false);
@@ -350,16 +391,16 @@ function AbaDominio() {
 
   const carregar = useCallback(async () => {
     setErro(null);
-    const r = await fetch("/api/enterprise/dominio");
+    const r = await fetch(api("/api/enterprise/dominio", masterId));
     const j = await r.json();
     if (!r.ok) { setErro(j.error ?? "Falha ao carregar"); return; }
     setSt(j);
-  }, []);
+  }, [masterId]);
   useEffect(() => { carregar(); }, [carregar]);
 
   async function salvar() {
     setBusy(true); setErro(null);
-    const r = await fetch("/api/enterprise/dominio", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dominio: entrada }) });
+    const r = await fetch(api("/api/enterprise/dominio", masterId), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dominio: entrada }) });
     const j = await r.json();
     setBusy(false);
     if (!r.ok) { setErro(j.error ?? "Falha ao salvar"); return; }
@@ -367,10 +408,15 @@ function AbaDominio() {
   }
 
   async function remover() {
-    if (!await confirmar("Remover o domínio próprio? Sua equipe volta a acessar só por app.v3partners.com.br.")) return;
-    setBusy(true);
-    await fetch("/api/enterprise/dominio", { method: "DELETE" });
+    const dominio = st?.dominio ?? "";
+    const texto = masterId
+      ? `Remover o domínio de ${masterNome ?? "Enterprise"}? A equipe dele deixa de acessar por ${dominio} e passa a usar app.v3partners.com.br.`
+      : `Remover o domínio? Sua equipe deixa de acessar por ${dominio} e passa a usar app.v3partners.com.br.`;
+    if (!await confirmar(texto, { perigo: true, titulo: "Remover domínio", botao: "Remover domínio" })) return;
+    setBusy(true); setErro(null);
+    const r = await fetch(api("/api/enterprise/dominio", masterId), { method: "DELETE" });
     setBusy(false);
+    if (!r.ok) { const j = await r.json().catch(() => ({})); setErro(j.error ?? "Falha ao remover"); return; }
     carregar();
   }
 
@@ -395,7 +441,7 @@ function AbaDominio() {
         <div className="rounded-xl border border-border/50 bg-card p-5 space-y-3">
           <p className="text-sm font-semibold text-white flex items-center gap-2"><Globe className="w-4 h-4 text-[#C9A84C]" /> Usar um domínio próprio</p>
           <p className="text-xs text-muted-foreground">
-            Sua equipe passa a acessar a plataforma pelo seu endereço, com a sua marca desde o login. Recomendamos um subdomínio, ex.: <span className="font-mono text-foreground">plataforma.suaempresa.com.br</span>.
+            {masterId ? `A equipe de ${masterNome ?? "Enterprise"} passa a acessar a plataforma pelo endereço dele, com a marca dele desde o login.` : "Sua equipe passa a acessar a plataforma pelo seu endereço, com a sua marca desde o login."} Recomendamos um subdomínio, ex.: <span className="font-mono text-foreground">plataforma.suaempresa.com.br</span>.
           </p>
           <div className="flex gap-2">
             <input className={`${input} flex-1`} placeholder="plataforma.suaempresa.com.br" value={entrada} onChange={(e) => setEntrada(e.target.value.trim().toLowerCase())} />
@@ -419,7 +465,7 @@ function AbaDominio() {
 
           {st.status === "ativo" ? (
             <p className="text-xs text-emerald-400">
-              Tudo certo. Sua equipe já pode acessar por <a className="underline" href={`https://${st.dominio}`} target="_blank" rel="noreferrer">https://{st.dominio}</a>. Novos convites de usuário já saem com este endereço.
+              Tudo certo. {masterId ? "A equipe" : "Sua equipe"} já pode acessar por <a className="underline" href={`https://${st.dominio}`} target="_blank" rel="noreferrer">https://{st.dominio}</a>. Novos convites de usuário já saem com este endereço.
             </p>
           ) : (
             <>
@@ -460,9 +506,15 @@ function AbaDominio() {
   );
 }
 
-export function EnterpriseClient({ ehMaster, marcaInicial, limite }: { ehMaster: boolean; marcaInicial: Marca | null; limite: number }) {
-  const [aba, setAba] = useState<Aba>(ehMaster ? "usuarios" : "repasses");
-  const abas: { id: Aba; label: string; icon: typeof Users }[] = ehMaster
+export function EnterpriseClient({ ehMaster, marcaInicial, limite, masterId, masterNome }: {
+  ehMaster: boolean; marcaInicial: Marca | null; limite: number; masterId?: string; masterNome?: string;
+}) {
+  const modoAdmin = !!masterId;
+  const [aba, setAba] = useState<Aba>(modoAdmin ? "marca" : ehMaster ? "usuarios" : "repasses");
+  // Modo ADMIN: marca e domínio editáveis; usuários e repasses só leitura (adendo de 20/11).
+  const abas: { id: Aba; label: string; icon: typeof Users }[] = modoAdmin
+    ? [{ id: "marca", label: "Marca", icon: Palette }, { id: "dominio", label: "Domínio", icon: Globe }, { id: "usuarios", label: "Usuários", icon: Users }, { id: "repasses", label: "Repasses", icon: Wallet }]
+    : ehMaster
     ? [{ id: "usuarios", label: "Usuários", icon: Users }, { id: "repasses", label: "Repasses a pagar", icon: Wallet }, { id: "marca", label: "Marca", icon: Palette }, { id: "dominio", label: "Domínio", icon: Globe }]
     : [{ id: "repasses", label: "Meus repasses", icon: Wallet }];
 
@@ -476,10 +528,10 @@ export function EnterpriseClient({ ehMaster, marcaInicial, limite }: { ehMaster:
           </button>
         ))}
       </div>
-      {aba === "usuarios" && <AbaUsuarios limite={limite} />}
-      {aba === "repasses" && <AbaRepasses ehMaster={ehMaster} />}
-      {aba === "marca" && <AbaMarca marcaInicial={marcaInicial} />}
-      {aba === "dominio" && <AbaDominio />}
+      {aba === "usuarios" && <AbaUsuarios limite={limite} masterId={masterId} />}
+      {aba === "repasses" && <AbaRepasses ehMaster={ehMaster} masterId={masterId} />}
+      {aba === "marca" && <AbaMarca marcaInicial={marcaInicial} masterId={masterId} masterNome={masterNome} />}
+      {aba === "dominio" && <AbaDominio masterId={masterId} masterNome={masterNome} />}
     </div>
   );
 }

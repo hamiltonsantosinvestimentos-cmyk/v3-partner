@@ -2,7 +2,7 @@
 import { aviso, confirmar } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
-import { Users, Plus, Search, UserCheck, UserX, Pencil, Trash2, Clock, ShieldOff, ShieldCheck, Mail, Loader2, FileText, CalendarPlus, History } from "lucide-react";
+import { Users, Plus, Search, UserCheck, UserX, Pencil, Trash2, Clock, ShieldOff, ShieldCheck, Mail, Loader2, FileText, CalendarPlus, History, Palette } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -109,6 +109,7 @@ interface User {
   contract_signed?: boolean;
   starter_antigo?: boolean;
   closer_id?: string | null;
+  enterprise_id?: string | null;
 }
 
 const ROLES_COM_CLOSER: UserRole[] = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"];
@@ -522,6 +523,16 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
+                        {/* Modo ADMIN do white label (BRIEF 2026-11-19_admin-configura-white-label-enterprise.md): só para master Enterprise. */}
+                        {user.role === "ENTERPRISE" && !user.enterprise_id && (
+                          <a
+                            href={`/enterprise?master=${user.id}`}
+                            className="p-1.5 rounded hover:bg-secondary transition-colors text-[#C9A84C] hover:text-[#E8C97A]"
+                            title="Configurar white label: preenche a marca e o domínio em nome do master. Use quando o cliente pedir que a V3 configure."
+                          >
+                            <Palette className="w-3.5 h-3.5" />
+                          </a>
+                        )}
                         {/* Botão de desbloqueio — só aparece se expirado/inativo */}
                         {!user.is_active && user.trial_expires_at && isExpired(user.trial_expires_at) ? (
                           <button
