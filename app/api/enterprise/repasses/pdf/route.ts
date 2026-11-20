@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { exigirEnterprise } from "@/lib/enterprise-server";
+import { exigirEnterprise, logLeituraAdmin } from "@/lib/enterprise-server";
 import { htmlRepasses, listarRepasses } from "@/lib/enterprise-repasses";
 import { periodoDoMes } from "@/lib/relatorio-mensal-partners";
 import { aplicarMarca } from "@/lib/enterprise";
@@ -10,10 +10,12 @@ export const maxDuration = 120;
 // GET ?mes=YYYY-MM|todos — PDF de repasses com a marca do Enterprise (master: todos os
 // usuários; usuário: os próprios).
 export async function GET(req: NextRequest) {
-  const auth = await exigirEnterprise();
+  const auth = await exigirEnterprise({ req, permitirAdmin: true });
   if (!auth.ok) return auth.res;
   const mes = new URL(req.url).searchParams.get("mes");
   const periodo = !mes || mes === "todos" ? null : periodoDoMes(mes);
+  // Modo ADMIN: registra a exportação (não bloqueia).
+  await logLeituraAdmin(auth, req, { action: "EXPORT", newData: { mes: mes ?? "todos", documento: "repasses_pdf" } });
 
   const dados = await listarRepasses(auth.db, auth.ctx.ehMaster
     ? { enterpriseId: auth.userId, periodo }

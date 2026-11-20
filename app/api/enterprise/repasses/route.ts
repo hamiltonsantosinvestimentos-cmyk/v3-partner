@@ -7,7 +7,8 @@ import { periodoDoMes } from "@/lib/relatorio-mensal-partners";
 // PATCH { ids: string[], status: "PAGO" | "PENDENTE" } — só o master marca pagamento
 
 export async function GET(req: NextRequest) {
-  const auth = await exigirEnterprise();
+  // Modo ADMIN (?master=): só leitura (BRIEF 2026-11-19_admin-configura-white-label-enterprise.md).
+  const auth = await exigirEnterprise({ req, permitirAdmin: true });
   if (!auth.ok) return auth.res;
   const mes = new URL(req.url).searchParams.get("mes");
   const periodo = !mes || mes === "todos" ? null : periodoDoMes(mes);
@@ -22,7 +23,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await exigirEnterprise({ somenteMaster: true });
+  // Marcar pago é só do master: ?master= devolve 403.
+  const auth = await exigirEnterprise({ somenteMaster: true, req });
   if (!auth.ok) return auth.res;
   const body = (await req.json().catch(() => ({}))) as { ids?: string[]; status?: string };
   const ids = Array.isArray(body.ids) ? body.ids.filter((x) => typeof x === "string") : [];
