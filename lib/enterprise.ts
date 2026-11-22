@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validarTema, prefixoBucketWhiteLabel, type TemaEnterprise } from "@/lib/enterprise-tema";
 
 /**
  * ENTERPRISE WHITE LABEL (24/09/2026) — ver supabase/migrations/20260924_enterprise_white_label.sql
@@ -27,6 +28,22 @@ export interface EnterpriseContexto {
   masterNome: string | null;
   /** white_label_nome do master, sem espaços ("" vira null). */
   marcaNome: string | null;
+  /** Tema visual (cores/ícone), fora de `marca`: existe mesmo sem nome/logo. null = visual V3. */
+  tema: TemaEnterprise | null;
+}
+
+/**
+ * Tema do master num select separado e tolerante (BRIEF 2026-11-21 tema visual): coluna ausente
+ * (42703, rollback) ou jsonb inválido = null, sem afetar nome e logo.
+ */
+export async function temaDoMaster(db: SupabaseClient, masterId: string): Promise<TemaEnterprise | null> {
+  try {
+    const { data, error } = await db.from("profiles").select("white_label_tema").eq("id", masterId).maybeSingle();
+    if (error || !data) return null;
+    return validarTema((data as { white_label_tema?: unknown }).white_label_tema, prefixoBucketWhiteLabel(process.env.NEXT_PUBLIC_SUPABASE_URL));
+  } catch {
+    return null;
+  }
 }
 
 type PerfilBase = { id: string; role: string | null; enterprise_id?: string | null };
@@ -43,9 +60,10 @@ export async function contextoEnterprise(db: SupabaseClient, perfil: PerfilBase 
 
   const masterId = p.enterprise_id ?? p.id;
   const ehMaster = !p.enterprise_id;
-  const [{ data: master }, usuarios] = await Promise.all([
+  const [{ data: master }, usuarios, tema] = await Promise.all([
     db.from("profiles").select("full_name, white_label_nome, white_label_logo_url").eq("id", masterId).maybeSingle(),
     ehMaster ? db.from("profiles").select("id").eq("enterprise_id", masterId) : Promise.resolve({ data: [] as { id: string }[] }),
+    temaDoMaster(db, masterId),
   ]);
   const nomeMarca = textoOuNull(master?.white_label_nome);
   const logo = (master?.white_label_logo_url as string | null) ?? null;
@@ -57,6 +75,7 @@ export async function contextoEnterprise(db: SupabaseClient, perfil: PerfilBase 
     marca: nomeMarca || logo ? { nome: nomeMarca ?? masterNome ?? "Enterprise", logoUrl: logo } : null,
     masterNome,
     marcaNome: nomeMarca,
+    tema,
   };
 }
 
@@ -167,7 +186,7 @@ export function ehHostV3(host: string | null | undefined): boolean {
  * Enterprise dono de um domínio próprio (profiles.white_label_dominio, status ativo ou
  * pendente — pendente já pode estar respondendo enquanto a Vercel termina o certificado).
  */
-export async function enterprisePorDominio(db: SupabaseClient, host: string | null | undefined): Promise<{ masterId: string; marca: Marca | null } | null> {
+export async function enterprisePorDominio(db: SupabaseClient, host: string | null | undefined): Promise<{ masterId: string; marca: Marca | null; tema: TemaEnterprise | null } | null> {
   if (ehHostV3(host)) return null;
   const h = (host ?? "").toLowerCase().split(":")[0];
   const { data } = await db
@@ -180,6 +199,7 @@ export async function enterprisePorDominio(db: SupabaseClient, host: string | nu
   if (!data) return null;
   return {
     masterId: data.id as string,
+    tema: await temaDoMaster(db, data.id as string),
     marca: { nome: (data.white_label_nome as string | null) ?? (data.full_name as string | null) ?? "Enterprise", logoUrl: (data.white_label_logo_url as string | null) ?? null },
   };
 }

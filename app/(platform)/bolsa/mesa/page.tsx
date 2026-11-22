@@ -2,7 +2,7 @@ import { MesaCapitaisClient } from "@/components/cm/mesa-capitais-client";
 import { hasComplianceDashboardAccess } from "@/lib/cm/compliance-access";
 import { requireRole } from "@/lib/auth/require-role";
 
-export const metadata = { title: "Mesa de Capitais - V3 Partners" };
+export const metadata = { title: "Mesa de Capitais" };
 export const dynamic = "force-dynamic";
 
 // Achado real 17/09/2026 (teste ao vivo com Monica Xavier, PARTNER_PRO): esta

@@ -1,7 +1,7 @@
 import { VitrineClient } from "@/components/cm/vitrine-client";
 import { createClient as sc } from "@supabase/supabase-js";
 
-export const metadata = { title: "Bolsa de Ativos — V3 Partners" };
+export const metadata = { title: "Bolsa de Ativos" };
 export const dynamic = "force-dynamic";
 
 export default async function BolsaPage() {

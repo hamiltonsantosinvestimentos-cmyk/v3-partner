@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { IntegracoesClient } from "@/components/configuracoes/integracoes-client";
 
-export const metadata = { title: "Integrações — V3 Partners" };
+export const metadata = { title: "Integrações" };
 
 export default async function IntegracoesPage() {
   const supabase = await createClient();

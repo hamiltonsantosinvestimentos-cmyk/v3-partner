@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { ConfiguracoesClient } from "@/components/configuracoes/configuracoes-client";
 
-export const metadata = { title: "Configurações — V3 Partners" };
+export const metadata = { title: "Configurações" };
 
 export default async function ConfiguracoesPage() {
   const supabase = await createClient();

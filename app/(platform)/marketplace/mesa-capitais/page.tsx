@@ -1,7 +1,7 @@
 import { MesaCapitaisClient } from "@/components/cm/mesa-capitais-client";
 import { requireRole } from "@/lib/auth/require-role";
 
-export const metadata = { title: "Mesa de Capitais — V3 Partners" };
+export const metadata = { title: "Mesa de Capitais" };
 export const dynamic = "force-dynamic";
 
 // Achado real 17/09/2026 (mesmo bug de app/(platform)/bolsa/mesa/page.tsx,

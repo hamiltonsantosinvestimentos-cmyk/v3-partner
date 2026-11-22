@@ -6,7 +6,7 @@ import { BuySideDemandsPanel } from "@/components/cm/buy-side-demands-panel";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Meus Compradores · V3 Partners",
+  title: "Meus Compradores",
 };
 
 // Tela pedida por Joao (13/08/2026): o Partner que origina um link de intake buy-side

@@ -4,6 +4,7 @@ import { confirmar } from "@/lib/aviso";
 import { useCallback, useEffect, useState } from "react";
 import { Users, Wallet, Palette, Loader2, Plus, FileDown, Check, X, Pencil, Upload, Globe, RefreshCw, Copy } from "lucide-react";
 import type { Marca } from "@/lib/enterprise";
+import { verificarContraste, tonsDerivados, type TemaEnterprise } from "@/lib/enterprise-tema";
 import type { RepasseLinha, ResumoUsuario } from "@/lib/enterprise-repasses";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -331,6 +332,7 @@ function AbaMarca({ marcaInicial, masterId, masterNome }: { marcaInicial: Marca 
   }
 
   return (
+    <div className="space-y-4">
     <div className="rounded-xl border border-border/50 bg-card p-5 space-y-4 max-w-xl">
       <div className="flex items-center gap-4">
         <div className="w-24 h-24 rounded-xl border border-border/50 bg-[#09081A] flex items-center justify-center overflow-hidden">
@@ -357,6 +359,167 @@ function AbaMarca({ marcaInicial, masterId, masterNome }: { marcaInicial: Marca 
           <button onClick={() => salvar(true)} disabled={salvando} className="h-9 px-3 rounded-lg border border-border text-xs text-muted-foreground">Remover logo</button>
         )}
       </div>
+      {msg && <p className="text-xs text-muted-foreground">{msg}</p>}
+    </div>
+    <AbaCores masterId={masterId} logoEscuro={marca?.logoUrl ?? null} nomeMarca={marca?.nome ?? masterNome ?? "Enterprise"} />
+    </div>
+  );
+}
+
+// ─── Cores (tema visual) ─────────────────────────────────────────────────────
+// BRIEF docs/briefs/2026-11-21_tema-visual-enterprise-manual-de-marca.md. A fonte continua a da V3.
+const HEX_COR = /^#[0-9a-fA-F]{6}$/;
+
+function AbaCores({ masterId, logoEscuro, nomeMarca }: { masterId?: string; logoEscuro: string | null; nomeMarca: string }) {
+  const [tema, setTema] = useState<TemaEnterprise | null>(null);
+  const [principal, setPrincipal] = useState("#040968");
+  const [acento, setAcento] = useState("#00E000");
+  const [logoClaro, setLogoClaro] = useState<File | null>(null);
+  const [icone, setIcone] = useState<File | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [carregado, setCarregado] = useState(false);
+
+  useEffect(() => {
+    fetch(api("/api/enterprise/marca", masterId)).then((r) => r.json()).then((j) => {
+      const t = (j?.tema ?? null) as TemaEnterprise | null;
+      setTema(t);
+      if (t) { setPrincipal(t.cor_principal); setAcento(t.cor_acento); }
+      setCarregado(true);
+    }).catch(() => setCarregado(true));
+  }, [masterId]);
+
+  const coresValidas = HEX_COR.test(principal) && HEX_COR.test(acento);
+  const falhas = coresValidas ? verificarContraste({ cor_principal: principal, cor_acento: acento }) : [];
+  const tons = coresValidas ? tonsDerivados({ cor_principal: principal, cor_acento: acento }) : null;
+
+  async function enviar(extra: Record<string, string>, confirmacao?: { texto: string; titulo: string; botao: string }) {
+    if (confirmacao) {
+      const ok = await confirmar(confirmacao.texto, { perigo: true, titulo: confirmacao.titulo, botao: confirmacao.botao });
+      if (!ok) return;
+    }
+    setSalvando(true); setMsg(null);
+    const fd = new FormData();
+    if (!extra.remover_tema) { fd.append("cor_principal", principal); fd.append("cor_acento", acento); }
+    if (logoClaro && !extra.remover_tema) fd.append("logo_claro", logoClaro);
+    if (icone && !extra.remover_tema) fd.append("icone", icone);
+    for (const [k, v] of Object.entries(extra)) fd.append(k, v);
+    const r = await fetch(api("/api/enterprise/marca", masterId), { method: "POST", body: fd });
+    const j = await r.json().catch(() => ({}));
+    setSalvando(false);
+    if (!r.ok) { setMsg((j as { error?: string }).error ?? "Não foi possível salvar. Tente de novo."); return; }
+    setTema(((j as { tema?: TemaEnterprise | null }).tema) ?? null);
+    setLogoClaro(null); setIcone(null);
+    setMsg(extra.remover_tema ? "Visual da V3 restaurado." : "Visual atualizado. Sua equipe vê a mudança no próximo carregamento da página.");
+  }
+
+  if (!carregado) return null;
+
+  const campos = [
+    { id: "cor-principal", rotulo: "Cor principal", valor: principal, set: setPrincipal },
+    { id: "cor-acento", rotulo: "Cor de acento", valor: acento, set: setAcento },
+  ];
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-card p-5 space-y-4 max-w-3xl">
+      <div>
+        <h3 className="text-sm font-semibold text-foreground">Cores</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          As cores trocam o visual da plataforma para {masterId ? "o master e a equipe dele" : "você e a sua equipe"}. Menu, abas e telas continuam os mesmos. A fonte continua a da V3.
+        </p>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-3">
+          {campos.map((c) => (
+            <div key={c.id} className="text-xs text-muted-foreground space-y-1">
+              <label htmlFor={c.id}>{c.rotulo}</label>
+              <div className="flex items-center gap-2">
+                <input type="color" aria-label={`${c.rotulo} (seletor)`} value={HEX_COR.test(c.valor) ? c.valor : "#000000"} onChange={(e) => c.set(e.target.value.toUpperCase())} className="h-9 w-12 rounded border border-border bg-transparent" />
+                <input id={c.id} className={`${input} w-32 font-mono`} value={c.valor} maxLength={7} onChange={(e) => c.set(e.target.value.trim())} placeholder="#RRGGBB" />
+              </div>
+            </div>
+          ))}
+          <div className="text-xs text-muted-foreground space-y-1">
+            <label htmlFor="logo-claro">Logo para fundo claro (PNG ou WEBP)</label>
+            <div className="flex items-center gap-2">
+              <Upload className="w-3.5 h-3.5" />
+              <input id="logo-claro" type="file" accept="image/png,image/webp" onChange={(e) => setLogoClaro(e.target.files?.[0] ?? null)} className="text-xs" />
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <label htmlFor="icone-aba">Ícone da aba (PNG ou ICO, quadrado, 64 a 1024 px)</label>
+            <div className="flex items-center gap-2">
+              <Upload className="w-3.5 h-3.5" />
+              <input id="icone-aba" type="file" accept="image/png,image/x-icon,image/vnd.microsoft.icon,.ico" onChange={(e) => setIcone(e.target.files?.[0] ?? null)} className="text-xs" />
+            </div>
+          </div>
+        </div>
+
+        {/* Prévia: menu, botão e cartão com as cores escolhidas (valores calculados, não fixos). */}
+        {tons && (
+          <div className="rounded-lg overflow-hidden border border-border/50" style={{ background: tons.fundo }}>
+            <div className="flex">
+              <div className="w-28 p-3 space-y-2" style={{ background: tons.base }}>
+                <div className="rounded-lg p-2" style={{ background: principal }}>
+                  {logoEscuro
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={logoEscuro} alt={nomeMarca} className="w-full h-auto" />
+                    : <span className="text-[10px] font-bold" style={{ color: tons.texto }}>{nomeMarca}</span>}
+                </div>
+                <div className="text-[10px] px-2 py-1 rounded" style={{ color: tons.texto, background: tons.medio, borderLeft: `3px solid ${tons.acento}` }}>Dashboard</div>
+                <div className="text-[10px] px-2 py-1" style={{ color: tons["texto-2"] }}>CRM</div>
+              </div>
+              <div className="flex-1 p-3 space-y-2">
+                <div className="rounded-lg p-2" style={{ background: tons.cartao }}>
+                  <p className="text-[9px] uppercase tracking-wider" style={{ color: tons.acento }}>Propostas</p>
+                  <p className="text-sm font-bold" style={{ color: tons.texto }}>18</p>
+                  <p className="text-[9px]" style={{ color: tons["texto-2"] }}>+4 no mês</p>
+                </div>
+                <span className="inline-block text-[10px] font-bold px-2 py-1 rounded" style={{ background: tons.acento, color: principal }}>Nova proposta</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {!coresValidas && <p className="text-xs text-red-400">Use o formato #RRGGBB nas duas cores.</p>}
+      {falhas.length > 0 && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-300 space-y-1">
+          <p className="font-semibold">Essas cores não têm contraste suficiente para leitura. Escolha um tom mais escuro para a cor principal ou mais claro para o acento.</p>
+          <ul className="list-disc pl-4">{falhas.map((f) => <li key={f.descricao}>{f.descricao}: {f.razao.toLocaleString("pt-BR")}:1 (mínimo 4,5:1)</li>)}</ul>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => enviar({})} disabled={salvando || !coresValidas || falhas.length > 0} className="h-9 px-4 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold disabled:opacity-40 flex items-center gap-1.5">
+          {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Salvar cores
+        </button>
+        {tema?.logo_claro_url && (
+          <button disabled={salvando} onClick={() => enviar({ remover_logo_claro: "1" }, { titulo: "Remover logo para fundo claro", texto: "O logo para fundo claro sai da sua marca. Para usar de novo, será preciso enviar o arquivo outra vez. Continuar?", botao: "Remover logo" })} className="h-9 px-3 rounded-lg border border-border text-xs text-muted-foreground">Remover logo para fundo claro</button>
+        )}
+        {tema?.icone_url && (
+          <button disabled={salvando} onClick={() => enviar({ remover_icone: "1" }, { titulo: "Remover ícone da aba", texto: "A aba do navegador volta a mostrar o ícone da V3 para você e toda a sua equipe. Continuar?", botao: "Remover ícone" })} className="h-9 px-3 rounded-lg border border-border text-xs text-muted-foreground">Remover ícone</button>
+        )}
+        {tema && (
+          <button disabled={salvando} onClick={() => enviar({ remover_tema: "1" }, { titulo: "Voltar ao visual da V3", texto: "As cores, o ícone da aba e o logo para fundo claro serão apagados, e a plataforma volta às cores da V3 para você e toda a sua equipe. O nome e o logo da marca continuam. Continuar?", botao: "Apagar tema" })} className="h-9 px-3 rounded-lg border border-red-500/40 text-xs text-red-400">Voltar ao visual da V3</button>
+        )}
+      </div>
+      {tema && (tema.logo_claro_url || tema.icone_url) && (
+        <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground">
+          {tema.logo_claro_url && (
+            <span className="flex items-center gap-2">Logo para fundo claro:
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={tema.logo_claro_url} alt="" className="h-6 bg-white rounded px-1" />
+            </span>
+          )}
+          {tema.icone_url && (
+            <span className="flex items-center gap-2">Ícone:
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={tema.icone_url} alt="" className="h-6 w-6 rounded" />
+            </span>
+          )}
+        </div>
+      )}
       {msg && <p className="text-xs text-muted-foreground">{msg}</p>}
     </div>
   );
