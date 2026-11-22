@@ -170,5 +170,6 @@ Rodada 4 de 6 (21/11): **LIBERADO**, zero falhas. Correções técnicas de texto
 
 ## REGISTRO DE LIBERAÇÃO
 - QA: LIBERADO, rodada 4, 21/11/2026
-- Go: (pendente)
+- Go: Hamilton, 21/11/2026 (capturado pelo hook).
+- Exceção ao CLAUDE.md: autorizada pelo Hamilton no chat em 22/11/2026 ("ta autorizado"); ciência do João dispensada por ele.
 - Migration aplicada em produção: (pendente)
