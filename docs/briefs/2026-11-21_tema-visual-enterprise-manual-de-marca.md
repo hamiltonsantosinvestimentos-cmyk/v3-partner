@@ -172,4 +172,10 @@ Rodada 4 de 6 (21/11): **LIBERADO**, zero falhas. Correções técnicas de texto
 - QA: LIBERADO, rodada 4, 21/11/2026
 - Go: Hamilton, 21/11/2026 (capturado pelo hook).
 - Exceção ao CLAUDE.md: autorizada pelo Hamilton no chat em 22/11/2026 ("ta autorizado"); ciência do João dispensada por ele.
-- Migration aplicada em produção: (pendente)
+- Prova de acesso (22/11/2026, rodada pelo Hamilton no SQL Editor, em BEGIN ... ROLLBACK, com a coluna criada na transação):
+  - (a) anon lendo profiles: 0 linhas visíveis.
+  - (c) o próprio master (JWT authenticated) gravando white_label_tema: bloqueado, 42501 "Alteração não permitida neste campo do perfil." (trigger profiles_trava_colunas_sensiveis).
+  - (b) partner comum gravando o tema de outro master: coberto por (c) (o trigger barra qualquer sessão não ADMIN, e a RLS de update é só do próprio perfil).
+  - (d) leitura do tema por partner comum: segue a política de SELECT atual de profiles; tema é dado público de marca (cores e URLs públicas), sem proteção extra.
+  - (e) políticas de storage.objects abertas a public: admin_full_storage (ALL), granted_read_storage (SELECT) e granted_write_storage (INSERT), as três restritas a bucket_id = 'v3-docs-publico'. Nenhuma política de escrita para anon/authenticated no bucket white-label.
+- Migration aplicada em produção: (pendente, aguarda o segundo go)
