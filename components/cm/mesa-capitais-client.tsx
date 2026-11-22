@@ -265,7 +265,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
   const [listings, setListings] = useState<Listing[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [bids, setBids] = useState<Bid[]>([]);
-  const [partners, setPartners] = useState<{ id: string; full_name: string }[]>([]);
+  const [partners, setPartners] = useState<{ id: string; full_name: string; rotulo?: string }[]>([]);
   const [referralPartners, setReferralPartners] = useState<{ id: string; full_name: string; contact: string | null }[]>([]);
   const [showNewReferralPartner, setShowNewReferralPartner] = useState(false);
   const [newReferralName, setNewReferralName] = useState("");
@@ -2128,7 +2128,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                   >
                     <option value="">Selecionar</option>
                     {partners.map((p) => (
-                      <option key={p.id} value={p.id}>{p.full_name}</option>
+                      <option key={p.id} value={p.id}>{p.rotulo ?? p.full_name}</option>
                     ))}
                     {referralPartners.length > 0 && (
                       <optgroup label="Sem conta no portal">
@@ -2392,7 +2392,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                 >
                   <option value="">Sem partner de origem</option>
                   {partners.map((p) => (
-                    <option key={p.id} value={p.id}>{p.full_name}</option>
+                    <option key={p.id} value={p.id}>{p.rotulo ?? p.full_name}</option>
                   ))}
                   {referralPartners.length > 0 && (
                     <optgroup label="Sem conta no portal">
@@ -2945,7 +2945,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
                   >
                     <option value="">Selecionar</option>
                     {partners.map((p) => (
-                      <option key={p.id} value={p.id}>{p.full_name}</option>
+                      <option key={p.id} value={p.id}>{p.rotulo ?? p.full_name}</option>
                     ))}
                     {referralPartners.length > 0 && (
                       <optgroup label="Sem conta no portal">

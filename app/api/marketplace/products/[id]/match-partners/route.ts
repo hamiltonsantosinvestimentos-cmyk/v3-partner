@@ -38,6 +38,8 @@ export async function POST(
     .from("profiles")
     .select("id, role, state, last_sign_in_at, metadata")
     .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
+    // Equipe de Enterprise fora das listas da V3; o master fica (BRIEF 2026-11-20 aba Enterprises).
+    .is("enterprise_id", null)
     .not("state", "is", null);
 
   if (partErr || !partners) {

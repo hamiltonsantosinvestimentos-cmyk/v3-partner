@@ -53,12 +53,14 @@ export async function GET() {
     .order("full_name");
 
   // Busca lista de partners para selector de "quem indicou"
-  const { data: partners } = await db
+  const { data: partnersBrutos } = await db
     .from("profiles")
-    .select("id, full_name, email")
+    .select("id, full_name, email, enterprise_id")
     .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
-    .order("full_name")
     .limit(1000);
+  // Rede V3 primeiro, equipe de Enterprise no fim com rótulo "Nome · Marca" (só exibição).
+  const { ordenarSeletorDePartners } = await import("@/lib/enterprise");
+  const partners = await ordenarSeletorDePartners(db, (partnersBrutos ?? []) as { id: string; full_name: string | null; email: string; enterprise_id: string | null }[]);
 
   return NextResponse.json({
     // Lead incompleto do quiz só entra no Kanban depois de 1 minuto sem concluir

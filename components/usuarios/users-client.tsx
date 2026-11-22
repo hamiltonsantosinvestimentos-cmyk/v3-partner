@@ -110,6 +110,10 @@ interface User {
   starter_antigo?: boolean;
   closer_id?: string | null;
   enterprise_id?: string | null;
+  /** Só no master Enterprise (GET /api/usuarios): equipe e marca. */
+  enterprise_usuarios?: number;
+  enterprise_usuarios_ativos?: number;
+  enterprise_marca?: string | null;
 }
 
 const ROLES_COM_CLOSER: UserRole[] = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"];
@@ -487,6 +491,18 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
                         <span className="font-medium text-foreground">
                           {user.full_name || "—"}
                         </span>
+                        {/* Selo do master Enterprise; a equipe dele fica na aba Enterprises (BRIEF 2026-11-20). */}
+                        {user.role === "ENTERPRISE" && !user.enterprise_id && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-md border border-[#C9A84C]/40 bg-[#C9A84C]/10 text-[#E8C97A] whitespace-nowrap"
+                            title="A equipe deste Enterprise fica na aba Enterprises."
+                          >
+                            Enterprise · {user.enterprise_marca ?? "Sem marca"}
+                            <span className="text-[#7A8FA8] font-normal">
+                              · {user.enterprise_usuarios ?? 0} {(user.enterprise_usuarios ?? 0) === 1 ? "usuário" : "usuários"}
+                            </span>
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{user.email}</td>

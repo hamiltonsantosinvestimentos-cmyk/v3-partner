@@ -985,7 +985,7 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
-  const [partners, setPartners] = useState<{ id: string; full_name: string }[]>([]);
+  const [partners, setPartners] = useState<{ id: string; full_name: string; rotulo?: string }[]>([]);
   const [assigneeId, setAssigneeId] = useState<string>("");
   const [ticketStatus, setTicketStatus] = useState("");
   const [resolution, setResolution] = useState("");
@@ -1246,7 +1246,7 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
                   <select value={assigneeId} onChange={e => setAssigneeId(e.target.value)}
                     className="w-full h-9 px-3 text-sm bg-secondary border border-border rounded-lg text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
                     <option value="">— Sem responsável —</option>
-                    {partners.map(p => <option key={p.id} value={p.id}>{p.full_name}</option>)}
+                    {partners.map(p => <option key={p.id} value={p.id}>{p.rotulo ?? p.full_name}</option>)}
                   </select>
                 </div>
               </div>
@@ -1354,7 +1354,7 @@ function TicketDetailModal({ open, onClose, ticket, currentUser, onUpdated, onOp
 }
 
 // ─── Editar Proposta Modal ────────────────────────────────────────────────
-interface Partner { id: string; full_name: string; role?: string }
+interface Partner { id: string; full_name: string; role?: string; rotulo?: string }
 type CreditLevel = "NIVEL_1" | "NIVEL_2" | "NIVEL_3";
 
 function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
@@ -1450,7 +1450,7 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
   if (!open || !proposal) return null;
 
   const filteredPartners = partners.filter(p =>
-    !partnerSearch || p.full_name.toLowerCase().includes(partnerSearch.toLowerCase())
+    !partnerSearch || (p.rotulo ?? p.full_name).toLowerCase().includes(partnerSearch.toLowerCase())
   );
 
   const LEVEL_CONFIG = {
@@ -1500,7 +1500,7 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
                       partnerId === p.id ? "bg-primary/15 text-primary font-semibold" : "text-foreground"
                     }`}
                   >
-                    {p.full_name}
+                    {p.rotulo ?? p.full_name}
                     {partnerId === p.id && <CheckCircle2 className="w-3 h-3 flex-shrink-0" />}
                   </button>
                 ))}
@@ -1689,7 +1689,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [npLevel, setNpLevel] = useState<"NIVEL_1" | "NIVEL_2" | "NIVEL_3">("NIVEL_1");
   const [npPartnerId, setNpPartnerId] = useState("");
   const [npPartnerName, setNpPartnerName] = useState("");
-  const [npPartners, setNpPartners] = useState<{ id: string; full_name: string; role?: string }[]>([]);
+  const [npPartners, setNpPartners] = useState<{ id: string; full_name: string; role?: string; rotulo?: string }[]>([]);
   const [npPartnersLoading, setNpPartnersLoading] = useState(false);
   const [npPartnerSearch, setNpPartnerSearch] = useState("");
   // ─── Estado de pendência ─────────────────────────────────────────────────
@@ -3241,11 +3241,11 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                 ) : (
                   <div className="max-h-40 overflow-y-auto rounded-lg border border-border bg-secondary">
                     {npPartners
-                      .filter(p => !npPartnerSearch || p.full_name.toLowerCase().includes(npPartnerSearch.toLowerCase()))
+                      .filter(p => !npPartnerSearch || (p.rotulo ?? p.full_name).toLowerCase().includes(npPartnerSearch.toLowerCase()))
                       .map(p => (
                         <button key={p.id} onClick={() => { setNpPartnerId(p.id); setNpPartnerName(p.full_name); setNpPartnerSearch(""); }}
                           className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-[#C9A84C]/10 ${npPartnerId === p.id ? "text-[#E8C97A] font-semibold" : "text-foreground"}`}>
-                          {p.full_name}
+                          {p.rotulo ?? p.full_name}
                         </button>
                       ))}
                   </div>
