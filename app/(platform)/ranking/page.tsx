@@ -80,14 +80,35 @@ export default async function RankingPage({
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase.from("profiles").select("id, full_name, role").eq("id", user.id).single();
-  if (!["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "FINANCEIRO", "MESA_OPERACIONAL"].includes(profile?.role ?? "")) redirect("/unauthorized");
+  if (!["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "FINANCEIRO", "MESA_OPERACIONAL", "ENTERPRISE"].includes(profile?.role ?? "")) redirect("/unauthorized");
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
-  // Busca todos os partners
-  const { data: partners } = await svc
-    .from("profiles").select("id, full_name, role")
-    .in("role", ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE"]);
+  // Enterprise (BRIEF 2026-11-20 aba Enterprises): ranking só da própria equipe (master + usuários
+  // ativos), mesmo com 0 pontos. Falha no contexto = lista vazia, nunca a rede inteira.
+  const ehEnterprise = profile?.role === "ENTERPRISE";
+  let marcaEquipe: string | null = null;
+  let partners: { id: string; full_name: string | null; role: string }[] | null = null;
+  if (ehEnterprise) {
+    const { contextoEnterprise, idsDoEnterprise, nomeDaMarca } = await import("@/lib/enterprise");
+    const ctx = await contextoEnterprise(svc, user.id).catch(() => null);
+    marcaEquipe = ctx ? nomeDaMarca(ctx) : null;
+    const ids = await idsDoEnterprise(svc, user.id);
+    if (ids.length) {
+      const { data } = await svc.from("profiles").select("id, full_name, role, is_active").in("id", ids);
+      partners = ((data ?? []) as { id: string; full_name: string | null; role: string; is_active: boolean | null }[])
+        .filter((p) => p.is_active !== false);
+    } else {
+      partners = [];
+    }
+  } else {
+    // Rede V3: partners pagantes (ENTERPRISE fica fora)
+    const { data } = await svc
+      .from("profiles").select("id, full_name, role")
+      .in("role", ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE"]);
+    partners = data as typeof partners;
+  }
+  const idsVisiveis = new Set((partners ?? []).map((p) => p.id));
 
   // Busca dados de todos os módulos filtrados pelo período
   const [
@@ -111,6 +132,7 @@ export default async function RankingPage({
     (proposals ?? []).map(p => ({ partner_id: p.partner_id, approved_value: p.approved_value, requested_value: p.requested_value, status: p.status, created_at: p.created_at })),
     (deals ?? []).map(d => ({ assigned_to: d.assigned_to, deal_value: d.deal_value, stage: d.stage, created_at: d.created_at })),
     (commissions ?? []).map(c => ({ partner_id: c.partner_id, commission_value: c.commission_value, status: c.status })),
+    { incluirZerados: ehEnterprise, papelLinha: ehEnterprise ? `Equipe ${marcaEquipe ?? "Enterprise"}` : "Partner" },
   );
 
   // Busca metas do mês atual
@@ -120,14 +142,18 @@ export default async function RankingPage({
     .select("partner_id, goal_proposals, goal_approvals, goal_volume, goal_deals")
     .eq("year", now.getFullYear())
     .eq("month", now.getMonth() + 1);
+  // Enterprise recebe só as metas da própria equipe.
+  const goalsVisiveis = ehEnterprise ? (goals ?? []).filter((g) => idsVisiveis.has(g.partner_id as string)) : (goals ?? []);
 
   return (
     <RankingClient
       userRole={profile?.role ?? "PARTNER"}
       userName={profile?.full_name ?? "Usuário"}
+      currentUserId={user.id}
+      marcaEquipe={ehEnterprise ? (marcaEquipe ?? "Enterprise") : null}
       rankingData={rankingData}
       period={period}
-      goals={goals ?? []}
+      goals={goalsVisiveis}
     />
   );
 }
@@ -138,7 +164,9 @@ function buildRankingData(
   proposals: Array<{ partner_id: string | null; approved_value: number | null; requested_value: number | null; status: string | null; created_at?: string }>,
   deals: Array<{ assigned_to: string | null; deal_value: number | null; stage: string | null; created_at?: string }>,
   commissions: Array<{ partner_id: string | null; commission_value: number | null; status: string | null }>,
+  opcoes: { incluirZerados?: boolean; papelLinha?: string } = {},
 ) {
+  const papel = opcoes.papelLinha ?? "Partner";
   type Agg = {
     id: string; name: string; avatar: string;
     proposals: number; approvals: number; volume: number;
@@ -190,27 +218,29 @@ function buildRankingData(
   }
 
   const aggs = Array.from(map.values()).filter(a =>
-    a.proposals > 0 || a.approvals > 0 || a.deals > 0 || a.commissionsPaid > 0 || a.score > 0
+    opcoes.incluirZerados || a.proposals > 0 || a.approvals > 0 || a.deals > 0 || a.commissionsPaid > 0 || a.score > 0
   );
+  // Desempate por nome (pt-BR), para a ordem não variar entre carregamentos.
+  const porNome = (a: Agg, b: Agg) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" });
 
   return {
-    score: [...aggs].sort((a, b) => b.score - a.score).map(a => ({
-      id: a.id, name: a.name, avatar: a.avatar, role: "Partner",
+    score: [...aggs].sort((a, b) => b.score - a.score || porNome(a, b)).map(a => ({
+      id: a.id, name: a.name, avatar: a.avatar, role: papel,
       score: a.score, proposals: a.proposals, approvals: a.approvals,
       deals: a.deals, volume: a.volume,
     })),
-    propostas: [...aggs].sort((a, b) => b.proposals - a.proposals).map(a => ({
-      id: a.id, name: a.name, avatar: a.avatar, role: "Partner",
+    propostas: [...aggs].sort((a, b) => b.proposals - a.proposals || porNome(a, b)).map(a => ({
+      id: a.id, name: a.name, avatar: a.avatar, role: papel,
       proposals: a.proposals, growth: 0, region: "",
     })),
-    aprovacoes: [...aggs].sort((a, b) => b.approvals - a.approvals).map(a => ({
-      id: a.id, name: a.name, avatar: a.avatar, role: "Partner",
+    aprovacoes: [...aggs].sort((a, b) => b.approvals - a.approvals || porNome(a, b)).map(a => ({
+      id: a.id, name: a.name, avatar: a.avatar, role: papel,
       approved: a.approvals,
       rate: a.proposals > 0 ? Math.round((a.approvals / a.proposals) * 100) : 0,
       volume: a.volume,
     })),
-    volume: [...aggs].sort((a, b) => b.volume - a.volume).map(a => ({
-      id: a.id, name: a.name, avatar: a.avatar, role: "Partner",
+    volume: [...aggs].sort((a, b) => b.volume - a.volume || porNome(a, b)).map(a => ({
+      id: a.id, name: a.name, avatar: a.avatar, role: papel,
       volume: a.volume,
       deals: a.approvals,
       avg: a.approvals > 0 ? Math.round(a.volume / a.approvals) : 0,

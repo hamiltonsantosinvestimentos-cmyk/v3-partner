@@ -33,6 +33,10 @@ interface MetasClientProps {
   performance: PartnerPerformance[];
   goals: Record<string, PartnerGoal>;
   isAdmin: boolean;
+  /** Master Enterprise: vê o resumo e os cards da equipe, sem editar metas. */
+  visaoEquipe?: boolean;
+  /** Login Enterprise (master ou usuário). */
+  ehEnterprise?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -196,6 +200,8 @@ export function MetasClient({
   performance,
   goals: initialGoals,
   isAdmin,
+  visaoEquipe = false,
+  ehEnterprise = false,
 }: MetasClientProps) {
   const [goals, setGoals] = useState(initialGoals);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -226,7 +232,7 @@ export function MetasClient({
       </div>
 
       {/* Resumo geral */}
-      {isAdmin && performance.length > 1 && (
+      {(isAdmin || visaoEquipe) && performance.length > 1 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[
             { label: "Total Propostas", value: overallStats.proposals, icon: <Target className="w-4 h-4" /> },
@@ -266,6 +272,9 @@ export function MetasClient({
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Taxa de aprovação: {approvalRate}% · Comissões pagas: {formatCurrency(partner.commissions)}
                   </p>
+                  {ehEnterprise && (
+                    <p className="text-[11px] text-muted-foreground mt-0.5">As comissões da equipe são pagas ao master.</p>
+                  )}
                 </div>
                 {isAdmin && !isEditing && (
                   <button
@@ -310,8 +319,10 @@ export function MetasClient({
               ) : (
                 <div className="text-center py-4 text-xs text-muted-foreground border border-dashed border-[#243A66] rounded-lg">
                   {isAdmin
-                    ? "Nenhuma meta definida — clique em Definir Metas para configurar"
-                    : "Metas não definidas pelo gestor para este mês"}
+                    ? "Nenhuma meta definida. Clique em Definir Metas."
+                    : ehEnterprise
+                      ? "Metas ainda não definidas pela V3 para este mês."
+                      : "Metas não definidas pelo gestor para este mês"}
                 </div>
               )}
 

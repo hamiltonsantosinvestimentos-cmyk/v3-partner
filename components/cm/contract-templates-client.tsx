@@ -262,7 +262,7 @@ export function ContractTemplatesClient({ onOpenContract, role }: { onOpenContra
   // trocados), escolhe de uma lista dos partners já cadastrados no
   // sistema (/api/partners, mesmo endpoint já usado em seletores internos)
   // e adiciona como envolvido com papel "partner" pré-preenchido.
-  const [partnersList, setPartnersList] = useState<{ id: string; full_name: string; email: string; role: string }[]>([]);
+  const [partnersList, setPartnersList] = useState<{ id: string; full_name: string; email: string; role: string; rotulo?: string }[]>([]);
   const [showPartnerPicker, setShowPartnerPicker] = useState(false);
   const [selectedPartnerId, setSelectedPartnerId] = useState("");
   const loadPartnersList = async () => {
@@ -1647,7 +1647,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                                   className="flex-1 bg-[#09081A] border border-[#9BAFC5]/15 rounded px-2 py-1.5 text-xs text-[#F5F1E8]">
                                   <option value="">{partnersList.length === 0 ? "Carregando..." : "Selecione um partner"}</option>
                                   {partnersList.map((p) => (
-                                    <option key={p.id} value={p.id}>{p.full_name} · {p.role}</option>
+                                    <option key={p.id} value={p.id}>{p.rotulo ?? p.full_name} · {p.role}</option>
                                   ))}
                                 </select>
                                 <button onClick={() => submitAddPartnerToBatch(batch.id)} disabled={!addPartnerPickerId || addPartySubmitting}
@@ -2423,7 +2423,7 @@ ${allParties.length > 0 ? `<div class="qualbox">
                       {partnersList.length === 0 ? "Carregando partners..." : "Selecione um partner"}
                     </option>
                     {partnersList.map((p) => (
-                      <option key={p.id} value={p.id}>{p.full_name} · {p.role}</option>
+                      <option key={p.id} value={p.id}>{p.rotulo ?? p.full_name} · {p.role}</option>
                     ))}
                   </select>
                   <button onClick={addPartnerAsQualParty} disabled={!selectedPartnerId}

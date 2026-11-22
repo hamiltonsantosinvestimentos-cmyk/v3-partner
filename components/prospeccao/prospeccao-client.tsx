@@ -75,7 +75,7 @@ interface Prospect {
 }
 
 interface Equipe { id: string; full_name: string; role: string; }
-interface Partner { id: string; full_name: string; email: string; }
+interface Partner { id: string; full_name: string; email: string; rotulo?: string }
 
 type Etapa = "incompleto" | "webinar" | "prospect" | "contatado" | "interessado" | "agenda_reuniao" | "proposta_retorno" | "followup" | "trial" | "convertido" | "perdido";
 
@@ -518,7 +518,7 @@ function ProspectModal({
                   style={{ background: NAVY_CARD }}
                 >
                   <option value="">Não é um partner cadastrado</option>
-                  {partners.map(p => <option key={p.id} value={p.id}>{p.full_name} — {p.email}</option>)}
+                  {partners.map(p => <option key={p.id} value={p.id}>{p.rotulo ?? p.full_name} · {p.email}</option>)}
                 </select>
               </div>
               {!form.indicado_por_partner_id && (

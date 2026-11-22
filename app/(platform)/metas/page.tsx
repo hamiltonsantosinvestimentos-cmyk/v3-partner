@@ -20,7 +20,7 @@ export default async function MetasPage() {
     .eq("id", user.id)
     .single();
 
-  const allowedRoles = ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "FINANCEIRO"];
+  const allowedRoles = ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "FINANCEIRO", "ENTERPRISE"];
   if (!allowedRoles.includes(profile?.role ?? "")) redirect("/unauthorized");
 
   const svc = serviceClient();
@@ -29,10 +29,35 @@ export default async function MetasPage() {
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
-  // Para ADMIN/GESTAO: todos os partners. Para parceiros: apenas si mesmo.
-  const partnerIds = isAdmin
-    ? (await svc.from("profiles").select("id, full_name").in("role", ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE"])).data ?? []
-    : [{ id: user.id, full_name: profile?.full_name ?? "Você" }];
+  const cmpNome = (a: { full_name: string | null }, b: { full_name: string | null }) =>
+    (a.full_name ?? "").localeCompare(b.full_name ?? "", "pt-BR", { sensitivity: "base" });
+
+  // Enterprise (BRIEF 2026-11-20 aba Enterprises): o master vê ele + a equipe ativa (ele primeiro,
+  // equipe por nome); o usuário da equipe vê só ele. O master não define metas (só a V3).
+  const ehEnterprise = profile?.role === "ENTERPRISE";
+  let visaoEquipe = false;
+  let partnerIds: { id: string; full_name: string | null }[];
+  if (isAdmin) {
+    // Para ADMIN/GESTAO: todos os partners, por nome.
+    partnerIds = (((await svc.from("profiles").select("id, full_name").in("role", ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE"])).data ?? []) as { id: string; full_name: string | null }[]).sort(cmpNome);
+  } else if (ehEnterprise) {
+    const { contextoEnterprise, idsDoEnterprise } = await import("@/lib/enterprise");
+    const ctx = await contextoEnterprise(svc, user.id).catch(() => null);
+    if (ctx?.ehMaster) {
+      visaoEquipe = true;
+      const ids = await idsDoEnterprise(svc, user.id);
+      const { data } = ids.length ? await svc.from("profiles").select("id, full_name, is_active").in("id", ids) : { data: [] };
+      const ativos = ((data ?? []) as { id: string; full_name: string | null; is_active: boolean | null }[]).filter((p) => p.is_active !== false);
+      const master = ativos.filter((p) => p.id === user.id);
+      const equipe = ativos.filter((p) => p.id !== user.id).sort(cmpNome);
+      partnerIds = [...(master.length ? master : [{ id: user.id, full_name: profile?.full_name ?? "Você" }]), ...equipe];
+    } else {
+      partnerIds = [{ id: user.id, full_name: profile?.full_name ?? "Você" }];
+    }
+  } else {
+    // Parceiros: apenas si mesmo.
+    partnerIds = [{ id: user.id, full_name: profile?.full_name ?? "Você" }];
+  }
 
   const ids = partnerIds.map((p) => p.id);
 
@@ -115,6 +140,8 @@ export default async function MetasPage() {
       performance={performance}
       goals={goalsMap}
       isAdmin={isAdmin}
+      visaoEquipe={visaoEquipe}
+      ehEnterprise={ehEnterprise}
     />
   );
 }

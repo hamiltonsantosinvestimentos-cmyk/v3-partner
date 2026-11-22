@@ -23,6 +23,10 @@ export interface EnterpriseContexto {
   /** Master: ids dos usuários dele. Usuário: vazio. */
   usuariosIds: string[];
   marca: Marca | null;
+  /** full_name do master (fallback do nome da marca). */
+  masterNome: string | null;
+  /** white_label_nome do master, sem espaços ("" vira null). */
+  marcaNome: string | null;
 }
 
 type PerfilBase = { id: string; role: string | null; enterprise_id?: string | null };
@@ -43,14 +47,46 @@ export async function contextoEnterprise(db: SupabaseClient, perfil: PerfilBase 
     db.from("profiles").select("full_name, white_label_nome, white_label_logo_url").eq("id", masterId).maybeSingle(),
     ehMaster ? db.from("profiles").select("id").eq("enterprise_id", masterId) : Promise.resolve({ data: [] as { id: string }[] }),
   ]);
-  const nomeMarca = (master?.white_label_nome as string | null) ?? null;
+  const nomeMarca = textoOuNull(master?.white_label_nome);
   const logo = (master?.white_label_logo_url as string | null) ?? null;
+  const masterNome = textoOuNull(master?.full_name);
   return {
     ehMaster,
     masterId,
     usuariosIds: ((usuarios as { data: { id: string }[] | null }).data ?? []).map((u) => u.id),
-    marca: nomeMarca || logo ? { nome: nomeMarca ?? (master?.full_name as string) ?? "Enterprise", logoUrl: logo } : null,
+    marca: nomeMarca || logo ? { nome: nomeMarca ?? masterNome ?? "Enterprise", logoUrl: logo } : null,
+    masterNome,
+    marcaNome: nomeMarca,
   };
+}
+
+function textoOuNull(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+/**
+ * Nome da marca para exibição (BRIEF 2026-11-20 aba Enterprises): white_label_nome, senão
+ * full_name do master, senão "Enterprise". Nunca devolve vazio nem "null".
+ */
+export function nomeDaMarca(dados: { marcaNome?: unknown; masterNome?: unknown } | null | undefined): string {
+  return textoOuNull(dados?.marcaNome) ?? textoOuNull(dados?.masterNome) ?? "Enterprise";
+}
+
+/**
+ * Todos os perfis do mesmo Enterprise (master + usuários), para qualquer perfil da equipe ou o
+ * master. Lista vazia se o perfil não é Enterprise ou se a consulta falha (nunca a rede inteira).
+ * Diferente de idsDaEquipe (permissão de proposta), aqui o usuário também recebe os colegas.
+ */
+export async function idsDoEnterprise(db: SupabaseClient, perfil: PerfilBase | string): Promise<string[]> {
+  try {
+    const ctx = await contextoEnterprise(db, perfil);
+    if (!ctx) return [];
+    const { data, error } = await db.from("profiles").select("id").eq("enterprise_id", ctx.masterId);
+    if (error) return [];
+    return [ctx.masterId, ...((data ?? []) as { id: string }[]).map((u) => u.id)];
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -146,4 +182,38 @@ export async function enterprisePorDominio(db: SupabaseClient, host: string | nu
     masterId: data.id as string,
     marca: { nome: (data.white_label_nome as string | null) ?? (data.full_name as string | null) ?? "Enterprise", logoUrl: (data.white_label_logo_url as string | null) ?? null },
   };
+}
+
+/**
+ * Seletores internos de partner (Mesa, contratos, "quem indicou"): rede V3 primeiro (inclui o
+ * master Enterprise, cliente direto da V3), equipe de Enterprise no fim, por marca e nome.
+ * `rotulo` é SÓ para exibir no item da lista: o que se grava ou vai para documento continua
+ * sendo id e full_name. BRIEF docs/briefs/2026-11-20_aba-enterprises-admin-e-equipe-fora-das-listas.md
+ */
+export async function ordenarSeletorDePartners<T extends { id: string; full_name: string | null; enterprise_id?: string | null }>(
+  db: SupabaseClient,
+  perfis: T[],
+): Promise<(Omit<T, "enterprise_id"> & { rotulo: string; marca: string | null })[]> {
+  const mastersIds = [...new Set(perfis.map((p) => p.enterprise_id).filter((m): m is string => !!m))];
+  const marcas = new Map<string, string>();
+  if (mastersIds.length) {
+    const { data } = await db.from("profiles").select("id, full_name, white_label_nome").in("id", mastersIds);
+    for (const m of (data ?? []) as { id: string; full_name: string | null; white_label_nome: string | null }[]) {
+      marcas.set(m.id, nomeDaMarca({ marcaNome: m.white_label_nome, masterNome: m.full_name }));
+    }
+  }
+  const cmp = (a: string, b: string) => a.localeCompare(b, "pt-BR", { sensitivity: "base" });
+  const itens = perfis.map(({ enterprise_id, ...resto }) => {
+    const nome = resto.full_name ?? "";
+    const marca = enterprise_id ? (marcas.get(enterprise_id) ?? "Enterprise") : null;
+    return { ...resto, marca, rotulo: marca ? `${nome} · ${marca}` : nome };
+  });
+  return itens.sort((a, b) => {
+    if (!a.marca !== !b.marca) return a.marca ? 1 : -1;
+    if (a.marca && b.marca) {
+      const m = cmp(a.marca, b.marca);
+      if (m) return m;
+    }
+    return cmp(a.full_name ?? "", b.full_name ?? "");
+  }) as (Omit<T, "enterprise_id"> & { rotulo: string; marca: string | null })[];
 }
