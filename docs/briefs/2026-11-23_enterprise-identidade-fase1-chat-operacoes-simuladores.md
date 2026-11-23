@@ -112,8 +112,17 @@ Rodada 3 de 6 (23/11): LIBERADO, zero falhas. Sugestões aplicadas: referência 
 ## REGISTRO DE LIBERAÇÃO
 - QA: LIBERADO na rodada 3 de 6 (23/11/2026)
 - Go: "go" do Hamilton em 23/11/2026, capturado pelo gate (válido até 24/11 00:08 UTC)
-- Migration aplicada em produção: não
+- Migration aplicada em produção: sim, pelo Hamilton no SQL Editor em 23/11/2026 (segundo go = ele rodou o arquivo), "Success. No rows returned"
 
 ## NOTA DE IMPLEMENTAÇÃO (23/11/2026)
 - PDF de checklist (Minhas operações): o cabeçalho desse PDF é escuro (faixa navy), não branco como o BRIEF supôs. Por isso ele usa o logo para fundo escuro (`white_label_logo_url`), convertido em PNG num canvas; sem logo, o nome em texto. Os simuladores (fundo branco) usam o logo claro, como previsto.
 - O código funciona antes da migration: a identidade é lida de forma tolerante e, sem as colunas, sai só com a marca.
+
+## TESTE DA MIGRATION ANTES DE APLICAR (23/11/2026)
+Rodado pelo Hamilton no SQL Editor de produção (`teste-migration-identidade-ags.sql`): migration inteira + testes num bloco que termina com erro proposital (tudo desfeito). Resultado:
+- Masters preenchidos: 1. AGS: razão social "AGS AGRONEGÓCIOS SUSTENTÁVEIS S.A.", CNPJ 33735094000104 (igual ao cadastro aprovado).
+- `pg_temp.cnpj_valido`: numérico válido true, alfanumérico válido true, inválido false (igual a `isValidCNPJ`).
+- (a) anon lê profiles: 0. (b) partner V3 lê o master AGS: 0. (c) usuário da equipe AGS lê o master: 0. (d) ADMIN lê: 1. (e) UPDATE do master no CNPJ: bloqueado, 42501.
+- Tabelas com GRANT de leitura para anon: 183 (todas dependem de RLS; profiles com RLS ligada). Fica registrado para o BRIEF de RLS por dono.
+Tudo como esperado. Aplicação real: segundo go do Hamilton.
+- Conferência depois de aplicar (identidadeDoPerfil, leitura): usuário de teste AGS recebe nome "AGS Finance", razão social "AGS AGRONEGÓCIOS SUSTENTÁVEIS S.A.", CNPJ 33.735.094/0001-04; partner V3 recebe null. A AGS não tem logo para fundo claro: os PDFs dos simuladores saem com o nome em texto até o upload do logo claro na aba Cores.
