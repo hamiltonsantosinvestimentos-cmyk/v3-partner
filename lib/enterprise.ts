@@ -279,6 +279,17 @@ export async function marcasDosPartners(db: SupabaseClient, partnerIds: (string 
 
 /** Acrescenta `enterprise` a cada linha (só chamar para a equipe interna). */
 export async function anexarTarja<T extends Record<string, unknown>>(db: SupabaseClient, linhas: T[], campo = "partner_id"): Promise<(T & { enterprise: TarjaProposta | null })[]> {
-  const mapa = await marcasDosPartners(db, linhas.map((l) => l[campo] as string | null));
-  return linhas.map((l) => ({ ...l, enterprise: mapa.get(l[campo] as string) ?? null }));
+  // O select das propostas nem sempre traz partner_id solto: só o join `partner:profiles!partner_id(id, ...)`.
+  // Sem esse fallback a lista recarregada voltava com enterprise null e a tarja sumia.
+  const idDe = (l: T): string | null => {
+    const direto = l[campo];
+    if (typeof direto === "string" && direto) return direto;
+    const partner = l.partner as { id?: unknown } | null | undefined;
+    return typeof partner?.id === "string" ? partner.id : null;
+  };
+  const mapa = await marcasDosPartners(db, linhas.map(idDe));
+  return linhas.map((l) => {
+    const id = idDe(l);
+    return { ...l, enterprise: (id && mapa.get(id)) || null };
+  });
 }
