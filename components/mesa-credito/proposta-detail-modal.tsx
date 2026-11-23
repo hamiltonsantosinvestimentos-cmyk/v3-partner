@@ -1,4 +1,5 @@
 "use client";
+import { SeloEnterprise, rotuloPartnerEnterprise, type TarjaEnterpriseDados } from "@/components/shared/tarja-enterprise";
 import { aviso, confirmar } from "@/lib/aviso";
 import { etapaTerminal } from "@/lib/credit-proposal-status";
 
@@ -189,6 +190,8 @@ export interface ProposalFull {
   partner_name?: string;
   /** Plano/role do parceiro (STARTER/PARTNER/PARTNER_PRO/ENTERPRISE) — define o % da comissão do licenciado. */
   partner_role?: string;
+  /** Tarja do Enterprise: só vem do servidor para a equipe interna; o modal mostra pela presença do campo. */
+  enterprise?: TarjaEnterpriseDados | null;
   docs_uploaded?: number;
   docs_required?: number;
   created_at: string;
@@ -3073,6 +3076,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="font-mono text-xs text-muted-foreground">{proposal.code}</span>
+              {proposal.enterprise && <SeloEnterprise dados={proposal.enterprise} tamanho="cabecalho" />}
               <SeloViaApi metadata={proposal.metadata} />
               <Badge className={STATUS_COLORS[proposal.status as OperationStatus]}>
                 {STATUS_LABELS[proposal.status as OperationStatus] ?? proposal.status}
@@ -3883,7 +3887,7 @@ export function PropostaDetailModal({ open, onClose, proposal, onStageChange, on
               <Link2 className="w-4 h-4 text-primary flex-shrink-0" />
               <div>
                 <p className="text-xs font-semibold text-primary">Partner Responsável</p>
-                <p className="text-sm font-medium text-white">{proposal.partner_name}</p>
+                <p className="text-sm font-medium text-white">{rotuloPartnerEnterprise(proposal.partner_name, proposal.enterprise)}</p>
                 {proposal.partner_id && <p className="text-xs text-muted-foreground">ID: {proposal.partner_id}</p>}
               </div>
             </div>

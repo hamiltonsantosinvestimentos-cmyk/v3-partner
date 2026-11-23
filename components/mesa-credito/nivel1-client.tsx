@@ -1,4 +1,5 @@
 "use client";
+import { FaixaEnterprise, SeloEnterprise, FiltroOrigemSelect, passaFiltroOrigem, type FiltroOrigem, type TarjaEnterpriseDados } from "@/components/shared/tarja-enterprise";
 import { aviso } from "@/lib/aviso";
 import { SeloViaApi } from "@/components/shared/selo-via-api";
 import { statusAoReabrir } from "@/lib/credit-proposal-status";
@@ -25,6 +26,8 @@ interface Proposal {
   approved_value: number | null; prazo?: string; finalidade?: string;
   current_level: string; status: string; stage?: string;
   partner_id?: string; partner_name?: string; partner_role?: string;
+  /** Tarja do Enterprise: só vem do servidor para a equipe interna (BRIEF 2026-11-21 tarja nas mesas). */
+  enterprise?: TarjaEnterpriseDados | null;
   docs_uploaded?: number; docs_required?: number;
   created_at: string;
   valor_credito_atual?: number;
@@ -111,6 +114,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
             partner_id: (p.partner as { id?: string } | null)?.id,
             partner_name: (p.partner as { full_name?: string } | null)?.full_name,
             partner_role: (p.partner as { role?: string } | null)?.role,
+            enterprise: (p.enterprise as TarjaEnterpriseDados | null | undefined) ?? null,
             created_at: p.created_at as string,
             valor_credito_atual: p.valor_credito_atual as number | undefined,
             comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
@@ -140,7 +144,13 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
   const partnerName = currentUser?.full_name ?? "Partner";
   const partnerId   = currentUser?.id ?? "";
 
-  const filtered = applyFilters(proposals, filters);
+  const [origem, setOrigem] = useState<FiltroOrigem>("todas");
+  const filtered = applyFilters(proposals, filters).filter((p) => passaFiltroOrigem(p, origem));
+  const contagemOrigem = {
+    todas: proposals.length,
+    v3: proposals.filter((p) => !p.enterprise).length,
+    enterprise: proposals.filter((p) => !!p.enterprise).length,
+  };
   const totalValue = filtered.reduce((s, p) => s + p.requested_value, 0);
   const slaCritical = filtered.filter(p => ["critical","expired"].includes(getSLAInfo(p).sla)).length;
   const slaWarning  = filtered.filter(p => getSLAInfo(p).sla === "warning").length;
@@ -255,6 +265,7 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
         creditLines={CREDIT_LINES_N1}
         isAdmin={isAdmin}
       />
+      <FiltroOrigemSelect valor={origem} onChange={setOrigem} contagem={contagemOrigem} />
 
       {/* Toggle tabela/kanban */}
       <div className="flex justify-end">
@@ -289,13 +300,15 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                       const { targetDate } = getSLAInfo(p);
                       return (
                         <div key={p.id} onClick={() => setDetailProposal(p)}
-                          className="bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group">
+                          className="relative bg-card border border-border/60 rounded-lg p-3 cursor-pointer hover:border-primary/40 hover:bg-card/80 transition-all space-y-2 group">
+                          <FaixaEnterprise dados={p.enterprise} />
                           <div className="flex items-center justify-between gap-1">
                             <span className="font-mono text-[9px] text-muted-foreground truncate">{p.code} <SeloViaApi metadata={p.metadata} /></span>
                             <Badge className={`${STATUS_COLORS[p.status as OperationStatus]} text-[9px] px-1.5 py-0 leading-4`}>
                               {STATUS_LABELS[p.status as OperationStatus]}
                             </Badge>
                           </div>
+                          {p.enterprise && <SeloEnterprise dados={p.enterprise} />}
                           <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2 group-hover:text-primary transition-colors">{p.client_name}</p>
                           <div className="flex items-center justify-between gap-1">
                             <Badge variant="info" className="text-[9px] truncate max-w-[100px]">{p.credit_line}</Badge>
@@ -344,7 +357,10 @@ export function CreditDeskLevel1Client({ proposals: initial, currentUser }: Cred
                         className="border-b border-border/30 cursor-pointer transition-colors hover:bg-secondary/50"
                         onClick={() => setDetailProposal(p)}>
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{p.code} <SeloViaApi metadata={p.metadata} /></td>
-                        <td className="px-4 py-3 font-medium text-foreground max-w-36 truncate">{p.client_name}</td>
+                        <td className="px-4 py-3 font-medium text-foreground max-w-44">
+                          <span className="block truncate">{p.client_name}</span>
+                          {p.enterprise && <SeloEnterprise dados={p.enterprise} tamanho="linha" />}
+                        </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{p.client_type ?? "PF"}</td>
                         <td className="px-4 py-3"><Badge variant="info">{p.credit_line}</Badge></td>
                         <td className="px-4 py-3 text-right font-semibold text-white">{formatCurrency(p.requested_value)}</td>

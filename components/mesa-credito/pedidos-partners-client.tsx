@@ -1,4 +1,5 @@
 "use client";
+import { SeloEnterprise, type TarjaEnterpriseDados } from "@/components/shared/tarja-enterprise";
 import { aviso, confirmar } from "@/lib/aviso";
 
 import { useEffect, useState, useCallback, type MouseEvent } from "react";
@@ -35,6 +36,8 @@ export interface PartnerOrder {
   partner_commission_id: string | null;
   partner_id: string | null;
   ref_partner_id: string | null;
+  /** Tarja do Enterprise do partner exibido (ref_partner ou partner); rota só interna. */
+  enterprise?: TarjaEnterpriseDados | null;
   created_at: string;
   cnpj_count?: number | null;
   cpf_count?: number | null;
@@ -54,6 +57,7 @@ function OriginBadge({ order }: { order: PartnerOrder }) {
           {order.origem === "mesa_credito" ? "Mesa de Crédito" : "Mesa M&A"}
         </Badge>
         {quem && <span className="text-[11px] text-muted-foreground truncate max-w-40">Partner: {quem}</span>}
+        <SeloEnterprise dados={order.enterprise} tamanho="linha" />
       </div>
     );
   }
@@ -64,6 +68,7 @@ function OriginBadge({ order }: { order: PartnerOrder }) {
         {order.ref_partner_name && (
           <span className="text-[11px] text-muted-foreground truncate max-w-40">Ref: {order.ref_partner_name}</span>
         )}
+        <SeloEnterprise dados={order.enterprise} tamanho="linha" />
       </div>
     );
   }
@@ -71,6 +76,7 @@ function OriginBadge({ order }: { order: PartnerOrder }) {
     <div className="flex flex-col gap-1">
       <Badge className="bg-teal-500/10 text-teal-400 border-teal-500/20 w-fit">Via partner</Badge>
       <span className="text-[11px] text-muted-foreground truncate max-w-40">{order.partner_name ?? "—"}</span>
+      <SeloEnterprise dados={order.enterprise} tamanho="linha" />
     </div>
   );
 }
