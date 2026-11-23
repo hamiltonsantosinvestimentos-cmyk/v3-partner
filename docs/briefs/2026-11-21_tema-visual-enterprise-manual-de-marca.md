@@ -178,4 +178,4 @@ Rodada 4 de 6 (21/11): **LIBERADO**, zero falhas. Correções técnicas de texto
   - (b) partner comum gravando o tema de outro master: coberto por (c) (o trigger barra qualquer sessão não ADMIN, e a RLS de update é só do próprio perfil).
   - (d) leitura do tema por partner comum: segue a política de SELECT atual de profiles; tema é dado público de marca (cores e URLs públicas), sem proteção extra.
   - (e) políticas de storage.objects abertas a public: admin_full_storage (ALL), granted_read_storage (SELECT) e granted_write_storage (INSERT), as três restritas a bucket_id = 'v3-docs-publico'. Nenhuma política de escrita para anon/authenticated no bucket white-label.
-- Migration aplicada em produção: (pendente, aguarda o segundo go)
+- Migration aplicada em produção: 22/11/2026, pelo próprio Hamilton no SQL Editor ("Success. No rows returned"), com o SQL de `20261121_white_label_tema.sql` mostrado no chat antes. Ele aplicou e pediu para continuar; não houve mensagem começando com "go" para esta etapa (registro de honestidade).
