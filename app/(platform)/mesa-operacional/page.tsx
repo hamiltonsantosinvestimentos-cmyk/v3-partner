@@ -117,7 +117,7 @@ export default async function MesaOperacionalPage() {
   return (
     <MesaOpClient
       tickets={(ticketsData ?? []) as unknown as Parameters<typeof MesaOpClient>[0]["tickets"]}
-      proposals={propostasComTarja as Parameters<typeof MesaOpClient>[0]["proposals"]}
+      proposals={propostasComTarja as unknown as Parameters<typeof MesaOpClient>[0]["proposals"]}
       currentUser={currentUser}
     />
   );
