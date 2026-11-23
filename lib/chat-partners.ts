@@ -85,6 +85,17 @@ const ETAPA_LABEL: Record<string, string> = {
 };
 export const etapaLabel = (s?: string | null) => (s ? ETAPA_LABEL[s] ?? s : "—");
 
+/** "Mesa {marca}" para partner de Enterprise, "Mesa V3" para os demais (BRIEF 2026-11-23 identidade fase 1). */
+export async function nomeDaMesaPara(db: SupabaseClient, partnerId: string): Promise<string> {
+  try {
+    const { contextoEnterprise, nomeDaMarca } = await import("@/lib/enterprise");
+    const ctx = await contextoEnterprise(db, partnerId);
+    return ctx ? `Mesa ${nomeDaMarca(ctx)}` : "Mesa V3";
+  } catch {
+    return "Mesa V3";
+  }
+}
+
 /** Aviso automático no chat do partner quando a proposta muda de etapa. */
 export async function avisarMudancaEtapa(db: SupabaseClient, propostaId: string, novaEtapa: string, autor: { id: string; nome: string }) {
   const { data: p } = await db.from("credit_desk_proposals")
@@ -97,7 +108,7 @@ export async function avisarMudancaEtapa(db: SupabaseClient, propostaId: string,
   if (novaEtapa === "PENDENCIA") texto += p.pending_reason ? `\nO que falta: ${p.pending_reason}` : "\nVeja na aba Documentos da proposta o que falta enviar.";
   if (novaEtapa === "LIBERADO") texto += "\nA comissão foi gerada e aparece em Comissões assim que o financeiro autorizar.";
   await inserirMensagem(db, {
-    room_id: salaDoPartner(p.partner_id), sender_id: autor.id, sender_name: "Mesa V3 · aviso automático",
+    room_id: salaDoPartner(p.partner_id), sender_id: autor.id, sender_name: `${await nomeDaMesaPara(db, p.partner_id)} · aviso automático`,
     sender_role: "SYSTEM", content: texto, tipo: "sistema", proposta_id: p.id,
   });
 }
@@ -110,7 +121,7 @@ export async function avisarComissaoPaga(db: SupabaseClient, partnerId: string,
   const valor = c.liquido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
   const quando = c.data ? ` em ${new Date(`${c.data}T12:00:00`).toLocaleDateString("pt-BR")}` : "";
   await inserirMensagem(db, {
-    room_id: salaDoPartner(partnerId), sender_id: autor.id, sender_name: "Mesa V3 · aviso automático", sender_role: "SYSTEM",
+    room_id: salaDoPartner(partnerId), sender_id: autor.id, sender_name: `${await nomeDaMesaPara(db, partnerId)} · aviso automático`, sender_role: "SYSTEM",
     content: `💰 Comissão ${c.code}${c.operacao ? ` (${c.operacao})` : ""} paga${quando}: ${valor} líquido. O comprovante foi enviado por e-mail e está em Comissões.`,
     tipo: "sistema",
   });

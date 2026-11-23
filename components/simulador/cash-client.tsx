@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { Home, Wheat, FileDown, Info, Plus, X, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIdentidadeEnterprise } from "@/components/enterprise/use-identidade";
+import { CSS_IDENTIDADE, cabecalhoEnterprise, linhaTecnicaV3, rodapeEnterprise, tituloSimulacao } from "@/components/simulador/identidade-pdf";
+import { escapeHtml } from "@/lib/html-escape";
 import {
   LINHAS_CASH, PARAMETROS_CASH, PRAZO_MAX, PRAZO_MIN,
   creditoPelaRenda, mediaAvaliacoes, parcelaMaxima, prazoMinimoQueCabe, simularCash, type LinhaCash,
@@ -62,6 +65,8 @@ function Linha({ label, valor, sub, forte }: { label: string; valor: string; sub
 }
 
 export function CashSimulator() {
+  // Enterprise: PDF e textos com a marca dele (BRIEF 2026-11-23 identidade fase 1).
+  const identidade = useIdentidadeEnterprise();
   const [linha, setLinha] = useState<LinhaCash>("CASH_HOME");
   const [avaliacoes, setAvaliacoes] = useState<number[]>([13_666_029]);
   const [prazo, setPrazo] = useState(188);
@@ -93,7 +98,7 @@ export function CashSimulator() {
     const d = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" });
     const linhaPdf = (l: string, v: string, s = "") =>
       `<div class="row"><span>${l}</span><span><b>${v}</b>${s ? `<small>${s}</small>` : ""}</span></div>`;
-    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Simulação ${nomeLinha} — V3 Partners</title>
+    const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${identidade ? tituloSimulacao(nomeLinha, identidade) : `Simulação ${nomeLinha} — V3 Partners`}</title>
 <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;color:#09081a;background:#fff}
 .page{max-width:620px;margin:0 auto;padding:40px 32px}h1{font-size:22px}p.em{color:#7a8fa8;font-size:12px;margin:4px 0 20px}
 .badge{display:inline-block;background:#09081a;color:#c9a84c;font-size:9px;font-weight:700;letter-spacing:1px;padding:4px 10px;border-radius:20px;margin-bottom:12px}
@@ -101,8 +106,8 @@ export function CashSimulator() {
 .row span:first-child{color:#555}.row span:last-child{text-align:right}.row small{display:block;color:#7a8fa8;font-size:10px;font-weight:400}
 .total{display:flex;justify-content:space-between;background:#f6f3ec;border:1px solid #c9a84c;border-radius:10px;padding:16px;margin-top:18px;font-size:15px;font-weight:700}
 .total span:last-child{font-size:20px}.foot{margin-top:24px;font-size:9px;color:#999;text-align:center}
-@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>
-<body><div class="page"><div class="badge">V3 PARTNERS · ${nomeLinha}</div>
+${identidade ? CSS_IDENTIDADE : ""}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head>
+<body><div class="page">${identidade ? cabecalhoEnterprise(identidade) : ""}<div class="badge">${identidade ? escapeHtml(identidade.nome.toUpperCase()) : "V3 PARTNERS"} · ${nomeLinha}</div>
 <h1>Demonstrativo da Liquidez</h1><p class="em">Emitido em ${d}</p>
 ${linhaPdf("Média de avaliação do imóvel", fmtBRL(sim.credito), origem === "renda" ? "calculada pela renda do cliente" : avaliacoesVisiveis.filter((v) => v > 0).length > 1 ? `média de ${avaliacoesVisiveis.filter((v) => v > 0).length} avaliações` : "")}
 ${linhaPdf("Prazo", `${sim.prazo} meses`)}
@@ -111,8 +116,8 @@ ${linhaPdf("Renda necessária", fmtBRL(sim.rendaNecessaria), `parcela até ${fmt
 ${renda > 0 ? linhaPdf("Renda do cliente", fmtBRL(renda), `parcela máxima ${fmtBRL(maxParcela)} · ${cabe(sim.parcela) ? "parcela cabe na renda" : "parcela acima da renda"}`) : ""}
 ${pelaRenda ? linhaPdf(`Crédito máximo pela renda (${prazo} meses)`, fmtBRL(pelaRenda.valorLiberado), `avaliação necessária ${fmtBRL(pelaRenda.avaliacaoNecessaria)}`) : ""}
 <div class="total"><span>Valor liberado ao cliente</span><span>${fmtBRL(sim.valorLiberado)}</span></div>
-<p class="foot">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br<br>Taxa de juros + INCC: parcelas corrigidas pelo INCC, valores mostrados sem a correção. Simulação estimada com fins ilustrativos. Não constitui proposta formal de crédito; sujeita à análise e avaliação do imóvel.</p>
-</div><script>window.onload=()=>window.print()</script></body></html>`;
+<p class="foot">${identidade ? rodapeEnterprise(identidade) : "V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br"}<br>Taxa de juros + INCC: parcelas corrigidas pelo INCC, valores mostrados sem a correção. Simulação estimada com fins ilustrativos. Não constitui proposta formal de crédito; sujeita à análise e avaliação do imóvel.</p>
+${identidade ? linhaTecnicaV3() : ""}</div><script>window.onload=()=>window.print()</script></body></html>`;
     const win = window.open("", "_blank");
     if (win) { win.document.write(html); win.document.close(); }
   };
@@ -313,7 +318,7 @@ ${pelaRenda ? linhaPdf(`Crédito máximo pela renda (${prazo} meses)`, fmtBRL(pe
                 <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
                   Simulação estimada. Parcelas corrigidas pelo INCC; valores mostrados sem a correção. Sujeita à análise de crédito e à avaliação do imóvel.
-                  <strong className="text-foreground"> Consulte um assessor V3 Partners para proposta formal.</strong>
+                  <strong className="text-foreground"> Consulte um assessor {identidade?.nome ?? "V3 Partners"} para proposta formal.</strong>
                 </p>
               </div>
             </>

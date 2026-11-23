@@ -119,3 +119,9 @@ Rodada 3 de 6 (21/11): **LIBERADO**, zero falhas. F1 a F6 resolvidas; F4 atendid
 - QA: LIBERADO, rodada 3, 21/11/2026
 - Go: (pendente)
 - Migration aplicada em produção: não se aplica
+
+## EXCEÇÃO PONTUAL (23/11/2026)
+O Hamilton autorizou no chat a criação de um usuário de teste na equipe AGS por script com service role, porque o modo ADMIN não cria usuários de Enterprise (só o master). Mesmo cadastro de `POST /api/enterprise/usuarios` (role ENTERPRISE, enterprise_id = master AGS, repasse 0%, troca de senha no 1º acesso, senha temporária só no e-mail).
+- Usuário: "Teste AGS V3", v3partnersbrasil@gmail.com, id 07668ecf-b524-4495-8bf2-ef18bb23db51. Ocupa 1 das 10 vagas e aparece ao Marciano na equipe e no ranking.
+- O registro em `audit_logs` falhou (coluna `record_id` não existe); fica este registro.
+- Remover o usuário depois do teste.

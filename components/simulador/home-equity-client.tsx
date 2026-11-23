@@ -7,6 +7,10 @@ import {
   AlertTriangle, Calculator, FileDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIdentidadeEnterprise } from "@/components/enterprise/use-identidade";
+import { CSS_IDENTIDADE, cabecalhoEnterprise, linhaTecnicaV3, tituloSimulacao } from "@/components/simulador/identidade-pdf";
+import { escapeHtml } from "@/lib/html-escape";
+import { linhaJuridica } from "@/lib/enterprise-identidade";
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
 // Exportadas: também usadas pelo simulador público (/simulador-home-equity-v3,
@@ -186,6 +190,8 @@ function Tab({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export function HomeEquitySimulator() {
+  // Enterprise: PDF e textos com a marca dele (BRIEF 2026-11-23 identidade fase 1).
+  const identidade = useIdentidadeEnterprise();
   const [valorImovel, setValorImovel] = useState(500_000);
   const [valorEmprestimo, setValorEmprestimo] = useState(200_000);
   const [prazo, setPrazo] = useState(120);
@@ -239,7 +245,7 @@ export function HomeEquitySimulator() {
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Simulação Home Equity — V3 Partners</title>
+<title>${identidade ? tituloSimulacao("Home Equity", identidade) : "Simulação Home Equity — V3 Partners"}</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1a1a2e; font-size: 11px; background: #fff; }
@@ -269,21 +275,23 @@ export function HomeEquitySimulator() {
   .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e5e0d5; font-size: 8.5px; color: #999; line-height: 1.5; }
   .alert { background: #fdf8ed; border: 1px solid #c9a84c33; border-radius: 6px; padding: 8px 12px; font-size: 9px; color: #7a6a2e; margin-bottom: 14px; }
   section { margin-bottom: 18px; }
+  ${identidade ? CSS_IDENTIDADE : ""}
   @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 </style>
 </head>
 <body>
 <div class="page">
+  ${identidade ? cabecalhoEnterprise(identidade) : ""}
   <!-- Header -->
   <div class="header">
     <div>
       <h1>Simulação Home Equity</h1>
-      <p>Crédito com Garantia de Imóvel · CGI — V3 Partners</p>
+      <p>${identidade ? `Crédito com Garantia de Imóvel · CGI · ${escapeHtml(identidade.nome)}` : "Crédito com Garantia de Imóvel · CGI — V3 Partners"}</p>
       <p style="margin-top:4px;color:#999">Gerado em ${dataHoje}</p>
     </div>
     <div style="text-align:right">
-      <div class="badge">V3 PARTNERS</div>
-      <p style="font-size:9px;color:#999;margin-top:6px">v3partners.com.br</p>
+      <div class="badge">${identidade ? escapeHtml(identidade.nome.toUpperCase()) : "V3 PARTNERS"}</div>
+      ${identidade ? (identidade.site ? `<p style="font-size:9px;color:#999;margin-top:6px">${escapeHtml(identidade.site)}</p>` : "") : `<p style="font-size:9px;color:#999;margin-top:6px">v3partners.com.br</p>`}
     </div>
   </div>
 
@@ -382,9 +390,13 @@ export function HomeEquitySimulator() {
   </div>
 
   <div class="footer">
-    <strong>V3 Partners Soluções Ltda</strong> — CNPJ 14.219.287/0001-50 · v3partners.com.br<br>
-    Esta simulação foi gerada pela Plataforma V3 PARTNER em ${dataHoje}. Não constitui proposta formal de crédito. O crédito ainda será analisado. Esta simulação não constitui aprovação de crédito. Consulte um assessor V3 Partners para proposta definitiva.
+    ${identidade
+      ? `${escapeHtml(linhaJuridica(identidade))}<br>
+    Esta simulação foi gerada pela plataforma ${escapeHtml(identidade.nome)} em ${dataHoje}. Não constitui proposta formal de crédito. O crédito ainda será analisado. Esta simulação não constitui aprovação de crédito. Consulte um assessor ${escapeHtml(identidade.nome)} para proposta definitiva.`
+      : `<strong>V3 Partners Soluções Ltda</strong> — CNPJ 14.219.287/0001-50 · v3partners.com.br<br>
+    Esta simulação foi gerada pela Plataforma V3 PARTNER em ${dataHoje}. Não constitui proposta formal de crédito. O crédito ainda será analisado. Esta simulação não constitui aprovação de crédito. Consulte um assessor V3 Partners para proposta definitiva.`}
   </div>
+  ${identidade ? linhaTecnicaV3() : ""}
 </div>
 <script>window.onload = () => { window.print(); }</script>
 </body></html>`;
@@ -693,7 +705,7 @@ export function HomeEquitySimulator() {
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
                   Simulação estimada. Taxa efetiva sujeita à análise de crédito, avaliação do imóvel e perfil do cliente.
                   LTV máximo de 60% sobre o valor de avaliação. Operação regulada pela Res. CMN 4.676/2018.
-                  <strong className="text-foreground"> Consulte um assessor V3 Partners para proposta formal.</strong>
+                  <strong className="text-foreground"> Consulte um assessor {identidade?.nome ?? "V3 Partners"} para proposta formal.</strong>
                 </p>
               </div>
             </>

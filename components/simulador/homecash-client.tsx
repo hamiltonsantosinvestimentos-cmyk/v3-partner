@@ -3,6 +3,9 @@
 import { useState, useMemo } from "react";
 import { Home, Info, FileDown, Calendar, TrendingUp, ChevronDown, ChevronUp, Calculator } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useIdentidadeEnterprise } from "@/components/enterprise/use-identidade";
+import { CSS_IDENTIDADE, cabecalhoEnterprise, linhaTecnicaV3, rodapeEnterprise, tituloSimulacao } from "@/components/simulador/identidade-pdf";
+import { escapeHtml } from "@/lib/html-escape";
 
 // ─── Parâmetros HomeCash (derivados da planilha oficial) ────────────────────
 const LTV            = 0.60;    // 60% do valor do imóvel
@@ -111,6 +114,8 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 export function HomeCashSimulator() {
+  // Enterprise: PDF e textos com a marca dele (BRIEF 2026-11-23 identidade fase 1).
+  const identidade = useIdentidadeEnterprise();
   const [valorImovel, setValorImovel]   = useState(2_267_333);
   const [prazoF2, setPrazoF2]           = useState(240);
   const [sistemaF2, setSistemaF2]       = useState<"PRICE" | "SAC">("PRICE");
@@ -164,7 +169,7 @@ export function HomeCashSimulator() {
 
     const html = `<!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="UTF-8"><title>Simulação HomeCash — V3 Partners</title>
+<head><meta charset="UTF-8"><title>${identidade ? tituloSimulacao("HomeCash", identidade) : "Simulação HomeCash — V3 Partners"}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a2e;font-size:11px;background:#fff}
   .page{max-width:720px;margin:0 auto;padding:32px}
@@ -179,12 +184,13 @@ export function HomeCashSimulator() {
   .footer{margin-top:20px;padding-top:10px;border-top:1px solid #e5e0d5;font-size:8.5px;color:#999}
   table{width:100%;border-collapse:collapse;font-size:9px}th{background:#09081a;color:#c9a84c;padding:6px 8px;text-align:right}th:first-child{text-align:center}
   td{padding:4px 8px;text-align:right;border-bottom:1px solid #ece8e0}td:first-child{text-align:center;color:#666}
-  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  ${identidade ? CSS_IDENTIDADE : ""}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head>
 <body><div class="page">
+  ${identidade ? cabecalhoEnterprise(identidade) : ""}
   <div class="header">
-    <div><h1>Simulação HomeCash</h1><p style="color:#666;font-size:10px;margin-top:3px">Fundo Compra — V3 Partners · ${d}</p></div>
-    <div class="badge">V3 PARTNERS</div>
+    <div><h1>Simulação HomeCash</h1><p style="color:#666;font-size:10px;margin-top:3px">${identidade ? `Fundo Compra · ${escapeHtml(identidade.nome)} · ${d}` : `Fundo Compra — V3 Partners · ${d}`}</p></div>
+    <div class="badge">${identidade ? escapeHtml(identidade.nome.toUpperCase()) : "V3 PARTNERS"}</div>
   </div>
   <div class="highlight">
     <div style="font-size:10px;color:#7a6a2e;margin-bottom:6px;font-weight:700">DADOS DE ENTRADA</div>
@@ -239,8 +245,9 @@ export function HomeCashSimulator() {
       </tbody>
     </table>
   </div>
-  <div class="footer">V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br<br>
+  <div class="footer">${identidade ? rodapeEnterprise(identidade) : "V3 Partners Soluções Ltda · CNPJ 14.219.287/0001-50 · v3partners.com.br"}<br>
   Simulação estimada com fins ilustrativos. Não constitui proposta formal de crédito.</div>
+  ${identidade ? linhaTecnicaV3() : ""}
 </div><script>window.onload=()=>window.print()</script></body></html>`;
     const win = window.open("", "_blank");
     if (win) { win.document.write(html); win.document.close(); }
@@ -532,7 +539,7 @@ export function HomeCashSimulator() {
                 <Info className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0 mt-0.5" />
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
                   Simulação estimada. Financiamento Imobiliário (Fase 2) sujeito à análise de crédito e avaliação do imóvel.
-                  <strong className="text-foreground"> Consulte um assessor V3 Partners para proposta formal.</strong>
+                  <strong className="text-foreground"> Consulte um assessor {identidade?.nome ?? "V3 Partners"} para proposta formal.</strong>
                 </p>
               </div>
             </>
