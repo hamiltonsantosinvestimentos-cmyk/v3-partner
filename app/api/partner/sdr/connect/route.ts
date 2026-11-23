@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createSession, getSessionStatus, getSessionQr, startSession } from "@/lib/whatsapp/openwa-client";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
@@ -22,6 +23,7 @@ async function authGuard() {
 // Espelha /api/sdr/qrcode, mas resolvendo a sessão do partner em vez da sessão
 // global da V3 — status é sempre consultado ao vivo no OpenWA, nunca cacheado.
 export async function GET() {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -65,6 +67,7 @@ export async function GET() {
 // abaixo) em vez de criar uma nova. A V3 continua sendo a única dona da
 // OPENWA_API_KEY — o partner nunca vê essa chave, só o QR da própria sessão.
 export async function POST() {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 

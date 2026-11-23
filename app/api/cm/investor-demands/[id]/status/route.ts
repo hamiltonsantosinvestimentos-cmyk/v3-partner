@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notify";
 import { CM_MEETING_URL, notifyMeetingLink } from "@/lib/cm-meeting";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 import {
   DEMAND_STATUS_LABELS,
   DEMAND_NEXT_ACTIONS,
@@ -26,6 +27,7 @@ const MESA_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
  *  Blind Wall: o texto livre do motivo fica so em cm_status_transitions (auditoria
  *  interna); a nota de timeline visivel ao partner de origem leva apenas a etapa. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

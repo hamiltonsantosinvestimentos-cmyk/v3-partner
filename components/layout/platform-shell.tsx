@@ -27,6 +27,8 @@ interface PlatformShellProps {
     is_active?: boolean | null;
     /** Papel STARTER do antigo V3 Starter (não Access): menu de antes do Access. */
     starter_antigo?: boolean;
+    /** ENTERPRISE master (enterprise_id nulo); a equipe tem o mesmo papel e não vê o item "Enterprise". */
+    enterprise_master?: boolean;
   };
   notificationCount: number;
   /** White label do Enterprise (null = marca V3). */
@@ -59,7 +61,7 @@ export function PlatformShell({ user, notificationCount, marca = null, temCorDeM
       <LocationGate role={user.role} />
       {/* Desktop sidebar */}
       <div className="hidden lg:flex flex-shrink-0">
-        <Sidebar role={user.role} starterAntigo={user.starter_antigo} marca={marca} temCorDeMarca={temCorDeMarca} />
+        <Sidebar role={user.role} starterAntigo={user.starter_antigo} enterpriseMaster={user.enterprise_master} marca={marca} temCorDeMarca={temCorDeMarca} />
       </div>
 
       {/* Mobile sidebar overlay */}
@@ -70,7 +72,7 @@ export function PlatformShell({ user, notificationCount, marca = null, temCorDeM
             onClick={() => setSidebarOpen(false)}
           />
           <div className="absolute left-0 top-0 bottom-0 z-50">
-            <Sidebar role={user.role} starterAntigo={user.starter_antigo} marca={marca} temCorDeMarca={temCorDeMarca} onClose={() => setSidebarOpen(false)} />
+            <Sidebar role={user.role} starterAntigo={user.starter_antigo} enterpriseMaster={user.enterprise_master} marca={marca} temCorDeMarca={temCorDeMarca} onClose={() => setSidebarOpen(false)} />
           </div>
         </div>
       )}

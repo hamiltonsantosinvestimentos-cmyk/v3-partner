@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ type GalleryItem = { storage_path: string; caption: string; order: number };
 
 // POST — upload de imagem higienizada para a galeria publica do ativo
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCallerRole(req);
   if (!caller) return NextResponse.json({ error: "Apenas ADMIN/GESTAO/MESA_OPERACIONAL" }, { status: 403 });
 
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 // DELETE — remove uma imagem da galeria (?storage_path=...)
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCallerRole(req);
   if (!caller) return NextResponse.json({ error: "Apenas ADMIN/GESTAO/MESA_OPERACIONAL" }, { status: 403 });
 

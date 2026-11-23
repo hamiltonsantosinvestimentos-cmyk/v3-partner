@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notify";
 import { CM_MEETING_URL, notifyMeetingLink } from "@/lib/cm-meeting";
 import { ASSET_DECLINE_REASON_VALUES } from "@/lib/cm-decline-reasons";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -45,6 +46,7 @@ async function getCallerRole(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCallerRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -188,6 +190,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCallerRole(req);
   if (!caller || !ADMIN_ROLES.includes(caller.role)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

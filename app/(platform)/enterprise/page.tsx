@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { Building2, ShieldCheck } from "lucide-react";
@@ -69,6 +70,10 @@ export default async function EnterprisePage({ searchParams }: { searchParams: P
       </div>
     );
   }
+
+  // Usuário da equipe não usa mais /enterprise: a comissão dele está em Comissões
+  // (BRIEF 2026-11-23 enterprise-menu-enxuto-e-comissoes). O modo ADMIN não muda.
+  if (!modoAdmin && !ctx.ehMaster) redirect("/comissoes");
 
   return (
     <div className="space-y-6 animate-fade-in">

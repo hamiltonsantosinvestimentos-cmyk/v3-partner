@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditHtml } from "@/lib/brand-guardian-gate";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 // Sprint 1, Fase 4 (18/09/2026), item 4.7: Teaser Cego para ativos da Bolsa
 // (precatórios, direitos creditórios), equivalente ao já existente para M&A
@@ -135,6 +136,7 @@ function buildTeaserHtml(params: {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });

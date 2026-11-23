@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { hasComplianceDashboardAccess } from "@/lib/cm/compliance-access";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 // GET /api/cm/listings/[id]/compliance-dossier/pdf -- reassina a URL do PDF
 // já finalizado (a assinatura de 30 dias gerada no fechamento do quórum
@@ -15,6 +16,7 @@ const BUCKET = "documents"; // ver nota em lib/compliance-dossier-generate.ts
 const SIGNED_URL_SECONDS = 30 * 24 * 60 * 60;
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const allowed = await hasComplianceDashboardAccess(user?.id);

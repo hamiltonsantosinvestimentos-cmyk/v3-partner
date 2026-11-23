@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirEnterprise } from "@/lib/enterprise-server";
 import { listarRepasses } from "@/lib/enterprise-repasses";
 import { periodoDoMes } from "@/lib/relatorio-mensal-partners";
+import { visaoDoUsuario } from "./visao-usuario";
 
 // GET   ?mes=YYYY-MM|todos — master: repasses de todos os usuários dele; usuário: os próprios
 // PATCH { ids: string[], status: "PAGO" | "PENDENTE" } — só o master marca pagamento
@@ -16,6 +17,8 @@ export async function GET(req: NextRequest) {
     const dados = await listarRepasses(auth.db, auth.ctx.ehMaster
       ? { enterpriseId: auth.userId, periodo }
       : { usuarioId: auth.userId, periodo });
+    // Usuário da equipe: só a comissão dele, sem o valor do master e o % (BRIEF 2026-11-23 menu enxuto e comissões).
+    if (!auth.ctx.ehMaster && !auth.admin) return NextResponse.json({ ...visaoDoUsuario(dados), ehMaster: false, periodo });
     return NextResponse.json({ ...dados, ehMaster: auth.ctx.ehMaster, periodo });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });

@@ -53,10 +53,10 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/closer", label: "Closer", icon: "Handshake", roles: ["ADMIN", "GESTAO", "FINANCEIRO", "CLOSER"] },
       { href: "/minhas-operacoes", label: "Minhas Operações", icon: "ClipboardList", roles: ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
       { href: "/meus-links", label: "Links de Serviço", icon: "Link2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "MESA_OPERACIONAL"] },
-      { href: "/meus-compradores", label: "Meus Compradores", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] },
-      { href: "/meus-ativos", label: "Meus Ativos", icon: "Package", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] },
+      { href: "/meus-compradores", label: "Meus Compradores", icon: "ShoppingBag", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"] },
+      { href: "/meus-ativos", label: "Meus Ativos", icon: "Package", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"] },
       { href: "/ranking", label: "Ranking", icon: "Medal", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
-      { href: "/indicacoes", label: "Indicações", icon: "UserPlus2", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE", "GESTAO"] },
+      { href: "/indicacoes", label: "Indicações", icon: "UserPlus2", roles: ["ADMIN", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "GESTAO"] },
     ],
   },
   {
@@ -100,9 +100,9 @@ const NAV_SECTIONS: NavSection[] = [
         // o filho "Vitrine" ja tinha roles de partner, mas nunca renderizava
         // porque o pai escondia o grupo inteiro antes disso.
         href: "/bolsa", label: "Bolsa de Ativos", icon: "Gavel",
-        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"],
+        roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"],
         children: [
-          { href: "/bolsa", label: "Vitrine", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] },
+          { href: "/bolsa", label: "Vitrine", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE"] },
           { href: "/bolsa/mesa", label: "Mesa de Capitais", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] },
         ],
       },
@@ -164,7 +164,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/agentes", label: "Squads de IA", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/sdr", label: "SDR WhatsApp", icon: "BotMessageSquare", roles: ["ADMIN", "GESTAO", "SDR", "CLOSER"] },
-      { href: "/meu-atendimento-ia", label: "Atendimento IA", icon: "MessageSquare", roles: ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
+      { href: "/meu-atendimento-ia", label: "Atendimento IA", icon: "MessageSquare", roles: ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE"] },
       { href: "/deal-rooms", label: "Deal Rooms", icon: "Layers", roles: ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "FINANCEIRO"] },
       { href: "/ia-assistant", label: "V3 IA Partner", icon: "BrainCircuit", roles: ["ADMIN", "STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE", "MESA_OPERACIONAL", "GESTAO", "FINANCEIRO"] },
       { href: "/metas", label: "Metas & Performance", icon: "Target", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"] },
@@ -242,6 +242,8 @@ const MENU_STARTER_ANTIGO = new Set([
 interface SidebarProps {
   role: UserRole;
   starterAntigo?: boolean;
+  /** ENTERPRISE master: só ele vê "/enterprise" (a equipe usa Comissões). */
+  enterpriseMaster?: boolean;
   onClose?: () => void;
   /** White label do Enterprise (lib/enterprise.ts): logo e nome no lugar da marca V3. */
   marca?: { nome: string; logoUrl: string | null } | null;
@@ -249,9 +251,10 @@ interface SidebarProps {
   temCorDeMarca?: boolean;
 }
 
-export function Sidebar({ role, starterAntigo = false, onClose, marca = null, temCorDeMarca = false }: SidebarProps) {
+export function Sidebar({ role, starterAntigo = false, enterpriseMaster = false, onClose, marca = null, temCorDeMarca = false }: SidebarProps) {
   const podeVer = (item: { href: string; roles: string[] }) =>
-    item.roles.includes(role) || (starterAntigo && role === "STARTER" && MENU_STARTER_ANTIGO.has(item.href));
+    (item.href === "/enterprise" && role === "ENTERPRISE" ? enterpriseMaster : item.roles.includes(role))
+    || (starterAntigo && role === "STARTER" && MENU_STARTER_ANTIGO.has(item.href));
   const pathname = usePathname();
   const [expandedItems, setExpandedItems] = useState<string[]>(() => {
     const initial = ["/mesa-credito"];

@@ -132,6 +132,8 @@ export default async function PlatformLayout({
     // usuário não tem assinatura própria — o acesso segue a do master (trial/ativo).
     let marca: { nome: string; logoUrl: string | null } | null = null;
     let tema: TemaEnterprise | null = null;
+    // Master x equipe (mesmo papel ENTERPRISE): só o master vê o item "Enterprise" do menu (BRIEF 2026-11-23 menu enxuto).
+    let ehMasterEnterprise = false;
     let trialExpiresAt = profile.trial_expires_at ?? null;
     let isActive = profile.is_active ?? null;
     if (profile.role === "ENTERPRISE") {
@@ -144,6 +146,7 @@ export default async function PlatformLayout({
         });
         marca = ctx?.marca ?? null;
         tema = ctx?.tema ?? null;
+        ehMasterEnterprise = !!ctx?.ehMaster;
         if (ctx && !ctx.ehMaster) {
           const { data: master } = await svc.from("profiles").select("trial_expires_at, is_active").eq("id", ctx.masterId).maybeSingle();
           trialExpiresAt = (master?.trial_expires_at as string | null) ?? null;
@@ -191,6 +194,7 @@ export default async function PlatformLayout({
             trial_expires_at: trialExpiresAt,
             is_active: isActive,
             starter_antigo: starterAntigo,
+            enterprise_master: ehMasterEnterprise,
           }}
           marca={marca}
           temCorDeMarca={!!tema}

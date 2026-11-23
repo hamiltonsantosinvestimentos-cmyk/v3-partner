@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { randomBytes } from "crypto";
 import { getMe, setTelegramWebhook, deleteTelegramWebhook } from "@/lib/telegram-dm";
 import { encryptSecret, decryptSecret } from "@/lib/crypto/secret";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
@@ -26,6 +27,7 @@ async function authGuard() {
 
 // GET — status da conexão do bot Telegram do partner.
 export async function GET() {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -47,6 +49,7 @@ export async function GET() {
 // gera um segredo de webhook próprio e registra o webhook na Telegram
 // apontando pra rota por partner (/api/partner/sdr/telegram-webhook/:id).
 export async function POST(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -84,6 +87,7 @@ export async function POST(req: NextRequest) {
 
 // DELETE — desconecta o bot (remove o webhook na Telegram e limpa os campos).
 export async function DELETE() {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 

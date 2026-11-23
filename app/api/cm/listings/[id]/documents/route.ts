@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -34,6 +35,7 @@ async function assertOwnership(caller: { userId: string; role: string }, listing
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCallerRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -64,6 +66,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 // via signed URL (GET /documents/upload-url). O corpo já não carrega o arquivo:
 // isso contorna o limite de body do Vercel serverless (~4.5MB).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCallerRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { exigirEnterprise, logLeituraAdmin } from "@/lib/enterprise-server";
 import { MAX_USUARIOS } from "@/lib/enterprise";
+import { getClientIp, logAudit, logAuditStrict } from "@/lib/audit";
 
 // Usuários abaixo do master de um Enterprise (até MAX_USUARIOS). Só o master gerencia.
 // GET   — lista os usuários
@@ -120,13 +121,35 @@ export async function PATCH(req: NextRequest) {
   }
   if (body.nome?.trim()) update.full_name = body.nome.trim();
   if (body.telefone !== undefined) update.phone = body.telefone?.trim() || null;
+  if (body.ativo !== undefined) update.is_active = Boolean(body.ativo);
+  if (Object.keys(update).length === 0) return NextResponse.json({ error: "Nada para alterar." }, { status: 400 });
+
+  // Auditoria antes de gravar (BRIEF 2026-11-23 menu enxuto e comissões): % de comissão é campo financeiro.
+  // Se o log falhar, nada é gravado.
+  const { data: antes } = await auth.db.from("profiles")
+    .select("full_name, phone, is_active, enterprise_repasse_percent").eq("id", body.id).maybeSingle();
+  const oldData = Object.fromEntries(Object.keys(update).map((k) => [k, (antes as Record<string, unknown> | null)?.[k] ?? null]));
+  try {
+    await logAuditStrict({
+      userId: auth.userId, userName: auth.nome, action: "UPDATE", entity: "profiles", entityId: body.id,
+      oldData, newData: { ...update, alterado_por: "master_enterprise" }, ipAddress: getClientIp(req),
+    });
+  } catch {
+    return NextResponse.json({ error: "Não foi possível registrar a alteração. Nada foi salvo; tente de novo." }, { status: 500 });
+  }
+
   if (body.ativo !== undefined) {
-    update.is_active = Boolean(body.ativo);
     // Bloqueia/libera o login de verdade, não só a flag.
     await auth.db.auth.admin.updateUserById(body.id, { ban_duration: body.ativo ? "none" : "876000h" }).catch(() => {});
   }
-  if (Object.keys(update).length === 0) return NextResponse.json({ error: "Nada para alterar." }, { status: 400 });
   const { error } = await auth.db.from("profiles").update(update).eq("id", body.id).eq("enterprise_id", auth.userId);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  if (error) {
+    // O log acima registrou uma mudança que não aconteceu: registra a falha para o rastro não enganar.
+    await logAudit({
+      userId: auth.userId, userName: auth.nome, action: "UPDATE", entity: "profiles", entityId: body.id,
+      oldData, newData: { ...update, resultado: "falhou", erro: error.message }, ipAddress: getClientIp(req),
+    }).catch(() => {});
+    return NextResponse.json({ error: "Não foi possível salvar. Tente de novo." }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, antes: oldData, depois: update });
 }

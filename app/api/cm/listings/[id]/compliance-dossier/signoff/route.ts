@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { hasComplianceDashboardAccess } from "@/lib/cm/compliance-access";
 import { generateAndStoreComplianceDossierPdf } from "@/lib/compliance-dossier-generate";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 // Quórum de fechamento do Dossiê de Risco (Cockpit de Compliance, Fase 4,
 // 10/09/2026). Atualizado em 29/09/2026 (Dr. Luis Athaydes saiu do time,
@@ -33,6 +34,7 @@ async function getSigner(userId: string | undefined) {
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const allowed = await hasComplianceDashboardAccess(user?.id);
@@ -61,6 +63,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const allowed = await hasComplianceDashboardAccess(user?.id);

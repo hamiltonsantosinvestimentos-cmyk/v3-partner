@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createNotification } from "@/lib/notify";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -28,6 +29,7 @@ function missingKycItems(docTypes: Set<string>, isPJ: boolean): string[] {
  *  comprador com link de retorno (upload de documento ja funciona pos-trava, 12/08/2026), e
  *  notificacao in-app pro Partner de origem. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

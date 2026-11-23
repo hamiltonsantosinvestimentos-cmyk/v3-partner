@@ -12,6 +12,9 @@ export const maxDuration = 120;
 export async function GET(req: NextRequest) {
   const auth = await exigirEnterprise({ req, permitirAdmin: true });
   if (!auth.ok) return auth.res;
+  // O PDF de repasses mostra o valor do master e o %: fica só para o master e o ADMIN.
+  // O usuário da equipe vê a comissão dele em Comissões (BRIEF 2026-11-23 menu enxuto e comissões).
+  if (!auth.ctx.ehMaster && !auth.admin) return NextResponse.json({ error: "Sua comissão está em Comissões." }, { status: 403 });
   const mes = new URL(req.url).searchParams.get("mes");
   const periodo = !mes || mes === "todos" ? null : periodoDoMes(mes);
   // Modo ADMIN: registra a exportação (não bloqueia).

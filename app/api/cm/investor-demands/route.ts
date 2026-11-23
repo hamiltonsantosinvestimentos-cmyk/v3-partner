@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { DEMAND_PIPELINE_STATUSES } from "@/lib/cm-demand-stages";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -40,6 +41,7 @@ async function getCallerOrPartner(req: NextRequest) {
  *  Traz contagem de documentos e de matches SEM depender de nenhum dos dois existir -- e exatamente
  *  o gap que motivou esta rota: antes so dava pra ver um comprador se ele ja tivesse match com listing. */
 export async function GET(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCallerOrPartner(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -121,6 +123,7 @@ export async function GET(req: NextRequest) {
 // Cadastro manual de comprador direto pela Mesa de Capitais, sem depender do link publico de intake
 // (correcao Mesa Operacional 2026-07-15 — "Novo Comprador" deixa de ser so gerador de link)
 export async function POST(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado — apenas ADMIN/GESTAO/MESA_OPERACIONAL" }, { status: 401 });
 
