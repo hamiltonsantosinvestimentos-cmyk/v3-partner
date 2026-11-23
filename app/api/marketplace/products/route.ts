@@ -151,10 +151,17 @@ export async function PATCH(req: NextRequest) {
   // Fire-and-forget AI matching when product is approved
   if (status === "APPROVED" && data?.id) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
-    fetch(`${appUrl}/api/marketplace/products/${data.id}/match-partners`, {
-      method: "POST",
-      headers: { "x-internal-key": process.env.INTERNAL_API_KEY ?? "v3-internal" },
-    }).catch(() => {});
+    const chave = process.env.INTERNAL_API_KEY;
+    if (!chave) {
+      console.error("[marketplace/products] INTERNAL_API_KEY ausente: match automático não disparado");
+    } else {
+      fetch(`${appUrl}/api/marketplace/products/${data.id}/match-partners`, {
+        method: "POST",
+        headers: { "x-internal-key": chave },
+      })
+        .then((r) => { if (!r.ok) console.error(`[marketplace/products] match-partners respondeu ${r.status}`); })
+        .catch((e) => console.error("[marketplace/products] match-partners falhou:", e instanceof Error ? e.message : String(e)));
+    }
   }
 
   return NextResponse.json({ product: data });

@@ -143,7 +143,14 @@ export default async function RankingPage({
     .eq("year", now.getFullYear())
     .eq("month", now.getMonth() + 1);
   // Enterprise recebe só as metas da própria equipe.
-  const goalsVisiveis = ehEnterprise ? (goals ?? []).filter((g) => idsVisiveis.has(g.partner_id as string)) : (goals ?? []);
+  // Metas da rede inteira só para ADMIN e GESTAO; Enterprise vê as da própria equipe; os demais só a própria linha
+  // (BRIEF 2026-11-21 Consórcio, item 6).
+  const veTodasAsMetas = ["ADMIN", "GESTAO"].includes(profile?.role ?? "");
+  const goalsVisiveis = veTodasAsMetas
+    ? (goals ?? [])
+    : ehEnterprise
+      ? (goals ?? []).filter((g) => idsVisiveis.has(g.partner_id as string))
+      : (goals ?? []).filter((g) => g.partner_id === user.id);
 
   return (
     <RankingClient

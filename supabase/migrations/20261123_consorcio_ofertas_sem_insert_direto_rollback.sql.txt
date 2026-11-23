@@ -1,0 +1,6 @@
+-- Rollback de 20261123_consorcio_ofertas_sem_insert_direto.sql.
+-- Recria a política exatamente como estava em produção (pg_policies colado pelo Hamilton em 23/11/2026).
+-- Ela não existe em nenhuma migration do repo.
+create policy "authenticated_insert_oferta" on public.consorcio_ofertas
+  for insert to public
+  with check (auth.uid() IS NOT NULL);
