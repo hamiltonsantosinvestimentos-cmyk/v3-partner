@@ -16,7 +16,9 @@ export default async function MinhasOperacoesPage() {
     .eq("id", user.id)
     .single();
 
-  if (!["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE"].includes(profile?.role ?? "")) redirect("/unauthorized");
+  // ENTERPRISE (master e equipe) vê só as próprias operações, pelo mesmo filtro dos demais partners
+  // (BRIEF docs/briefs/2026-11-23_minhas-operacoes-acesso-enterprise.md).
+  if (!["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"].includes(profile?.role ?? "")) redirect("/unauthorized");
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
 
