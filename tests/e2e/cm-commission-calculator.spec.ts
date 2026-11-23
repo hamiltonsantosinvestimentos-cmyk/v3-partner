@@ -54,7 +54,7 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, 
   test("calcula em % direto, salva a simulacao sem erro de banco, e habilita os 3 PDFs", async ({ page }) => {
     await abrirCalculadora(page);
 
-    await page.fill('input[name="face_value"]', "100000000"); // R$ 1.000.000,00
+    await page.fill('input[name="face_value"]', "1000000"); // R$ 1.000.000 (reais inteiros)
     await page.fill('input[name="fee_total_pct"]', "10");
 
     await expect(page.getByText(/precisa somar 100%/i)).toHaveCount(0);
@@ -97,7 +97,7 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, 
   test("recorrencia mostra colunas Mensal e Acumulado nas tabelas com os valores corretos", async ({ page }) => {
     await abrirCalculadora(page);
 
-    await page.fill('input[name="face_value"]', "100000000"); // R$ 1.000.000,00
+    await page.fill('input[name="face_value"]', "1000000"); // R$ 1.000.000 (reais inteiros)
     await page.fill('input[name="fee_total_pct"]', "10");
     await page.fill('input[name="buy_side_pct"]', "5");
     await page.fill('input[name="buy_fee_v3_pct"]', "2");
@@ -132,7 +132,7 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, 
   test("saldo de Intermediarios negativo nao trava a tela, so desabilita o PDF daquele lado", async ({ page }) => {
     await abrirCalculadora(page);
 
-    await page.fill('input[name="face_value"]', "50000000"); // R$ 500.000,00
+    await page.fill('input[name="face_value"]', "500000"); // R$ 500.000 (reais inteiros)
     await page.fill('input[name="fee_total_pct"]', "5");
 
     // Lado Compra: Grupo Cheia 5%, Fee V3 4% + Mandatario 3% = 7% > 5% ->
@@ -153,8 +153,8 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, 
   test("% Desagio calcula Deságio (R$) e Preço do Comprador em tempo real, e % Titulares calcula o R$ junto", async ({ page }) => {
     await abrirCalculadora(page);
 
-    // R$ 10.000.000,00 (mascara de moeda: digitos representam centavos).
-    await page.fill('input[name="face_value"]', "1000000000");
+    // R$ 10.000.000 (mascara de moeda: digitos sao reais inteiros desde 22/11/2026).
+    await page.fill('input[name="face_value"]', "10000000");
     await page.fill('input[name="desconto_desagio_pct"]', "30");
 
     // Desagio (R$) = Valor de Face x 30% = R$ 3.000.000,00.
@@ -170,7 +170,7 @@ test.describe("Bolsa de Ativos - Calculadora Rapida de Comissionamento (Fase 4, 
   test("PDF Buy-Side traz o bloco RESUMO FINANCEIRO DE AQUISIÇÃO com Preço Final de Aquisição real", async ({ page }) => {
     await abrirCalculadora(page);
 
-    await page.fill('input[name="face_value"]', "1000000000"); // R$ 10.000.000,00
+    await page.fill('input[name="face_value"]', "10000000"); // R$ 10.000.000 (reais inteiros)
     await page.fill('input[name="desconto_desagio_pct"]', "30");
     await page.fill('input[name="fee_total_pct"]', "5");
     await page.fill('input[name="buy_side_pct"]', "2.5");
