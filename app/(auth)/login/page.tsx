@@ -16,7 +16,20 @@ export default function LoginPage() {
   // Domínio próprio de Enterprise (white label): logo e nome dele no login.
   const [marca, setMarca] = useState<{ nome: string; logoUrl: string | null } | null>(null);
   useEffect(() => {
-    fetch("/api/public/white-label").then((r) => r.json()).then((j) => setMarca(j?.marca ?? null)).catch(() => {});
+    fetch("/api/public/white-label").then((r) => r.json()).then((j) => {
+      setMarca(j?.marca ?? null);
+      // Tema do Enterprise (BRIEF 2026-11-21 tema visual): variáveis --wl-* no :root e troca do
+      // href do ícone que já vem do metadata raiz (sem acrescentar outro <link rel="icon">).
+      if (typeof j?.temaCss === "string" && j.temaCss.startsWith(":root{")) {
+        const el = document.getElementById("tema-enterprise") ?? Object.assign(document.createElement("style"), { id: "tema-enterprise" });
+        el.textContent = j.temaCss;
+        document.head.appendChild(el);
+      }
+      if (typeof j?.iconeUrl === "string") {
+        const link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+        if (link) link.href = j.iconeUrl;
+      }
+    }).catch(() => {});
   }, []);
 
   const IS_DEMO = false;
@@ -66,18 +79,18 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden"
-      style={{ backgroundColor: "#09081A" }}>
+      style={{ backgroundColor: "var(--wl-principal, var(--wl-fundo, #09081A))" }}>
 
       {/* Background layers */}
       <div style={{
         position: "absolute", inset: 0, pointerEvents: "none",
-        backgroundImage: "linear-gradient(rgba(196,146,46,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(196,146,46,0.04) 1px, transparent 1px)",
+        backgroundImage: "linear-gradient(color-mix(in srgb, var(--wl-acento, #C4922E) 4%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--wl-acento, #C4922E) 4%, transparent) 1px, transparent 1px)",
         backgroundSize: "36px 36px"
       }} />
       <div style={{
         position: "absolute", top: "-10%", left: "50%", transform: "translateX(-50%)",
         width: 600, height: 300,
-        background: "radial-gradient(ellipse, rgba(196,146,46,0.08) 0%, transparent 70%)",
+        background: "radial-gradient(ellipse, color-mix(in srgb, var(--wl-acento, #C4922E) 8%, transparent) 0%, transparent 70%)",
         pointerEvents: "none"
       }} />
       <div style={{
@@ -90,17 +103,17 @@ export default function LoginPage() {
       {/* Card */}
       <div style={{ position: "relative", width: "100%", maxWidth: 420, margin: "0 20px" }}>
         <div style={{
-          background: "linear-gradient(160deg, #091221 0%, #09081A 100%)",
-          border: "1px solid rgba(196,146,46,0.15)",
+          background: "linear-gradient(160deg, var(--wl-fundo-2, #091221) 0%, var(--wl-fundo, #09081A) 100%)",
+          border: "1px solid color-mix(in srgb, var(--wl-acento, #C4922E) 15%, transparent)",
           borderRadius: 20,
           padding: "40px 36px",
-          boxShadow: "0 32px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(196,146,46,0.08) inset",
+          boxShadow: "0 32px 64px rgba(0,0,0,0.6), 0 0 0 1px color-mix(in srgb, var(--wl-acento, #C4922E) 8%, transparent) inset",
           position: "relative",
           overflow: "hidden",
         }}>
           <div style={{
             position: "absolute", top: 0, left: "20%", right: "20%", height: 1,
-            background: "linear-gradient(90deg, transparent, rgba(196,146,46,0.5), transparent)"
+            background: "linear-gradient(90deg, transparent, color-mix(in srgb, var(--wl-acento, #C4922E) 50%, transparent), transparent)"
           }} />
 
           {/* Logo */}
@@ -108,8 +121,8 @@ export default function LoginPage() {
             <div style={{
               width: 200, height: 200, borderRadius: 28,
               overflow: "hidden",
-              background: "#0E2040",
-              boxShadow: "0 16px 48px rgba(196,146,46,0.25), 0 0 0 1px rgba(196,146,46,0.18)",
+              background: "var(--wl-principal, #0E2040)",
+              boxShadow: "0 16px 48px color-mix(in srgb, var(--wl-acento, #C4922E) 25%, transparent), 0 0 0 1px color-mix(in srgb, var(--wl-acento, #C4922E) 18%, transparent)",
               flexShrink: 0,
               display: "flex",
               alignItems: "center",
@@ -129,7 +142,7 @@ export default function LoginPage() {
                 />
               )}
             </div>
-            <p style={{ fontSize: 10, color: "#7A8FA8", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 14 }}>
+            <p style={{ fontSize: 10, color: "var(--wl-texto-2, #7A8FA8)", letterSpacing: "0.18em", textTransform: "uppercase", marginTop: 14 }}>
               {marca ? marca.nome : "Plataforma Financeira"}
             </p>
           </div>
@@ -138,59 +151,59 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <label style={{
-                fontSize: 10, fontWeight: 700, color: "#7A8FA8",
+                fontSize: 10, fontWeight: 700, color: "var(--wl-texto-2, #7A8FA8)",
                 textTransform: "uppercase", letterSpacing: "0.1em",
                 display: "block", marginBottom: 7
               }}>E-mail</label>
               <div style={{ position: "relative" }}>
-                <Mail style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#7A8FA8" }} />
+                <Mail style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "var(--wl-texto-2, #7A8FA8)" }} />
                 <input
                   type="email" value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="seu@email.com" required
                   style={{
                     width: "100%", height: 46, paddingLeft: 42, paddingRight: 16,
-                    background: "#0F1E35", border: "1px solid #122036", borderRadius: 12,
-                    color: "#E8EDF5", fontSize: 14, outline: "none", boxSizing: "border-box",
+                    background: "var(--wl-base, #0F1E35)", border: "1px solid var(--wl-base, #122036)", borderRadius: 12,
+                    color: "var(--wl-texto, #E8EDF5)", fontSize: 14, outline: "none", boxSizing: "border-box",
                     transition: "border-color 0.2s",
                   }}
-                  onFocus={(e) => e.target.style.borderColor = "rgba(196,146,46,0.4)"}
-                  onBlur={(e) => e.target.style.borderColor = "#122036"}
+                  onFocus={(e) => e.target.style.borderColor = "color-mix(in srgb, var(--wl-acento, #C4922E) 40%, transparent)"}
+                  onBlur={(e) => e.target.style.borderColor = "var(--wl-base, #122036)"}
                 />
               </div>
             </div>
 
             <div>
               <label style={{
-                fontSize: 10, fontWeight: 700, color: "#7A8FA8",
+                fontSize: 10, fontWeight: 700, color: "var(--wl-texto-2, #7A8FA8)",
                 textTransform: "uppercase", letterSpacing: "0.1em",
                 display: "block", marginBottom: 7
               }}>Senha</label>
               <div style={{ position: "relative" }}>
-                <Lock style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "#7A8FA8" }} />
+                <Lock style={{ position: "absolute", left: 13, top: "50%", transform: "translateY(-50%)", width: 15, height: 15, color: "var(--wl-texto-2, #7A8FA8)" }} />
                 <input
                   type={showPassword ? "text" : "password"} value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••" required
                   style={{
                     width: "100%", height: 46, paddingLeft: 42, paddingRight: 50,
-                    background: "#0F1E35", border: "1px solid #122036", borderRadius: 12,
-                    color: "#E8EDF5", fontSize: 14, outline: "none", boxSizing: "border-box",
+                    background: "var(--wl-base, #0F1E35)", border: "1px solid var(--wl-base, #122036)", borderRadius: 12,
+                    color: "var(--wl-texto, #E8EDF5)", fontSize: 14, outline: "none", boxSizing: "border-box",
                     transition: "border-color 0.2s",
                   }}
-                  onFocus={(e) => e.target.style.borderColor = "rgba(196,146,46,0.4)"}
-                  onBlur={(e) => e.target.style.borderColor = "#122036"}
+                  onFocus={(e) => e.target.style.borderColor = "color-mix(in srgb, var(--wl-acento, #C4922E) 40%, transparent)"}
+                  onBlur={(e) => e.target.style.borderColor = "var(--wl-base, #122036)"}
                 />
                 <button type="button" onClick={() => setShowPassword(!showPassword)}
                   style={{
                     position: "absolute", right: 13, top: "50%", transform: "translateY(-50%)",
-                    background: "none", border: "none", cursor: "pointer", color: "#7A8FA8", padding: 0
+                    background: "none", border: "none", cursor: "pointer", color: "var(--wl-texto-2, #7A8FA8)", padding: 0
                   }}>
                   {showPassword ? <EyeOff style={{ width: 15, height: 15 }} /> : <Eye style={{ width: 15, height: 15 }} />}
                 </button>
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-                <Link href="/esqueci-senha" style={{ fontSize: 12, color: "#7A8FA8", textDecoration: "none" }}>
+                <Link href="/esqueci-senha" style={{ fontSize: 12, color: "var(--wl-texto-2, #7A8FA8)", textDecoration: "none" }}>
                   Esqueci minha senha
                 </Link>
               </div>
@@ -209,14 +222,14 @@ export default function LoginPage() {
             <button type="submit" disabled={loading} style={{
               marginTop: 4, height: 48,
               background: loading
-                ? "rgba(196,146,46,0.4)"
-                : "linear-gradient(120deg, #C9A84C 0%, #E8C97A 50%, #C9A84C 100%)",
+                ? "color-mix(in srgb, var(--wl-acento, #C4922E) 40%, transparent)"
+                : "linear-gradient(120deg, var(--wl-acento, #C9A84C) 0%, var(--wl-acento-2, #E8C97A) 50%, var(--wl-acento, #C9A84C) 100%)",
               backgroundSize: "200% 100%",
-              color: "#09081A", border: "none", borderRadius: 12,
+              color: "var(--wl-fundo, #09081A)", border: "none", borderRadius: 12,
               fontSize: 14, fontWeight: 700, letterSpacing: "0.04em",
               cursor: loading ? "not-allowed" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              boxShadow: loading ? "none" : "0 4px 20px rgba(196,146,46,0.35)",
+              boxShadow: loading ? "none" : "0 4px 20px color-mix(in srgb, var(--wl-acento, #C4922E) 35%, transparent)",
               transition: "all 0.2s",
             }}>
               {loading ? "Entrando..." : (<>Acessar Plataforma <ArrowRight style={{ width: 16, height: 16 }} /></>)}
@@ -224,7 +237,7 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p style={{ textAlign: "center", fontSize: 10, color: "#3A5068", marginTop: 18, letterSpacing: "0.05em" }}>
+        <p style={{ textAlign: "center", fontSize: 10, color: "var(--wl-medio, #3A5068)", marginTop: 18, letterSpacing: "0.05em" }}>
           {marca ? <>{marca.nome} · Powered by V3 Partners</> : <>© {new Date().getFullYear()} V3 Partners. Todos os direitos reservados.</>}
         </p>
       </div>

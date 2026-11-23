@@ -6,7 +6,7 @@ import { SellSideListingsPanel } from "@/components/cm/sell-side-listings-panel"
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Meus Ativos · V3 Partners",
+  title: "Meus Ativos",
 };
 
 // Tela pedida por Joao (13/08/2026): o Partner que originou um ATIVO (Sell-Side) nao tinha

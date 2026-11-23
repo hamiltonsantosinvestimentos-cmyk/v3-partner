@@ -1,0 +1,4 @@
+-- Reversão de 20261121_white_label_tema.sql
+-- ORDEM: primeiro reverter o deploy do código (o código novo lê a coluna; sem ela o tema vira null,
+-- mas o deploy antigo não depende dela). Depois rodar:
+ALTER TABLE public.profiles DROP COLUMN IF EXISTS white_label_tema;

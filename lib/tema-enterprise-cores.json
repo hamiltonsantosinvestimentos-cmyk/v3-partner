@@ -1,0 +1,16 @@
+{
+  "_comentario": "Cores da V3 (classes e CSS) trocadas pelo tema do Enterprise. Usado pelo plugin postcss-tema-enterprise.cjs e por lib/enterprise-tema.ts. BRIEF docs/briefs/2026-11-21_tema-visual-enterprise-manual-de-marca.md",
+  "papeis": {
+    "fundo": ["#09081A"],
+    "fundo-2": ["#12112A", "#0D1929"],
+    "base": ["#111F35", "#122036"],
+    "cartao": ["#162744"],
+    "cartao-2": ["#1B3050"],
+    "medio": ["#243A66"],
+    "acento": ["#C9A84C"],
+    "acento-2": ["#E8C97A"],
+    "texto": ["#F0ECE4", "#F5F1E8", "#E8EDF5"],
+    "texto-2": ["#7A8FA8"],
+    "texto-3": ["#9BAFC5"]
+  }
+}

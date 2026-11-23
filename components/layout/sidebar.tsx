@@ -245,9 +245,11 @@ interface SidebarProps {
   onClose?: () => void;
   /** White label do Enterprise (lib/enterprise.ts): logo e nome no lugar da marca V3. */
   marca?: { nome: string; logoUrl: string | null } | null;
+  /** Enterprise com tema: logo horizontal sobre a cor principal, com área de proteção. */
+  temCorDeMarca?: boolean;
 }
 
-export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: SidebarProps) {
+export function Sidebar({ role, starterAntigo = false, onClose, marca = null, temCorDeMarca = false }: SidebarProps) {
   const podeVer = (item: { href: string; roles: string[] }) =>
     item.roles.includes(role) || (starterAntigo && role === "STARTER" && MENU_STARTER_ANTIGO.has(item.href));
   const pathname = usePathname();
@@ -341,11 +343,16 @@ export function Sidebar({ role, starterAntigo = false, onClose, marca = null }: 
           {/* Outer glow ring */}
           <div className="absolute -inset-1.5 rounded-2xl bg-gradient-to-br from-[#C9A84C]/20 via-transparent to-[#E8C97A]/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
           {/* Logo container — proporção real de logo.jpg (652x778) para evitar corte/emenda dentro de um quadrado */}
-          <div className="relative w-[84px] h-[100px] rounded-2xl overflow-hidden"
-            style={{ boxShadow: "0 0 0 1px rgba(201,168,76,0.2), 0 8px 24px rgba(0,0,0,0.5), 0 0 40px rgba(201,168,76,0.08)" }}>
+          {/* Com tema (BRIEF 2026-11-21): caixa de largura livre até 150 px, fundo na cor principal e
+              padding de 16 px (área de proteção = diâmetro do ponto da logo); sem tema, o formato da V3. */}
+          <div className={temCorDeMarca && marca?.logoUrl ? "relative w-[150px] rounded-2xl overflow-hidden p-4" : "relative w-[84px] h-[100px] rounded-2xl overflow-hidden"}
+            style={{
+              boxShadow: "0 0 0 1px color-mix(in srgb, var(--wl-acento, #C9A84C) 20%, transparent), 0 8px 24px rgba(0,0,0,0.5), 0 0 40px color-mix(in srgb, var(--wl-acento, #C9A84C) 8%, transparent)",
+              ...(temCorDeMarca && marca?.logoUrl ? { background: "var(--wl-principal)" } : {}),
+            }}>
             {marca?.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={marca.logoUrl} alt={marca.nome} className="w-full h-full object-contain bg-[#09081A]" />
+              <img src={marca.logoUrl} alt={marca.nome} className={temCorDeMarca ? "w-full h-auto object-contain" : "w-full h-full object-contain bg-[#09081A]"} />
             ) : (
               <Image src="/logo.jpg" alt="V3 PARTNERS" width={84} height={100}
                 className="w-full h-full object-contain" priority />

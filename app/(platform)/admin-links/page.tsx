@@ -5,7 +5,7 @@ import { AdminLinksDashboard } from "@/components/admin/admin-links-dashboard";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Dashboard de Links · V3 Partners",
+  title: "Dashboard de Links",
 };
 
 // Dashboard de Links para a Diretoria (14/09/2026, pedido de João): a API

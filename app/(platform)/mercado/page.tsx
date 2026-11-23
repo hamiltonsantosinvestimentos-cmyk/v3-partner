@@ -1,6 +1,6 @@
 import { MercadoClient } from "@/components/mercado/mercado-client";
 
-export const metadata = { title: "Mercado ao vivo — V3 Partners" };
+export const metadata = { title: "Mercado ao vivo" };
 
 export default function MercadoPage() {
   return <MercadoClient />;

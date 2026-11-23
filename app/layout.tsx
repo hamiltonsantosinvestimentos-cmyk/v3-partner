@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   description: "Plataforma de gestão para parceiros e operações financeiras V3 Partners",
   keywords: ["crédito", "finanças", "M&A", "parceiros"],
   manifest: "/manifest.json",
+  // Favicon em public/ (não app/favicon.ico): a convenção de arquivo do Next injeta o ícone da raiz
+  // antes dos ícones dos layouts filhos, e o Enterprise com tema sairia com dois ícones.
+  icons: { icon: "/favicon.ico" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",

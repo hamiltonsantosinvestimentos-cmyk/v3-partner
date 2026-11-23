@@ -9,6 +9,8 @@
     "lint": "eslint",
     "test:unit": "tsx --tsconfig tsconfig.json --test tests/unit/*.test.ts",
     "test:e2e": "playwright test",
+    "tema:pendencias": "node scripts/tema-pendencias.mjs",
+    "tema:fixtures": "node scripts/tema-enterprise-fixtures.mjs",
     "test:e2e:report": "playwright show-report",
     "audit:access": "node scripts/audit-page-role-gates.js"
   },

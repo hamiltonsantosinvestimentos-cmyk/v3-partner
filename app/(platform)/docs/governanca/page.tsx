@@ -3,7 +3,7 @@ import { GovernancaClient } from "@/components/docs/governanca-client";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Governança · V3 Partners" };
+export const metadata = { title: "Governança" };
 
 const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 

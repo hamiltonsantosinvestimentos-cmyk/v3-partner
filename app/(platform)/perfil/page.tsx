@@ -4,7 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { PerfilClient } from "@/components/perfil/perfil-client";
 import { ehStarterAntigo } from "@/lib/v3-access";
 
-export const metadata = { title: "Meu Perfil — V3 Partners" };
+export const metadata = { title: "Meu Perfil" };
 
 export default async function PerfilPage() {
   const supabase = await createClient();

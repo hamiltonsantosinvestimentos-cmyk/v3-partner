@@ -2,8 +2,26 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { PlatformShell } from "@/components/layout/platform-shell";
 import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
+import type { Metadata } from "next";
+import { whiteLabelDaSessao } from "@/lib/enterprise-sessao";
+import { cssVariaveis, type TemaEnterprise } from "@/lib/enterprise-tema";
 
 const IS_DEMO = false;
+
+/**
+ * Título e ícone da aba (BRIEF 2026-11-21 tema visual): "{tela} · {marca}" e o ícone do Enterprise
+ * para a equipe com tema; "{tela} · V3 Partners" para os demais. Nunca lança nem redireciona.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const wl = await whiteLabelDaSessao();
+  if (wl) {
+    return {
+      title: { template: `%s · ${wl.nome}`, default: wl.nome },
+      ...(wl.tema?.icone_url ? { icons: { icon: wl.tema.icone_url } } : {}),
+    };
+  }
+  return { title: { template: "%s · V3 Partners", default: "V3 PARTNERS · Plataforma Financeira" } };
+}
 
 export default async function PlatformLayout({
   children,
@@ -113,6 +131,7 @@ export default async function PlatformLayout({
     // Enterprise white label (lib/enterprise.ts): marca do master para ele e os usuários; o
     // usuário não tem assinatura própria — o acesso segue a do master (trial/ativo).
     let marca: { nome: string; logoUrl: string | null } | null = null;
+    let tema: TemaEnterprise | null = null;
     let trialExpiresAt = profile.trial_expires_at ?? null;
     let isActive = profile.is_active ?? null;
     if (profile.role === "ENTERPRISE") {
@@ -124,6 +143,7 @@ export default async function PlatformLayout({
           id: profile.id, role: profile.role, enterprise_id: (profileData as { enterprise_id?: string | null }).enterprise_id ?? null,
         });
         marca = ctx?.marca ?? null;
+        tema = ctx?.tema ?? null;
         if (ctx && !ctx.ehMaster) {
           const { data: master } = await svc.from("profiles").select("trial_expires_at, is_active").eq("id", ctx.masterId).maybeSingle();
           trialExpiresAt = (master?.trial_expires_at as string | null) ?? null;
@@ -159,6 +179,8 @@ export default async function PlatformLayout({
 
     return (
       <>
+        {/* Tema do Enterprise: variáveis --wl-* no :root (alcança body, portais e toasts). Sem tema, nada. */}
+        {tema && <style id="tema-enterprise" dangerouslySetInnerHTML={{ __html: cssVariaveis(tema) }} />}
         <PlatformShell
           user={{
             id: profile.id,
@@ -171,6 +193,7 @@ export default async function PlatformLayout({
             starter_antigo: starterAntigo,
           }}
           marca={marca}
+          temCorDeMarca={!!tema}
           notificationCount={notificationCount}
         >
           {children}

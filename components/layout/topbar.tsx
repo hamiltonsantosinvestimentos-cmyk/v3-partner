@@ -167,7 +167,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0, marca = null 
             <button className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white/[0.05] transition-all border border-transparent hover:border-white/[0.06] group">
               {/* Avatar */}
               <div className="relative w-7 h-7 rounded-lg bg-gradient-to-br from-[#C9A84C]/80 to-[#E8C97A]/60 flex items-center justify-center flex-shrink-0 overflow-hidden"
-                style={{ boxShadow: "0 0 0 1px rgba(201,168,76,0.25), 0 2px 8px rgba(0,0,0,0.4)" }}>
+                style={{ boxShadow: `0 0 0 1px color-mix(in srgb, var(--wl-acento, #C9A84C) 25%, transparent), 0 2px 8px rgba(0,0,0,0.4)` }}>
                 {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarUrl} alt={user.full_name || ""} className="w-full h-full object-cover" />
@@ -189,7 +189,7 @@ export function Topbar({ user, onMenuClick, notificationCount = 0, marca = null 
           </DropdownMenuTrigger>
 
           <DropdownMenuContent align="end" className="w-56 border-[#1E3050] bg-[#0E1A2D]"
-            style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,168,76,0.1)" }}>
+            style={{ boxShadow: `0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px color-mix(in srgb, var(--wl-acento, #C9A84C) 10%, transparent)` }}>
             <DropdownMenuLabel>
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#C9A84C]/80 to-[#E8C97A]/60 flex items-center justify-center flex-shrink-0">
