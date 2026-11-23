@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { z } from "zod";
 import { issueV3Code } from "@/lib/v3-codes";
 import { reservarVagaOuNegar } from "@/lib/creation-quota-route";
+import { cartaParaVitrine, ehInterno } from "../vitrine";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -30,20 +31,24 @@ const createSchema = z.object({
 });
 
 export async function GET() {
-  const { user } = await getAuthedUser();
+  const { user, profile } = await getAuthedUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  // Preço de custo e margem só para a equipe interna (BRIEF 2026-11-21 Consórcio, item 3).
+  const interno = ehInterno(profile?.role);
   const svc = serviceClient();
   const { data, error } = await svc.from("consorcio_cartas").select("*").is("deleted_at", null).order("created_at", { ascending: false });
   if (error) {
     console.error("[consorcio/cartas GET]", error.message);
     return NextResponse.json({ error: "Não foi possível carregar as cartas." }, { status: 500 });
   }
-  return NextResponse.json({ cartas: data ?? [] });
+  return NextResponse.json({ cartas: ((data ?? []) as Record<string, unknown>[]).map((c) => cartaParaVitrine(c, interno)) });
 }
 
 export async function POST(req: NextRequest) {
   const { user, profile } = await getAuthedUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  // Só a equipe interna inclui carta (decisão do Hamilton, 23/11/2026). Perfil não encontrado também cai aqui.
+  if (!ehInterno(profile?.role)) return NextResponse.json({ error: "Só a equipe interna inclui cartas." }, { status: 403 });
   const body = await req.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
@@ -78,7 +83,7 @@ export async function POST(req: NextRequest) {
     await vaga.devolver();
     return NextResponse.json({ error: "Não foi possível concluir o cadastro agora. Tente novamente em instantes." }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, carta: data });
+  return NextResponse.json({ ok: true, carta: cartaParaVitrine(data as Record<string, unknown>, true) });
 }
 
 // DELETE — descontinuado: exclusão agora passa por soft delete + governança

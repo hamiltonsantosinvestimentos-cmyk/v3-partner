@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { createHash, timingSafeEqual } from "node:crypto";
+
+/** Compara pelos hashes SHA-256 (mesmo tamanho sempre), em tempo constante. */
+function chaveConfere(recebida: string | null, esperada: string): boolean {
+  if (!recebida) return false;
+  const a = createHash("sha256").update(recebida).digest();
+  const b = createHash("sha256").update(esperada).digest();
+  return timingSafeEqual(a, b);
+}
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -13,9 +22,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // Validate internal key
-  const internalKey = req.headers.get("x-internal-key");
-  if (internalKey !== (process.env.INTERNAL_API_KEY ?? "v3-internal")) {
+  // Chave interna sem valor padrão (BRIEF 2026-11-21 Consórcio, item 7).
+  const esperada = process.env.INTERNAL_API_KEY;
+  if (!esperada) {
+    console.error("[match-partners] INTERNAL_API_KEY ausente");
+    return NextResponse.json({ error: "Indisponível" }, { status: 500 });
+  }
+  if (!chaveConfere(req.headers.get("x-internal-key"), esperada)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 

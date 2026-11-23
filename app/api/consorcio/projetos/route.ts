@@ -5,6 +5,11 @@ import { z } from "zod";
 import { issueV3Code } from "@/lib/v3-codes";
 import { reservarVagaOuNegar } from "@/lib/creation-quota-route";
 import { resolveClient } from "@/lib/v3-clients";
+import { idsDaEquipe } from "@/lib/enterprise";
+import { ehInterno } from "../vitrine";
+
+// Colunas que a tela /consorcio/projetos usa; sem client_cpf_cnpj para quem não é da equipe interna.
+const COLUNAS_PARTNER = "id, code, name, type, credit_value, status, client, admin, created_at";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -30,10 +35,18 @@ const createSchema = z.object({
 });
 
 export async function GET() {
-  const { user } = await getAuthedUser();
+  const { user, profile } = await getAuthedUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const svc = serviceClient();
-  const { data, error } = await svc.from("consorcio_projetos").select("*").is("deleted_at", null).order("created_at", { ascending: false });
+  // Equipe interna vê todos; os demais só os criados por eles (master Enterprise: também os da equipe).
+  // Projeto sem created_by fica só para a equipe interna (BRIEF 2026-11-21 Consórcio, item 1).
+  const interno = ehInterno(profile?.role);
+  let query = svc.from("consorcio_projetos").select(interno ? "*" : COLUNAS_PARTNER).is("deleted_at", null);
+  if (!interno) {
+    const ids = await idsDaEquipe(svc, user.id);
+    query = query.in("created_by", ids);
+  }
+  const { data, error } = await query.order("created_at", { ascending: false });
   if (error) {
     console.error("[consorcio/projetos GET]", error.message);
     return NextResponse.json({ error: "Não foi possível carregar os projetos." }, { status: 500 });

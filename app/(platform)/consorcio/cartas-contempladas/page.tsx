@@ -30,8 +30,11 @@ interface ContemplatedLetter {
   group_name?: string | null;
   quota?: string | null;
   status: LetterStatus;
-  asking_price: number;
-  discount: number;
+  // Só chegam para a equipe interna; o servidor não manda preço de custo ao partner (BRIEF 2026-11-21 Consórcio).
+  asking_price?: number;
+  discount?: number;
+  entrada_partner: number;
+  desconto_partner: number;
   created_at?: string;
   metadata?: LetterMetadata | null;
 }
@@ -132,15 +135,10 @@ export default function CartasContempladasPage() {
 
   const isAdmin = ADMIN_ROLES.includes(userRole);
 
-  // Entrada exibida ao partner = asking_price + 7% do crédito (margem V3)
-  const partnerEntrada = (l: ContemplatedLetter) => l.asking_price + l.credit_value * 0.07;
-  const displayEntrada = (l: ContemplatedLetter) => isAdmin ? l.asking_price : partnerEntrada(l);
-  // Desconto recalculado com a entrada do partner
-  const partnerDiscount = (l: ContemplatedLetter) => {
-    const pe = partnerEntrada(l);
-    return l.credit_value > 0 ? Math.max(0, Math.round(((l.credit_value - pe) / l.credit_value) * 1000) / 10) : 0;
-  };
-  const displayDiscount = (l: ContemplatedLetter) => isAdmin ? l.discount : partnerDiscount(l);
+  // Entrada e desconto do partner vêm calculados do servidor (app/api/consorcio/vitrine.ts).
+  const partnerEntrada = (l: ContemplatedLetter) => l.entrada_partner;
+  const displayEntrada = (l: ContemplatedLetter) => isAdmin ? (l.asking_price ?? l.entrada_partner) : l.entrada_partner;
+  const displayDiscount = (l: ContemplatedLetter) => isAdmin ? (l.discount ?? l.desconto_partner) : l.desconto_partner;
 
   const filtered = letters.filter(l => {
     const matchSearch = !search || l.code.includes(search) || l.admin.toLowerCase().includes(search.toLowerCase());
@@ -312,10 +310,12 @@ export default function CartasContempladasPage() {
               {syncing ? "Sincronizando..." : "Sincronizar Portal"}
             </Button>
           )}
-          <Button size="sm" onClick={() => setShowForm(!showForm)}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Incluir Carta
-          </Button>
+          {isAdmin && (
+            <Button size="sm" onClick={() => setShowForm(!showForm)}>
+              <Plus className="w-4 h-4 mr-1.5" />
+              Incluir Carta
+            </Button>
+          )}
         </div>
       </div>
 
@@ -341,7 +341,7 @@ export default function CartasContempladasPage() {
       )}
 
       {/* Form */}
-      {showForm && (
+      {showForm && isAdmin && (
         <Card className="border-amber-500/30">
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-4">
@@ -451,7 +451,7 @@ export default function CartasContempladasPage() {
                       <>
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">Entrada (Portal)</span>
-                          <span className="font-semibold text-amber-400">{formatCurrency(letter.asking_price)}</span>
+                          <span className="font-semibold text-amber-400">{formatCurrency(letter.asking_price ?? 0)}</span>
                         </div>
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">Entrada Partner</span>
