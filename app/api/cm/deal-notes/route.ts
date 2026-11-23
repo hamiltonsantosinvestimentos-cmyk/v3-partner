@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -79,6 +80,7 @@ async function notifyMentioned(params: {
  *  BRIEF Notas Internas Mesa M&A, terceira aplicação do mesmo padrão de âncora exclusiva já
  *  usado em 19/08/2026 para listing_id/demand_id, e em cm_qualification_batches). */
 export async function GET(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -103,6 +105,7 @@ export async function GET(req: NextRequest) {
  *  (in-app + email) para usuarios mencionados. Exatamente um de listing_id/demand_id/deal_id,
  *  nunca mais de um nem nenhum (mesmo CHECK do banco, validado aqui antes pra dar erro claro). */
 export async function POST(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
@@ -22,6 +23,7 @@ async function authGuard() {
 
 // GET — lista campanhas de envio em massa do próprio partner
 export async function GET() {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -36,6 +38,7 @@ export async function GET() {
 
 // POST — cria uma nova campanha (rascunho, sem contatos ainda)
 export async function POST(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 

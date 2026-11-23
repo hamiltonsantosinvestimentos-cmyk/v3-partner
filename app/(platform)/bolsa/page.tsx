@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { VitrineClient } from "@/components/cm/vitrine-client";
 import { createClient as sc } from "@supabase/supabase-js";
 
@@ -12,6 +13,8 @@ export default async function BolsaPage() {
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
   const { data: profile } = await svc.from("profiles").select("role").eq("id", user?.id ?? "").single();
   const userRole = (profile as { role?: string } | null)?.role ?? "PARTNER";
+  // ENTERPRISE fora desta tela (BRIEF 2026-11-23 enterprise-menu-enxuto-e-comissoes).
+  if (userRole === "ENTERPRISE") redirect("/unauthorized");
 
   return <VitrineClient userRole={userRole} />;
 }

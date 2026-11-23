@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -10,6 +11,7 @@ function svc() {
  *  aprovacao de diretor. So ADMIN ve/aprova (mesmo gate do PATCH em /nda-authorize) -- este endpoint
  *  so lista o que ja foi submetido com anexo real via /nda-authorize POST, nunca fabrica nada. */
 export async function GET(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

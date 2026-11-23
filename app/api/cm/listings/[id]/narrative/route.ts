@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditText } from "@/lib/brand-guardian-gate";
 import { getThesisTemplate } from "@/lib/thesis-templates";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 export const maxDuration = 60;
 
@@ -22,6 +23,7 @@ async function getCaller(req: NextRequest) {
 // POST — (re)gera a narrativa comercial publica do ativo com base na tese
 // selecionada (selected_thesis_template). Fase 3: Switcher de Teses.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Apenas ADMIN/GESTAO/MESA_OPERACIONAL" }, { status: 403 });
 

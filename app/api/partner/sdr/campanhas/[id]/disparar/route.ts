@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { sendText, getSessionStatus } from "@/lib/whatsapp/openwa-client";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 export const maxDuration = 300;
 
@@ -27,6 +28,7 @@ function renderTemplate(template: string, nome: string | null): string {
 // POST — envia a fila pendente da campanha, um a um, respeitando o intervalo
 // configurado, pela sessão WhatsApp do próprio partner.
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const { id } = await params;

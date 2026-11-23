@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
@@ -19,6 +20,7 @@ async function authGuard() {
 
 // GET — detalhe da campanha + fila de contatos (só se for do próprio partner)
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const { id } = await params;
@@ -35,6 +37,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 // PATCH — atualiza nome/mensagem/intervalo/status (nunca dispara envio)
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const { id } = await params;
@@ -69,6 +72,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 // DELETE — remove a campanha e seus contatos
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const { id } = await params;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { getDemandNcndaState } from "@/lib/cm-ncnda";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -15,6 +16,7 @@ const MESA_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
  *  bloqueio do botao "Registrar NCNDA assinado". So Mesa: o Partner de origem nao ve
  *  contrato nem dado de qualificacao do comprador (Blind Wall). */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 // GET /api/cm/listings/[id]/communications-log — histórico de e-mails
 // institucionais disparados pela Forja Jurídico para este ativo (Etapa 7,
@@ -14,6 +15,7 @@ function svc() {
 const ALLOWED = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

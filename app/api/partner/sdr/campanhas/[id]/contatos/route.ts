@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
@@ -25,6 +26,7 @@ function validarTelefone(raw: string): { valido: boolean; normalizado: string } 
 // POST — recebe contatos já parseados (client-side) e enfileira (status
 // "pendente" ou "invalido"). Não dispara nenhum envio.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const { id } = await params;
@@ -64,6 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 // DELETE — remove um contato da fila
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   const { id } = await params;

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { runChecktudoComplianceScan, type ChecktudoDocType } from "@/lib/checktudo";
 import { hasComplianceDashboardAccess } from "@/lib/cm/compliance-access";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 export const maxDuration = 60;
 
@@ -24,6 +25,7 @@ async function authorize(supabaseUser: { id: string } | null) {
 
 /** Histórico de varreduras Checktudo já feitas neste ativo, mais recente primeiro. */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const auth = await authorize(user);
@@ -50,6 +52,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
  * confiado ao fato de a chave existir). Ver BRIEF Fase 2, 27/08/2026.
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const auth = await authorize(user);

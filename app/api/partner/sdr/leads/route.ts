@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
@@ -24,6 +25,7 @@ async function authGuard() {
 // com preview da última mensagem. Espelha /api/sdr/leads, mas escopado ao
 // próprio partner_id em vez de mostrar todo mundo.
 export async function GET() {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -72,6 +74,7 @@ export async function GET() {
 
 // PATCH — atualiza metadados de um lead (nome, tags, status, pausar IA)
 export async function PATCH(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const auth = await authGuard();
   if (!auth) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 

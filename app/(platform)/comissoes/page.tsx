@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { ComissoesPartnerClient } from "@/components/financeiro/comissoes-partner-client";
 import { DEMO_COMISSOES } from "@/lib/demo-data-financeiro";
+import { ComissaoEquipeEnterprise, type UsuarioEquipe } from "@/components/financeiro/comissao-equipe-enterprise";
+import { MinhaComissaoEnterprise } from "@/components/financeiro/minha-comissao-enterprise";
 
 export const dynamic = "force-dynamic";
 
@@ -53,9 +55,29 @@ export default async function ComissoesPage() {
   if (!user) redirect("/login");
 
   const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
-  if (!profile || !["ADMIN", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "FINANCEIRO", "GESTAO"].includes(profile.role)) redirect("/unauthorized");
+  if (!profile || !["ADMIN", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "FINANCEIRO", "GESTAO", "ENTERPRISE"].includes(profile.role)) redirect("/unauthorized");
 
   const svc = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+  // Enterprise (BRIEF 2026-11-23 enterprise-menu-enxuto-e-comissoes): o master vê as comissões dele e
+  // define o % de cada usuário; o usuário da equipe vê só a comissão dele (cortada aqui, no servidor).
+  const ehEnterprise = profile.role === "ENTERPRISE";
+  let equipe: UsuarioEquipe[] | null = null;
+  if (ehEnterprise) {
+    const { contextoEnterprise } = await import("@/lib/enterprise");
+    const ctx = await contextoEnterprise(svc, user.id);
+    if (ctx && !ctx.ehMaster) {
+      const { listarRepasses } = await import("@/lib/enterprise-repasses");
+      const { visaoDoUsuario } = await import("@/app/api/enterprise/repasses/visao-usuario");
+      const dados = await listarRepasses(svc, { usuarioId: user.id, periodo: null });
+      return <MinhaComissaoEnterprise dados={visaoDoUsuario(dados)} />;
+    }
+    const { data: usuarios } = await svc.from("profiles")
+      .select("id, full_name, is_active, enterprise_repasse_percent").eq("enterprise_id", user.id);
+    equipe = ((usuarios ?? []) as { id: string; full_name: string | null; is_active: boolean | null; enterprise_repasse_percent: number | null }[])
+      .map((u) => ({ id: u.id, nome: u.full_name ?? "Sem nome", ativo: u.is_active !== false, percentual: Number(u.enterprise_repasse_percent ?? 0) }))
+      .sort((a, b) => (a.ativo === b.ativo ? a.nome.localeCompare(b.nome, "pt-BR") : a.ativo ? -1 : 1));
+  }
   const isAdmin = ["ADMIN", "GESTAO", "FINANCEIRO"].includes(profile.role);
 
   // Alíquota global de imposto sobre comissões (Configurações → Comissões)
@@ -95,16 +117,16 @@ export default async function ComissoesPage() {
     partners = partnerRows ?? [];
   }
 
-  // Marketplace leads deste partner (ou todos se admin)
+  // Marketplace leads deste partner (ou todos se admin). Enterprise não tem Marketplace: nem consulta.
   let mktQ = svc
     .from("marketplace_leads")
     .select("id, status, created_at, product_id, client_name, marketplace_products(name, partner_commission_percent)")
     .order("created_at", { ascending: false })
     .limit(500);
   if (!isAdmin) mktQ = mktQ.eq("partner_id", user.id) as typeof mktQ;
-  const { data: marketplaceLeads } = await mktQ;
+  const { data: marketplaceLeads } = ehEnterprise ? { data: [] } : await mktQ;
 
-  return (
+  const lista = (
     <ComissoesPartnerClient
       partnerId={user.id}
       partnerName={profile.full_name ?? ""}
@@ -117,4 +139,13 @@ export default async function ComissoesPage() {
       marketplaceLeads={(marketplaceLeads ?? []) as unknown as Parameters<typeof ComissoesPartnerClient>[0]["marketplaceLeads"]}
     />
   );
+  if (equipe) {
+    return (
+      <div className="space-y-6">
+        <ComissaoEquipeEnterprise usuariosIniciais={equipe} />
+        {lista}
+      </div>
+    );
+  }
+  return lista;
 }

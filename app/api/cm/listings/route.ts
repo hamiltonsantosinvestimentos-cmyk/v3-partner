@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { issueV3Code, resolveSectorCode, resolveEsferaCode } from "@/lib/v3-codes";
 import { resolveClient } from "@/lib/v3-clients";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -37,6 +38,7 @@ async function getCallerOrPartner(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCallerOrPartner(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
@@ -96,6 +98,7 @@ async function withDaysInStage<T extends { id: string; listing_status: string; c
 }
 
 export async function POST(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCallerRole(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -46,6 +47,7 @@ async function notifyGovernance(params: { anonymousId: string; requesterName: st
 
 // POST: ADMIN exclui direto (soft delete). GESTAO/MESA_OPERACIONAL solicitam (pending_governance).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   if (!["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(caller.role)) {
@@ -105,6 +107,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 // PATCH: ADMIN aprova ou rejeita uma solicitação pendente
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCaller(req);
   if (!caller || caller.role !== "ADMIN") {
     return NextResponse.json({ error: "Apenas ADMIN pode aprovar ou rejeitar exclusões" }, { status: 403 });

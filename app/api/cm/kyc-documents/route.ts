@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -44,6 +45,7 @@ async function getCallerOrPartner(req: NextRequest) {
  *  demand_id direto -- o painel "Demandas de Compra" da Mesa de Capitais usa esse modo, sem depender
  *  de nenhum match ter acontecido. */
 export async function GET(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const { searchParams } = new URL(req.url);
   const listingId = searchParams.get("listing_id");
   const demandId = searchParams.get("demand_id");
@@ -133,6 +135,7 @@ export async function GET(req: NextRequest) {
 
 /** POST /api/cm/kyc-documents — upload de documento KYC (fica retido, pendente de validacao) */
 export async function POST(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 

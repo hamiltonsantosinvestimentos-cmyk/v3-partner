@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
@@ -13,6 +14,7 @@ function svc() {
 // notificação — Hamilton confirma o pagamento por fora e ativa com um clique
 // em /api/admin/sdr-addon/[partnerId]/ativar.
 export async function POST() {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

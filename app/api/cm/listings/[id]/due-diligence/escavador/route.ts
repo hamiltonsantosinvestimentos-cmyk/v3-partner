@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { buscarProcessosEscavador } from "@/lib/escavador";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 export const maxDuration = 60;
 
@@ -22,6 +23,7 @@ async function authorize(supabaseUser: { id: string } | null) {
 
 /** Historico de checagens ja feitas neste ativo, mais recente primeiro. */
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const auth = await authorize(user);
@@ -42,6 +44,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
 /** Roda uma nova busca Escavador para o ativo e salva o resultado no historico. */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const auth = await authorize(user);

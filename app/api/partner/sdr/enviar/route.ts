@@ -9,6 +9,7 @@ import { decryptPageToken } from "@/lib/meta-oauth";
 import { decryptSecret } from "@/lib/crypto/secret";
 import { formatQuickReplyBlock, type QuickReplyOption } from "@/lib/whatsapp/quick-reply";
 import type { SdrCanal } from "@/lib/sdr-agent";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 const PARTNER_ROLES = ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"] as const;
 
@@ -20,6 +21,7 @@ function svc() {
 // /api/sdr/enviar, mas cada canal usa a conexão própria do partner
 // (partner_sdr_connections), nunca a credencial interna da V3.
 export async function POST(req: NextRequest) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

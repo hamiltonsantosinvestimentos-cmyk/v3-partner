@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { hasComplianceDashboardAccess } from "@/lib/cm/compliance-access";
 import { buildComplianceDossierData } from "@/lib/compliance-dossier-data";
 import { auditText } from "@/lib/brand-guardian-gate";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 // POST /api/cm/listings/[id]/compliance-dossier/compile -- Cockpit de
 // Compliance, Fase 4 (10/09/2026). Compila o parecer do Dossiê de Risco,
@@ -18,6 +19,7 @@ function svc() {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const allowed = await hasComplianceDashboardAccess(user?.id);

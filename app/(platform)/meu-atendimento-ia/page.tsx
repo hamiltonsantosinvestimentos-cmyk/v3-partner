@@ -7,7 +7,8 @@ import { PartnerSdrClient } from "@/components/sdr/partner-sdr-client";
 
 export const dynamic = "force-dynamic";
 
-const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE", "ENTERPRISE"];
+// ENTERPRISE fora desta tela (BRIEF 2026-11-23 enterprise-menu-enxuto-e-comissoes).
+const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "PARTNER_HE"];
 
 export default async function MeuAtendimentoIaPage() {
   const supabase = await createClient();

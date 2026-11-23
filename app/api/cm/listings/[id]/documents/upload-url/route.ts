@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ const PARTNER_ROLES = ["PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "STARTER", 
 // Contorna o limite de body do Vercel serverless (~4.5MB) para documentos grandes
 // (ex: anexo com múltiplos sub-documentos anexados para OCR na Bolsa de Ativos).
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -22,6 +23,7 @@ async function getCaller(req: NextRequest) {
  * visivel no Deal Room publico) ou rejeita (fica retido, nunca sai do painel segregado).
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const caller = await getCaller(req);
   if (!caller) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
