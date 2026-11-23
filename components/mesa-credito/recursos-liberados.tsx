@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Banknote, Plus, FileDown, Trash2, Loader2, FileSignature, AlertTriangle, BadgeCheck, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmar } from "@/lib/aviso";
-import { formatCurrency, maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
+import { formatCurrency, formatCurrencyBRLFromNumber, parseCurrencyBRLInput } from "@/lib/utils";
+import { MoneyInput } from "@/components/shared/money-input";
 import { dataBR, type RecursoLiberado } from "@/lib/cobranca-mandato";
 
 // Recursos liberados (15/10/2026, pedido do Hamilton): a Mesa lança cada
@@ -141,7 +142,7 @@ export function RecursosLiberados({
     setPagando(r.id);
     setErro(null);
     setAviso(null);
-    setValorPago(r.remuneracao != null ? maskCurrencyBRLInput(String(Math.round(r.remuneracao * 100))) : "");
+    setValorPago(r.remuneracao != null ? formatCurrencyBRLFromNumber(r.remuneracao) : "");
     setDataPago(hojeISO());
   }
 
@@ -304,7 +305,7 @@ export function RecursosLiberados({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Valor recebido *</label>
-                    <input value={valorPago} onChange={(e) => setValorPago(maskCurrencyBRLInput(e.target.value))} placeholder="0,00" inputMode="numeric" className={INPUT} autoFocus />
+                    <MoneyInput value={valorPago} onValueChange={setValorPago} placeholder="0,00" className={INPUT} autoFocus />
                   </div>
                   <div>
                     <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Data do pagamento *</label>
@@ -343,11 +344,10 @@ export function RecursosLiberados({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Valor liberado *</label>
-              <input
+              <MoneyInput
                 value={valor}
-                onChange={(e) => setValor(maskCurrencyBRLInput(e.target.value))}
+                onValueChange={setValor}
                 placeholder="0,00"
-                inputMode="numeric"
                 className={INPUT}
                 autoFocus
               />

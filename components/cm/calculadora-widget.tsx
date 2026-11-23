@@ -3,7 +3,8 @@ import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import { Calculator, Loader2, ArrowRightLeft, Settings2 } from "lucide-react";
-import { maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, sanitizeDecimalInput, parseDecimalInput } from "@/lib/utils";
+import { parseCurrencyBRLInput, formatCurrencyBRLFromNumber, sanitizeDecimalInput, parseDecimalInput } from "@/lib/utils";
+import { MoneyInput } from "@/components/shared/money-input";
 
 const INTERNAL_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
 
@@ -105,8 +106,8 @@ export function CalculadoraWidget({ userRole = "PARTNER" }: { userRole?: string 
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <div>
           <label className="block text-[10px] text-[#C9A84C] font-bold uppercase mb-1">Valor Face (R$)</label>
-          <input
-            inputMode="numeric" value={valorFace} onChange={(e) => setValorFace(maskCurrencyBRLInput(e.target.value))}
+          <MoneyInput
+            value={valorFace} onValueChange={setValorFace}
             placeholder="0,00"
             className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold"
           />

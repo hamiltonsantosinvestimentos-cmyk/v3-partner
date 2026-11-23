@@ -22,7 +22,9 @@ test("R$: valor gravado volta para o campo e o campo salva em reais", () => {
   assert.equal(valorParaCampoBRL("5.000"), "5.000,00");
   assert.equal(valorParaCampoBRL(null), "");
   assert.equal(valorParaCampoBRL(0), "");
-  assert.equal(parseCurrencyBRLInput(maskCurrencyBRLInput("150000")), 1500);
+  // Padrão único (22/11/2026): os dígitos digitados são reais inteiros, não centavos.
+  assert.equal(parseCurrencyBRLInput(maskCurrencyBRLInput("150000")), 150000);
+  assert.equal(maskCurrencyBRLInput("150000"), "150.000");
   assert.equal(parseCurrencyBRLInput(valorParaCampoBRL(5000)), 5000);
 });
 

@@ -5,7 +5,10 @@
 // para o quiz "Seja Partner" — o simulador pode adotar estes depois.
 
 import type React from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Clock3, Loader2 } from "lucide-react";
+import { formatCurrencyBRLFromNumber, parseCurrencyBRLInput } from "@/lib/utils";
+import { MoneyInput, MoneyHint } from "@/components/shared/money-input";
 
 export const GOLD = "#C9A84C";
 export const GOLD_LIGHT = "#E8C97A";
@@ -30,12 +33,6 @@ export function maskCEP(v: string) {
 export function fmtBRL(v: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v || 0);
 }
-function fmtCentavos(cents: number) {
-  return (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-function digitsToCentavos(raw: string) {
-  return parseInt(raw.replace(/\D/g, ""), 10) || 0;
-}
 
 export const inputCls = "w-full px-3.5 py-2.5 rounded-xl border text-sm text-white outline-none bg-transparent";
 export const inputStyle = { background: NAVY, borderColor: "rgba(201,168,76,0.25)" } as const;
@@ -59,23 +56,32 @@ export function Field({ label, children }: { label: string; children: React.Reac
   );
 }
 
-// ─── Input monetário com máscara BRL (dígitos = centavos) ───────────────────
+// ─── Input monetário padrão (reais inteiros, vírgula nos centavos) ──────────
 export function LabeledCurrencyInput({
   label, value, onChange, autoFocus, helper,
 }: { label: string; value: number; onChange: (v: number) => void; autoFocus?: boolean; helper?: string }) {
-  const display = value > 0 ? fmtCentavos(Math.round(value * 100)) : "";
+  // Texto local (a máscara precisa guardar estados como "50.000," enquanto a pessoa digita), sincronizado
+  // com o valor em reais quando ele muda por fora (ex.: limpar o formulário).
+  const [texto, setTexto] = useState(() => (value > 0 ? formatCurrencyBRLFromNumber(value) : ""));
+  useEffect(() => {
+    if (parseCurrencyBRLInput(texto) !== value) setTexto(value > 0 ? formatCurrencyBRLFromNumber(value) : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
   return (
     <Field label={label}>
       <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl border" style={inputStyle}>
         <span className="text-sm font-semibold" style={{ color: MUTED }}>R$</span>
-        <input
-          type="text" inputMode="numeric" autoFocus={autoFocus}
-          value={display}
-          onChange={(e) => onChange(digitsToCentavos(e.target.value) / 100)}
+        <MoneyInput
+          autoFocus={autoFocus}
+          value={texto}
+          onValueChange={(m) => { setTexto(m); onChange(parseCurrencyBRLInput(m)); }}
+          hint={false}
           placeholder="0,00"
           className="flex-1 bg-transparent text-lg font-bold text-white outline-none"
         />
       </div>
+      <MoneyHint value={texto} />
       {helper && <p className="text-xs" style={{ color: MUTED }}>{helper}</p>}
     </Field>
   );

@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Copy, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LEVEL_LINES } from "@/lib/credit-checklists";
-import { maskCurrencyBRLInput, parseCurrencyBRLInput, valorParaCampoBRL, formatCurrency } from "@/lib/utils";
+import { parseCurrencyBRLInput, valorParaCampoBRL, formatCurrency } from "@/lib/utils";
+import { MoneyInput } from "@/components/shared/money-input";
 
 // Botão "Duplicar" do modal da proposta (14/10/2026, pedido do Hamilton): cria
 // uma proposta nova na linha escolhida com o mesmo cadastro do cliente e cópia
@@ -163,7 +164,7 @@ export function DuplicarProposta({
 
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold uppercase tracking-widest text-[#C9A84C]">Valor solicitado</label>
-                  <input value={valor} onChange={(e) => setValor(maskCurrencyBRLInput(e.target.value))} className={INPUT} placeholder="0,00" inputMode="numeric" />
+                  <MoneyInput value={valor} onValueChange={setValor} className={INPUT} placeholder="0,00" />
                   <p className="text-[10px] text-muted-foreground">Proposta atual: {formatCurrency(proposal.requested_value)}</p>
                 </div>
 

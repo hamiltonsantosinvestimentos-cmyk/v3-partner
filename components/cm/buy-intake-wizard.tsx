@@ -3,7 +3,8 @@ import { aviso } from "@/lib/aviso";
 
 import React, { useState, useEffect } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield, Search, Upload } from "lucide-react";
-import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
+import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
+import { MoneyInput } from "@/components/shared/money-input";
 import { fetchCep, buildEnderecoFromCep, formatCepMask } from "@/lib/viacep";
 
 const STEPS = [
@@ -487,11 +488,11 @@ export function BuyIntakeWizard({ token, prefill, originPartnerId, lockedFollowU
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className={labelClass}>Ticket mínimo (R$)</label>
-                  <input inputMode="numeric" className={inputClass} value={form.ticket_min} onChange={(e) => upd("ticket_min", maskCurrencyBRLInput(e.target.value))} placeholder="0,00" />
+                  <MoneyInput className={inputClass} value={form.ticket_min} onValueChange={(v) => upd("ticket_min", v)} placeholder="0,00" />
                 </div>
                 <div>
                   <label className={labelClass}>Ticket máximo (R$)</label>
-                  <input inputMode="numeric" className={inputClass} value={form.ticket_max} onChange={(e) => upd("ticket_max", maskCurrencyBRLInput(e.target.value))} placeholder="0,00" />
+                  <MoneyInput className={inputClass} value={form.ticket_max} onValueChange={(v) => upd("ticket_max", v)} placeholder="0,00" />
                 </div>
                 <div>
                   <label className={labelClass}>Deságio mínimo (%)</label>

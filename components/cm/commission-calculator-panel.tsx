@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Calculator, Loader2, Download, Lock, History, AlertTriangle } from "lucide-react";
 import { calculateCommission, hasNegativeResidual, type CommissionCalculatorResult, type SideBreakdown } from "@/lib/commission-calculator";
-import { maskCurrencyBRLInput, parseCurrencyBRLInput, sanitizeDecimalInput, parseDecimalInput } from "@/lib/utils";
+import { parseCurrencyBRLInput, sanitizeDecimalInput, parseDecimalInput } from "@/lib/utils";
+import { MoneyInput } from "@/components/shared/money-input";
 
 interface SimulationRecord {
   id: string;
@@ -290,7 +291,7 @@ export function CommissionCalculatorPanel({ onClose }: Props) {
             </div>
             <div>
               <label className="block text-[10px] text-[#E8C97A] font-bold uppercase mb-1">Valor de Face (R$)</label>
-              <input inputMode="numeric" name="face_value" value={valorFace} onChange={(e) => setValorFace(maskCurrencyBRLInput(e.target.value))}
+              <MoneyInput name="face_value" value={valorFace} onValueChange={setValorFace}
                 placeholder="0,00"
                 className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md px-3 py-2 text-xs text-[#F5F1E8] font-semibold" />
             </div>
