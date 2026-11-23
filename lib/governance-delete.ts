@@ -61,6 +61,38 @@ async function notifyDeletionGovernance(params: {
   }
 }
 
+// Aviso de exclusão JÁ FEITA (sem aprovação prévia) por Analista de Mesa, à diretoria: só informa, o documento está na
+// Lixeira por 30 dias. Mesmo caminho e mesmo Brand Guardian das demais exclusões da governança. Nunca lança.
+export async function avisarExclusaoDiretaGovernanca(params: {
+  vertical: string;
+  itemLabel: string;
+  autorNome: string;
+  motivo: string;
+  lixeiraUrl: string;
+}): Promise<"enviado" | "falhou"> {
+  if (!process.env.RESEND_API_KEY) return "falhou";
+  try {
+    const { Resend } = await import("resend");
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const subjectGate = auditText(`Exclusão por analista, ${params.vertical}: ${params.itemLabel}`);
+    const htmlGate = auditHtml(`<p><strong>${escapeHtml(params.autorNome)}</strong> excluiu <strong>${escapeHtml(params.itemLabel)}</strong> (${escapeHtml(params.vertical)}) com justificativa.</p>
+             <p><strong>Motivo:</strong> ${escapeHtml(params.motivo)}</p>
+             <p>O documento está na Lixeira por ${TRASH_RETENTION_DAYS} dias e pode ser restaurado. Esta mensagem é só um aviso, não precisa de aprovação.</p>
+             <p>Lixeira: ${params.lixeiraUrl}</p>`);
+    if (htmlGate.blocking.length > 0) console.error(`[governance-delete][${params.vertical}] Brand Guardian bloqueou:`, htmlGate.blocking);
+    const { error } = await resend.emails.send({
+      from: "V3 Partners Governança <noreply@v3partners.com.br>",
+      to: GOVERNANCE_EMAILS,
+      subject: subjectGate.corrected,
+      html: htmlGate.corrected,
+    });
+    return error ? "falhou" : "enviado";
+  } catch (err) {
+    console.error(`[governance-delete][${params.vertical}] falha ao avisar exclusão direta:`, err);
+    return "falhou";
+  }
+}
+
 export type DeleteRouteConfig = {
   table: string;
   vertical: string;

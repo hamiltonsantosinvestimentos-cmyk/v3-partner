@@ -55,6 +55,13 @@ export async function PATCH(
     updateData.closer_vinculado_em = closerId ? new Date().toISOString() : null;
   }
 
+  // Valor anterior de is_active para a auditoria do bloquear/liberar (BRIEF 2026-11-20 aba Enterprises).
+  let isActiveAntes: boolean | null = null;
+  if ("is_active" in updateData) {
+    const { data: antes } = await svcClient().from("profiles").select("is_active").eq("id", id).maybeSingle();
+    isActiveAntes = (antes as { is_active?: boolean | null } | null)?.is_active ?? null;
+  }
+
   const supabaseAny = supabase as unknown as {
     from: (table: string) => {
       update: (data: unknown) => {
@@ -102,7 +109,8 @@ export async function PATCH(
     }
   }
 
-  // Grava auditoria (fire-and-forget)
+  // Grava auditoria. Bloquear/liberar acesso (inclusive de usuário da equipe de um Enterprise,
+  // pela aba Enterprises) é aguardado e guarda o is_active anterior; os demais seguem sem esperar.
   const actionLabel = body.email ? "EDITAR_EMAIL"
     : body.role ? "EDITAR_ROLE"
     : body.is_active === false ? "SUSPENDER"
@@ -110,16 +118,22 @@ export async function PATCH(
     : body.trial_expires_at ? "RENOVAR_TRIAL"
     : "EDITAR_PERFIL";
 
-  svcClient().from("audit_logs").insert({
+  const registro = svcClient().from("audit_logs").insert({
     user_id: user.id,
     user_name: profile?.full_name ?? profile?.email ?? user.email,
     action: actionLabel,
     entity: "profiles",
     entity_id: id,
     new_data: updateData,
-    old_data: null,
+    old_data: "is_active" in updateData ? { is_active: isActiveAntes } : null,
     ip_address: null,
-  }).then(() => {}, () => {});
+  });
+  if ("is_active" in updateData) {
+    const { error: auditErr } = await registro;
+    if (auditErr) console.error("[usuarios] auditoria do bloquear/liberar não gravada:", auditErr.message);
+  } else {
+    registro.then(() => {}, () => {});
+  }
 
   return NextResponse.json(data);
 }

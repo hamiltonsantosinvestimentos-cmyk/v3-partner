@@ -570,9 +570,11 @@ interface RankingClientProps {
   period?: string;
   goals?: PartnerGoal[];
   currentUserId?: string;
+  /** Login Enterprise: nome da marca da equipe (ranking só da equipe). null = rede V3. */
+  marcaEquipe?: string | null;
 }
 
-export function RankingClient({ userRole, userName, rankingData, period = "mes", goals = [], currentUserId }: RankingClientProps) {
+export function RankingClient({ userRole, userName, rankingData, period = "mes", goals = [], currentUserId, marcaEquipe = null }: RankingClientProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("score");
 
@@ -596,7 +598,10 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
   const totalVolume     = rankingData.volume.reduce((s, x) => s + x.volume, 0);
 
   const isAdmin = ["ADMIN", "GESTAO", "FINANCEIRO", "MESA_OPERACIONAL"].includes(userRole);
-  const myEntry = rankingData.score.find(s => s.name === userName) ?? rankingData.score[0];
+  // Card "sua posição" pelo id; quem não pontuou no período não cai no card de outra pessoa.
+  const myEntry = currentUserId
+    ? rankingData.score.find(s => s.id === currentUserId)
+    : rankingData.score.find(s => s.name === userName);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -610,8 +615,13 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
           <div>
             <h1 className="text-2xl font-bold text-white">Ranking de Performance</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              {isAdmin ? "Visão Administrador" : `Bem-vindo, ${userName.split(" ")[0]}`} — {PERIOD_LABELS[period]}
+              {marcaEquipe
+                ? `Ranking da equipe ${marcaEquipe} · ${PERIOD_LABELS[period]}`
+                : `${isAdmin ? "Visão Administrador" : `Bem-vindo, ${userName.split(" ")[0]}`} · ${PERIOD_LABELS[period]}`}
             </p>
+            {marcaEquipe && (
+              <p className="text-[11px] text-muted-foreground mt-0.5">As comissões da equipe são pagas ao master do {marcaEquipe}.</p>
+            )}
           </div>
         </div>
         <div className="flex gap-1 p-1 rounded-xl bg-[#091221] border border-[#122036]">
@@ -695,6 +705,10 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
             {/* My profile (partners) ou Hall of Fame (admins) */}
             {!isAdmin && myEntry ? (
               <MyProfileCard entry={myEntry} allScores={rankingData.score} />
+            ) : !isAdmin ? (
+              <div className="p-4 rounded-2xl bg-[#091221] border border-[#122036] text-sm text-muted-foreground">
+                Você ainda não pontuou neste período.
+              </div>
             ) : (
               <HallOfFame scoreData={rankingData.score} />
             )}
@@ -709,7 +723,7 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
                 <span className="text-[10px] text-muted-foreground ml-1">Clique para expandir</span>
               </div>
               <Badge className="text-[10px] bg-[#C9A84C]/10 text-[#E8C97A] border-[#C9A84C]/30">
-                Top {currentData.length} Partners
+                {marcaEquipe ? `Top ${currentData.length}` : `Top ${currentData.length} Partners`}
               </Badge>
             </div>
             <div className="p-3 space-y-1">
@@ -726,7 +740,7 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
         <div className="flex items-center gap-2 mb-4">
           <Sparkles className="w-4 h-4 text-[#C9A84C]" />
           <h3 className="text-sm font-bold text-white">Todas as Conquistas Disponíveis</h3>
-          <span className="text-[10px] text-muted-foreground">— desbloqueie acumulando resultados</span>
+          <span className="text-[10px] text-muted-foreground">· desbloqueie acumulando resultados</span>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
           {BADGE_DEFS.map(b => (
@@ -742,7 +756,8 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
         </div>
       </div>
 
-      {/* Premiação notice */}
+      {/* Premiação notice: só para a rede V3 (Enterprise não participa da premiação). */}
+      {!marcaEquipe && (
       <div className="p-4 rounded-xl border border-[#C9A84C]/25 bg-[#C9A84C]/5 flex items-start gap-3">
         <Trophy className="w-4 h-4 text-[#E8C97A] mt-0.5 flex-shrink-0" />
         <div>
@@ -754,6 +769,7 @@ export function RankingClient({ userRole, userName, rankingData, period = "mes",
           </p>
         </div>
       </div>
+      )}
     </div>
   );
 }

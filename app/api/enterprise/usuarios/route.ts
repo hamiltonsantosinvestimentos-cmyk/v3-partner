@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
-import { exigirEnterprise } from "@/lib/enterprise-server";
+import { exigirEnterprise, logLeituraAdmin } from "@/lib/enterprise-server";
 import { MAX_USUARIOS } from "@/lib/enterprise";
 
 // Usuários abaixo do master de um Enterprise (até MAX_USUARIOS). Só o master gerencia.
@@ -17,8 +17,10 @@ function percentualValido(v: unknown) {
   return Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n * 100) / 100 : null;
 }
 
-export async function GET() {
-  const auth = await exigirEnterprise({ somenteMaster: true });
+export async function GET(req: NextRequest) {
+  // Modo ADMIN (?master=): só leitura, com ACCESS no log (adendo de 20/11 do BRIEF 2026-11-19).
+  // POST e PATCH continuam sem modo ADMIN (403 com ?master).
+  const auth = await exigirEnterprise({ somenteMaster: true, req, permitirAdmin: true });
   if (!auth.ok) return auth.res;
   const { data, error } = await auth.db
     .from("profiles")
@@ -26,11 +28,12 @@ export async function GET() {
     .eq("enterprise_id", auth.userId)
     .order("created_at", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  await logLeituraAdmin(auth, req, { action: "ACCESS", newData: { tela: "enterprise_usuarios", total: data?.length ?? 0 } });
   return NextResponse.json({ usuarios: data ?? [], limite: MAX_USUARIOS });
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await exigirEnterprise({ somenteMaster: true });
+  const auth = await exigirEnterprise({ somenteMaster: true, req });
   if (!auth.ok) return auth.res;
   const body = (await req.json().catch(() => ({}))) as { nome?: string; email?: string; telefone?: string; percentual?: number };
   const nome = body.nome?.trim().replace(/\s+/g, " ");
@@ -103,7 +106,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const auth = await exigirEnterprise({ somenteMaster: true });
+  const auth = await exigirEnterprise({ somenteMaster: true, req });
   if (!auth.ok) return auth.res;
   const body = (await req.json().catch(() => ({}))) as { id?: string; percentual?: number; ativo?: boolean; nome?: string; telefone?: string };
   if (!body.id || !auth.ctx.usuariosIds.includes(body.id)) {

@@ -658,7 +658,7 @@ export function HomeEquityPublicoClient() {
               </div>
 
               <p className="text-center text-[11px]" style={{ color: MUTED }}>
-                CET estimado: {fmtPct(resultado.cet)} a.a. · Taxa: 0,89% a.m. + IPCA
+                CET estimado: {fmtPct(resultado.cet)} a.a. · Taxa a partir de 1,09% a.m. + IPCA
               </p>
 
               <div className="pt-1 border-t space-y-3" style={{ borderColor: "rgba(255,255,255,0.06)" }}>

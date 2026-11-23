@@ -55,7 +55,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   GOLD: "V3 Gold",
   DIAMANTE: "V3 Diamante",
   ENTERPRISE: "V3 Enterprise",
-  MESA_OPERACIONAL: "Mesa Operacional",
+  MESA_OPERACIONAL: "Analista de Mesa",
   GESTAO: "Gestão",
   FINANCEIRO: "Financeiro",
   FORNECEDOR: "Fornecedor",

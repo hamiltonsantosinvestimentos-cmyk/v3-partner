@@ -16,6 +16,7 @@ import { KYC_DOCUMENT_KIND_LABELS } from "@/lib/kyc-documents";
 import { ROLE_LABELS } from "@/lib/qualification-roles";
 import { PartyDueDiligenceTab, type DdInitial } from "./party-due-diligence-tab";
 import { confirmar, pedirMotivoPadronizado } from "@/lib/aviso";
+import { ImageZoomViewer } from "@/components/cm/image-zoom-viewer";
 import { MOTIVOS_DEVOLUCAO, MOTIVOS_EXCLUSAO } from "@/lib/comunicacao-externa";
 
 type KycDocument = { document_id: string; document_kind: string; original_filename: string | null; mime_type?: string | null; uploaded_at: string; valid_until: string; uploaded_ip?: string | null };
@@ -45,7 +46,8 @@ function DocumentRow({ qualificationId, doc, onPreview, onOpened, podeExcluir, o
     setLoading(true);
     setError(null);
     // PDF: a janela precisa abrir de forma síncrona no clique, senão o bloqueador de pop-up barra.
-    const pdfWindow = isPdf ? window.open("", "_blank") : null;
+    // Imagem também abre em janela separada (zoom nativo do navegador e leitura ao lado da ficha); sem janela, cai no visualizador com zoom.
+    const pdfWindow = isPdf || isImage ? window.open("", "_blank") : null;
     try {
       const res = await fetch(`/api/cm/qualifications/party/${qualificationId}/documents/${doc.document_id}/open`, { method: "POST" });
       const json = await res.json().catch(() => ({}));
@@ -56,7 +58,7 @@ function DocumentRow({ qualificationId, doc, onPreview, onOpened, podeExcluir, o
       }
       setUrl(json.url);
       onOpened?.();
-      if (isPdf && pdfWindow) pdfWindow.location.href = json.url;
+      if (pdfWindow) pdfWindow.location.href = json.url;
       else if (isImage) onPreview(json.url);
     } catch {
       pdfWindow?.close();
@@ -108,7 +110,7 @@ function DocumentRow({ qualificationId, doc, onPreview, onOpened, podeExcluir, o
     <div className="bg-[#09081A] rounded px-2.5 py-2 space-y-1">
       <div className="flex items-center gap-2">
         {isImage && url ? (
-          <button type="button" onClick={() => onPreview(url)} className="flex-shrink-0 w-10 h-10 rounded overflow-hidden border border-[#9BAFC5]/20 hover:border-[#C9A84C]/60 transition-colors">
+          <button type="button" onClick={() => { if (!window.open(url, "_blank")) onPreview(url); }} title="Abrir em janela separada" className="flex-shrink-0 w-10 h-10 rounded overflow-hidden border border-[#9BAFC5]/20 hover:border-[#C9A84C]/60 transition-colors">
             <img src={url} alt={doc.original_filename ?? "documento"} className="w-full h-full object-cover" />
           </button>
         ) : (
@@ -613,7 +615,7 @@ function PartyCardBody({ data, onPreview, onChanged, onExcluido }: { data: any; 
       {data.documents?.length > 0 && (
         <div className="pt-2 border-t border-[#9BAFC5]/10 space-y-1.5">
           <p className="text-[12px] font-bold text-[#E8C97A] uppercase">Documentos KYC</p>
-          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onExcluido} />)}
+          {data.documents.map((doc: any, i: number) => <DocumentRow key={doc.document_id ?? i} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.pode_excluir_documento)} onExcluido={onExcluido} />)}
         </div>
       )}
 
@@ -656,7 +658,7 @@ function PartyCardBody({ data, onPreview, onChanged, onExcluido }: { data: any; 
               )}
               {rep.documents?.length > 0 && (
                 <div className="pt-1 space-y-1">
-                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.conferencia?.pode_liberar)} onExcluido={onExcluido} />)}
+                  {rep.documents.map((doc: any, j: number) => <DocumentRow key={doc.document_id ?? j} qualificationId={q.id} doc={doc} onPreview={onPreview} onOpened={onChanged} podeExcluir={Boolean(data.pode_excluir_documento)} onExcluido={onExcluido} />)}
                 </div>
               )}
             </div>
@@ -720,7 +722,8 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
 
   return (
     <>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60" onClick={onClose}>
+      {/* Fecha só pelo botão ×: clicar fora não fecha mais (perdia a conferência em andamento). */}
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60">
         <div className="w-full max-w-lg max-h-[85vh] bg-[#09081A] border border-[#C9A84C]/20 rounded-xl flex flex-col" onClick={(e) => e.stopPropagation()}>
           <div className="p-4 border-b border-[#C9A84C]/20 flex items-center justify-between flex-shrink-0">
             <div className="text-sm font-bold text-[#F5F1E8] flex items-center gap-2"><User size={14} className="text-[#C9A84C]" /> Ficha de Qualificação</div>
@@ -760,12 +763,7 @@ export function PartyQualificationCardModal({ qualificationId, onClose }: { qual
       </div>
 
       {lightboxUrl && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/85 p-6" onClick={() => setLightboxUrl(null)}>
-          <button onClick={() => setLightboxUrl(null)} className="absolute top-4 right-4 text-[#F5F1E8] hover:text-[#C9A84C] transition-colors">
-            <X size={24} />
-          </button>
-          <img src={lightboxUrl} alt="Documento" className="max-w-full max-h-full rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
-        </div>
+        <ImageZoomViewer url={lightboxUrl} onClose={() => setLightboxUrl(null)} />
       )}
     </>
   );

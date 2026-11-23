@@ -23,6 +23,8 @@ export async function GET() {
     .from("profiles")
     .select("id, full_name, email, role")
     .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE"])
+    // Equipe de Enterprise fora das listas da V3; o master fica (BRIEF 2026-11-20 aba Enterprises).
+    .is("enterprise_id", null)
     .eq("is_active", true);
 
   if (!partners?.length) return NextResponse.json({ ranking: [] });

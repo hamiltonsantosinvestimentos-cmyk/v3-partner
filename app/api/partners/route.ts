@@ -26,10 +26,12 @@ export async function GET() {
   // sem precisar rebaixar o role deles pra PARTNER e perder o acesso amplo.
   const { data, error } = await svc
     .from("profiles")
-    .select("id, full_name, email, role")
-    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE", "GESTAO", "ADMIN"])
-    .order("full_name");
+    .select("id, full_name, email, role, enterprise_id")
+    .in("role", ["STARTER", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE", "GESTAO", "ADMIN"]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ partners: data ?? [] });
+  // Rede V3 primeiro, equipe de Enterprise no fim com rótulo "Nome · Marca" (só exibição).
+  const { ordenarSeletorDePartners } = await import("@/lib/enterprise");
+  const partners = await ordenarSeletorDePartners(svc, (data ?? []) as { id: string; full_name: string | null; email: string; role: string; enterprise_id: string | null }[]);
+  return NextResponse.json({ partners });
 }

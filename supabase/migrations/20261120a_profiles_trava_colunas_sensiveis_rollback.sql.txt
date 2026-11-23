@@ -1,0 +1,7 @@
+-- Reversão de 20261120a_profiles_trava_colunas_sensiveis.sql (volta ao estado de 19/11/2026, com a brecha).
+BEGIN;
+DROP TRIGGER IF EXISTS profiles_trava_colunas_sensiveis ON public.profiles;
+DROP FUNCTION IF EXISTS public.profiles_trava_colunas_sensiveis();
+DROP POLICY IF EXISTS crm_insert ON public.crm_leads;
+CREATE POLICY crm_insert ON public.crm_leads FOR INSERT TO public WITH CHECK (auth.uid() IS NOT NULL);
+COMMIT;

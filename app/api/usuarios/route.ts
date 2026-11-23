@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { idsStarterAntigo } from "@/lib/v3-access";
+import { exigirAdmin } from "@/lib/usuarios/exigir-admin";
 
 const IS_DEMO = false;
 
@@ -9,16 +10,11 @@ export async function GET() {
   }
 
   // Verifica autenticação e role ADMIN antes de expor todos os perfis
-  const { createClient, createServiceClient } = await import("@/lib/supabase/server");
-  const authClient = await createClient();
-  const { data: { user } } = await authClient.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  const acesso = await exigirAdmin();
+  if (!acesso.ok) return acesso.res;
 
+  const { createServiceClient } = await import("@/lib/supabase/server");
   const svc = await createServiceClient();
-  const { data: caller } = await svc.from("profiles").select("role").eq("id", user.id).single();
-  if (caller?.role !== "ADMIN") {
-    return NextResponse.json({ error: "Acesso restrito a administradores" }, { status: 403 });
-  }
 
   const { data, error } = await svc
     .from("profiles")
@@ -36,17 +32,50 @@ export async function GET() {
 
   const signedIds = new Set((contracts ?? []).map((c: { user_id: string }) => c.user_id));
 
+  // Equipe de um Enterprise (enterprise_id preenchido) fica fora desta tela: é gerida na aba
+  // Enterprises (/admin-enterprises). O master continua, com a contagem da equipe e a marca.
+  // BRIEF docs/briefs/2026-11-20_aba-enterprises-admin-e-equipe-fora-das-listas.md
+  const todos = (data ?? []) as Record<string, unknown>[];
+  const equipePorMaster = new Map<string, { total: number; ativos: number }>();
+  for (const u of todos) {
+    const m = u.enterprise_id as string | null;
+    if (!m) continue;
+    const c = equipePorMaster.get(m) ?? { total: 0, ativos: 0 };
+    c.total += 1;
+    if (u.is_active !== false) c.ativos += 1;
+    equipePorMaster.set(m, c);
+  }
+
   const starterAntigo = await idsStarterAntigo(svc);
-  const usersWithContract = (data ?? []).map((u: Record<string, unknown>) => ({
-    ...u,
-    contract_signed: signedIds.has(u.id as string),
-    starter_antigo: starterAntigo.has(u.id as string),
-  }));
+  const usersWithContract = todos
+    .filter((u) => !u.enterprise_id)
+    .map((u) => {
+      const ehMaster = u.role === "ENTERPRISE";
+      const eq = equipePorMaster.get(u.id as string);
+      return {
+        ...u,
+        contract_signed: signedIds.has(u.id as string),
+        starter_antigo: starterAntigo.has(u.id as string),
+        ...(ehMaster
+          ? {
+              enterprise_usuarios: eq?.total ?? 0,
+              enterprise_usuarios_ativos: eq?.ativos ?? 0,
+              // null = sem white_label_nome (a tela mostra "Sem marca")
+              enterprise_marca: typeof u.white_label_nome === "string" && u.white_label_nome.trim() ? u.white_label_nome.trim() : null,
+            }
+          : {}),
+      };
+    });
 
   return NextResponse.json(usersWithContract);
 }
 
 export async function POST(request: Request) {
+  // Só ADMIN cria acesso: antes desta checagem, qualquer usuário logado chegava ao createUser
+  // (BRIEF 2026-11-20_rls-crm-insert-e-profiles-update-own.md).
+  const acesso = await exigirAdmin();
+  if (!acesso.ok) return acesso.res;
+
   const { email, password, full_name, role, phone, document_cpf } = await request.json();
 
   if (IS_DEMO) {

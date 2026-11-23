@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
-import { Users, GraduationCap } from "lucide-react";
+import { Users, GraduationCap, ShieldCheck } from "lucide-react";
 import type { UserRole } from "@/lib/constants";
 
 const UsersClient = dynamic(
@@ -17,7 +17,12 @@ const AdminOnboardingPanel = dynamic(
 
 const IS_DEMO = false;
 
-type Tab = "usuarios" | "onboarding";
+const PermissoesMesaPanel = dynamic(
+  () => import("@/components/usuarios/permissoes-mesa-panel").then((m) => m.PermissoesMesaPanel),
+  { ssr: false }
+);
+
+type Tab = "usuarios" | "onboarding" | "permissoes";
 
 export function UsuariosPageClient() {
   const [users, setUsers] = useState<{ id: string; email: string; full_name: string | null; role: UserRole; phone: string | null; document_cpf: string | null; is_active: boolean; created_at: string }[]>([]);
@@ -76,10 +81,22 @@ export function UsuariosPageClient() {
           <GraduationCap className="w-4 h-4" />
           Onboarding
         </button>
+        <button
+          onClick={() => setTab("permissoes")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+            ${tab === "permissoes"
+              ? "bg-[#C9A84C] text-[#09081A]"
+              : "text-[#7A8FA8] hover:text-[#F0ECE4]"
+            }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          Permissões da Mesa
+        </button>
       </div>
 
       {tab === "usuarios" && <UsersClient initialUsers={users} />}
       {tab === "onboarding" && <AdminOnboardingPanel />}
+      {tab === "permissoes" && <PermissoesMesaPanel />}
     </div>
   );
 }
