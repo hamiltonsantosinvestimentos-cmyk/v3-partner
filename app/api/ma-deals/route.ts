@@ -42,6 +42,7 @@ const createSchema = z.object({
   title:                  z.string().max(300).optional(),
   sector:                 z.string().max(100).optional().nullable(),
   value:                  z.number().nonnegative().optional().nullable(),
+  currency:               z.enum(["BRL", "USD", "EUR"]).optional(),
   notes:                  z.string().max(5000).optional().nullable(),
   code:                   z.string().max(50).optional(),
   tipo_participante:      z.enum(["Vendedor", "Investidor"]).optional(),
@@ -66,6 +67,7 @@ const patchSchema = z.object({
   sector:                 z.string().max(100).optional().nullable(),
   location:               z.string().max(200).optional().nullable(),
   deal_value:             z.number().positive().optional().nullable(),
+  currency:               z.enum(["BRL", "USD", "EUR"]).optional(),
   stage:                  z.enum([...WORKING_DB_STAGES, ...CLOSED_DB_STAGES] as [string, ...string[]]).optional(),
   probability_percent:    z.number().int().min(0).max(100).optional().nullable(),
   notes:                  z.string().max(2000).optional().nullable(),
@@ -86,7 +88,7 @@ const patchSchema = z.object({
 
 // Monta select com join de partner — usa nome da coluna para evitar problema com nome do FK constraint
 const DEAL_SELECT = `
-  id, code, title, target_company, sector, deal_value, ebitda_multiple,
+  id, code, title, target_company, sector, deal_value, currency, fx_rate_brl, fx_rate_date, fx_rate_source, ebitda_multiple,
   stage, probability_percent, expected_close_date, created_at, updated_at,
   notes, comments, assigned_to, created_by, asset_data, location,
   partner:profiles!assigned_to(id, full_name)
@@ -201,6 +203,7 @@ export async function POST(req: NextRequest) {
       target_company:         d.company,
       sector:                 d.sector ?? null,
       deal_value:             d.value ?? null,
+      currency:               d.currency ?? "BRL",
       stage:                  "PROSPECTING" as const,
       probability_percent:    d.probability_percent ?? 10,
       notes:                  d.notes ?? null,
@@ -218,7 +221,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await svcPost
       .from("ma_deals")
       .insert(insertPayload)
-      .select("id, code, target_company, sector, deal_value, probability_percent, created_at, notes, assigned_to")
+      .select("id, code, target_company, sector, deal_value, currency, probability_percent, created_at, notes, assigned_to")
       .single();
 
     if (error) {
@@ -318,6 +321,7 @@ export async function POST(req: NextRequest) {
         company:     data.target_company,
         sector:      data.sector ?? "",
         value:       data.deal_value ?? 0,
+        currency:    data.currency ?? "BRL",
         stage:       "prospeccao",
         responsible: profile?.full_name ?? "Partner",
         probability: data.probability_percent ?? 10,
@@ -351,6 +355,15 @@ export async function PATCH(req: NextRequest) {
   } = parsed.data;
   const svc = serviceClient();
   const isAdmin = ADMIN_ROLES.includes(profile?.role as typeof ADMIN_ROLES[number]);
+
+  // Trocar a moeda do ativo invalida o câmbio gravado (era de outra moeda): zera para o
+  // botão "Atualizar câmbio" buscar de novo. Reenviar a mesma moeda não zera nada.
+  if (fields.currency !== undefined) {
+    const { data: atual } = await svc.from("ma_deals").select("currency").eq("id", id).single();
+    if ((atual?.currency ?? "BRL") !== fields.currency) {
+      Object.assign(fields, { fx_rate_brl: null, fx_rate_date: null, fx_rate_source: null });
+    }
+  }
 
   // Autorizar avanço sem a Análise de Crédito paga (gate abaixo) é decisão
   // exclusiva de ADMIN -- nem GESTAO nem MESA_OPERACIONAL, apesar de estarem

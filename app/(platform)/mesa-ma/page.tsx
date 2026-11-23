@@ -21,7 +21,7 @@ export default async function MesaMaPage() {
   // Carrega deals server-side para garantir que aparecem imediatamente ao abrir a página
   const { data: dealsData, error: dealsError } = await svc
     .from("ma_deals")
-    .select("id, code, title, target_company, sector, deal_value, ebitda_multiple, stage, probability_percent, expected_close_date, created_at, notes, comments, assigned_to, created_by, asset_data, location, partner:profiles!assigned_to(id, full_name), closed_date, closed_at, closed_from_stage, closed_reason_category, closed_reason, closed_note, closer:profiles!closed_by(full_name)")
+    .select("id, code, title, target_company, sector, deal_value, currency, fx_rate_brl, fx_rate_date, ebitda_multiple, stage, probability_percent, expected_close_date, created_at, notes, comments, assigned_to, created_by, asset_data, location, partner:profiles!assigned_to(id, full_name), closed_date, closed_at, closed_from_stage, closed_reason_category, closed_reason, closed_note, closer:profiles!closed_by(full_name)")
     // Deals na Lixeira não entram no Kanban (a rota GET já filtrava; a carga inicial não).
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
@@ -41,6 +41,9 @@ export default async function MesaMaPage() {
       company:          (d.target_company ?? d.title ?? "Sem nome") as string,
       sector:           (d.sector ?? "") as string,
       value:            (d.deal_value ?? 0) as number,
+      currency:         (d.currency ?? "BRL") as string,
+      fx_rate_brl:      (d.fx_rate_brl ?? null) as number | null,
+      fx_rate_date:     (d.fx_rate_date ?? null) as string | null,
       stage:            DB_TO_PIPELINE[d.stage as string] ?? d.stage ?? "prospeccao",
       dbStage:          d.stage as string,
       responsible,
