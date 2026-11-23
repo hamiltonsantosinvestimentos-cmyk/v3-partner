@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PortfolioViewer } from "@/components/portfolio/portfolio-viewer";
 import { dbStageLabel, isClosedDbStage } from "@/lib/ma/pipeline";
+import { useIdentidadeEnterprise } from "@/components/enterprise/use-identidade";
 
 interface PendenciaOcr {
   doc_label: string;
@@ -192,6 +193,8 @@ function PendenciasRow({ proposta, onCorrigido }: {
 }
 
 export function MinhasOperacoesClient({ propostas: initialPropostas, deals, leads, partnerName }: Omit<Props, "propostas"> & { propostas: Proposta[] }) {
+  // Enterprise vê o portfólio com a marca dele (BRIEF 2026-11-23 identidade fase 1).
+  const identidade = useIdentidadeEnterprise();
   const [tab, setTab] = useState<Tab>("portfolio");
   const [propostas, setPropostas] = useState<Proposta[]>(initialPropostas);
 
@@ -387,7 +390,7 @@ export function MinhasOperacoesClient({ propostas: initialPropostas, deals, lead
         <Card>
           <CardContent className="p-5">
             <div className="mb-4">
-              <h2 className="text-base font-bold text-white">Portfólio V3 Partners 2026</h2>
+              <h2 className="text-base font-bold text-white">{identidade ? `Portfólio ${identidade.nome} ${new Date().getFullYear()}` : "Portfólio V3 Partners 2026"}</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Todas as linhas de produtos e soluções financeiras disponíveis para originação</p>
             </div>
             <PortfolioViewer />

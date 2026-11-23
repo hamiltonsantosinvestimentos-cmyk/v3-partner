@@ -4,7 +4,7 @@ import { createNotification, notifyByRoles } from "@/lib/notify";
 import { notifyChatMensagemPartner } from "@/lib/email";
 import { ehDaEquipe } from "@/lib/enterprise";
 import {
-  ANEXOS_BUCKET, type Anexo, ehMesa, inserirMensagem, lerConversas, marcarLido, salaDoPartner, salvarConversa, svc,
+  ANEXOS_BUCKET, type Anexo, ehMesa, inserirMensagem, lerConversas, marcarLido, nomeDaMesaPara, salaDoPartner, salvarConversa, svc,
 } from "@/lib/chat-partners";
 
 export const dynamic = "force-dynamic";
@@ -130,10 +130,13 @@ export async function POST(req: NextRequest) {
 
   const preview = texto.slice(0, 200);
   if (mesa && partnerId) {
-    createNotification({ user_id: partnerId, title: "Nova mensagem da Mesa V3", message: preview.slice(0, 80), type: "info", action_url: "/chat" }).catch(() => {});
+    // Partner de Enterprise vê "Mesa {marca}" (BRIEF 2026-11-23 identidade fase 1).
+    const nomeMesa = await nomeDaMesaPara(db, partnerId);
+    const marcaEnterprise = nomeMesa === "Mesa V3" ? null : nomeMesa.slice("Mesa ".length);
+    createNotification({ user_id: partnerId, title: `Nova mensagem da ${nomeMesa}`, message: preview.slice(0, 80), type: "info", action_url: "/chat" }).catch(() => {});
     void Promise.resolve(db.from("profiles").select("email, full_name").eq("id", partnerId).single()).then(({ data: partner }) => {
       if (partner?.email) {
-        void notifyChatMensagemPartner({ partnerEmail: partner.email, partnerName: partner.full_name ?? "Partner", senderName: me.full_name ?? "Mesa V3", preview }).catch(() => {});
+        void notifyChatMensagemPartner({ partnerEmail: partner.email, partnerName: partner.full_name ?? "Partner", senderName: me.full_name ?? nomeMesa, preview, marca: marcaEnterprise }).catch(() => {});
       }
     }).catch(() => {});
   } else if (!mesa) {

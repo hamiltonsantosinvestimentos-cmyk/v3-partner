@@ -1,0 +1,3 @@
+-- Rollback de 20261123b_white_label_identidade_juridica.sql (apaga os dados das 2 colunas).
+alter table public.profiles drop column if exists white_label_cnpj;
+alter table public.profiles drop column if exists white_label_razao_social;

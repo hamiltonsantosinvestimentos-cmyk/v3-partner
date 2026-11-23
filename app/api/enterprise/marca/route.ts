@@ -4,6 +4,20 @@ import { getClientIp, logAuditStrict } from "@/lib/audit";
 import { temaDoMaster } from "@/lib/enterprise";
 import { validarTema, verificarContraste, prefixoBucketWhiteLabel, type TemaEnterprise } from "@/lib/enterprise-tema";
 import { conferirIcone, conferirLogoClaro } from "@/lib/enterprise-arquivos";
+import { cnpjCanonico, normalizarRazaoSocial } from "@/lib/enterprise-identidade";
+import { formatCNPJ } from "@/lib/validators/cpf-cnpj";
+
+// Razão social e CNPJ (BRIEF 2026-11-23 identidade fase 1). Leitura tolerante: antes da migration as colunas não existem.
+async function identidadeJuridica(db: import("@supabase/supabase-js").SupabaseClient, masterId: string): Promise<{ razao_social: string | null; cnpj: string | null }> {
+  try {
+    const { data, error } = await db.from("profiles").select("white_label_razao_social, white_label_cnpj").eq("id", masterId).maybeSingle();
+    if (error || !data) return { razao_social: null, cnpj: null };
+    const d = data as { white_label_razao_social?: string | null; white_label_cnpj?: string | null };
+    return { razao_social: d.white_label_razao_social ?? null, cnpj: d.white_label_cnpj ?? null };
+  } catch {
+    return { razao_social: null, cnpj: null };
+  }
+}
 
 // Marca do white label do Enterprise. Só o master altera; usuários herdam.
 // Modo ADMIN (?master=<id>, BRIEF 2026-11-19_admin-configura-white-label-enterprise.md): o ADMIN
@@ -21,7 +35,12 @@ const HEX = /^#[0-9a-fA-F]{6}$/;
 export async function GET(req: NextRequest) {
   const auth = await exigirEnterprise({ req, permitirAdmin: true });
   if (!auth.ok) return auth.res;
-  return NextResponse.json({ marca: auth.ctx.marca, ehMaster: auth.ctx.ehMaster, tema: auth.ctx.tema ?? null });
+  const juridica = await identidadeJuridica(auth.db, auth.ctx.masterId);
+  return NextResponse.json({
+    marca: auth.ctx.marca, ehMaster: auth.ctx.ehMaster, tema: auth.ctx.tema ?? null,
+    razao_social: juridica.razao_social,
+    cnpj: juridica.cnpj ? formatCNPJ(juridica.cnpj) : null,
+  });
 }
 
 /** Caminho no bucket a partir da URL pública (null se não for do nosso bucket). */
@@ -46,6 +65,19 @@ export async function POST(req: NextRequest) {
   const update: Record<string, unknown> = {};
   const nome = form.get("nome");
   if (typeof nome === "string") update.white_label_nome = nome.trim().slice(0, 80) || null;
+
+  // ── Razão social e CNPJ: validados aqui, no servidor; gravados no formato canônico ──
+  const razao = form.get("razao_social");
+  if (typeof razao === "string") update.white_label_razao_social = normalizarRazaoSocial(razao);
+  const cnpjForm = form.get("cnpj");
+  if (typeof cnpjForm === "string") {
+    if (!cnpjForm.trim()) update.white_label_cnpj = null;
+    else {
+      const c = cnpjCanonico(cnpjForm);
+      if (!c) return NextResponse.json({ error: "CNPJ inválido." }, { status: 400 });
+      update.white_label_cnpj = c;
+    }
+  }
 
   const removerLogo = form.get("remover_logo") === "1";
   if (removerLogo) update.white_label_logo_url = null;
@@ -114,15 +146,20 @@ export async function POST(req: NextRequest) {
 
   // ── Auditoria antes de qualquer escrita (inclusive upload) ────────────────
   const { data: antes } = await auth.db.from("profiles").select("white_label_nome, white_label_logo_url").eq("id", auth.userId).single();
+  const juridicaAntes = await identidadeJuridica(auth.db, auth.userId);
   const dadosLog = {
     action: "UPDATE" as const,
     oldData: {
       white_label_nome: antes?.white_label_nome ?? null,
       white_label_logo_url: antes?.white_label_logo_url ?? null,
       white_label_tema: temaAtual,
+      white_label_razao_social: juridicaAntes.razao_social,
+      white_label_cnpj: juridicaAntes.cnpj,
     },
     newData: {
       ...("white_label_nome" in update ? { white_label_nome: update.white_label_nome } : {}),
+      ...("white_label_razao_social" in update ? { white_label_razao_social: update.white_label_razao_social } : {}),
+      ...("white_label_cnpj" in update ? { white_label_cnpj: update.white_label_cnpj } : {}),
       ...(removerLogo ? { white_label_logo_url: null } : {}),
       ...(temLogo ? { logo_novo: (logo as File).name } : {}),
       ...(mexeNoTema ? { white_label_tema: novoTema, logo_claro_novo: temLogoClaro ? (logoClaro as File).name : undefined, icone_novo: temIcone ? (icone as File).name : undefined } : {}),

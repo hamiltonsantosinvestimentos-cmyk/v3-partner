@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { auditText, auditHtml, type GateViolation } from "@/lib/brand-guardian-gate";
+import { escapeHtml } from "@/lib/html-escape";
 
 const FROM = process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>";
 
@@ -1319,11 +1320,14 @@ export async function notifyChatMensagemPartner(opts: {
   partnerName: string;
   senderName: string;
   preview: string;
+  /** Marca do Enterprise do destinatário (BRIEF 2026-11-23 identidade fase 1); sem ela, V3 Partners. */
+  marca?: string | null;
 }): Promise<void> {
+  const marca = opts.marca ? escapeHtml(opts.marca) : "V3 Partners";
   const body = `
     <p style="color:#F5F1E8;font-size:14px;margin:0 0 4px;">Olá, <strong>${opts.partnerName}</strong>!</p>
     <p style="color:#9BAFC5;font-size:13px;margin:0 0 20px;">
-      Você recebeu uma nova mensagem da equipe V3 Partners.
+      Você recebeu uma nova mensagem da equipe ${marca}.
     </p>
     <div style="background:#0D1C2E;border-radius:10px;padding:20px;margin-bottom:16px;border-left:3px solid #C9A84C;">
       <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#C9A84C;letter-spacing:0.08em;">MENSAGEM DE ${opts.senderName.toUpperCase()}</p>
@@ -1333,7 +1337,7 @@ export async function notifyChatMensagemPartner(opts: {
   `;
   await send(
     opts.partnerEmail,
-    `💬 Nova mensagem da Mesa V3 Partners`,
+    `💬 Nova mensagem da Mesa ${opts.marca ?? "V3 Partners"}`,
     template("Nova mensagem no chat", body, {
       label: "Abrir Chat",
       url:   "https://app.v3partners.com.br/chat",

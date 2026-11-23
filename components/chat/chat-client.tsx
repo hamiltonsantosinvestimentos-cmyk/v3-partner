@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   type Anexo, type ChatMessage, type PropostaResumo, type RespostaPronta,
   Bolha, GerenciarRespostas, NotasInternas, PropostaCard, SalvarAnexoModal, haQuanto,
+  nomeDaMesaParaExibir,
 } from "@/components/chat/chat-partes";
 
 // Chat Partners v2 (26/10/2026). Mesa (isAdmin): fila de conversas por tempo de espera,
@@ -32,7 +33,7 @@ export interface ChatRoom {
   responsavel_nome?: string | null;
 }
 
-interface ChatClientProps { roomId: string; profile: ChatProfile; isAdmin: boolean; rooms?: ChatRoom[] }
+interface ChatClientProps { roomId: string; profile: ChatProfile; isAdmin: boolean; rooms?: ChatRoom[]; marcaMesa?: string | null }
 
 const SLA_H = 4;
 const MESA = ["ADMIN", "GESTAO", "MESA_OPERACIONAL", "SYSTEM"];
@@ -50,7 +51,7 @@ function dataGrupo(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: tz });
 }
 
-export function ChatClient({ roomId, profile, isAdmin }: ChatClientProps) {
+export function ChatClient({ roomId, profile, isAdmin, marcaMesa = null }: ChatClientProps) {
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [roomsCarregadas, setRoomsCarregadas] = useState(false);
   const [filtro, setFiltro] = useState<Filtro>("aguardando");
@@ -178,7 +179,7 @@ export function ChatClient({ roomId, profile, isAdmin }: ChatClientProps) {
         if (m.room_id === activeRef.current) {
           carregarMensagens(m.room_id).then(() => { if (m.sender_id !== profile.id) marcarLido(m.room_id); });
         } else if (m.sender_id !== profile.id && !MESA.includes(m.sender_role)) {
-          setToast({ nome: m.sender_name, texto: m.content, room: m.room_id });
+          setToast({ nome: isAdmin ? m.sender_name : nomeDaMesaParaExibir(m.sender_name, marcaMesa), texto: m.content, room: m.room_id });
         }
         if (isAdmin) agendarSalas();
       },
@@ -436,11 +437,11 @@ export function ChatClient({ roomId, profile, isAdmin }: ChatClientProps) {
             )}
             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[#C9A84C]/15"><MessageSquare className="w-4 h-4 text-[#C9A84C]" /></div>
             <div className="min-w-0 flex-1">
-              <h3 className="truncate text-[13px] font-semibold text-[#F0ECE4]">{isAdmin ? roomAtual?.partner_name ?? "Selecione uma conversa" : "Mesa V3"}</h3>
+              <h3 className="truncate text-[13px] font-semibold text-[#F0ECE4]">{isAdmin ? roomAtual?.partner_name ?? "Selecione uma conversa" : `Mesa ${marcaMesa ?? "V3"}`}</h3>
               <p className="truncate text-[10.5px] text-[#7A8FA8]">
                 {isAdmin
                   ? roomAtual ? `${ROTULO_PAPEL[roomAtual.partner_role] ?? roomAtual.partner_role}${responsavel?.nome ? ` · Responsável: ${responsavel.id === profile.id ? "você" : responsavel.nome}` : " · Sem responsável"}` : ""
-                  : "Chat direto com a equipe V3 · respondemos em horário comercial"}
+                  : `Chat direto com a equipe ${marcaMesa ?? "V3"} · respondemos em horário comercial`}
               </p>
             </div>
             {isAdmin && roomAtual && !ehInstituicao && (
@@ -486,7 +487,7 @@ export function ChatClient({ roomId, profile, isAdmin }: ChatClientProps) {
                           <div className="h-px flex-1 bg-[#243A66]/40" /><span className="px-2 text-[10px] font-medium text-[#7A8FA8]/50">{g.data}</span><div className="h-px flex-1 bg-[#243A66]/40" />
                         </div>
                         {g.msgs.map((m) => (
-                          <Bolha key={m.id} msg={m} propria={m.sender_id === profile.id && m.tipo !== "sistema" && m.sender_role !== "SYSTEM"}
+                          <Bolha key={m.id} msg={isAdmin ? m : { ...m, sender_name: nomeDaMesaParaExibir(m.sender_name, marcaMesa) }} propria={m.sender_id === profile.id && m.tipo !== "sistema" && m.sender_role !== "SYSTEM"}
                             lidaPeloOutro={lidaPeloOutro(m)} urls={urls} proposta={m.proposta_id ? propostasMsg[m.proposta_id] : undefined}
                             podeSalvarAnexo={isAdmin && activeRoom.startsWith("partner_")} onSalvarAnexo={setSalvarAnexo} />
                         ))}

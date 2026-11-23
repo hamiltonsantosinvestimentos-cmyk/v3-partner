@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ChatClient } from "@/components/chat/chat-client";
+import { whiteLabelDaSessao } from "@/lib/enterprise-sessao";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,9 @@ export default async function ChatPage() {
   }
 
   const roomId = `partner_${profile.id}`;
+  // Enterprise vê a Mesa com a marca dele (BRIEF 2026-11-23 identidade fase 1).
+  const wl = await whiteLabelDaSessao();
+  const marcaMesa = wl?.nome ?? null;
 
   return (
     <div className="p-4 sm:p-6">
@@ -38,11 +42,11 @@ export default async function ChatPage() {
         <div className="flex items-center gap-3 mb-1">
           <div className="w-px h-5 bg-[#C9A84C]" />
           <h1 className="text-[22px] font-bold text-[#F0ECE4] tracking-tight">
-            Chat com a Mesa V3
+            Chat com a Mesa {marcaMesa ?? "V3"}
           </h1>
         </div>
         <p className="text-[12px] text-[#7A8FA8] ml-4">
-          Converse diretamente com a equipe operacional V3 Partners
+          Converse diretamente com a equipe operacional {marcaMesa ?? "V3 Partners"}
         </p>
       </div>
 
@@ -54,6 +58,7 @@ export default async function ChatPage() {
           role: profile.role,
         }}
         isAdmin={false}
+        marcaMesa={marcaMesa}
       />
     </div>
   );

@@ -39,6 +39,12 @@ const corEtapa = (s?: string | null) =>
 const brl = (v?: number | null) => (v == null ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }));
 const tamanho = (b: number) => (b > 1e6 ? `${(b / 1e6).toFixed(1).replace(".", ",")} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
 
+/** Para o partner de um Enterprise, "Mesa V3..." gravado no histórico aparece como "Mesa {marca}" (o banco não muda). */
+export function nomeDaMesaParaExibir(senderName: string, marcaMesa: string | null | undefined): string {
+  if (!marcaMesa) return senderName;
+  return senderName.replace(/^Mesa V3( Partners)?/, `Mesa ${marcaMesa}`);
+}
+
 export function hora(iso: string) {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
 }

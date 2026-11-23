@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp, Search, Briefcase, Loader2, FileText, Check, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buscarIdentidade, useIdentidadeEnterprise } from "@/components/enterprise/use-identidade";
+import { linhaJuridica } from "@/lib/enterprise-identidade";
 
 export interface Documento {
   id: string;
@@ -66,8 +68,34 @@ const FIELDS: { key: keyof PortfolioLinha; label: string }[] = [
 ];
 
 // ── PDF Generator ─────────────────────────────────────────────────────────────
+/** Logo de qualquer formato (PNG, JPG, WEBP, SVG) convertido em PNG num canvas, cabendo na caixa. */
+async function logoComoPng(url: string, caixaMm: number): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  try {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    await new Promise<void>((ok, erro) => { img.onload = () => ok(); img.onerror = () => erro(new Error("logo")); img.src = url; });
+    const largura = img.naturalWidth || 600;
+    const altura = img.naturalHeight || 600;
+    const escala = Math.min(1, 1200 / Math.max(largura, altura));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(largura * escala);
+    canvas.height = Math.round(altura * escala);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const proporcao = canvas.width / canvas.height;
+    const w = proporcao >= 1 ? caixaMm : caixaMm * proporcao;
+    const h = proporcao >= 1 ? caixaMm / proporcao : caixaMm;
+    return { dataUrl: canvas.toDataURL("image/png"), w, h };
+  } catch {
+    return null;
+  }
+}
+
 async function gerarPDF(linha: PortfolioLinha, docs: Documento[], checados: Set<string>) {
   const { jsPDF } = await import("jspdf");
+  // Enterprise: logo, marca, razão social e CNPJ dele, sem menção à V3 (BRIEF 2026-11-23 identidade fase 1).
+  const identidade = await buscarIdentidade();
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
   const W = 210;
@@ -78,7 +106,17 @@ async function gerarPDF(linha: PortfolioLinha, docs: Documento[], checados: Set<
   doc.rect(0, 0, W, 52, "F");
 
   // Logo
-  try {
+  if (identidade) {
+    // Cabeçalho escuro: logo para fundo escuro; sem logo, o nome em texto.
+    const logo = identidade.logoUrl ? await logoComoPng(identidade.logoUrl, 30) : null;
+    if (logo) doc.addImage(logo.dataUrl, "PNG", margin, 9 + (30 - logo.h) / 2, logo.w, logo.h);
+    else {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(240, 236, 228);
+      doc.text(doc.splitTextToSize(identidade.nome, 30), margin, 22);
+    }
+  } else try {
     const logoRes = await fetch("/logo.jpg");
     const logoBlob = await logoRes.blob();
     const logoB64 = await new Promise<string>((resolve) => {
@@ -104,7 +142,7 @@ async function gerarPDF(linha: PortfolioLinha, docs: Documento[], checados: Set<
   // Subtitle
   doc.setFontSize(7);
   doc.setTextColor(122, 143, 168);
-  doc.text("CHECKLIST DE DOCUMENTOS — V3 PARTNERS 2026", margin + 36, 40);
+  doc.text(identidade ? `CHECKLIST DE DOCUMENTOS · ${identidade.nome.toUpperCase()} ${new Date().getFullYear()}` : "CHECKLIST DE DOCUMENTOS — V3 PARTNERS 2026", margin + 36, 40);
 
   // Gold separator line
   doc.setFillColor(201, 168, 76);
@@ -215,9 +253,9 @@ async function gerarPDF(linha: PortfolioLinha, docs: Documento[], checados: Set<
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(122, 143, 168);
-  doc.text("v3partners.com.br", margin, footerY + 2);
+  doc.text(identidade ? (identidade.site ?? "") : "v3partners.com.br", margin, footerY + 2);
   doc.text(
-    "Documento de uso interno — V3 Partners Soluções Ltda",
+    identidade ? linhaJuridica({ ...identidade, site: null }) : "Documento de uso interno — V3 Partners Soluções Ltda",
     W / 2,
     footerY + 2,
     { align: "center" }
@@ -523,6 +561,7 @@ function LinhaCard({ linha, nivelMap }: { linha: PortfolioLinha; nivelMap: Recor
 }
 
 export function PortfolioViewer() {
+  const identidade = useIdentidadeEnterprise();
   const [linhas, setLinhas] = useState<PortfolioLinha[]>([]);
   const [nivelMap, setNivelMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -595,7 +634,7 @@ export function PortfolioViewer() {
 
       {/* Count */}
       <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
-        {filtered.length} produto{filtered.length !== 1 ? "s" : ""} — PORTFÓLIO V3 PARTNERS 2026
+        {filtered.length} produto{filtered.length !== 1 ? "s" : ""} · PORTFÓLIO {(identidade?.nome ?? "V3 PARTNERS").toUpperCase()} {identidade ? new Date().getFullYear() : 2026}
       </p>
 
       {/* Cards */}

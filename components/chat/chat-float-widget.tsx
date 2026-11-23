@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { MessageSquare, X, Send, Loader2, ChevronDown, ExternalLink } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useIdentidadeEnterprise } from "@/components/enterprise/use-identidade";
+import { nomeDaMesaParaExibir } from "@/components/chat/chat-partes";
 
 type Msg = {
   id: string;
@@ -47,6 +49,9 @@ function playNotificationSound() {
 }
 
 export function ChatFloatWidget({ profileId, profileName, role, isAdmin }: ChatFloatWidgetProps) {
+  // Enterprise vê a Mesa com a marca dele (BRIEF 2026-11-23 identidade fase 1).
+  const identidade = useIdentidadeEnterprise();
+  const marcaMesa = isAdmin ? null : identidade?.nome ?? null;
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -260,7 +265,7 @@ export function ChatFloatWidget({ profileId, profileName, role, isAdmin }: ChatF
                 <p className="text-xs font-bold text-[#F0ECE4]">
                   {isAdmin
                     ? activeRoomName ? `Chat — ${activeRoomName}` : "Chat — Partners"
-                    : "Mesa V3 Partners"}
+                    : `Mesa ${marcaMesa ?? "V3 Partners"}`}
                 </p>
                 <p className="text-[10px] text-[#7A8FA8]">
                   {isAdmin ? "Resposta rápida · mensagem mais recente" : "Chat direto com a equipe"}
@@ -305,7 +310,7 @@ export function ChatFloatWidget({ profileId, profileName, role, isAdmin }: ChatF
                     )}
                     <div className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
                       <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${isMe ? "bg-[#C9A84C] text-[#09081A]" : "bg-[#162744] text-[#F0ECE4] border border-[#243A66]"}`}>
-                        {!isMe && <p className="text-[9px] font-bold text-[#C9A84C] mb-0.5">{m.sender_name}</p>}
+                        {!isMe && <p className="text-[9px] font-bold text-[#C9A84C] mb-0.5">{nomeDaMesaParaExibir(m.sender_name, marcaMesa)}</p>}
                         <p className="text-xs leading-relaxed">{m.content}</p>
                         <p className={`text-[9px] mt-1 text-right ${isMe ? "text-[#09081A]/60" : "text-[#7A8FA8]"}`}>{formatTime(m.created_at)}</p>
                       </div>

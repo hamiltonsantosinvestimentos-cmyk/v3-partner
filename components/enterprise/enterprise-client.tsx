@@ -6,6 +6,7 @@ import { Users, Wallet, Palette, Loader2, Plus, FileDown, Check, X, Pencil, Uplo
 import type { Marca } from "@/lib/enterprise";
 import { verificarContraste, tonsDerivados, type TemaEnterprise } from "@/lib/enterprise-tema";
 import type { RepasseLinha, ResumoUsuario } from "@/lib/enterprise-repasses";
+import { isValidCNPJ } from "@/lib/validators/cpf-cnpj";
 
 const brl = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
@@ -361,7 +362,71 @@ function AbaMarca({ marcaInicial, masterId, masterNome }: { marcaInicial: Marca 
       </div>
       {msg && <p className="text-xs text-muted-foreground">{msg}</p>}
     </div>
+    <DadosDaEmpresa masterId={masterId} />
     <AbaCores masterId={masterId} logoEscuro={marca?.logoUrl ?? null} nomeMarca={marca?.nome ?? masterNome ?? "Enterprise"} />
+    </div>
+  );
+}
+
+// ─── Razão social e CNPJ (BRIEF 2026-11-23 identidade fase 1) ────────────────
+/** Máscara progressiva XX.XXX.XXX/XXXX-XX, aceitando letras (CNPJ alfanumérico). */
+function mascaraCnpj(v: string): string {
+  const c = v.replace(/[^0-9A-Za-z]/g, "").toUpperCase().slice(0, 14);
+  const p = [c.slice(0, 2), c.slice(2, 5), c.slice(5, 8), c.slice(8, 12), c.slice(12, 14)];
+  let out = p[0];
+  if (p[1]) out += `.${p[1]}`;
+  if (p[2]) out += `.${p[2]}`;
+  if (p[3]) out += `/${p[3]}`;
+  if (p[4]) out += `-${p[4]}`;
+  return out;
+}
+
+function DadosDaEmpresa({ masterId }: { masterId?: string }) {
+  const [razao, setRazao] = useState("");
+  const [cnpj, setCnpj] = useState("");
+  const [carregado, setCarregado] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(api("/api/enterprise/marca", masterId)).then((r) => r.json()).then((j) => {
+      setRazao(j.razao_social ?? "");
+      setCnpj(j.cnpj ?? "");
+    }).catch(() => {}).finally(() => setCarregado(true));
+  }, [masterId]);
+
+  const cnpjLimpo = cnpj.replace(/[^0-9A-Za-z]/g, "");
+  const cnpjOk = !cnpjLimpo || isValidCNPJ(cnpjLimpo);
+  const incompleto = carregado && (!razao.trim() || !cnpjLimpo);
+
+  async function salvar() {
+    if (!cnpjOk) { setMsg("CNPJ inválido."); return; }
+    setSalvando(true); setMsg(null);
+    const fd = new FormData();
+    fd.append("razao_social", razao);
+    fd.append("cnpj", cnpj);
+    const r = await fetch(api("/api/enterprise/marca", masterId), { method: "POST", body: fd });
+    const j = await r.json().catch(() => ({}));
+    setSalvando(false);
+    setMsg(r.ok ? "Dados da empresa salvos." : (j.error ?? "Falha ao salvar"));
+  }
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-card p-5 space-y-3 max-w-xl">
+      <div>
+        <h3 className="text-sm font-semibold text-foreground">Dados da empresa</h3>
+        <p className="text-xs text-muted-foreground">Aparecem nos PDFs e simulações gerados pela sua equipe.</p>
+      </div>
+      <input className={`${input} w-full`} placeholder="Razão social" value={razao} maxLength={200} onChange={(e) => setRazao(e.target.value)} />
+      <div>
+        <input className={`${input} w-full`} placeholder="CNPJ" value={cnpj} inputMode="text" onChange={(e) => setCnpj(mascaraCnpj(e.target.value))} />
+        {!cnpjOk && <p className="text-[11px] text-red-400 mt-1">CNPJ inválido.</p>}
+      </div>
+      {incompleto && <p className="text-[11px] text-amber-400">Preencha razão social e CNPJ para saírem nos documentos.</p>}
+      <button onClick={salvar} disabled={salvando || !cnpjOk} className="h-9 px-4 rounded-lg bg-[#C9A84C] text-[#09081A] text-xs font-bold disabled:opacity-40 flex items-center gap-1.5">
+        {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} Salvar dados
+      </button>
+      {msg && <p className="text-xs text-muted-foreground">{msg}</p>}
     </div>
   );
 }
