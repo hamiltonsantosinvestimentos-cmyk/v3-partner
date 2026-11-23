@@ -84,6 +84,7 @@ https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&displa
 Autorizada pelo go do Hamilton no BRIEF `docs/briefs/2026-11-21_tema-visual-enterprise-manual-de-marca.md`.
 - Cores de cliente Enterprise são **dado do tema** (`profiles.white_label_tema`): valem só quando o login é de um Enterprise com tema, nunca para usuário da V3. A fonte continua DM Sans para todos.
 - **Nenhum hex de cliente fica fixo em componente.** O plugin `postcss-tema-enterprise.cjs` troca as cores da V3 por `var(--wl-*, <cor V3>)`; o padrão de cada variável é a cor da V3. Não "corrija" esse `var()`: é o tema funcionando.
+- Tarja nas mesas (BRIEF `docs/briefs/2026-11-21_tarja-enterprise-nas-mesas-v3.md`): a equipe interna da V3 vê a cor de um cliente Enterprise só dentro da tarja de identificação de propostas desse cliente (faixa de 4 px e selo, `components/shared/tarja-enterprise.tsx`). Fora disso, telas de usuário V3 seguem a paleta V3.
 - Cores da tabela em `lib/tema-enterprise-cores.json`. Cor nova da V3 em classe deve entrar na tabela, senão fica de fora do tema (`npm run tema:pendencias`).
 
 ---

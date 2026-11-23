@@ -107,10 +107,17 @@ export default async function MesaOperacionalPage() {
     };
   });
 
+  // Tarja do Enterprise só para a equipe interna (BRIEF 2026-11-21 tarja nas mesas).
+  let propostasComTarja: Record<string, unknown>[] = proposals;
+  if (isAdmin) {
+    const { anexarTarja } = await import("@/lib/enterprise");
+    propostasComTarja = await anexarTarja(svc, proposals as Record<string, unknown>[]);
+  }
+
   return (
     <MesaOpClient
       tickets={(ticketsData ?? []) as unknown as Parameters<typeof MesaOpClient>[0]["tickets"]}
-      proposals={proposals as Parameters<typeof MesaOpClient>[0]["proposals"]}
+      proposals={propostasComTarja as Parameters<typeof MesaOpClient>[0]["proposals"]}
       currentUser={currentUser}
     />
   );

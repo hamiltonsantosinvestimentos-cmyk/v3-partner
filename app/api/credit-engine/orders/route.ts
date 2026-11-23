@@ -138,5 +138,14 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ orders: result });
+  // Tarja do Enterprise pelo partner que a tela exibe: ref_partner se houver, senão partner (rota só interna).
+  // BRIEF docs/briefs/2026-11-21_tarja-enterprise-nas-mesas-v3.md
+  const exibido = new Map(filtered.map((o) => [o.id, (o.ref_partner_id as string | null) ?? (o.partner_id as string | null)]));
+  const { marcasDosPartners } = await import("@/lib/enterprise");
+  const tarjas = await marcasDosPartners(svc, [...exibido.values()]);
+  const comTarja = result.map((r) => {
+    const pid = exibido.get(r.id as string);
+    return { ...r, enterprise: pid ? tarjas.get(pid) ?? null : null };
+  });
+  return NextResponse.json({ orders: comTarja });
 }

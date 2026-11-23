@@ -1,6 +1,6 @@
 import { recortarTransferenciaPorPapel } from "@/lib/ma/transferencias";
 import { NextRequest, NextResponse } from "next/server";
-import { ehDaEquipe, idsDaEquipe } from "@/lib/enterprise";
+import { anexarTarja, ehDaEquipe, idsDaEquipe } from "@/lib/enterprise";
 import { protegerMetadata } from "@/lib/credit-proposal-meta";
 import { statusAoReabrir } from "@/lib/credit-proposal-status";
 import { semAnaliseDoSite } from "@/lib/analise-site";
@@ -126,7 +126,9 @@ export async function GET(req: NextRequest) {
     if (!isAdmin) single = single.in("partner_id", equipeIds);
     const { data, error } = await single.single();
     if (error || !data) return NextResponse.json({ error: "Proposta não encontrada" }, { status: 404 });
-    return NextResponse.json({ proposal: recortarTransferenciaPorPapel(data as unknown as Record<string, unknown>, profile?.role, "code") });
+    const proposta = recortarTransferenciaPorPapel(data as unknown as Record<string, unknown>, profile?.role, "code");
+    // Tarja do Enterprise só para a equipe interna (BRIEF 2026-11-21 tarja nas mesas).
+    return NextResponse.json({ proposal: isAdmin ? (await anexarTarja(svc, [proposta as Record<string, unknown>]))[0] : proposta });
   }
 
   let query = svc
@@ -146,7 +148,9 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   // Propostas técnicas de análise comprada no site não são crédito (lib/analise-site.ts).
   const recortadas = ((data ?? []) as unknown as Record<string, unknown>[]).map((r) => recortarTransferenciaPorPapel(r, profile?.role, "code"));
-  return NextResponse.json({ proposals: semAnaliseDoSite(recortadas as { metadata?: unknown }[]) });
+  const lista = semAnaliseDoSite(recortadas as { metadata?: unknown }[]) as Record<string, unknown>[];
+  // Tarja do Enterprise só para a equipe interna; o join do partner não muda (sem enterprise_id).
+  return NextResponse.json({ proposals: isAdmin ? await anexarTarja(svc, lista) : lista });
 }
 
 // POST — cria nova proposta de crédito
@@ -196,7 +200,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: res.error }, { status: res.status });
     }
 
-    return NextResponse.json({ ok: true, proposal: res.proposal });
+    const nova = res.proposal as Record<string, unknown>;
+    return NextResponse.json({ ok: true, proposal: isAdmin && nova ? (await anexarTarja(serviceClient(), [nova]))[0] : nova });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[credit-proposals POST]", msg, err);
@@ -501,7 +506,8 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, proposal: data });
+  // Equipe interna recebe a tarja recalculada (troca de partner atualiza o card na hora).
+  return NextResponse.json({ ok: true, proposal: isAdmin && data ? (await anexarTarja(serviceClient(), [data as Record<string, unknown>]))[0] : data });
 }
 
 // DELETE — somente ADMIN

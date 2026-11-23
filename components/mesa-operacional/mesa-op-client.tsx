@@ -1,4 +1,5 @@
 "use client";
+import { FaixaEnterprise, SeloEnterprise, FiltroOrigemSelect, passaFiltroOrigem, type FiltroOrigem, type TarjaEnterpriseDados } from "@/components/shared/tarja-enterprise";
 import { aviso, confirmar } from "@/lib/aviso";
 import { statusAoReabrir } from "@/lib/credit-proposal-status";
 import { isNdaMesaTemplateName, NDA_MESA_NOME } from "@/lib/nda-mesa-operacoes";
@@ -70,6 +71,8 @@ interface ProposalCard {
   credit_line: string; requested_value: number;
   stage: string; status: string;
   partner_name?: string; partner_id?: string; partner_role?: string;
+  /** Tarja do Enterprise: só vem do servidor para a equipe interna (BRIEF 2026-11-21 tarja nas mesas). */
+  enterprise?: TarjaEnterpriseDados | null;
   docs_uploaded?: number; docs_required?: number;
   created_at: string;
   cpf_cnpj?: string; email?: string; telefone?: string;
@@ -1420,12 +1423,15 @@ function EditarPropostaModal({ open, onClose, proposal, onSaved }: {
       if (res.ok) {
         const chosenPartner = partners.find(p => p.id === partnerId);
         const partnerName = chosenPartner?.full_name ?? proposal.partner_name;
+        // Tarja recalculada pelo servidor (troca de partner Enterprise ↔ V3 aparece na hora).
+        const salvo = await res.json().catch(() => null) as { proposal?: { enterprise?: TarjaEnterpriseDados | null } } | null;
         onSaved(proposal.id, {
           partner_id: partnerId || proposal.partner_id,
           partner_name: partnerName,
           partner_role: partnerId ? chosenPartner?.role : proposal.partner_role,
           current_level: level,
           credit_line: creditLine,
+          ...(salvo?.proposal && "enterprise" in salvo.proposal ? { enterprise: salvo.proposal.enterprise ?? null } : {}),
         });
         if (partnerId && partnerId !== proposal.partner_id) {
           fetch("/api/notifications", {
@@ -1588,6 +1594,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
             partner_id: (p.partner as { id?: string } | null)?.id,
             partner_name: (p.partner as { full_name?: string } | null)?.full_name,
             partner_role: (p.partner as { role?: string } | null)?.role,
+            enterprise: (p.enterprise as TarjaEnterpriseDados | null | undefined) ?? null,
             created_at: p.created_at as string,
             valor_credito_atual: p.valor_credito_atual as number | undefined,
             comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
@@ -1836,6 +1843,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
   const [editProposal, setEditProposal] = useState<ProposalCard | null>(null);
   const [stageSlaTarget, setStageSlaTarget] = useState<{ proposal: ProposalCard; stage: SlaStage } | null>(null);
   const [search, setSearch] = useState("");
+  const [origem, setOrigem] = useState<FiltroOrigem>("todas");
 
   // Drag & drop
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -2100,6 +2108,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
         partner_role: npPartners.find(x => x.id === npPartnerId)?.role ?? json.proposal.partner?.role,
         current_level: npLevel,
         metadata: json.proposal.metadata ?? metadata,
+        enterprise: (json.proposal.enterprise as TarjaEnterpriseDados | null | undefined) ?? null,
       }, ...prev]);
       return json.proposal.id as string;
     }
@@ -2135,10 +2144,16 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
     const matchSearch = !search ||
       p.client_name.toLowerCase().includes(search.toLowerCase()) ||
       (p.code ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      (p.partner_name ?? "").toLowerCase().includes(search.toLowerCase());
+      (p.partner_name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.enterprise?.nome ?? "").toLowerCase().includes(search.toLowerCase());
     const matchStage = !selectedStage || p.stage === selectedStage;
-    return matchSearch && matchStage;
+    return matchSearch && matchStage && passaFiltroOrigem(p, origem);
   });
+  const contagemOrigem = {
+    todas: proposals.length,
+    v3: proposals.filter((p) => !p.enterprise).length,
+    enterprise: proposals.filter((p) => !!p.enterprise).length,
+  };
   // Movimento V3: cards do Kanban deslizam até a etapa nova (components/motion/use-flip.ts)
   const kanbanRef = useRef<HTMLDivElement>(null);
   const definirOrigemFlip = useFlip(kanbanRef, [filteredProposals]);
@@ -2333,6 +2348,7 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                 placeholder="Buscar por cliente, código, partner..."
                 className="w-full h-9 pl-9 pr-4 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
+            <FiltroOrigemSelect valor={origem} onChange={setOrigem} contagem={contagemOrigem} />
             <div className="flex gap-1 flex-wrap">
               {PIPELINE_STAGES.map((s) => (
                 <button key={s.key} onClick={() => setSelectedStage(selectedStage === s.key ? null : s.key)}
@@ -2397,6 +2413,8 @@ export function MesaOpClient({ tickets: initialTickets, proposals: initialPropos
                           className={`relative w-full text-left p-3 rounded-xl bg-card border border-border hover:border-primary/40 hover:bg-secondary/50 transition-all group cursor-pointer ${draggedId === p.id ? "opacity-40 scale-95 cursor-grabbing" : canChangeStage ? "cursor-grab active:cursor-grabbing" : ""}`}
                           style={slaBorderColor ? { borderLeftWidth: "3px", borderLeftColor: slaBorderColor } : undefined}
                           onClick={(e) => { registrarOrigemModal(e.currentTarget); setDetailProposal(p); }}>
+                          <FaixaEnterprise dados={p.enterprise} />
+                          {p.enterprise && <div className="mb-1.5"><SeloEnterprise dados={p.enterprise} /></div>}
                           {(() => {
                             if (!sla) return null;
                             const colors = { ok: "bg-emerald-500", warning: "bg-amber-500", danger: "bg-red-500" };

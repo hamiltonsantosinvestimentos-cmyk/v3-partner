@@ -237,3 +237,48 @@ export async function ordenarSeletorDePartners<T extends { id: string; full_name
     return cmp(a.full_name ?? "", b.full_name ?? "");
   }) as (Omit<T, "enterprise_id"> & { rotulo: string; marca: string | null })[];
 }
+
+/** Tarja do Enterprise numa proposta, só para a equipe interna da V3. */
+export interface TarjaProposta { nome: string; cor: string; corTexto: string; corFaixa: string; papel: "master" | "equipe" }
+
+/**
+ * Tarja de cada partner Enterprise (master ou equipe) para as mesas da V3. Duas consultas pequenas
+ * em profiles; partner da V3 = null. Falha = mapa vazio (sem tarja, nunca erro).
+ * BRIEF docs/briefs/2026-11-21_tarja-enterprise-nas-mesas-v3.md
+ */
+export async function marcasDosPartners(db: SupabaseClient, partnerIds: (string | null | undefined)[]): Promise<Map<string, TarjaProposta | null>> {
+  const out = new Map<string, TarjaProposta | null>();
+  const ids = [...new Set(partnerIds.filter((x): x is string => !!x))];
+  if (!ids.length) return out;
+  try {
+    const { data: perfis } = await db.from("profiles").select("id, role, enterprise_id").in("id", ids);
+    const lista = (perfis ?? []) as { id: string; role: string | null; enterprise_id: string | null }[];
+    const masterDe = (p: { id: string; role: string | null; enterprise_id: string | null }) =>
+      p.role !== "ENTERPRISE" ? null : (p.enterprise_id ?? p.id);
+    const masters = [...new Set(lista.map(masterDe).filter((m): m is string => !!m))];
+    const dadosMaster = new Map<string, { nome: string; corPrincipal: string | null }>();
+    if (masters.length) {
+      const { data: ms } = await db.from("profiles").select("id, full_name, white_label_nome").in("id", masters);
+      const temas = await Promise.all(masters.map((m) => temaDoMaster(db, m)));
+      const temaPor = new Map(masters.map((m, i) => [m, temas[i]]));
+      for (const m of (ms ?? []) as { id: string; full_name: string | null; white_label_nome: string | null }[]) {
+        dadosMaster.set(m.id, { nome: nomeDaMarca({ marcaNome: m.white_label_nome, masterNome: m.full_name }), corPrincipal: temaPor.get(m.id)?.cor_principal ?? null });
+      }
+    }
+    const { corDaTarja } = await import("@/lib/enterprise-cor");
+    for (const p of lista) {
+      const m = masterDe(p);
+      const d = m ? dadosMaster.get(m) : null;
+      out.set(p.id, d ? { nome: d.nome, ...corDaTarja(d.corPrincipal), papel: p.enterprise_id ? "equipe" : "master" } : null);
+    }
+  } catch {
+    // tarja é identificação visual: falha aqui nunca derruba a mesa
+  }
+  return out;
+}
+
+/** Acrescenta `enterprise` a cada linha (só chamar para a equipe interna). */
+export async function anexarTarja<T extends Record<string, unknown>>(db: SupabaseClient, linhas: T[], campo = "partner_id"): Promise<(T & { enterprise: TarjaProposta | null })[]> {
+  const mapa = await marcasDosPartners(db, linhas.map((l) => l[campo] as string | null));
+  return linhas.map((l) => ({ ...l, enterprise: mapa.get(l[campo] as string) ?? null }));
+}
