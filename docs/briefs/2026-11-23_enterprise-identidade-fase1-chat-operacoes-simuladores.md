@@ -113,3 +113,7 @@ Rodada 3 de 6 (23/11): LIBERADO, zero falhas. Sugestões aplicadas: referência 
 - QA: LIBERADO na rodada 3 de 6 (23/11/2026)
 - Go: "go" do Hamilton em 23/11/2026, capturado pelo gate (válido até 24/11 00:08 UTC)
 - Migration aplicada em produção: não
+
+## NOTA DE IMPLEMENTAÇÃO (23/11/2026)
+- PDF de checklist (Minhas operações): o cabeçalho desse PDF é escuro (faixa navy), não branco como o BRIEF supôs. Por isso ele usa o logo para fundo escuro (`white_label_logo_url`), convertido em PNG num canvas; sem logo, o nome em texto. Os simuladores (fundo branco) usam o logo claro, como previsto.
+- O código funciona antes da migration: a identidade é lida de forma tolerante e, sem as colunas, sai só com a marca.
