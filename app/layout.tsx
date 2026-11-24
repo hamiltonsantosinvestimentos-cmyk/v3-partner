@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   // Favicon em public/ (não app/favicon.ico): a convenção de arquivo do Next injeta o ícone da raiz
   // antes dos ícones dos layouts filhos, e o Enterprise com tema sairia com dois ícones.
-  icons: { icon: "/favicon.ico" },
+  icons: { icon: "/favicon.ico", apple: "/icon-192.png" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -33,10 +33,6 @@ export default function RootLayout({
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#C9A84C" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="V3 Partners" />
-        <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body className="min-h-full bg-[#09081A]">
         <PWARegister />

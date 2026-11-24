@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
-import { marcaDoHost } from "@/lib/enterprise-marca-host";
+import { marcaDoHost, metadataDaMarca } from "@/lib/enterprise-marca-host";
 import { EsqueciSenhaClient } from "./esqueci-senha-client";
 
 // Domínio próprio de Enterprise: marca resolvida no servidor (BRIEF
 // docs/briefs/2026-11-24_login-enterprise-marca-no-servidor.md).
 export async function generateMetadata(): Promise<Metadata> {
   const { marca, iconeUrl } = await marcaDoHost();
-  if (!marca) return {};
-  return { title: marca.nome, ...(iconeUrl ? { icons: { icon: iconeUrl } } : {}) };
+  return metadataDaMarca(marca, iconeUrl);
 }
 
 export default async function EsqueciSenhaPage() {
