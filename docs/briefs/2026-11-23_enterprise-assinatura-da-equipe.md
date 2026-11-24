@@ -94,3 +94,10 @@ Rodada 2 de 6 (23/11): BLOQUEADO, 1 falha só humana: [VALIDAR COM ROBSON]. Zero
 - Falha aceita pelo Hamilton em 23/11/2026, texto capturado pelo gate: "go mesmo assim: aceito seguir sem o parecer do Robson sobre a V3 registrar e mostrar a cobrança que o Enterprise faz dos usuários dele, sem a V3 receber nada" ([VALIDAR COM ROBSON] aceito; o Robson continua devendo ser consultado).
 - Go: "go mesmo assim" do Hamilton, 23/11/2026 (válido até 24/11 10:22 UTC)
 - Migration aplicada em produção: não
+
+## TESTE DA MIGRATION ANTES DE APLICAR (24/11/2026)
+Rodado pelo Hamilton no SQL Editor de produção (`teste-migration-assinatura-equipe.sql`, bloco com erro proposital, tudo desfeito):
+- Coluna e CHECK criados. CHECK com `cobra=true` e valor 0: recusado (23514).
+- (a) anon lê profiles: 0. (b) usuário da equipe lê o próprio registro: 1; lê a linha do master: 0. (c) master lê a linha do usuário: 0. (d) ADMIN lê: 1.
+- (e) master altera a linha do usuário: 0 linhas afetadas. (f) usuário muda o próprio `pago_ate`: bloqueado (42501). (g) partner V3 lê a linha do usuário: 0.
+Tudo como esperado. Aplicação real: segundo go do Hamilton, antes do merge do PR #425.
