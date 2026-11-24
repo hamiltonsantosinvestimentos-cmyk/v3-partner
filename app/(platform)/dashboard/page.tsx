@@ -3,6 +3,7 @@ import { semAnaliseDoSite } from "@/lib/analise-site";
 import { ehPartnerAccess } from "@/lib/v3-access";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { ehEnterprise } from "@/lib/enterprise-bloqueio";
 import {
   DEMO_DEALS, DEMO_CREDIT_PROPOSALS, DEMO_TICKETS
 } from "@/lib/demo-data";
@@ -460,6 +461,7 @@ export default async function DashboardPage({
     <DashboardClient
       role={role}
       partnerAccess={role === "STARTER" ? await ehPartnerAccess(svc, user.id) : false}
+      esconderVideoV3={ehEnterprise(role)}
       userName={profileData?.full_name || "Usuário"}
       period={period}
       revenueData={revenueData}
