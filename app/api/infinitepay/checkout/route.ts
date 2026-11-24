@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { createCheckoutLink } from "@/lib/infinitepay";
 import { planoLabel } from "@/lib/whatsapp/subscription-messages";
 import { getPlanoValor } from "@/lib/plano-valor";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -12,6 +13,8 @@ function svc() {
 // POST — gera um link de checkout InfinitePay (cartão) para a mensalidade do partner logado,
 // criando a cobrança PENDING na hora se ainda não existir nenhuma
 export async function POST() {
+  // Enterprise é cobrado pelo contrato de Parceria (BRIEF 2026-11-23 assinatura da equipe).
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { CheckCircle2, Clock, AlertCircle, FileText, Wallet, TrendingUp, Crown, Shield, RefreshCw, ArrowUpCircle, Loader2, QrCode, Copy, ExternalLink, CreditCard, MessageSquare, Lock } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
@@ -39,6 +39,10 @@ interface Props {
   profile: Profile;
   contract: Contract | null;
   commissions: Commission[];
+  /** Master Enterprise (BRIEF 2026-11-23 assinatura da equipe): sem trial, sem cobrança/add-on da V3. */
+  enterpriseMaster?: boolean;
+  /** Quadro "Assinatura da equipe", renderizado abaixo do plano. */
+  quadroEquipe?: ReactNode;
 }
 
 const moeda = (v: number) =>
@@ -80,7 +84,7 @@ const COMISSAO_PCT: Record<string, string> = {
   ENTERPRISE: "55%",
 };
 
-export function MinhaAssinaturaClient({ profile, contract, commissions }: Props) {
+export function MinhaAssinaturaClient({ profile, contract, commissions, enterpriseMaster = false, quadroEquipe = null }: Props) {
   const planoLabel = PLANO_LABEL[profile.role] ?? "Partner";
   const comissaoPct = COMISSAO_PCT[profile.role] ?? "35%";
   const partnerValor = moeda(getPlanoValor("PARTNER") / 100);
@@ -106,6 +110,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   const [addonStatus, setAddonStatus] = useState<{ addon_ativo: boolean; addon_solicitado_em: string | null } | null>(null);
 
   useEffect(() => {
+    if (enterpriseMaster) return; // add-on pago da V3 não se aplica ao Enterprise
     fetch("/api/partner/sdr/addon-status")
       .then((r) => r.json())
       .then((d) => setAddonStatus(d))
@@ -117,6 +122,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
   const valorMensal = moeda((subscription?.amount_cents ?? getPlanoValor(profile.role)) / 100);
 
   useEffect(() => {
+    if (enterpriseMaster) return; // Enterprise é cobrado pelo contrato de Parceria, não pela Cora
     fetch("/api/cora/subscription")
       .then(r => r.json())
       .then(d => {
@@ -210,24 +216,26 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
             <div>
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-xl font-bold text-[#F0ECE4]">V3 {planoLabel}</h2>
+                {!enterpriseMaster && (
                 <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${trialStatus.bg} ${trialStatus.color}`}>
                   {trialStatus.icon} {trialStatus.label}
                 </span>
+                )}
               </div>
-              <p className="text-sm text-[#7A8FA8]">{valorMensal}/mês · {comissaoPct} de comissão</p>
+              <p className="text-sm text-[#7A8FA8]">{enterpriseMaster ? `Contrato de Parceria · ${comissaoPct} de comissão` : `${valorMensal}/mês · ${comissaoPct} de comissão`}</p>
             </div>
           </div>
-          <div className="text-right">
+          {!enterpriseMaster && <div className="text-right">
             <p className="text-xs text-[#7A8FA8]">Acesso até</p>
             <p className="text-sm font-bold text-[#F0ECE4]">{dataFmt(expiresDate.toISOString())}</p>
-          </div>
+          </div>}
         </div>
 
         {/* Detalhes do plano */}
         <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3 pt-5 border-t border-[#243A66]">
           {[
             { label: "Plano", value: planoLabel },
-            { label: "Mensalidade", value: valorMensal },
+            { label: "Mensalidade", value: enterpriseMaster ? "Conforme contrato" : valorMensal },
             { label: "Comissão", value: comissaoPct },
             { label: "Membro desde", value: new Date(profile.created_at).toLocaleDateString("pt-BR") },
           ].map(item => (
@@ -239,7 +247,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
         </div>
 
         {/* Ações */}
-        <div className="mt-5 pt-5 border-t border-[#243A66] flex flex-wrap gap-3">
+        {!enterpriseMaster && <div className="mt-5 pt-5 border-t border-[#243A66] flex flex-wrap gap-3">
           {/* Botão renovar — aparece quando faltam ≤ 15 dias */}
           {showRenovar && !confirmRenovar && (
             <button
@@ -261,9 +269,12 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
             </div>
           )}
           {/* Upgrade movido para card de comparação abaixo */}
-        </div>
+        </div>}
       </div>
 
+      {quadroEquipe}
+
+      {!enterpriseMaster && (<>
       {/* Add-ons */}
       <div>
         <p className="text-xs font-bold text-[#C9A84C] uppercase tracking-widest mb-3">Add-ons</p>
@@ -410,6 +421,8 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
         </div>
       )}
 
+      </>)}
+
       {/* Comparativo de planos — apenas para PARTNER (não PRO) */}
       {profile.role === "PARTNER" && (
         <div className="rounded-2xl border border-[#C9A84C]/20 bg-[#C9A84C]/5 p-5">
@@ -526,6 +539,7 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
         </Card>
       )}
 
+      {!enterpriseMaster && (<>
       {/* Histórico de mensalidades Cora */}
       {subHistory.length > 0 && (
         <Card>
@@ -569,6 +583,8 @@ export function MinhaAssinaturaClient({ profile, contract, commissions }: Props)
           </CardContent>
         </Card>
       )}
+
+      </>)}
 
       {/* Histórico de comissões */}
       {commissions.length > 0 && (
