@@ -88,7 +88,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   const dadosLog = {
-    userId: auth.userId, userName: auth.nome, action: "UPDATE" as const, entity: "profiles", entityId: id,
+    userId: auth.userId, userName: auth.nome, action: "UPDATE" as const, entity: "profiles" as const, entityId: id,
     oldData: { enterprise_assinatura: atual }, newData: { enterprise_assinatura: novo, acao, usuario: perfil?.full_name ?? null },
     ipAddress: getClientIp(req),
   };
