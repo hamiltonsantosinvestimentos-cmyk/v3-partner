@@ -10,6 +10,7 @@ import {
   ArrowLeftRight, Pencil, Check, Loader2, DatabaseZap, Clock, TrendingUp, Bot,
   Link2, AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, Handshake, User, StickyNote, Compass,
   GripVertical, RotateCcw,
+  Package,
 } from "lucide-react";
 import { ExportButton } from "@/components/financeiro/export-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +28,8 @@ import { ContratoPanel } from "@/components/ma/contrato-panel";
 import { InvestorMatchPanel } from "@/components/ma/investor-match-panel";
 import { NegociacaoPanel } from "@/components/mesa-ma/negociacao-panel";
 import { DealClientesPanel } from "@/components/mesa-ma/deal-clientes-panel";
+import { CommodityPanel } from "@/components/mesa-ma/commodity-panel";
+import { LADOS, PRODUTOS } from "@/lib/ma/commodity";
 import dynamic from "next/dynamic";
 const DealAnalyticsPanel = dynamic(
   () => import("@/components/ma/deal-analytics-panel").then(m => m.DealAnalyticsPanel),
@@ -124,6 +127,24 @@ const ALL_STAGE_LABELS: Record<string, string> = Object.fromEntries(
 );
 const CLOSED_IDS = ["ganho", "perdido"];
 const CAN_MOVE_ROLES = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"];
+
+// Formulário do Rápido. Pedido de commodity (BRIEF 24/11/2026, bloco A): com a caixa marcada, o valor vem de
+// quantidade x preço por saca, calculado no servidor; o resto do pedido se completa na aba Commodity.
+type NewCardForm = {
+  company: string; sector: string; value: string; currency: CmCurrency; stage: string; responsible: string; notes: string;
+  isCommodity: boolean; lado: string; produto: string; produtoOutro: string; quantidade: string; precoSaca: string;
+};
+const NEW_CARD_VAZIO: NewCardForm = {
+  company: "", sector: "Fintech", value: "", currency: "BRL", stage: "", responsible: "", notes: "",
+  isCommodity: false, lado: "", produto: "", produtoOutro: "", quantidade: "", precoSaca: "",
+};
+function quantidadeSacas(v: string): number { return Number(v.replace(/\D/g, "") || 0); }
+function rapidoValido(c: NewCardForm): boolean {
+  if (!c.company || !c.responsible) return false;
+  if (!c.isCommodity) return !!parseCurrencyBRLInput(c.value);
+  return !!c.lado && !!c.produto && (c.produto !== "OUTRO" || !!c.produtoOutro.trim())
+    && quantidadeSacas(c.quantidade) > 0 && parseCurrencyBRLInput(c.precoSaca) > 0;
+}
 
 
 const SECTORS = ["Fintech", "Real Estate", "Agronegócio", "Varejo", "Logística", "Saúde", "Tecnologia", "Indústria", "Energia", "Outro"];
@@ -402,7 +423,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   const [cards, setCards] = useState<MaCard[]>(initialDeals);
   const [operators, setOperators] = useState<MesaOperator[]>([]);
   const [selectedCard, setSelectedCard] = useState<MaCard | null>(null);
-  const [detailTab, setDetailTab] = useState<"detalhes" | "originacao" | "forja" | "criativos" | "contrato" | "matches" | "negociacao" | "clientes" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan" | "chat-ia" | "notas">("detalhes");
+  const [detailTab, setDetailTab] = useState<"commodity" | "detalhes" | "originacao" | "forja" | "criativos" | "contrato" | "matches" | "negociacao" | "clientes" | "analytics" | "qa" | "doc-requests" | "timeline" | "business-plan" | "chat-ia" | "notas">("detalhes");
   const [showNewCard, setShowNewCard] = useState(false);
   const [showFullForm, setShowFullForm] = useState(false);
   const [showNewOp, setShowNewOp] = useState(false);
@@ -530,7 +551,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   }, []);
 
   // New card form
-  const [newCard, setNewCard] = useState<{ company: string; sector: string; value: string; currency: CmCurrency; stage: string; responsible: string; notes: string }>({ company: "", sector: "Fintech", value: "", currency: "BRL", stage: "", responsible: "", notes: "" });
+  const [newCard, setNewCard] = useState<NewCardForm>(NEW_CARD_VAZIO);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -984,11 +1005,23 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
   };
 
   const handleCreateCard = async () => {
-    if (!newCard.company || !parseCurrencyBRLInput(newCard.value)) return;
+    if (!rapidoValido(newCard)) return;
     const defaultStage = newCard.stage || maStages[0]?.id || "prospeccao";
     setIsCreating(true);
 
     let createdId: string | null = null;
+
+    // Pedido de commodity: o servidor valida e calcula o valor (quantidade x preço por saca).
+    const commodity = newCard.isCommodity
+      ? {
+          lado: newCard.lado,
+          produto: newCard.produto,
+          produto_outro: newCard.produto === "OUTRO" ? newCard.produtoOutro.trim() : null,
+          quantidade_sacas: quantidadeSacas(newCard.quantidade),
+          preco_saca_centavos: Math.round(parseCurrencyBRLInput(newCard.precoSaca) * 100),
+          moeda: newCard.currency === "USD" ? "USD" : "BRL",
+        }
+      : null;
 
     try {
       const res = await fetch("/api/ma-deals", {
@@ -997,7 +1030,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         body: JSON.stringify({
           company: newCard.company,
           sector: newCard.sector,
-          value: parseCurrencyBRLInput(newCard.value),
+          ...(commodity ? { asset_data: { commodity } } : { value: parseCurrencyBRLInput(newCard.value) }),
           currency: newCard.currency,
           notes: newCard.notes,
           responsible: newCard.responsible,
@@ -1006,7 +1039,12 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
       const json = await res.json();
       if (json.card) {
         createdId = json.card.id;
-        setCards(prev => [...prev, { ...json.card, stage: defaultStage }]);
+        setCards(prev => [...prev, { ...json.card, stage: defaultStage, ...(commodity ? { asset_data: { commodity: true } } : {}) }]);
+      } else if (commodity) {
+        // Pedido recusado pelo servidor (ex: valor acima do teto): mostra o motivo e mantém a janela aberta.
+        aviso(json.error ?? "Não foi possível criar a operação.");
+        setIsCreating(false);
+        return;
       }
     } catch {}
 
@@ -1021,7 +1059,9 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
         code: "NÃO SALVO",
         company: newCard.company,
         sector: newCard.sector,
-        value: parseCurrencyBRLInput(newCard.value),
+        value: newCard.isCommodity
+          ? quantidadeSacas(newCard.quantidade) * parseCurrencyBRLInput(newCard.precoSaca)
+          : parseCurrencyBRLInput(newCard.value),
         currency: newCard.currency,
         stage: defaultStage,
         responsible: userName || newCard.responsible,
@@ -1043,7 +1083,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
       }
     }
 
-    setNewCard({ company: "", sector: "Fintech", value: "", currency: "BRL", stage: "", responsible: "", notes: "" });
+    setNewCard(NEW_CARD_VAZIO);
     setPendingFiles([]);
     setIsCreating(false);
     setShowNewCard(false);
@@ -1518,6 +1558,10 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   { id: "doc-requests" as const, label: "Docs", icon: <FileText size={12} /> },
                   { id: "timeline" as const, label: "Timeline", icon: <Clock size={12} /> },
                   { id: "chat-ia" as const, label: "Chat IA", icon: <Bot size={12} /> },
+                  // Pedido de commodity (BRIEF 24/11/2026, bloco A): deals do Agronegócio ou que já têm pedido.
+                  ...(selectedCard.sector === "Agronegócio" || !!selectedCard.asset_data?.commodity
+                    ? [{ id: "commodity" as const, label: "Commodity", icon: <Package size={12} /> }]
+                    : []),
                 ]).map(tab => {
                   const isTimeline = tab.id === "timeline";
                   const unread = isTimeline && selectedCard ? (timelineUnread[selectedCard.id] ?? 0) : 0;
@@ -1751,6 +1795,22 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                   <InvestorMatchPanel
                     dealId={selectedCard.id}
                     dealCode={selectedCard.code}
+                  />
+                </div>
+              );
+            }
+
+            if (detailTab === "commodity") {
+              return (
+                <div className="mt-2">
+                  <CommodityPanel
+                    dealId={selectedCard.id}
+                    onSaved={(value, currency) => {
+                      setCards(prev => prev.map(c => c.id === selectedCard.id
+                        ? { ...c, value, currency, asset_data: { ...(c.asset_data ?? {}), commodity: true } }
+                        : c));
+                      setSelectedCard(prev => prev ? { ...prev, value, currency, asset_data: { ...(prev.asset_data ?? {}), commodity: true } } : prev);
+                    }}
                   />
                 </div>
               );
@@ -2864,9 +2924,11 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
 
       {/* ── NEW CARD MODAL ─────────────────────────────────────── */}
+      {/* Altura máxima e rolagem interna: com o valor por extenso (PR #417) a janela passou da altura de
+          telas menores e o botão "Criar Operação" ficava fora da tela, sem como alcançar (24/11/2026). */}
       <Dialog open={showNewCard} onOpenChange={setShowNewCard}>
         <DialogContent
-          className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-md"
+          className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-md max-h-[90vh] overflow-y-auto"
           onPointerDownOutside={(e) => e.preventDefault()}
         >
           <DialogHeader>
@@ -2904,12 +2966,70 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                 </select>
               </div>
             </div>
-            <MoneyCurrencyField
-              label="Valor Estimado *"
-              value={newCard.value}
-              currency={newCard.currency}
-              onChange={(v, c) => setNewCard(p => ({ ...p, value: v, currency: c }))}
-            />
+            {/* Pedido de commodity (BRIEF 24/11/2026, bloco A) */}
+            <label className="flex items-start gap-2 rounded-lg border border-[#243A66] bg-[#13223A] px-3 py-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={newCard.isCommodity}
+                onChange={e => setNewCard(p => ({ ...p, isCommodity: e.target.checked, ...(e.target.checked ? { sector: "Agronegócio" } : {}) }))}
+                className="mt-0.5 accent-[#C9A84C]"
+              />
+              <span>
+                <span className="block text-xs font-bold text-[#F5F1E8]">Pedido de commodity</span>
+                <span className="block text-[11px] text-[#9BAFC5]">Milho, soja, café. O valor sai de quantidade × preço por saca; o resto do pedido se completa na aba Commodity do deal.</span>
+              </span>
+            </label>
+            {newCard.isCommodity ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-[#9BAFC5] mb-1.5 block" htmlFor="rapido-lado">Lado *</label>
+                    <select id="rapido-lado" value={newCard.lado} onChange={e => setNewCard(p => ({ ...p, lado: e.target.value }))}
+                      className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C]">
+                      <option value="">Selecione</option>
+                      {LADOS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#9BAFC5] mb-1.5 block" htmlFor="rapido-produto">Produto *</label>
+                    <select id="rapido-produto" value={newCard.produto} onChange={e => setNewCard(p => ({ ...p, produto: e.target.value }))}
+                      className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 focus:outline-none focus:border-[#C9A84C]">
+                      <option value="">Selecione</option>
+                      {PRODUTOS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {newCard.produto === "OUTRO" && (
+                  <input value={newCard.produtoOutro} maxLength={60} onChange={e => setNewCard(p => ({ ...p, produtoOutro: e.target.value }))}
+                    placeholder="Qual produto? (sem nome de empresa, CPF ou CNPJ)"
+                    className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#9BAFC5] focus:outline-none focus:border-[#C9A84C]" />
+                )}
+                <div>
+                  <label className="text-xs text-[#9BAFC5] mb-1.5 block" htmlFor="rapido-qtd">Quantidade (sacas) *</label>
+                  <input id="rapido-qtd" inputMode="numeric" value={newCard.quantidade} placeholder="Ex: 300.000"
+                    onChange={e => { const d = e.target.value.replace(/\D/g, "").slice(0, 8); setNewCard(p => ({ ...p, quantidade: d ? Number(d).toLocaleString("pt-BR") : "" })); }}
+                    className="w-full rounded-lg border border-[#122036] bg-[#0F1E35] text-[#E8EDF5] text-sm px-3 py-2.5 placeholder:text-[#9BAFC5] focus:outline-none focus:border-[#C9A84C]" />
+                </div>
+                <MoneyCurrencyField
+                  label="Preço por saca *"
+                  value={newCard.precoSaca}
+                  currency={newCard.currency}
+                  onChange={(v, c) => setNewCard(p => ({ ...p, precoSaca: v, currency: c }))}
+                />
+                {quantidadeSacas(newCard.quantidade) > 0 && parseCurrencyBRLInput(newCard.precoSaca) > 0 && (
+                  <p className="text-xs text-[#9BAFC5]">
+                    Valor total estimado: <span className="font-bold text-[#C9A84C]">{formatMoney(quantidadeSacas(newCard.quantidade) * parseCurrencyBRLInput(newCard.precoSaca), newCard.currency)}</span>
+                  </p>
+                )}
+              </div>
+            ) : (
+              <MoneyCurrencyField
+                label="Valor Estimado *"
+                value={newCard.value}
+                currency={newCard.currency}
+                onChange={(v, c) => setNewCard(p => ({ ...p, value: v, currency: c }))}
+              />
+            )}
             <div>
               <label className="text-xs text-[#7A8FA8] mb-1.5 block">Responsável *</label>
               <input
@@ -2974,7 +3094,7 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
               </button>
               <button
                 onClick={handleCreateCard}
-                disabled={!newCard.company || !parseCurrencyBRLInput(newCard.value) || !newCard.responsible || isCreating}
+                disabled={!rapidoValido(newCard) || isCreating}
                 className="flex-1 rounded-lg bg-[#C9A84C] text-[#09081A] text-sm font-semibold py-2.5 hover:bg-[#E8C97A] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isCreating ? (
