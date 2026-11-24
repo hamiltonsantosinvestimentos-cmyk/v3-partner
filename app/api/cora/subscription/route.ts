@@ -4,6 +4,7 @@ import { createClient as sc } from "@supabase/supabase-js";
 import { coraFetch } from "@/lib/cora";
 import { randomUUID } from "crypto";
 import { getPlanoValor } from "@/lib/plano-valor";
+import { bloqueioEnterprise } from "@/lib/enterprise-bloqueio";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -11,6 +12,8 @@ function svc() {
 
 // GET — retorna cobrança vigente + histórico do partner
 export async function GET() {
+  // Enterprise é cobrado pelo contrato de Parceria (BRIEF 2026-11-23 assinatura da equipe).
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -28,6 +31,8 @@ export async function GET() {
 
 // POST — gera nova cobrança mensal para o partner
 export async function POST(req: NextRequest) {
+  // Enterprise é cobrado pelo contrato de Parceria (BRIEF 2026-11-23 assinatura da equipe).
+  { const bloqueio = await bloqueioEnterprise(); if (bloqueio) return bloqueio; }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
