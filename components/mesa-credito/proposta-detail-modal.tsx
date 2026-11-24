@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCurrency, formatDate, maskCurrencyBRLInput, maskTelefoneCredito, parseCurrencyBRLInput, telefoneCreditoParaSalvar, valorBRLParaNumero, valorParaCampoBRL } from "@/lib/utils";
+import { formatCurrency, formatDate, maskTelefoneCredito, parseCurrencyBRLInput, telefoneCreditoParaSalvar, valorBRLParaNumero, valorParaCampoBRL } from "@/lib/utils";
+import { MoneyInput, MoneyHint } from "@/components/shared/money-input";
 import { STATUS_LABELS, STATUS_COLORS, PLAN_COMMISSION_PCT, ROLE_LABELS, type OperationStatus, type UserRole } from "@/lib/constants";
 import { uploadCreditDocument } from "@/lib/credit-documents/upload";
 import { CHECKLISTS, DEFAULT_CHECKLIST } from "./nova-proposta-modal";
@@ -6037,9 +6038,10 @@ function ECurrencyField({ label, value, onChange }: {
       <label className="block text-xs font-semibold text-muted-foreground mb-1.5">{label}</label>
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground select-none pointer-events-none">R$</span>
-        <input type="text" inputMode="numeric" value={value} onChange={(e) => onChange(maskCurrencyBRLInput(e.target.value))} placeholder="0,00"
+        <MoneyInput value={value} onValueChange={onChange} hint={false} placeholder="0,00"
           className="w-full h-9 pl-8 pr-3 text-sm bg-secondary border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
       </div>
+      <MoneyHint value={value} />
     </div>
   );
 }

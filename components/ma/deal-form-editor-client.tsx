@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { Pencil, X, Check, Loader2, ChevronDown, ChevronUp } from "lucide-react";
-import { asCurrency, maskCurrencyBRLInput, parseCurrencyBRLInput, normalizeMoneyText, formatCurrencyBRLFromNumber, MA_CURRENCY_PREFIX, type CmCurrency } from "@/lib/utils";
+import { asCurrency, parseCurrencyBRLInput, normalizeMoneyText, formatCurrencyBRLFromNumber, MA_CURRENCY_PREFIX, type CmCurrency } from "@/lib/utils";
 import { MoneyCurrencyField } from "@/components/ma/deal-money";
+import { MoneyInput, MONEY_SUPPORT_TEXT } from "@/components/shared/money-input";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -341,7 +342,7 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
                   />
                   <div>
                     <label className={labelCls}>Dívida Total ({MA_CURRENCY_PREFIX[currency]})</label>
-                    <input value={s3.divida_total} onChange={e => setS3(p => ({ ...p, divida_total: maskCurrencyBRLInput(e.target.value) }))} inputMode="decimal" className={inputCls} placeholder="0,00" />
+                    <MoneyInput value={s3.divida_total} onValueChange={m => setS3(p => ({ ...p, divida_total: m }))} currency={currency} className={inputCls} placeholder="0,00" />
                   </div>
                 </div>
                 {/* Tabela de receita / ebitda / lucro */}
@@ -363,10 +364,10 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
                           <td className="pr-2 py-1 font-medium text-[#F0ECE4] text-[10px] uppercase tracking-wide">{row.label}</td>
                           {row.keys.map(k => (
                             <td key={k} className="px-1 py-1">
-                              <input
+                              <MoneyInput
                                 value={s3[k]}
-                                onChange={e => setS3(p => ({ ...p, [k]: maskCurrencyBRLInput(e.target.value) }))}
-                                inputMode="decimal"
+                                onValueChange={m => setS3(p => ({ ...p, [k]: m }))}
+                                hint={false}
                                 className="w-full rounded border border-[#243A66] bg-[#111F35] text-[#F0ECE4] text-xs px-2 py-1 focus:outline-none focus:ring-1 focus:ring-[#C9A84C]/50 placeholder:text-[#7A8FA8]"
                                 placeholder="0,00"
                               />
@@ -376,6 +377,7 @@ export function DealFormEditorClient({ dealId, dealData, onSaved, compact = fals
                       ))}
                     </tbody>
                   </table>
+                <p className="mt-1 text-[11px] leading-snug text-[#9BAFC5]">{MONEY_SUPPORT_TEXT}</p>
                 </div>
               </div>
             )}

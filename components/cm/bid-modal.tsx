@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { X, Loader2, Send } from "lucide-react";
-import { maskCurrencyInput, parseCurrencyBRLInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
+import { formatCurrencyFromNumber, parseCurrencyBRLInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
+import { MoneyInput, MoneyHint } from "@/components/shared/money-input";
 
 interface BidModalProps {
   listing: {
@@ -54,7 +55,7 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
     setDesagio(val);
     if (val) {
       const custo = listing.valor_face * (1 - Number(val) / 100);
-      setBidValue(maskCurrencyInput(String(Math.round(custo * 100)), currency));
+      setBidValue(formatCurrencyFromNumber(custo, currency));
     }
   };
 
@@ -128,13 +129,15 @@ export function BidModal({ listing, onClose, onSuccess }: BidModalProps) {
             <label className="block text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-1">Valor da Oferta ({symbol})</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#9BAFC5]">{symbol}</span>
-              <input
-                inputMode="numeric" value={bidValue}
-                onChange={(e) => setBidValue(maskCurrencyInput(e.target.value, currency))}
+              <MoneyInput
+                value={bidValue} currency={currency}
+                onValueChange={setBidValue}
+                hint={false}
                 placeholder="0,00"
                 className="w-full bg-[#162744] border border-[#C9A84C]/30 rounded-md pl-8 pr-3 py-2 text-sm text-[#F5F1E8] font-bold placeholder:text-[#9BAFC5]/40"
               />
             </div>
+            <MoneyHint value={bidValue} currency={currency} />
           </div>
           <div>
             <label className="block text-[10px] text-[#C9A84C] font-bold uppercase tracking-wider mb-1">TIR Pretendida (% a.a.)</label>

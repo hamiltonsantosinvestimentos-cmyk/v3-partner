@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { BadgeCheck, Loader2, Send } from "lucide-react";
-import { maskCurrencyBRLInput, parseCurrencyBRLInput, valorParaCampoBRL } from "@/lib/utils";
+import { parseCurrencyBRLInput, valorParaCampoBRL } from "@/lib/utils";
+import { MoneyInput } from "@/components/shared/money-input";
 import {
   avisosPreAprovacao, brl, dataHoraBR, mascararEmail, proximaEtapaTexto, rotuloRenda, validarPreAprovacao,
   ROTULO_RENDA_NECESSARIA, type PreAprovacaoDados, type PreAprovacaoRegistro,
@@ -115,8 +116,8 @@ export function PreAprovacaoPanel({ proposalId, clientEmail, partnerName, hasPar
             {CAMPOS.map((c) => (
               <label key={c.k} className="space-y-1">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#7A8FA8]">{c.label}</span>
-                <input inputMode="numeric" className={input} placeholder="R$ 0,00" value={valores[c.k] ? `R$ ${valores[c.k]}` : ""}
-                  onChange={(e) => setValores((v) => ({ ...v, [c.k]: maskCurrencyBRLInput(e.target.value) }))} />
+                <MoneyInput className={input} placeholder="R$ 0,00" value={valores[c.k] ?? ""}
+                  onValueChange={(m) => setValores((v) => ({ ...v, [c.k]: m }))} />
               </label>
             ))}
           </div>

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { CheckCircle2, ChevronRight, ChevronLeft, Loader2, Shield, Save } from "lucide-react";
-import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, isValidCpfCnpj, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
+import { maskCpfCnpjInput, maskPhoneInput, isValidEmail, isValidCpfCnpj, parseCurrencyBRLInput, formatCurrencyBRLFromNumber } from "@/lib/utils";
+import { MoneyInput } from "@/components/shared/money-input";
 import { UFS, fetchMunicipios } from "@/lib/br-locations";
 import { fetchCep, buildEnderecoFromCep, formatCepMask } from "@/lib/viacep";
 import { Plus, Trash2 } from "lucide-react";
@@ -546,11 +547,11 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className={labelClass}>Valor de Face (R$) *</label>
-                <input inputMode="numeric" className={inputClass} value={form.valor_face} onChange={(e) => upd("valor_face", maskCurrencyBRLInput(e.target.value))} placeholder="0,00" />
+                <MoneyInput className={inputClass} value={form.valor_face} onValueChange={(v) => upd("valor_face", v)} placeholder="0,00" />
               </div>
               <div>
                 <label className={labelClass}>Valor Atualizado (R$)</label>
-                <input inputMode="numeric" className={inputClass} value={form.valor_atualizado} onChange={(e) => upd("valor_atualizado", maskCurrencyBRLInput(e.target.value))} placeholder="Se diferente do face" />
+                <MoneyInput className={inputClass} value={form.valor_atualizado} onValueChange={(v) => upd("valor_atualizado", v)} placeholder="Se diferente do face" />
               </div>
               <div>
                 <label className={labelClass}>Deságio Pretendido (%)</label>
@@ -567,7 +568,7 @@ export function IntakeWizard({ token, prefill, anonymousId }: IntakeWizardProps)
               {form.allows_tranching && (
                 <div>
                   <label className={labelClass}>Valor Mínimo por Fração (R$)</label>
-                  <input inputMode="numeric" className={inputClass} value={form.tranche_valor_minimo} onChange={(e) => upd("tranche_valor_minimo", maskCurrencyBRLInput(e.target.value))} placeholder="0,00" />
+                  <MoneyInput className={inputClass} value={form.tranche_valor_minimo} onValueChange={(v) => upd("tranche_valor_minimo", v)} placeholder="0,00" />
                 </div>
               )}
             </div>

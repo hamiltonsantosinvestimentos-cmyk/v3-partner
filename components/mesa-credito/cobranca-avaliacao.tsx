@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Receipt, Plus, FileDown, Trash2, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmar } from "@/lib/aviso";
-import { formatCurrency, maskCurrencyBRLInput, parseCurrencyBRLInput } from "@/lib/utils";
+import { formatCurrency, parseCurrencyBRLInput } from "@/lib/utils";
+import { MoneyInput } from "@/components/shared/money-input";
 import { dataBR, somarDiasUteis } from "@/lib/cobranca-mandato";
 import {
   BANCOS, DESCRICAO_PADRAO, ROTULO_PIX, formatarChavePix, validarContaRecebimento, type CobrancaAvaliacao, type TipoChavePix,
@@ -203,7 +204,7 @@ export function CobrancaAvaliacaoEngenharia({ proposalId, canEdit, etapaAtual, i
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Valor da avaliação *</label>
-              <input value={valor} onChange={(e) => setValor(maskCurrencyBRLInput(e.target.value))} placeholder="0,00" inputMode="numeric" className={INPUT} autoFocus />
+              <MoneyInput value={valor} onValueChange={setValor} placeholder="0,00" className={INPUT} autoFocus />
             </div>
             <div>
               <label className="block text-[10px] font-semibold text-muted-foreground mb-1">Vencimento *</label>

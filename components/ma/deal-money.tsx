@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { RefreshCw, Info } from "lucide-react";
 import {
-  asCurrency, formatMoney, maskCurrencyBRLInput, parseCurrencyBRLInput,
+  asCurrency, formatMoney, parseCurrencyBRLInput,
   MA_CURRENCY_PREFIX, type CmCurrency,
 } from "@/lib/utils";
 import { valorPorExtenso } from "@/lib/utils/valor-extenso";
+import {
+  MoneyInput, MONEY_SUPPORT_TEXT, MONEY_WARN_TEXT, MONEY_WARN_ABOVE, MONEY_NOTA_PORQUE,
+} from "@/components/shared/money-input";
 
 /** Moedas oferecidas no interruptor da Mesa M&A. */
 const SWITCH_CURRENCIES: CmCurrency[] = ["BRL", "USD"];
@@ -15,7 +18,7 @@ const NOTA_PORQUE =
   "Escolha a moeda em que o ativo é ofertado. O valor digitado fica sempre na moeda escolhida " +
   "(nada é convertido sozinho). O texto por extenso é gerado a partir do valor para você conferir " +
   "o que está sendo cadastrado antes de salvar. Se a moeda for dólar, use o botão Atualizar câmbio " +
-  "no card para ver o equivalente em reais pela cotação do dia (PTAX do Banco Central).";
+  "no card para ver o equivalente em reais pela cotação do dia (PTAX do Banco Central). " + MONEY_NOTA_PORQUE;
 
 /**
  * Campo de valor com interruptor de moeda (R$ / US$), máscara brasileira e valor por extenso.
@@ -71,14 +74,18 @@ export function MoneyCurrencyField({
       {nota && <p className="text-[11px] leading-snug text-[#9BAFC5] mb-2 rounded-lg bg-[#162744] border border-[#243A66] p-2">{NOTA_PORQUE}</p>}
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#C9A84C]">{MA_CURRENCY_PREFIX[currency]}</span>
-        <input
+        <MoneyInput
           value={value}
-          onChange={e => onChange(maskCurrencyBRLInput(e.target.value), currency)}
-          inputMode="decimal"
+          onValueChange={m => onChange(m, currency)}
+          hint={false}
           placeholder="0,00"
           className={`w-full ${h} rounded-lg border bg-[#162744] ${currency === "BRL" ? "pl-9" : "pl-11"} pr-3 text-sm text-[#F5F1E8] placeholder:text-[#9BAFC5] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition ${error ? "border-red-500/60" : "border-[#243A66]"}`}
         />
       </div>
+      <p className="mt-1 text-[11px] leading-snug text-[#9BAFC5]">{MONEY_SUPPORT_TEXT}</p>
+      {numero > MONEY_WARN_ABOVE && (
+        <p role="status" className="mt-1 text-[11px] font-bold leading-snug text-[#E8C97A]">{MONEY_WARN_TEXT}</p>
+      )}
       <div className="mt-2">
         <span className="block text-[11px] text-[#9BAFC5] mb-1">Valor por extenso</span>
         <p

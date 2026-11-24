@@ -12,7 +12,8 @@ import {
   ToggleLeft, ToggleRight, Save, Download, ExternalLink, Trash2, X,
   FileSignature, CalendarClock, XCircle, Flame,
 } from "lucide-react";
-import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, maskCurrencyBRLInput, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, maskCurrencyInput, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
+import { cn, maskCpfCnpjInput, maskPhoneInput, isValidEmail, parseCurrencyBRLInput, formatCurrencyBRLFromNumber, CM_CURRENCY_SYMBOL, type CmCurrency } from "@/lib/utils";
+import { MoneyInput } from "@/components/shared/money-input";
 import { AssetAssistant } from "./asset-assistant";
 import { DueDiligencePanel } from "./due-diligence-panel";
 import { CommissionCalculatorPanel } from "./commission-calculator-panel";
@@ -2178,13 +2179,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Valor de Face ({CM_CURRENCY_SYMBOL[manualForm.currency]}) *</label>
-                  <input inputMode="numeric" value={manualForm.valor_face} onChange={(e) => setManualForm((f) => ({ ...f, valor_face: maskCurrencyInput(e.target.value, f.currency) }))}
+                  <MoneyInput value={manualForm.valor_face} currency={manualForm.currency} onValueChange={(v) => setManualForm((f) => ({ ...f, valor_face: v }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Atualizado ({CM_CURRENCY_SYMBOL[manualForm.currency]})</label>
-                  <input inputMode="numeric" value={manualForm.valor_atualizado} onChange={(e) => setManualForm((f) => ({ ...f, valor_atualizado: maskCurrencyInput(e.target.value, f.currency) }))}
+                  <MoneyInput value={manualForm.valor_atualizado} currency={manualForm.currency} onValueChange={(v) => setManualForm((f) => ({ ...f, valor_atualizado: v }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
@@ -2244,7 +2245,7 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               {manualForm.allows_tranching && (
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Valor Mínimo por Fração ({CM_CURRENCY_SYMBOL[manualForm.currency]})</label>
-                  <input inputMode="numeric" value={manualForm.tranche_valor_minimo} onChange={(e) => setManualForm((f) => ({ ...f, tranche_valor_minimo: maskCurrencyInput(e.target.value, f.currency) }))}
+                  <MoneyInput value={manualForm.tranche_valor_minimo} currency={manualForm.currency} onValueChange={(v) => setManualForm((f) => ({ ...f, tranche_valor_minimo: v }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
@@ -2589,13 +2590,13 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Ticket Mín. (R$)</label>
-                  <input inputMode="numeric" value={manualBuyerForm.ticket_min} onChange={(e) => setManualBuyerForm((f) => ({ ...f, ticket_min: maskCurrencyBRLInput(e.target.value) }))}
+                  <MoneyInput value={manualBuyerForm.ticket_min} onValueChange={(v) => setManualBuyerForm((f) => ({ ...f, ticket_min: v }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Ticket Máx. (R$)</label>
-                  <input inputMode="numeric" value={manualBuyerForm.ticket_max} onChange={(e) => setManualBuyerForm((f) => ({ ...f, ticket_max: maskCurrencyBRLInput(e.target.value) }))}
+                  <MoneyInput value={manualBuyerForm.ticket_max} onValueChange={(v) => setManualBuyerForm((f) => ({ ...f, ticket_max: v }))}
                     placeholder="0,00"
                     className="w-full bg-[#12112A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1" />
                 </div>
@@ -4209,8 +4210,8 @@ export function MesaCapitaisClient({ userRole = "GESTAO", hasComplianceAccess = 
               <div className="bg-[#12112A] border border-[#9BAFC5]/10 rounded-lg p-3 space-y-3">
                 <div>
                   <label className="text-[9px] text-[#9BAFC5] uppercase">Ask Price Floor (R$)</label>
-                  <input
-                    inputMode="numeric" value={askPriceFloor} onChange={(e) => setAskPriceFloor(maskCurrencyBRLInput(e.target.value))}
+                  <MoneyInput
+                    value={askPriceFloor} onValueChange={setAskPriceFloor}
                     placeholder="0,00"
                     className="w-full bg-[#09081A] border border-[#9BAFC5]/15 rounded px-3 py-2 text-xs text-[#F5F1E8] mt-1 focus:border-[#C9A84C]/50 focus:outline-none"
                   />

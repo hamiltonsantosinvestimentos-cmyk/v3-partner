@@ -179,19 +179,58 @@ export function isValidCpfCnpj(value: string): boolean {
   return false;
 }
 
-/** Mascara monetaria em Reais em tempo real (estilo maquineta: digita da direita pra esquerda). Ex: "1234567" digitado vira "12.345,67". */
+/**
+ * Mascara monetaria UNICA da plataforma (padrao de 22/11/2026, decisao do Joao): REAIS INTEIROS.
+ * Os digitos digitados sao reais, com ponto de milhar; a virgula inicia os centavos (max 2 casas).
+ * Ex: "50000000" vira "50.000.000"; "50000000,5" vira "50.000.000,5". Antes era "maquineta" em
+ * centavos ("50000000" virava "500.000,00"), o que causava erro de 100x na digitacao.
+ * Ponto digitado e sempre separador de milhar (nunca decimal); sinal e qualquer outro caractere sao ignorados;
+ * zeros a esquerda caem ("007" vira "7"); a terceira casa decimal e descartada.
+ */
 export function maskCurrencyBRLInput(value: string): string {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) return "";
-  const cents = parseInt(digits, 10);
-  return (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const s = value.replace(/[^\d,]/g, "");
+  if (!s) return "";
+  const i = s.indexOf(",");
+  let int = (i === -1 ? s : s.slice(0, i)).replace(/^0+(?=\d)/, "");
+  if (int === "") int = "0";
+  const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  if (i === -1) return grouped;
+  return `${grouped},${s.slice(i + 1).replace(/,/g, "").slice(0, 2)}`;
 }
 
-/** Converte o valor exibido por maskCurrencyBRLInput de volta para number (reais, nao centavos). */
+/**
+ * Converte o texto de um campo monetario para number (em reais, nao centavos).
+ * Le o formato novo ("50.000.000", "50.000.000,5") E o antigo ("500.000,00"), entao rascunhos
+ * guardados no navegador em formato antigo nao mudam de valor. Vazio ou invalido devolve 0.
+ */
 export function parseCurrencyBRLInput(value: string): number {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) return 0;
-  return parseInt(digits, 10) / 100;
+  const s = value.replace(/[^\d,]/g, "");
+  if (!s) return 0;
+  const i = s.indexOf(",");
+  const int = (i === -1 ? s : s.slice(0, i)) || "0";
+  const dec = i === -1 ? "" : s.slice(i + 1).replace(/,/g, "").slice(0, 2);
+  return Number(`${int}.${(dec + "00").slice(0, 2)}`);
+}
+
+/**
+ * Colagem em campo monetario: o padrao en-US exato ("50000000.00", "1234.5": digitos, UM ponto,
+ * 1 ou 2 digitos finais, sem virgula) vira virgula decimal antes da mascara. Qualquer outro texto
+ * segue a regra brasileira (ponto = milhar; "1.234" colado continua 1234). Digitar nunca passa aqui.
+ */
+export function normalizePastedMoney(text: string): string {
+  const t = text.trim();
+  return /^\d+\.\d{1,2}$/.test(t) ? t.replace(".", ",") : t;
+}
+
+/**
+ * Ao sair do campo: completa os centavos ("50.000.000" vira "50.000.000,00"; "50.000.000,5" vira
+ * "50.000.000,50"). Valor zero vira vazio (zero nao e valor: campo opcional fica sem dado, obrigatorio
+ * continua sendo recusado por "maior que zero").
+ */
+export function completeMoneyOnBlur(value: string): string {
+  const n = parseCurrencyBRLInput(value);
+  if (!n) return "";
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /**
@@ -230,20 +269,19 @@ export function formatCurrencyBRLFromNumber(value: number | null | undefined): s
 export type CmCurrency = "BRL" | "USD" | "EUR";
 
 export const CM_CURRENCY_SYMBOL: Record<CmCurrency, string> = { BRL: "R$", USD: "$", EUR: "€" };
-const CM_CURRENCY_LOCALE: Record<CmCurrency, string> = { BRL: "pt-BR", USD: "en-US", EUR: "en-US" };
 
 /** Mesma logica de maskCurrencyBRLInput, mas parametrizada por moeda (separador decimal/milhar muda entre BRL e USD/EUR). */
-export function maskCurrencyInput(value: string, currency: CmCurrency = "BRL"): string {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) return "";
-  const cents = parseInt(digits, 10);
-  return (cents / 100).toLocaleString(CM_CURRENCY_LOCALE[currency], { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export function maskCurrencyInput(value: string, _currency: CmCurrency = "BRL"): string {
+  // Padrao unico (22/11/2026): BRL, USD e EUR usam ponto de milhar e virgula decimal, em reais inteiros.
+  void _currency; // assinatura mantida para os chamadores; a moeda nao muda mais a mascara
+  return maskCurrencyBRLInput(value);
 }
 
 /** Formata um number vindo do banco no padrao visual de maskCurrencyInput, para popular campo mascarado ja existente. */
-export function formatCurrencyFromNumber(value: number | null | undefined, currency: CmCurrency = "BRL"): string {
+export function formatCurrencyFromNumber(value: number | null | undefined, _currency: CmCurrency = "BRL"): string {
+  void _currency; // assinatura mantida; BRL, USD e EUR usam o mesmo padrao visual pt-BR
   if (value === null || value === undefined || Number.isNaN(value)) return "";
-  return value.toLocaleString(CM_CURRENCY_LOCALE[currency], { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 /** Símbolo exibido na Mesa M&A. Padrão visual único: separadores brasileiros (milhar ponto, decimal vírgula) em qualquer moeda. */

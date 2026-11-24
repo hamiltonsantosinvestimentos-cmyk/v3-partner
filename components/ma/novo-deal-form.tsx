@@ -8,7 +8,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { maskCurrencyBRLInput, parseCurrencyBRLInput, asCurrency, MA_CURRENCY_PREFIX, type CmCurrency } from "@/lib/utils";
+import { parseCurrencyBRLInput, asCurrency, formatMoney, MA_CURRENCY_PREFIX, type CmCurrency } from "@/lib/utils";
+import { MoneyInput as MoneyInputPadrao, MoneyHint } from "@/components/shared/money-input";
 import { MoneyCurrencyField } from "@/components/ma/deal-money";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -244,14 +245,16 @@ function MoneyInput({ label, name, watch, setValue, placeholder = "0,00", error 
     <FieldGroup label={label}>
       <div className="relative">
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#C9A84C]">{prefixo}</span>
-        <input
+        <MoneyInputPadrao
           value={value}
-          onChange={e => setValue(name, maskCurrencyBRLInput(e.target.value) as FormData[typeof name], { shouldValidate: true })}
-          inputMode="decimal"
+          onValueChange={m => setValue(name, m as FormData[typeof name], { shouldValidate: true })}
+          hint={false}
+          currency={asCurrency(watch("currency"))}
           placeholder={placeholder}
           className={`w-full h-9 rounded-lg border bg-[#162744] ${prefixo.length > 2 ? "pl-11" : "pl-9"} pr-3 text-sm text-[#F0ECE4] placeholder:text-[#7A8FA8] focus:outline-none focus:ring-2 focus:ring-[#C9A84C]/50 transition ${error ? "border-red-500/60" : "border-[#243A66]"}`}
         />
       </div>
+      <MoneyHint value={value} currency={asCurrency(watch("currency"))} />
       {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
     </FieldGroup>
   );
@@ -920,7 +923,7 @@ export function NovoDealForm({ isDemo, userId, onSuccess, onCancel }: NovoDealFo
                 ["Setor", watch("sector")],
                 ["Tipo", watch("deal_type")],
                 ["Localização", watch("location")],
-                ["Valor Pretendido", watch("deal_value") ? `${MA_CURRENCY_PREFIX[asCurrency(watch("currency"))]} ${watch("deal_value")}` : "—"],
+                ["Valor Pretendido", parseCurrencyBRLInput(watch("deal_value") ?? "") > 0 ? formatMoney(parseCurrencyBRLInput(watch("deal_value") ?? ""), asCurrency(watch("currency"))) : "—"],
                 ["Processos", watch("tem_processos") === "sim" ? "Sim" : "Não"],
               ].map(([k, v]) => (
                 <div key={k}>
