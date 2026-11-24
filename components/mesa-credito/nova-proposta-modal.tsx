@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { filtrarChecklistPorImovel, garantiaPelasZonas, type ImovelGarantia } from "@/lib/checklist-imovel";
 import {
   X, User, Building2, FileText, Upload, CheckCircle2, Circle,
@@ -302,6 +303,14 @@ interface NovaPropostaModalProps {
   // pode originar as 4 linhas da família Home Equity. A trava real é no
   // POST /api/credit-proposals — aqui é só a UI.
   restrictLines?: readonly string[];
+}
+
+// Portal direto no <body>: páginas com `animate-fade-in` (transform com `forwards`) prendiam o
+// `fixed inset-0` à área da página e a janela abria cortada (BRIEF
+// docs/briefs/2026-11-24_nova-proposta-modal-tela-inteira.md).
+function noBody(conteudo: React.ReactNode) {
+  if (typeof document === "undefined") return null;
+  return createPortal(conteudo, document.body);
 }
 
 export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId, onSubmit, restrictLines }: NovaPropostaModalProps) {
@@ -722,7 +731,7 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
   ];
 
   if (submitted) {
-    return (
+    return noBody(
       <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-6 bg-black/60 backdrop-blur-sm overflow-y-auto">
         <div className="bg-card border border-border rounded-2xl p-8 max-w-lg w-full animate-fade-in">
           <div className="text-center mb-5">
@@ -775,9 +784,9 @@ export function NovaPropostaModal({ open, onClose, level, partnerName, partnerId
     );
   }
 
-  return (
+  return noBody(
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-6 bg-black/60 backdrop-blur-sm overflow-y-auto">
-      <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[92vh] flex flex-col animate-fade-in">
+      <div className="bg-card border border-border rounded-2xl w-full max-w-4xl max-h-[calc(100vh-3rem)] flex flex-col animate-fade-in">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
