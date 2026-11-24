@@ -2864,9 +2864,11 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
 
 
       {/* ── NEW CARD MODAL ─────────────────────────────────────── */}
+      {/* Altura máxima e rolagem interna: com o valor por extenso (PR #417) a janela passou da altura de
+          telas menores e o botão "Criar Operação" ficava fora da tela, sem como alcançar (24/11/2026). */}
       <Dialog open={showNewCard} onOpenChange={setShowNewCard}>
         <DialogContent
-          className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-md"
+          className="bg-[#091221] border border-[#122036] text-[#E8EDF5] max-w-md max-h-[90vh] overflow-y-auto"
           onPointerDownOutside={(e) => e.preventDefault()}
         >
           <DialogHeader>
