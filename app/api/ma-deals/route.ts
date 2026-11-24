@@ -15,6 +15,10 @@ import {
   dbStageLabel, lossCategoryLabel, crossesCreditGate, WORKING_DB_STAGES, CLOSED_DB_STAGES,
   type TransitionKind,
 } from "@/lib/ma/pipeline";
+import { filtrarDealParaPerfil, montarPedido, preservarCommodity, totalEmUnidades } from "@/lib/ma/commodity";
+
+// Pedido de commodity (BRIEF 2026-11-24, bloco A): só ADMIN, GESTAO e MESA mandam o pedido na criação.
+const PAPEIS_CRIAM_COMMODITY = ["ADMIN", "GESTAO", "MESA"];
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -90,9 +94,11 @@ const patchSchema = z.object({
 const DEAL_SELECT = `
   id, code, title, target_company, sector, deal_value, currency, fx_rate_brl, fx_rate_date, fx_rate_source, ebitda_multiple,
   stage, probability_percent, expected_close_date, created_at, updated_at,
-  notes, comments, assigned_to, created_by, asset_data, location,
+  notes, comments, assigned_to, created_by, originator_profile_id, asset_data, location,
   partner:profiles!assigned_to(id, full_name)
 `;
+// originator_profile_id entra no select só para decidir o recorte do pedido de commodity; ao perfil
+// não equipe ele sai da resposta em filtrarDealParaPerfil (lib/ma/commodity.ts).
 
 // Campos de encerramento só para a Mesa (ADMIN, GESTAO, MESA_OPERACIONAL), nunca para partner.
 const DEAL_SELECT_MESA = `${DEAL_SELECT},
@@ -123,7 +129,7 @@ export async function GET(req: NextRequest) {
       const [comTransf] = await anexarTransferencias(svc, [data as unknown as { id: string }]);
       return NextResponse.json({ deal: { ...(data as object), transferencias: comTransf.transferencias } });
     }
-    return NextResponse.json({ deal: data });
+    return NextResponse.json({ deal: data ? filtrarDealParaPerfil(data as unknown as Record<string, unknown>, profile?.role, user.id, false) : data });
   }
 
   let query = svc.from("ma_deals").select(select).is("deleted_at", null).order("created_at", { ascending: false });
@@ -144,7 +150,9 @@ export async function GET(req: NextRequest) {
     const comTransf = await anexarTransferencias(svc, (data ?? []) as unknown as { id: string }[]);
     return NextResponse.json({ deals: comTransf });
   }
-  return NextResponse.json({ deals: data ?? [] });
+  return NextResponse.json({
+    deals: ((data ?? []) as unknown as Record<string, unknown>[]).map(d => filtrarDealParaPerfil(d, profile?.role, user.id, false)),
+  });
 }
 
 // POST — cria novo deal M&A
@@ -164,6 +172,24 @@ export async function POST(req: NextRequest) {
     }
     // Para papel que não é da equipe, atribuição, originação e código vêm só do servidor (usuário autenticado).
     const d = camposConfiaveisParaCriacao(parsed.data, profile?.role);
+
+    // Pedido de commodity: aceito só de ADMIN, GESTAO e MESA, validado e com o total calculado aqui.
+    // De qualquer outro papel a chave é descartada.
+    let commodityPedido: ReturnType<typeof montarPedido> | null = null;
+    if (d.asset_data && typeof d.asset_data === "object" && "commodity" in d.asset_data) {
+      const entradaCommodity = (d.asset_data as Record<string, unknown>).commodity;
+      const { commodity: _c, ...restoAsset } = d.asset_data as Record<string, unknown>;
+      void _c;
+      d.asset_data = restoAsset;
+      if (PAPEIS_CRIAM_COMMODITY.includes(profile?.role ?? "")) {
+        commodityPedido = montarPedido(entradaCommodity, null);
+        if (!commodityPedido.ok) {
+          return NextResponse.json({ error: `Pedido de commodity: ${commodityPedido.erro}` }, { status: 400 });
+        }
+        d.value = totalEmUnidades(commodityPedido.pedido.valor_total_centavos);
+        d.currency = commodityPedido.pedido.moeda;
+      }
+    }
 
     // Conteúdo mínimo: recusa ANTES de reservar a vaga, para uma recusa por falta de descrição não consumir a cota.
     const faltaConteudo = validarConteudoMinimoDoDeal(profile?.role, d);
@@ -215,6 +241,9 @@ export async function POST(req: NextRequest) {
       asset_data: {
         ...(d.tipo_participante ? { tipo_participante: d.tipo_participante } : {}),
         ...(d.asset_data ?? {}),
+        ...(commodityPedido?.ok
+          ? { commodity: { ...commodityPedido.pedido, atualizado_em: new Date().toISOString(), atualizado_por: user.id } }
+          : {}),
       },
     };
 
@@ -557,6 +586,14 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // Pedido de commodity: esta rota nunca altera asset_data.commodity (a única que altera é
+  // /api/ma/deals/[deal_id]/commodity). Relê o banco logo antes do update e mantém a versão gravada,
+  // para uma edição antiga de asset_data não apagar nem mudar o pedido (BRIEF 2026-11-24, bloco A).
+  if (fields.asset_data && typeof fields.asset_data === "object") {
+    const { data: adBanco } = await svc.from("ma_deals").select("asset_data").eq("id", id).single();
+    fields.asset_data = preservarCommodity(fields.asset_data as Record<string, unknown>, adBanco?.asset_data);
+  }
+
   // Demais campos do deal (fase e probabilidade de fase já gravadas pela transição).
   if (transition) delete fields.probability_percent;
   let data: Record<string, unknown> | null = null;
@@ -670,7 +707,9 @@ export async function PATCH(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ ok: true, deal: data });
+  // A resposta do update traz a linha inteira: ao perfil não equipe, aplica o mesmo recorte do GET.
+  const dealResposta = data && !isAdmin ? filtrarDealParaPerfil(data, profile?.role, user.id, false) : data;
+  return NextResponse.json({ ok: true, deal: dealResposta });
 }
 
 // DELETE — somente ADMIN
