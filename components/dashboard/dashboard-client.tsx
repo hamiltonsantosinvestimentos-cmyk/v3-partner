@@ -222,6 +222,8 @@ interface DashboardClientProps {
   role: string;
   /** Partner V3 Access de verdade (papel STARTER + cadastro do Access), não o antigo V3 Starter. */
   partnerAccess?: boolean;
+  /** Enterprise (master e equipe) não vê o vídeo de boas-vindas da V3 (white label). */
+  esconderVideoV3?: boolean;
   userName: string;
   period?: string;
   userCreatedAt?: string | null;
@@ -273,6 +275,7 @@ interface DashboardClientProps {
 export function DashboardClient({
   role,
   partnerAccess = false,
+  esconderVideoV3 = false,
   userName,
   period = "30d",
   userCreatedAt,
@@ -338,7 +341,7 @@ export function DashboardClient({
   return (
     <div className="space-y-6 v3-stagger">
       {/* Founder Video Modal — renders once for new partners, manages own visibility */}
-      <FounderVideoModal partnerName={userName} />
+      {!esconderVideoV3 && <FounderVideoModal partnerName={userName} />}
 
       {/* Market Ticker */}
       <MarketTicker />
