@@ -69,10 +69,11 @@ export async function POST(req: NextRequest) {
     .eq("id", dealId)
     .maybeSingle();
 
-  if (!podeAcessarDeal(profile?.role, deal, user.id)) {
+  // Equipe recebe 404 para deal inexistente; os demais recebem 403 sem saber se o deal existe.
+  if (!deal && ehEquipeDocumentos(profile?.role)) return NextResponse.json({ error: "Operação M&A não encontrada" }, { status: 404 });
+  if (!deal || !podeAcessarDeal(profile?.role, deal, user.id)) {
     return NextResponse.json({ error: MSG_SEM_PERMISSAO }, { status: 403 });
   }
-  if (!deal) return NextResponse.json({ error: "Operação M&A não encontrada" }, { status: 404 });
 
   const cat = checarCategoria(profile?.role, category);
   if (!cat.ok) return NextResponse.json({ error: cat.erro }, { status: cat.status });
@@ -202,10 +203,10 @@ export async function GET(req: NextRequest) {
     .eq("id", dealId)
     .maybeSingle();
 
-  if (!podeAcessarDeal(profile?.role, deal, user.id)) {
+  if (!deal && ehEquipeDocumentos(profile?.role)) return NextResponse.json({ error: "Operação não encontrada" }, { status: 404 });
+  if (!deal || !podeAcessarDeal(profile?.role, deal, user.id)) {
     return NextResponse.json({ error: MSG_SEM_PERMISSAO }, { status: 403 });
   }
-  if (!deal) return NextResponse.json({ error: "Operação não encontrada" }, { status: 404 });
 
   // Recorte (duplo cego): quem não é equipe recebe só os documentos que ele mesmo enviou.
   const docs: DocEntry[] = documentosVisiveis(profile?.role, Array.isArray(deal.documents) ? deal.documents : [], user.id);
