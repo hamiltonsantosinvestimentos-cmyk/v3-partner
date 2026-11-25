@@ -14,8 +14,8 @@ async function send(
   subject: string,
   html: string,
   attachments?: MailAttachment[],
-): Promise<void> {
-  if (!process.env.RESEND_API_KEY || !to) return;
+): Promise<boolean> {
+  if (!process.env.RESEND_API_KEY || !to) return false;
   try {
     // White label (lib/enterprise.ts): destinatário de um Enterprise recebe com o logo dele.
     // Com domínio próprio verificado no Resend, também o remetente e as frases institucionais
@@ -39,7 +39,7 @@ async function send(
     const htmlGate = auditHtml(html);
     if (htmlGate.blocking.length > 0) console.error("[lib/email] Brand Guardian bloqueou:", htmlGate.blocking);
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from,
       to,
       subject: subjectGate.corrected,
@@ -48,7 +48,8 @@ async function send(
         ? { attachments: attachments.map(a => ({ filename: a.filename, content: a.content })) }
         : {}),
     });
-  } catch { /* silent */ }
+    return !error;
+  } catch { return false; }
 }
 
 /**
@@ -86,6 +87,24 @@ export async function enviarEmailRegistrado(opts: {
 /** E-mail com HTML já montado (ex.: relatório mensal de partners), pelo mesmo ponto de saída/gate. */
 export async function enviarEmailHtml(to: string, subject: string, html: string): Promise<void> {
   await send(to, subject, html);
+}
+
+/**
+ * Recuperação de senha pelo domínio do Enterprise (BRIEF docs/briefs/2026-11-25_recuperar-senha-marca-enterprise.md).
+ * Sai pelo send(): remetente, logo e rodapé da marca do destinatário. Devolve se o Resend aceitou.
+ */
+export async function enviarRecuperacaoSenha(opts: { to: string; nome: string | null; link: string }): Promise<boolean> {
+  const nome = opts.nome ? escapeHtml(opts.nome.split(" ")[0]) : "";
+  const body = `
+    <p style="color:#9BAFC5;font-size:14px;margin:0 0 16px;line-height:1.6;">
+      Olá${nome ? `, <strong style="color:#F5F1E8;">${nome}</strong>` : ""}! Recebemos um pedido para redefinir a senha da sua conta.
+      Clique no botão abaixo para criar uma nova senha.
+    </p>
+    <p style="color:#9BAFC5;font-size:12px;margin:0;line-height:1.6;">
+      O link expira em pouco tempo e só pode ser usado uma vez. Se você não pediu, ignore este e-mail: sua senha continua a mesma.
+    </p>
+  `;
+  return send(opts.to, "Redefinir sua senha", template("Redefinir sua senha", body, { label: "Criar nova senha", url: opts.link }));
 }
 
 // ── Template base ──────────────────────────────────────────────────────────

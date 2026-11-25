@@ -7,11 +7,16 @@ import { createClient } from "@/lib/supabase/client";
 import { Mail, ArrowRight, ArrowLeft, CheckCircle2 } from "lucide-react";
 import type { Marca } from "@/lib/enterprise";
 
-// Marca do Enterprise vem do servidor (page.tsx), pelo domínio acessado.
-export function EsqueciSenhaClient({ marca }: { marca: Marca | null }) {
+// Marca do Enterprise vem do servidor (page.tsx), pelo domínio acessado. Com `recuperacaoPelaMarca`,
+// o e-mail sai pela API da plataforma com a marca (BRIEF docs/briefs/2026-11-25_recuperar-senha-marca-enterprise.md).
+export function EsqueciSenhaClient({ marca, recuperacaoPelaMarca = false, linkVencido = false }: {
+  marca: Marca | null;
+  recuperacaoPelaMarca?: boolean;
+  linkVencido?: boolean;
+}) {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(linkVencido ? "Link vencido ou já usado. Peça um novo abaixo." : "");
   const [enviado, setEnviado] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,6 +25,19 @@ export function EsqueciSenhaClient({ marca }: { marca: Marca | null }) {
     setError("");
 
     try {
+      if (recuperacaoPelaMarca) {
+        const res = await fetch("/api/public/recuperar-senha", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (!res.ok) {
+          setError("Erro ao enviar o e-mail. Tente novamente em instantes.");
+          return;
+        }
+        setEnviado(true);
+        return;
+      }
       const supabase = createClient();
       // redirectTo aponta pro callback do Supabase, que troca o code pela
       // sessão e manda o usuário pra /auth/update-password — mesma tela já
@@ -126,7 +144,7 @@ export function EsqueciSenhaClient({ marca }: { marca: Marca | null }) {
           ) : (
             <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <p style={{ fontSize: 13, color: "var(--wl-texto-2, #7A8FA8)", lineHeight: 1.6, marginBottom: 4 }}>
-                Digite o e-mail da sua conta — vamos te mandar um link pra criar uma nova senha.
+                Digite o e-mail da sua conta. Vamos te mandar um link pra criar uma nova senha.
               </p>
 
               <div>
