@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { carregarConcessoes } from "@/lib/governance/concessoes-server";
+import { concessoesEfetivas } from "@/lib/governance/acesso-pasta";
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -34,16 +36,13 @@ export async function GET(req: NextRequest) {
   if (deal_code) query = query.eq("deal_code", deal_code);
 
   if (!ALLOWED_ADMIN.includes(role)) {
-    const { data: grants } = await db
-      .from("folder_access_grants")
-      .select("folder_id")
-      .eq("user_id", user.id);
-
-    const folderIds = (grants ?? []).map((g: { folder_id: string }) => g.folder_id);
-    if (folderIds.length === 0) {
+    // Só concessões válidas e, para externo, só de operação de que ele é dono (BRIEF 2026-11-24).
+    const efetivas = concessoesEfetivas(role, await carregarConcessoes(db, user.id), new Date().toISOString());
+    const caminhos = efetivas.map(c => c.full_path);
+    if (caminhos.length === 0) {
       return NextResponse.json({ folders: [] });
     }
-    query = query.in("id", folderIds);
+    query = query.in("full_path", caminhos);
   }
 
   const { data: folders, error } = await query;

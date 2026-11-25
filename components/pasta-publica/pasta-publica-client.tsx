@@ -52,13 +52,20 @@ export function PastaPublicaClient() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
+  // Respostas da rota (BRIEF 24/11/2026): 403, sem concessão e aviso neutro de pastas liberadas em etapas.
+  const [semAcesso, setSemAcesso] = useState(false);
+  const [semConcessao, setSemConcessao] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const fetchFiles = useCallback(async (path: string) => {
     setLoading(true);
     try {
       const res = await fetch(`/api/governance/files?path=${encodeURIComponent(path)}`);
       const data = await res.json();
-      setFiles(data.files ?? []);
+      setSemAcesso(res.status === 403);
+      setSemConcessao(!!data.sem_concessao);
+      setAviso(data.aviso ?? null);
+      setFiles(res.ok ? (data.files ?? []) : []);
     } catch {
       setFiles([]);
     }
@@ -107,11 +114,11 @@ export function PastaPublicaClient() {
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
           <FolderOpen size={24} color="#C9A84C" />
           <h1 style={{ fontSize: 22, fontWeight: 800, color: "#F5F1E8", margin: 0 }}>
-            Pasta Publica
+            Pasta Pública
           </h1>
         </div>
         <p style={{ fontSize: 12, color: "#9BAFC5", margin: 0 }}>
-          MPS Documentos V3 — Estrutura governada por vertical
+          MPS Documentos V3 · Estrutura governada por vertical
         </p>
       </div>
 
@@ -137,7 +144,7 @@ export function PastaPublicaClient() {
             onClick={() => setCurrentPath("")}
             style={{ color: "#C9A84C", cursor: "pointer", fontWeight: 700 }}
           >
-            PASTA PUBLICA
+            PASTA PÚBLICA
           </span>
           {breadcrumbs.map((crumb, i) => {
             const path = breadcrumbs.slice(0, i + 1).join("/");
@@ -177,6 +184,10 @@ export function PastaPublicaClient() {
         </div>
       </div>
 
+      {aviso && (
+        <p role="status" style={{ fontSize: 12, color: "#E8C97A", margin: "0 0 12px" }}>{aviso}</p>
+      )}
+
       {/* Content */}
       <div style={{
         background: "#13223A", border: "1px solid #162744",
@@ -188,7 +199,13 @@ export function PastaPublicaClient() {
           </div>
         ) : filteredFiles.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "#9BAFC5", fontSize: 13 }}>
-            {search ? "Nenhum resultado para a busca" : "Pasta vazia"}
+            {search
+              ? "Nenhum resultado para a busca"
+              : semAcesso
+                ? "Sem acesso a esta pasta"
+                : semConcessao && !currentPath
+                  ? "Nenhuma pasta liberada para você."
+                  : "Pasta vazia"}
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>

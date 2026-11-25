@@ -1,0 +1,32 @@
+-- Rollback de 20261125a. Aplicar só com autorização da diretoria: reabre o acesso direto de externos.
+-- Texto das políticas lido do pg_policies em 24/11/2026; privilégios como estavam (ALL para anon e authenticated).
+begin;
+
+create policy granted_read_storage on storage.objects for select to public using (
+  (bucket_id = 'v3-docs-publico'::text) and (exists ( select 1
+     from (folder_access_grants fag join folder_registry fr on ((fr.id = fag.folder_id)))
+    where ((fag.user_id = auth.uid()) and ((fag.expires_at is null) or (fag.expires_at > now())) and (objects.name ~~ (fr.full_path || '%'::text)))))
+);
+
+create policy granted_write_storage on storage.objects for insert to public with check (
+  (bucket_id = 'v3-docs-publico'::text) and (exists ( select 1
+     from (folder_access_grants fag join folder_registry fr on ((fr.id = fag.folder_id)))
+    where ((fag.user_id = auth.uid()) and (fag.permission = any (array['write'::text, 'admin'::text])) and ((fag.expires_at is null) or (fag.expires_at > now())) and (objects.name ~~ (fr.full_path || '%'::text)))))
+);
+
+create policy granted_read_registry on public.folder_registry for select to public using (
+  (exists ( select 1 from folder_access_grants
+    where ((folder_access_grants.folder_id = folder_registry.id) and (folder_access_grants.user_id = auth.uid()) and ((folder_access_grants.expires_at is null) or (folder_access_grants.expires_at > now())))))
+);
+
+create policy user_read_own_grants on public.folder_access_grants for select to public using ((user_id = auth.uid()));
+
+create policy granted_read_chunks on public.document_chunks for select to public using (
+  (exists ( select 1 from folder_access_grants fag
+    where ((fag.folder_id = document_chunks.folder_id) and (fag.user_id = auth.uid()) and (fag.permission = any (array['read'::text, 'write'::text, 'admin'::text])) and ((fag.expires_at is null) or (fag.expires_at > now())))))
+);
+
+grant all on public.folder_registry to anon, authenticated;
+grant all on public.folder_access_grants to anon, authenticated;
+
+commit;

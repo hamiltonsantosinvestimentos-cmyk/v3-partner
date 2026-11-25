@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
+import { logAudit, getClientIp } from "@/lib/audit";
+import { carregarConcessoes } from "@/lib/governance/concessoes-server";
+import { concessoesEfetivas, ehAdmin, filtrarListagem, MSG_SEM_ACESSO_PASTA } from "@/lib/governance/acesso-pasta";
+
+// Listagem da Pasta Pública (BRIEF 2026-11-24): só o que foi concedido. Na raiz e nas pastas-mãe, só o caminho até
+// as pastas concedidas; externo não vê subpasta oculta (duplo cego). Antes, a raiz e qualquer pasta-mãe eram
+// listadas inteiras para qualquer usuário logado.
 
 function svc() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -14,38 +21,21 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const db = svc();
-  const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).single();
+  const { data: profile } = await db.from("profiles").select("role, full_name").eq("id", user.id).single();
   const role = profile?.role ?? "";
-  const isAdmin = role === "ADMIN";
 
-  const url = new URL(req.url);
-  const folderPath = url.searchParams.get("path") ?? "";
+  const folderPath = new URL(req.url).searchParams.get("path") ?? "";
 
-  if (!isAdmin) {
-    const { data: grants } = await db
-      .from("folder_access_grants")
-      .select("folder_id, folder:folder_registry!folder_id(full_path)")
-      .eq("user_id", user.id);
+  const efetivas = ehAdmin(role) ? [] : concessoesEfetivas(role, await carregarConcessoes(db, user.id), new Date().toISOString());
 
-    const grantedPaths = (grants ?? []).map((g: Record<string, unknown>) => {
-      const folder = g.folder as { full_path: string } | null;
-      return folder?.full_path ?? "";
-    }).filter(Boolean);
+  // Pré-checagem (sem listar o Storage) para caminho claramente fora de alcance.
+  const pre = filtrarListagem(role, efetivas, folderPath, []);
+  if (!pre.ok) return NextResponse.json({ error: MSG_SEM_ACESSO_PASTA }, { status: 403 });
 
-    const hasAccess = grantedPaths.some(p => folderPath.startsWith(p) || p.startsWith(folderPath));
-    if (!hasAccess && folderPath) {
-      return NextResponse.json({ error: "Sem acesso a esta pasta" }, { status: 403 });
-    }
-  }
+  const { data: items, error } = await db.storage.from(BUCKET).list(folderPath, { limit: 500 });
+  if (error) return NextResponse.json({ error: "Não foi possível listar a pasta." }, { status: 500 });
 
-  const { data: items, error } = await db.storage.from(BUCKET).list(folderPath, {
-    limit: 500,
-    sortBy: { column: "name", order: "asc" },
-  });
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  const files = (items ?? []).map(item => {
+  const brutos = (items ?? []).map(item => {
     const raw = item as unknown as Record<string, unknown>;
     const meta = raw.metadata as Record<string, unknown> | undefined;
     return {
@@ -59,5 +49,21 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json({ path: folderPath || "/", files });
+  const r = filtrarListagem(role, efetivas, folderPath, brutos);
+  if (!r.ok) return NextResponse.json({ error: MSG_SEM_ACESSO_PASTA }, { status: 403 });
+
+  if (!ehAdmin(role)) {
+    // Quem listou qual caminho (não bloqueia a resposta).
+    await logAudit({
+      userId: user.id, userName: profile?.full_name, action: "ACCESS", entity: "profiles", entityId: user.id,
+      newData: { pasta_publica_listou: folderPath || "/", itens: r.itens.length }, ipAddress: getClientIp(req),
+    });
+  }
+
+  return NextResponse.json({
+    path: folderPath || "/",
+    files: r.itens,
+    aviso: r.aviso,
+    sem_concessao: !ehAdmin(role) && efetivas.length === 0,
+  });
 }
