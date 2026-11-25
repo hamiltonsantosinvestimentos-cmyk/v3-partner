@@ -18,18 +18,29 @@ async function send(
   if (!process.env.RESEND_API_KEY || !to) return;
   try {
     // White label (lib/enterprise.ts): destinatário de um Enterprise recebe com o logo dele.
+    // Com domínio próprio verificado no Resend, também o remetente e as frases institucionais
+    // (BRIEF docs/briefs/2026-11-25_emails-remetente-enterprise.md).
+    let from = FROM;
     try {
       const { createClient: sc } = await import("@supabase/supabase-js");
       const { marcaPorEmail, aplicarMarca } = await import("@/lib/enterprise");
       const db = sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
       html = aplicarMarca(html, await marcaPorEmail(db, to));
+      const { remetentePara } = await import("@/lib/email-remetente");
+      const { trocarTextoV3 } = await import("@/lib/email-remetente-regras");
+      const r = await remetentePara(db, to);
+      if (r) {
+        from = r.from;
+        html = trocarTextoV3(html, r.marca, true);
+        subject = trocarTextoV3(subject, r.marca, false);
+      }
     } catch { /* marca é cosmética: segue com a V3 */ }
     const subjectGate = auditText(subject);
     const htmlGate = auditHtml(html);
     if (htmlGate.blocking.length > 0) console.error("[lib/email] Brand Guardian bloqueou:", htmlGate.blocking);
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: FROM,
+      from,
       to,
       subject: subjectGate.corrected,
       html: htmlGate.corrected,
