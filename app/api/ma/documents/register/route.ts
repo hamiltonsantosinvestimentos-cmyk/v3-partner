@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { createHash } from "crypto";
+import { logAuditStrict, getClientIp } from "@/lib/audit";
+import { LINK_DOCUMENTO_SEGUNDOS } from "@/lib/ma/acesso-documentos";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const SIGNED_URL_EXPIRES  = 20 * 24 * 60 * 60; // 20 dias
+const SIGNED_URL_EXPIRES  = LINK_DOCUMENTO_SEGUNDOS; // 1 hora (era 20 dias; BRIEF 2026-11-24)
 const WRITE_ROLES         = ["ADMIN", "GESTAO", "MESA_OPERACIONAL"] as const;
 
 function serviceClient() {
@@ -105,6 +107,18 @@ export async function POST(req: NextRequest) {
   // Remove versão anterior do mesmo doc_id (substituição)
   const oldDoc = existingDocs.find(d => d.doc_id === doc_id);
   if (oldDoc) {
+    // Log antes da remoção (BRIEF 2026-11-24); se não gravar, o arquivo anterior fica e a substituição não acontece.
+    try {
+      await logAuditStrict({
+        userId: user.id, action: "UPDATE", entity: "ma_deals", entityId: deal_id,
+        oldData: { substituiu_doc_id: oldDoc.doc_id, storage_path: oldDoc.storage_path, bucket: oldDoc.bucket ?? "ma-documents", file_name: oldDoc.file_name },
+        newData: { documento: { doc_id, file_name } }, ipAddress: getClientIp(req),
+      });
+    } catch (e) {
+      console.error("[ma/documents/register] auditoria da substituição falhou:", e);
+      await svc.storage.from(bucket).remove([storage_path]);
+      return NextResponse.json({ error: "Não foi possível registrar a substituição. Nada foi alterado." }, { status: 500 });
+    }
     await svc.storage.from(oldDoc.bucket ?? "ma-documents").remove([oldDoc.storage_path]);
   }
 

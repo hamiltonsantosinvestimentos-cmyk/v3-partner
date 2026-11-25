@@ -1,5 +1,5 @@
 "use client";
-import { aviso, pedirMotivo } from "@/lib/aviso";
+import { aviso, confirmar, pedirMotivo } from "@/lib/aviso";
 
 import { useState, useEffect, useRef } from "react";
 import {
@@ -2630,15 +2630,31 @@ export function MesaMaClient({ userRole, initialDeals = [], userId = "", userNam
                               </button>
                             </>
                           )}
-                          <button
-                            onClick={async () => {
-                              await fetch(`/api/ma/documents?deal_id=${selectedCard!.id}&doc_id=${encodeURIComponent(doc.doc_id)}`, { method: "DELETE" });
-                              setCardDocs(prev => prev.filter(d => d.doc_id !== doc.doc_id));
-                            }}
-                            className="text-[#7A8FA8] hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 size={12} />
-                          </button>
+                          {/* Exclusão só pela equipe, com confirmação; o item só sai da lista com resposta 200 (BRIEF 24/11/2026). */}
+                          {["ADMIN", "GESTAO", "MESA_OPERACIONAL"].includes(userRole) && (
+                            <button
+                              aria-label={`Excluir ${doc.file_name}`}
+                              onClick={async () => {
+                                const ok = await confirmar(
+                                  `O arquivo "${doc.file_name}" é removido do Storage e não pode ser recuperado.`,
+                                  { perigo: true, titulo: "Excluir documento", botao: "Excluir" },
+                                );
+                                if (!ok) return;
+                                const res = await fetch(`/api/ma/documents?deal_id=${selectedCard!.id}&doc_id=${encodeURIComponent(doc.doc_id)}`, { method: "DELETE" });
+                                if (res.ok) {
+                                  setCardDocs(prev => prev.filter(d => d.doc_id !== doc.doc_id));
+                                } else if (res.status === 403) {
+                                  aviso("Sem permissão para excluir documentos deste deal.");
+                                } else {
+                                  const j = await res.json().catch(() => null);
+                                  aviso(j?.error ?? "Não foi possível excluir o documento.");
+                                }
+                              }}
+                              className="text-[#7A8FA8] hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
                         </div>
                       ))}
                       {uploadingDoc && (
