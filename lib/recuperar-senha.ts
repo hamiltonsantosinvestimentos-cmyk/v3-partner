@@ -14,6 +14,7 @@ const EV_ENVIADO = "recuperar_senha_enviado";
 const NOME_AUDITORIA = {
   anonimo: "Pedido anônimo de recuperação de senha",
   perfil: "Pedido de redefinição pelo perfil",
+  admin: "Reenvio de acesso pela V3 (ADMIN)",
 } as const;
 
 export type OrigemPedido = keyof typeof NOME_AUDITORIA;
@@ -25,10 +26,10 @@ export function servico(): SupabaseClient {
 }
 
 /**
- * Domínio do master pronto para e-mail (status "ativo" e verificado no Resend), em minúsculas.
- * null = domínio não pronto. Falha de consulta LANÇA (quem chama decide o que fazer).
+ * Domínio do master pronto para e-mail (status "ativo" e verificado no Resend), em minúsculas,
+ * e o nome da marca. null = domínio não pronto. Falha de consulta LANÇA (quem chama decide).
  */
-export async function dominioProntoDoMaster(db: SupabaseClient, masterId: string): Promise<string | null> {
+export async function dominioProntoDoMaster(db: SupabaseClient, masterId: string): Promise<{ dominio: string; nome: string } | null> {
   const { data: m, error } = await db.from("profiles")
     .select("full_name, white_label_nome, white_label_dominio, white_label_dominio_status")
     .eq("id", masterId).maybeSingle();
@@ -40,7 +41,9 @@ export async function dominioProntoDoMaster(db: SupabaseClient, masterId: string
     status: m.white_label_dominio_status as string | null,
     verificados: await dominiosVerificadosResend(),
   });
-  return from ? String(m.white_label_dominio).trim().toLowerCase() : null;
+  if (!from) return null;
+  const nome = String((m.white_label_nome as string | null) || (m.full_name as string | null) || "").trim() || "do Enterprise";
+  return { dominio: String(m.white_label_dominio).trim().toLowerCase(), nome };
 }
 
 /**
@@ -51,8 +54,8 @@ export async function dominioComMarcaPronta(db: SupabaseClient, host: string | n
   try {
     const e = await enterprisePorDominio(db, host);
     if (!e) return null;
-    const dominio = await dominioProntoDoMaster(db, e.masterId);
-    return dominio ? { masterId: e.masterId, dominio } : null;
+    const pronto = await dominioProntoDoMaster(db, e.masterId);
+    return pronto ? { masterId: e.masterId, dominio: pronto.dominio } : null;
   } catch {
     return null;
   }
@@ -78,8 +81,13 @@ async function contar(db: SupabaseClient, evento: string, filtro: { entityId?: s
  */
 export async function enviarLinkDaMarca(
   db: SupabaseClient, perfil: PerfilEquipe, dominio: string, ip: string | null, origem: OrigemPedido,
+  extra?: { por?: string; ipAdmin?: string | null },
 ): Promise<ResultadoEnvio> {
   const userName = NOME_AUDITORIA[origem];
+  const quem = {
+    ...(extra?.por ? { por: extra.por } : {}),
+    ...(extra?.ipAdmin ? { ip_admin: extra.ipAdmin } : {}),
+  };
 
   // Teto de escrita antes de gravar (falha de contagem lança: falha fechado).
   if (await contar(db, EV_RESERVA, { entityId: perfil.id }) >= MAX_RESERVAS_USUARIO_HORA) return "limite";
@@ -87,7 +95,7 @@ export async function enviarLinkDaMarca(
 
   const { data: minha, error: errIns } = await db.from("audit_logs").insert({
     user_id: perfil.id, user_name: userName, action: "ACCESS", entity: "profiles",
-    entity_id: perfil.id, new_data: { evento: EV_RESERVA }, ip_address: ip,
+    entity_id: perfil.id, new_data: { evento: EV_RESERVA, ...quem }, ip_address: ip,
   }).select("id, created_at").single();
   if (errIns || !minha) throw new Error(`audit_logs: ${errIns?.message ?? "sem reserva"}`);
 
@@ -111,10 +119,11 @@ export async function enviarLinkDaMarca(
     link: `https://${dominio}/auth/confirm?token_hash=${encodeURIComponent(hash)}`,
   });
   if (!ok) { console.error("[recuperar-senha] Resend recusou o envio", perfil.id); return "falha"; }
-  await db.from("audit_logs").insert({
+  const { error: errEnv } = await db.from("audit_logs").insert({
     user_id: perfil.id, user_name: userName, action: "ACCESS", entity: "profiles",
-    entity_id: perfil.id, new_data: { evento: EV_ENVIADO }, ip_address: ip,
+    entity_id: perfil.id, new_data: { evento: EV_ENVIADO, ...quem }, ip_address: ip,
   });
+  if (errEnv) console.error("[recuperar-senha] registro de envio não gravado", perfil.id, errEnv.message);
   return "enviado";
 }
 

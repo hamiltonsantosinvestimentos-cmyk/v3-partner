@@ -35,3 +35,21 @@ export function podeEnviar(reservas: Reserva[], minhaId: string, enviosNaHora: n
     .sort((a, b) => (a.created_at === b.created_at ? (a.id < b.id ? -1 : a.id > b.id ? 1 : 0) : a.created_at < b.created_at ? -1 : 1));
   return recentes.length > 0 && recentes[0].id === minhaId;
 }
+
+export type CaminhoReenvio = { tipo: "erro" } | { tipo: "marca"; masterId: string } | { tipo: "antigo" };
+
+/**
+ * Decide o "Reenviar e-mail" do ADMIN: erro na leitura do perfil = "erro" (500, sem trocar senha);
+ * equipe Enterprise = "marca" (link da marca, se o domínio estiver pronto); demais = fluxo antigo.
+ * BRIEF docs/briefs/2026-11-26_reenviar-acesso-enterprise-por-link.md
+ */
+export function caminhoReenvio(leitura: {
+  erro: boolean;
+  perfil: { id: string; role: string | null; enterprise_id: string | null } | null;
+}): CaminhoReenvio {
+  if (leitura.erro) return { tipo: "erro" };
+  const p = leitura.perfil;
+  if (!p || p.role !== "ENTERPRISE") return { tipo: "antigo" };
+  const masterId = p.enterprise_id ?? p.id;
+  return daEquipe(p, masterId) ? { tipo: "marca", masterId } : { tipo: "antigo" };
+}
