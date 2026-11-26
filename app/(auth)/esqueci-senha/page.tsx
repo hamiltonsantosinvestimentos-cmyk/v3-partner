@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { marcaDoHost, metadataDaMarca } from "@/lib/enterprise-marca-host";
+import { marcaDoHost, metadataDaMarca, viewportDoHost } from "@/lib/enterprise-marca-host";
 import { dominioComMarcaPronta, servico } from "@/lib/recuperar-senha";
 import { EsqueciSenhaClient } from "./esqueci-senha-client";
 
@@ -9,9 +9,12 @@ import { EsqueciSenhaClient } from "./esqueci-senha-client";
 // no Resend, a recuperação sai pela plataforma com a marca
 // (BRIEF docs/briefs/2026-11-25_recuperar-senha-marca-enterprise.md).
 export async function generateMetadata(): Promise<Metadata> {
-  const { marca, iconeUrl } = await marcaDoHost();
-  return metadataDaMarca(marca, iconeUrl);
+  const { marca, iconeUrl, versao } = await marcaDoHost();
+  return metadataDaMarca(marca, iconeUrl, versao);
 }
+
+// Cor da barra e do app instalado no domínio do Enterprise (BRIEF 2026-11-26_app-instalado-marca-enterprise).
+export const generateViewport = viewportDoHost;
 
 export default async function EsqueciSenhaPage({ searchParams }: { searchParams: Promise<{ erro?: string }> }) {
   const { marca, temaCss } = await marcaDoHost();

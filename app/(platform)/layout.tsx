@@ -5,6 +5,8 @@ import { PWAInstallPrompt } from "@/components/pwa/pwa-install-prompt";
 import type { Metadata } from "next";
 import { whiteLabelDaSessao } from "@/lib/enterprise-sessao";
 import { cssVariaveis, type TemaEnterprise } from "@/lib/enterprise-tema";
+import { marcaDoHost, metadataDoApp, viewportDoHost } from "@/lib/enterprise-marca-host";
+import { urlIcone } from "@/lib/manifest-marca";
 
 const IS_DEMO = false;
 
@@ -14,14 +16,26 @@ const IS_DEMO = false;
  */
 export async function generateMetadata(): Promise<Metadata> {
   const wl = await whiteLabelDaSessao();
-  if (wl) {
-    return {
-      title: { template: `%s · ${wl.nome}`, default: wl.nome },
-      ...(wl.tema?.icone_url ? { icons: { icon: wl.tema.icone_url } } : {}),
-    };
-  }
-  return { title: { template: "%s · V3 Partners", default: "V3 PARTNERS · Plataforma Financeira" } };
+  const base: Metadata = wl
+    ? {
+        title: { template: `%s · ${wl.nome}`, default: wl.nome },
+        ...(wl.tema?.icone_url ? { icons: { icon: wl.tema.icone_url } } : {}),
+      }
+    : { title: { template: "%s · V3 Partners", default: "V3 PARTNERS · Plataforma Financeira" } };
+
+  // App instalado pelo domínio do Enterprise: manifesto, ícone do iPhone e nome da marca do host
+  // (BRIEF docs/briefs/2026-11-26_app-instalado-marca-enterprise.md). Em host da V3, nada muda.
+  const host = await marcaDoHost();
+  if (!host.marca) return base;
+  const icon = wl?.tema?.icone_url ?? host.iconeUrl ?? "/favicon.ico";
+  return {
+    ...base,
+    ...metadataDoApp(host.marca.nome, null),
+    icons: { icon, ...(host.versao ? { apple: urlIcone("180", host.versao) } : {}) },
+  };
 }
+
+export const generateViewport = viewportDoHost;
 
 export default async function PlatformLayout({
   children,
@@ -180,6 +194,9 @@ export default async function PlatformLayout({
       // silently ignore notification errors
     }
 
+    // Nome da marca do host para o aviso "Instale o app" (BRIEF 2026-11-26_app-instalado-marca-enterprise).
+    const marcaHost = (await marcaDoHost()).marca;
+
     return (
       <>
         {/* Tema do Enterprise: variáveis --wl-* no :root (alcança body, portais e toasts). Sem tema, nada. */}
@@ -202,7 +219,7 @@ export default async function PlatformLayout({
         >
           {children}
         </PlatformShell>
-        <PWAInstallPrompt />
+        <PWAInstallPrompt marcaNome={marcaHost?.nome} />
       </>
     );
   } catch (err) {
