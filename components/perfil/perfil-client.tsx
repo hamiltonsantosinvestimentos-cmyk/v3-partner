@@ -44,11 +44,15 @@ const TAB_CONFIG: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: "preferencias",  label: "Preferências",     icon: <Settings className="w-4 h-4" /> },
 ];
 
-function Toast({ msg, type }: { msg: string; type: "success" | "error" }) {
+type TipoToast = "success" | "error" | "info";
+
+function Toast({ msg, type }: { msg: string; type: TipoToast }) {
   return (
     <div style={{ "--dur": "4000ms" } as React.CSSProperties} className={`v3-toast fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-2xl border text-sm font-medium ${
       type === "success"
         ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+        : type === "info"
+        ? "bg-[#C9A84C]/10 border-[#C9A84C]/35 text-[#E8C97A]"
         : "bg-red-500/15 border-red-500/40 text-red-400"
     }`}>
       {type === "success" ? <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 flex-shrink-0" />}
@@ -98,7 +102,7 @@ function Toggle({ checked, onChange, label, description }: { checked: boolean; o
 export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }) {
   const [tab, setTab] = useState<Tab>("perfil");
   const [profile, setProfile] = useState<ProfileData>(initialProfile);
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: TipoToast } | null>(null);
   const [saving, setSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -138,7 +142,7 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
   const [language, setLanguage] = useState("pt-BR");
   const [timezone, setTimezone] = useState("America/Sao_Paulo");
 
-  function showToast(msg: string, type: "success" | "error") {
+  function showToast(msg: string, type: TipoToast) {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 4000);
   }
@@ -223,9 +227,10 @@ export function PerfilClient({ initialProfile }: { initialProfile: ProfileData }
     try {
       const res = await fetch("/api/profile/reset-password", { method: "POST" });
       const json = await res.json();
-      if (!res.ok) { showToast(json.error ?? "Erro ao enviar email.", "error"); return; }
+      if (res.status === 429) { showToast(json.error ?? "Já enviamos um e-mail há pouco.", "info"); return; }
+      if (!res.ok) { showToast(json.error ?? "Não foi possível enviar o e-mail agora. Tente de novo em instantes.", "error"); return; }
       setResetSent(true);
-      showToast(json.message ?? "Email enviado!", "success");
+      showToast(json.message ?? "E-mail enviado!", "success");
     } finally {
       setResetLoading(false);
     }
