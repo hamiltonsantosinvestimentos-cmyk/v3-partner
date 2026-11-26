@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
-import { marcaDoHost, metadataDaMarca } from "@/lib/enterprise-marca-host";
+import { marcaDoHost, metadataDaMarca, viewportDoHost } from "@/lib/enterprise-marca-host";
 
 // Link do e-mail de recuperação com a marca do Enterprise. Abrir a página NÃO usa o token
 // (antivírus de e-mail fazem GET nos links): só o botão "Continuar" envia o POST que valida.
 // BRIEF docs/briefs/2026-11-25_recuperar-senha-marca-enterprise.md
 export async function generateMetadata(): Promise<Metadata> {
-  const { marca, iconeUrl } = await marcaDoHost();
-  return metadataDaMarca(marca, iconeUrl);
+  const { marca, iconeUrl, versao } = await marcaDoHost();
+  return metadataDaMarca(marca, iconeUrl, versao);
 }
+
+// Cor da barra e do app instalado no domínio do Enterprise (BRIEF 2026-11-26_app-instalado-marca-enterprise).
+export const generateViewport = viewportDoHost;
 
 export default async function ConfirmarRecuperacaoPage({ searchParams }: { searchParams: Promise<{ token_hash?: string }> }) {
   const { marca, temaCss } = await marcaDoHost();

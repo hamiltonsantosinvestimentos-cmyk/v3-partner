@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { PWARegister } from "@/components/pwa-register";
 import { ChunkErrorReload } from "@/components/chunk-error-reload";
@@ -19,6 +19,10 @@ export const metadata: Metadata = {
   },
 };
 
+// Cor padrão da barra (V3). As páginas no domínio de um Enterprise sobrescrevem com generateViewport
+// (BRIEF docs/briefs/2026-11-26_app-instalado-marca-enterprise.md).
+export const viewport: Viewport = { themeColor: "#C9A84C" };
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -30,8 +34,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" />
-        <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#C9A84C" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className="min-h-full bg-[#09081A]">

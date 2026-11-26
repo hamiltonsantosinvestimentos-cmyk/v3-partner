@@ -7,7 +7,8 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-export function PWAInstallPrompt() {
+export function PWAInstallPrompt({ marcaNome }: { marcaNome?: string | null } = {}) {
+  const nomeApp = marcaNome || "V3 Partners";
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [show, setShow] = useState(false);
 
@@ -52,7 +53,7 @@ export function PWAInstallPrompt() {
     <div
       className="fixed bottom-4 left-4 right-4 z-50 mx-auto max-w-sm rounded-xl border border-[#243A66] bg-[#111F35] px-4 py-3 shadow-2xl"
       role="banner"
-      aria-label="Instalar aplicativo V3 Partners"
+      aria-label={`Instalar aplicativo ${nomeApp}`}
     >
       <div className="flex items-center gap-3">
         {/* Icon */}
@@ -62,7 +63,7 @@ export function PWAInstallPrompt() {
 
         {/* Text */}
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-600 text-[#F0ECE4]">Instale o app V3 Partners</p>
+          <p className="text-sm font-600 text-[#F0ECE4]">Instale o app {nomeApp}</p>
           <p className="text-xs text-[#7A8FA8]">Acesso rápido direto da sua tela inicial</p>
         </div>
 
