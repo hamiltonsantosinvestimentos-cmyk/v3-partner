@@ -1,7 +1,7 @@
 // BRIEF docs/briefs/2026-11-25_recuperar-senha-marca-enterprise.md
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { daEquipe, normalizarEmail, podeEnviar } from "../../lib/recuperar-senha-regras";
+import { caminhoReenvio, daEquipe, normalizarEmail, podeEnviar } from "../../lib/recuperar-senha-regras";
 
 test("normaliza o e-mail e recusa formato inválido", () => {
   assert.equal(normalizarEmail("  Ana@AGSFinance.app "), "ana@agsfinance.app");
@@ -43,4 +43,13 @@ test("podeEnviar: com 5 envios efetivos na hora o próximo não envia; reservas 
   const r = [{ id: "a", created_at: iso(T0) }];
   assert.equal(podeEnviar(r, "a", 5, T0 + 10), false);
   assert.equal(podeEnviar(r, "a", 4, T0 + 10), true);
+});
+
+test("caminhoReenvio: erro de leitura não segue para a senha fixa; equipe Enterprise vai pela marca", () => {
+  assert.deepEqual(caminhoReenvio({ erro: true, perfil: null }), { tipo: "erro" });
+  assert.deepEqual(caminhoReenvio({ erro: true, perfil: { id: "m1", role: "ENTERPRISE", enterprise_id: null } }), { tipo: "erro" });
+  assert.deepEqual(caminhoReenvio({ erro: false, perfil: null }), { tipo: "antigo" });
+  assert.deepEqual(caminhoReenvio({ erro: false, perfil: { id: "p1", role: "PARTNER", enterprise_id: null } }), { tipo: "antigo" });
+  assert.deepEqual(caminhoReenvio({ erro: false, perfil: { id: "m1", role: "ENTERPRISE", enterprise_id: null } }), { tipo: "marca", masterId: "m1" });
+  assert.deepEqual(caminhoReenvio({ erro: false, perfil: { id: "u1", role: "ENTERPRISE", enterprise_id: "m1" } }), { tipo: "marca", masterId: "m1" });
 });

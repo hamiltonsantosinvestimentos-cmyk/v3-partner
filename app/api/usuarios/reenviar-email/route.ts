@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as sc } from "@supabase/supabase-js";
 import { ehStarterAntigo, rotuloStarter } from "@/lib/v3-access";
+import { getClientIp } from "@/lib/audit";
+import { caminhoReenvio } from "@/lib/recuperar-senha-regras";
+import { dominioProntoDoMaster, enviarLinkDaMarca, type PerfilEquipe } from "@/lib/recuperar-senha";
+
+const MSG_FALHA = "Não foi possível enviar o e-mail agora. Tente de novo em instantes.";
+const MSG_LIMITE = "Já foi enviado um link há pouco para este usuário. Aguarde alguns minutos.";
 
 function serviceClient() {
   return sc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -105,6 +111,28 @@ export async function POST(req: NextRequest) {
   const email = authData.user.email;
   if (!email) return NextResponse.json({ error: "Usuário sem e-mail cadastrado" }, { status: 400 });
 
+  // Equipe de Enterprise com domínio pronto: link de criação de senha com a marca, SEM trocar a senha.
+  // Decidido antes de qualquer troca de senha; erro de consulta = 500, nunca a senha fixa.
+  // BRIEF docs/briefs/2026-11-26_reenviar-acesso-enterprise-por-link.md
+  try {
+    const { data: alvo, error: errAlvo } = await svc.from("profiles")
+      .select("id, role, enterprise_id, full_name").eq("id", userId).maybeSingle();
+    const caminho = caminhoReenvio({ erro: !!errAlvo, perfil: alvo as PerfilEquipe | null });
+    if (caminho.tipo === "erro") throw new Error(`profiles: ${errAlvo?.message ?? "erro"}`);
+    if (caminho.tipo === "marca") {
+      const pronto = await dominioProntoDoMaster(svc, caminho.masterId);
+      if (pronto) {
+        const r = await enviarLinkDaMarca(svc, alvo as PerfilEquipe, pronto.dominio, null, "admin", { por: user.id, ipAdmin: getClientIp(req) });
+        if (r === "enviado") return NextResponse.json({ ok: true, modo: "link_marca", marca: pronto.nome, emailEnviado: email });
+        if (r === "limite") return NextResponse.json({ error: MSG_LIMITE }, { status: 429 });
+        return NextResponse.json({ error: MSG_FALHA }, { status: 500 });
+      }
+    }
+  } catch (e) {
+    console.error("[reenviar-email] decisão/envio da marca não concluído", userId, (e as Error)?.message ?? "erro");
+    return NextResponse.json({ error: MSG_FALHA }, { status: 500 });
+  }
+
   // Busca nome e role do perfil
   const { data: profile } = await svc
     .from("profiles")
@@ -143,5 +171,5 @@ export async function POST(req: NextRequest) {
   // Envia e-mail de boas-vindas
   const emailResult = await enviarBoasVindas(email, profile?.full_name ?? "Parceiro", profile?.role ?? "PARTNER", profile?.role === "STARTER" && (await ehStarterAntigo(userId)));
 
-  return NextResponse.json({ ok: true, emailEnviado: email, email: emailResult });
+  return NextResponse.json({ ok: true, modo: "senha_temporaria", emailEnviado: email, email: emailResult });
 }

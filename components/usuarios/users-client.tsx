@@ -265,7 +265,13 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
   };
 
   const handleReenviarEmail = async (user: User) => {
-    if (!await confirmar(`Reenviar e-mail de boas-vindas para ${user.email}?\n\nIsso também redefinirá a senha para 12345678.`)) return;
+    const confirmado = user.role === "ENTERPRISE"
+      ? await confirmar(
+          `Reenviar acesso para ${user.email}?\n\nSe o domínio da marca dele estiver ativo, ele recebe um link para criar a senha, com a marca do Enterprise, e a senha atual não muda. Se não estiver, a senha é redefinida para 12345678 e vai o e-mail da V3.`,
+          { perigo: true, botao: "Reenviar acesso" },
+        )
+      : await confirmar(`Reenviar e-mail de boas-vindas para ${user.email}?\n\nIsso também redefinirá a senha para 12345678.`);
+    if (!confirmado) return;
     setSendingEmail(user.id);
     try {
       const res = await fetch("/api/usuarios/reenviar-email", {
@@ -274,8 +280,12 @@ export function UsersClient({ initialUsers }: UsersClientProps) {
         body: JSON.stringify({ userId: user.id }),
       });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.modo === "link_marca") {
+        aviso(`Link para criar senha enviado para ${user.email}, com a marca ${data.marca}. A senha atual não mudou.`);
+      } else if (res.ok) {
         aviso(`E-mail enviado com sucesso para ${user.email}!`);
+      } else if (res.status === 429 || res.status === 500) {
+        aviso(data.error ?? "Não foi possível enviar o e-mail agora. Tente de novo em instantes.");
       } else {
         aviso(`Erro: ${data.error}`);
       }

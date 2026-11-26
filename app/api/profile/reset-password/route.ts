@@ -26,9 +26,9 @@ export async function POST(req: NextRequest) {
     const masterId = perfil?.role === "ENTERPRISE" ? (perfil.enterprise_id ?? perfil.id) : null;
 
     if (perfil && masterId && daEquipe(perfil, masterId)) {
-      const dominio = await dominioProntoDoMaster(svc, masterId);
-      if (dominio) {
-        const r = await enviarLinkDaMarca(svc, perfil, dominio, getClientIp(req), "perfil");
+      const pronto = await dominioProntoDoMaster(svc, masterId);
+      if (pronto) {
+        const r = await enviarLinkDaMarca(svc, perfil, pronto.dominio, getClientIp(req), "perfil");
         if (r === "enviado") return ok();
         if (r === "limite") return NextResponse.json({ error: MSG_LIMITE }, { status: 429 });
         return NextResponse.json({ error: MSG_FALHA }, { status: 500 });
