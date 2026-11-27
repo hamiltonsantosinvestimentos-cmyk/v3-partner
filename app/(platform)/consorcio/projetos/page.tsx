@@ -6,6 +6,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FolderOpen, Plus, ArrowRight, Trash2, Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { rotuloStatusOferta, type OfertaAcompanhamento } from "@/lib/consorcio/ofertas-acompanhamento";
+import { dataBR, valorBR } from "@/app/(platform)/enterprise/mesa-operacional/exibicao";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 interface Project {
@@ -121,6 +124,8 @@ export default function ConsorcioProjetosPage() {
         </Card>
       )}
 
+      <OfertasCotaContemplada />
+
       {loading && <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-violet-400" /></div>}
 
       {!loading && (
@@ -164,6 +169,90 @@ export default function ConsorcioProjetosPage() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Ofertas de cota contemplada (BRIEF docs/briefs/2026-11-27_ofertas-cota-contemplada-em-projetos.md).
+// A rota já devolve a lista fechada por papel e na ordem certa (pendentes primeiro).
+function OfertasCotaContemplada() {
+  const [ofertas, setOfertas] = useState<OfertaAcompanhamento[] | null>(null);
+  const [interno, setInterno] = useState(false);
+  const [erro, setErro] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/consorcio/ofertas/acompanhamento")
+      .then(async (r) => {
+        const j = await r.json().catch(() => null);
+        if (!r.ok || !Array.isArray(j?.ofertas)) throw new Error("falha");
+        setOfertas(j.ofertas);
+        setInterno(!!j.interno);
+      })
+      .catch(() => setErro(true));
+  }, []);
+
+  const emAnalise = ofertas?.filter((o) => o.status === "pendente").length;
+  const aceitas = ofertas?.filter((o) => o.status === "aceita").length;
+
+  return (
+    <section id="ofertas" className="space-y-3 scroll-mt-24">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-[#F0ECE4]">Ofertas de cota contemplada</h2>
+          <p className="text-xs text-[#7A8FA8]">
+            {interno ? "Todas as ofertas feitas nas cartas contempladas. A decisão é feita na carta." : "Ofertas que você e sua equipe fizeram nas cartas contempladas."}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Contador rotulo="Em análise" valor={emAnalise} />
+          <Contador rotulo="Aceitas" valor={aceitas} />
+          <Contador rotulo="Total" valor={ofertas?.length} />
+        </div>
+      </div>
+
+      {erro ? (
+        <p className="rounded-xl border border-[#243A66] p-4 text-sm text-[#7A8FA8]">Não foi possível carregar as ofertas agora.</p>
+      ) : ofertas === null ? (
+        <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-[#C9A84C]" /></div>
+      ) : ofertas.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-[#243A66] p-6 text-center text-sm text-[#7A8FA8]">Nenhuma oferta de cota contemplada ainda.</p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {ofertas.map((o) => (
+            <div key={o.id} className="overflow-hidden rounded-xl border border-[#243A66] bg-[#162744]">
+              <div className="bg-[#C9A84C] px-4 py-1 text-[9px] font-bold tracking-[0.18em] uppercase text-[#09081A]">Oferta cota contemplada</div>
+              <div className="p-4 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-[#C9A84C]">Carta {o.carta_code}</span>
+                  <span className={o.status === "pendente" ? "rounded-full bg-[#C9A84C]/15 px-2 py-0.5 text-[10px] font-semibold text-[#E8C97A]" : "rounded-full bg-[#243A66] px-2 py-0.5 text-[10px] font-semibold text-[#F0ECE4]"}>
+                    {rotuloStatusOferta(o.status)}
+                  </span>
+                </div>
+                <p className="text-sm font-medium text-[#F0ECE4] break-words">{o.interessado_nome || "Interessado sem nome"}</p>
+                {!interno && <p className="text-[11px] text-[#7A8FA8]">{o.interessado_documento}</p>}
+                <p className="text-xs text-[#7A8FA8]">Crédito da carta: <span className="text-[#F0ECE4]">{valorBR(o.carta_credit_value)}</span></p>
+                <p className="text-xs text-[#7A8FA8]">Valor ofertado: <span className="font-semibold text-[#E8C97A]">{valorBR(o.valor_oferta)}</span></p>
+                <p className="text-[11px] text-[#7A8FA8]">Ofertado por {o.ofertado_por} em {dataBR(o.created_at)}</p>
+                {interno && (
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <span className="rounded-full border border-[#C9A84C]/35 px-2 py-0.5 text-[10px] text-[#E8C97A]">{o.origem}</span>
+                    <Link href="/consorcio/cartas-contempladas" className="text-xs font-semibold text-[#C9A84C] hover:underline">Abrir a carta</Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Contador({ rotulo, valor }: { rotulo: string; valor: number | undefined }) {
+  return (
+    <div className="rounded-lg border border-[#243A66] bg-[#111F35] px-3 py-1.5 text-center">
+      <p className="text-[9px] font-bold tracking-[0.18em] uppercase text-[#C9A84C]">{rotulo}</p>
+      <p className="text-sm font-semibold text-[#F0ECE4]">{valor ?? ""}</p>
     </div>
   );
 }

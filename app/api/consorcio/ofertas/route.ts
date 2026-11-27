@@ -6,6 +6,8 @@ import { z } from "zod";
 import { auditText, auditHtml } from "@/lib/brand-guardian-gate";
 import { escapeHtml } from "@/lib/html-escape";
 import { ehInterno } from "../vitrine";
+import { marcasDosPartners } from "@/lib/enterprise";
+import { origemDaOferta } from "@/lib/consorcio/ofertas-acompanhamento";
 
 export const dynamic = "force-dynamic";
 
@@ -126,29 +128,42 @@ export async function POST(req: NextRequest) {
     .eq("id", d.carta_id)
     .in("status", ["DISPONIVEL", "NEGOCIACAO"]);
 
-  // 3. Buscar todos os admins/gestão para notificações e email
+  // 3. Equipe V3 que recebe o aviso (BRIEF 2026-11-27 ofertas de cota contemplada: ADMIN, GESTAO e MESA_OPERACIONAL).
   const { data: admins } = await svc()
     .from("profiles")
     .select("id, email, full_name")
-    .in("role", ["ADMIN", "GESTAO"])
+    .in("role", ["ADMIN", "GESTAO", "MESA_OPERACIONAL"])
     .eq("is_active", true);
+
+  // Origem e quem ofertou: falha aqui vira "Não identificada" e o aviso sai do mesmo jeito.
+  let origem = "Não identificada";
+  let ofertadoPor = "Usuário sem nome";
+  try {
+    const { data: criador } = await svc().from("profiles").select("full_name, role").eq("id", user.id).maybeSingle();
+    ofertadoPor = (criador?.full_name as string | null)?.trim() || "Usuário sem nome";
+    const marcas = await marcasDosPartners(svc(), [user.id]);
+    origem = origemDaOferta(marcas, user.id, ehInterno(criador?.role as string | null));
+  } catch { /* mantém "Não identificada" */ }
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.v3partners.com.br";
+  const linkProjetos = `${appUrl}/consorcio/projetos#ofertas`;
 
   // 4. Notificações in-app
   if (admins && admins.length > 0) {
     await svc().from("notifications").insert(
       admins.map((a: { id: string; email: string; full_name: string }) => ({
         user_id: a.id,
-        title: "Nova Oferta de Consórcio",
-        message: `${d.interessado_nome} fez uma oferta de ${fmtCurrency(d.valor_oferta)} para a carta ${cartaCode} (crédito ${fmtCurrency(cartaCredito)}).`,
+        title: "Oferta de cota contemplada",
+        message: `${d.interessado_nome} ofertou ${fmtCurrency(d.valor_oferta)} pela carta ${cartaCode} (crédito ${fmtCurrency(cartaCredito)}). Origem: ${origem}. Ofertado por ${ofertadoPor}.`,
         type: "CONSORCIO_OFERTA",
-        action_url: "/consorcio/cartas-contempladas",
+        action_url: "/consorcio/projetos#ofertas",
         read: false,
       }))
     );
   }
 
   // 5. Email via Resend para todos os admins
-  if (process.env.RESEND_API_KEY && admins && admins.length > 0) {
+  if (!process.env.EMAIL_FROM) console.error("[consorcio/ofertas] EMAIL_FROM ausente: e-mail de oferta não enviado");
+  if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM && admins && admins.length > 0) {
     try {
       const resend = new Resend(process.env.RESEND_API_KEY);
       const adminEmails = admins
@@ -158,7 +173,7 @@ export async function POST(req: NextRequest) {
       if (adminEmails.length > 0) {
         const html = `<!DOCTYPE html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"><title>Nova Oferta de Consórcio</title></head>
+<head><meta charset="utf-8"><title>Oferta de cota contemplada</title></head>
 <body style="margin:0;padding:0;background:#09081A;font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:560px;margin:40px auto;background:#162744;border-radius:12px;overflow:hidden;border:1px solid #243A66;">
     <div style="padding:24px 32px;border-bottom:1px solid #243A66;background:#09081A;">
@@ -166,7 +181,7 @@ export async function POST(req: NextRequest) {
     </div>
     <div style="padding:32px;">
       <h2 style="margin:0 0 20px;font-size:18px;font-weight:700;color:#F5F1E8;">
-        Nova Oferta — Carta ${escapeHtml(cartaCode)}
+        Oferta de cota contemplada: carta ${escapeHtml(cartaCode)}
       </h2>
       <div style="background:#09081A;border-radius:8px;padding:16px;margin-bottom:20px;">
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #243A66;">
@@ -187,7 +202,15 @@ export async function POST(req: NextRequest) {
         </div>
         <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:${d.observacoes ? "1px solid #243A66" : "none"};">
           <span style="color:#9BAFC5;font-size:13px;">Telefone</span>
-          <span style="color:#F5F1E8;font-size:13px;font-weight:600;">${escapeHtml(d.interessado_tel ?? "—")}</span>
+          <span style="color:#F5F1E8;font-size:13px;font-weight:600;">${escapeHtml(d.interessado_tel || "Não informado")}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #243A66;">
+          <span style="color:#9BAFC5;font-size:13px;">Origem</span>
+          <span style="color:#F5F1E8;font-size:13px;font-weight:600;">${escapeHtml(origem)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #243A66;">
+          <span style="color:#9BAFC5;font-size:13px;">Ofertado por</span>
+          <span style="color:#F5F1E8;font-size:13px;font-weight:600;">${escapeHtml(ofertadoPor)}</span>
         </div>
         ${responsavel_nome ? `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:${d.observacoes ? "1px solid #243A66" : "none"};">
           <span style="color:#9BAFC5;font-size:13px;">Responsável</span>
@@ -199,21 +222,22 @@ export async function POST(req: NextRequest) {
         </div>` : ""}
       </div>
       <p style="font-size:13px;color:#F5F1E8;line-height:1.6;margin-bottom:16px;">
-        A carta foi marcada como <strong style="color:#E8C97A;">Em Negociação</strong>. Acesse a plataforma para acompanhar.
+        A carta foi marcada como <strong style="color:#E8C97A;">Em Negociação</strong>.
       </p>
+      <p style="margin:0 0 8px;"><a href="${escapeHtml(linkProjetos)}" style="display:inline-block;background:#C9A84C;color:#09081A;font-size:13px;font-weight:700;text-decoration:none;padding:10px 18px;border-radius:8px;">Acompanhar em Projetos</a></p>
     </div>
     <div style="padding:18px 32px;border-top:1px solid #243A66;background:#09081A;">
-      <p style="margin:0;font-size:11px;color:#9BAFC5;">V3 Partners — Consórcio · Notificação automática</p>
+      <p style="margin:0;font-size:11px;color:#9BAFC5;">V3 Partners · Consórcio · Notificação automática</p>
     </div>
   </div>
 </body>
 </html>`;
 
-        const ofertaSubjectGate = auditText(`Nova Oferta: Carta ${cartaCode} · ${d.interessado_nome}`);
+        const ofertaSubjectGate = auditText(`Oferta de cota contemplada: carta ${cartaCode}`);
         const ofertaHtmlGate = auditHtml(html);
         if (ofertaHtmlGate.blocking.length > 0) console.error("[consorcio/ofertas] Brand Guardian bloqueou:", ofertaHtmlGate.blocking);
         await resend.emails.send({
-          from: process.env.EMAIL_FROM || "V3 Partners <onboarding@resend.dev>",
+          from: process.env.EMAIL_FROM,
           to: adminEmails,
           subject: ofertaSubjectGate.corrected,
           html: ofertaHtmlGate.corrected,
