@@ -1,0 +1,53 @@
+-- PROVA DE ACESSO de 20261127a_consorcio_contratacoes.sql (rodar no SQL Editor ANTES de aplicar de vez).
+-- BRIEF docs/briefs/2026-11-27_contratar-cota-nova-em-projetos.md, plano de teste (item 6.8 do QA).
+-- Tudo roda dentro de uma transação que é DESFEITA no final: nada fica gravado.
+-- Rode um bloco por vez. Cada "permission denied" (42501) é o resultado ESPERADO.
+-- Usuário de teste: 07668ecf-b524-4495-8bf2-ef18bb23db51 (master temporário AGS Teste).
+
+-- ===== BLOCO 1: cria a tabela dentro da transação e confere privilégios =====
+begin;
+-- (cole aqui o conteúdo inteiro de 20261127a_consorcio_contratacoes.sql)
+select
+  has_table_privilege('anon', 'public.consorcio_contratacoes', 'select')          as anon_select,
+  has_table_privilege('anon', 'public.consorcio_contratacoes', 'insert')          as anon_insert,
+  has_table_privilege('authenticated', 'public.consorcio_contratacoes', 'select') as auth_select,
+  has_table_privilege('authenticated', 'public.consorcio_contratacoes', 'insert') as auth_insert,
+  has_table_privilege('authenticated', 'public.consorcio_contratacoes', 'update') as auth_update,
+  has_table_privilege('authenticated', 'public.consorcio_contratacoes', 'delete') as auth_delete;
+-- ESPERADO: todas as colunas = false.
+
+-- ===== BLOCO 2: como anon =====
+set local role anon;
+select * from public.consorcio_contratacoes;
+-- ESPERADO: ERROR 42501 permission denied for table consorcio_contratacoes
+rollback;
+
+-- ===== BLOCO 3: como authenticated (partner de teste) =====
+-- Repita "begin; <migration>; set local role authenticated; select set_config(...)" e UM comando por vez,
+-- terminando com rollback (o erro aborta a transação):
+begin;
+-- (cole a migration de novo)
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"07668ecf-b524-4495-8bf2-ef18bb23db51","role":"authenticated"}', true);
+select * from public.consorcio_contratacoes;                                   -- ESPERADO: 42501
+rollback;
+-- Repita trocando o select por cada linha abaixo (todas ESPERADO: 42501):
+--   insert into public.consorcio_contratacoes (segmento, valor_credito, parcela_maxima, prazo_meses, quando, cliente_nome, cliente_whatsapp, consentimento_em, consentimento_texto, created_by) values ('IMOVEL', 100000, 1000, 180, 'IMEDIATO', 'Teste', '+5551999999999', now(), 'teste', '07668ecf-b524-4495-8bf2-ef18bb23db51');
+--   update public.consorcio_contratacoes set status = 'NOVA';
+--   delete from public.consorcio_contratacoes;
+
+-- ===== DEPOIS DE APLICAR DE VEZ (segundo go): as 3 consultas da seção 6 =====
+-- a) políticas abertas: a tabela nova NÃO pode aparecer
+select schemaname, tablename, policyname, roles, qual from pg_policies
+ where tablename = 'consorcio_contratacoes';
+-- ESPERADO: 0 linhas (nenhuma policy)
+-- b) views sem security_invoker: a tabela nova não cria view (nada a conferir além de 0 views novas)
+select table_name from information_schema.views where table_schema = 'public' and table_name ilike '%contratac%';
+-- ESPERADO: 0 linhas
+-- c) tabelas legíveis por anon: a nova não pode aparecer
+select table_name from information_schema.role_table_grants
+ where grantee in ('anon', 'authenticated') and table_schema = 'public' and table_name = 'consorcio_contratacoes';
+-- ESPERADO: 0 linhas
+-- d) RLS ligada
+select relrowsecurity from pg_class where oid = 'public.consorcio_contratacoes'::regclass;
+-- ESPERADO: true

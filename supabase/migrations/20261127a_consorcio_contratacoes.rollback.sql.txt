@@ -1,0 +1,10 @@
+-- Reversão de 20261127a_consorcio_contratacoes.sql
+-- BRIEF docs/briefs/2026-11-27_contratar-cota-nova-em-projetos.md
+--
+-- 1. Conferir e exportar antes (guardar o resultado fora do banco):
+--      select count(*) from public.consorcio_contratacoes;
+--      select * from public.consorcio_contratacoes order by created_at;
+-- 2. Reverter o código antes (a rota trata a tabela ausente: GET vazio, POST 503).
+-- 3. Apagar:
+drop table if exists public.consorcio_contratacoes;
+-- As notificações já criadas ficam (o texto não tem WhatsApp nem e-mail do cliente).
