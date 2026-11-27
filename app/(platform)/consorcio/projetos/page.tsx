@@ -10,6 +10,7 @@ import Link from "next/link";
 import { rotuloStatusOferta, type OfertaAcompanhamento } from "@/lib/consorcio/ofertas-acompanhamento";
 import { dataBR, valorBR } from "@/app/(platform)/enterprise/mesa-operacional/exibicao";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { BotaoContratarCota, CotasNovas } from "@/components/consorcio/contratar-cota";
 
 interface Project {
   id: string;
@@ -87,10 +88,13 @@ export default function ConsorcioProjetosPage() {
             <p className="text-xs text-muted-foreground">Acompanhe projetos de aquisição via consórcio</p>
           </div>
         </div>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
-          <Plus className="w-4 h-4 mr-1.5" />
-          Incluir Projeto
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <BotaoContratarCota />
+          <Button size="sm" onClick={() => setShowForm(!showForm)}>
+            <Plus className="w-4 h-4 mr-1.5" />
+            Incluir Projeto
+          </Button>
+        </div>
       </div>
 
       {showForm && (
@@ -123,6 +127,8 @@ export default function ConsorcioProjetosPage() {
           </CardContent>
         </Card>
       )}
+
+      <CotasNovas />
 
       <OfertasCotaContemplada />
 
