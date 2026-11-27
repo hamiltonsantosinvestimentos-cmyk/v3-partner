@@ -41,7 +41,7 @@ O que muda: o usuário de teste "Teste AGS V3" (07668ecf-b524-4495-8bf2-ef18bb23
     - configurar domínio;
     - salvar razão social, CNPJ, logo, ícone ou cores na tela Marca;
     - salvar repasses ou assinaturas da equipe;
-    - criar proposta, análise de crédito, lead, consulta paga (CheckTudo/SCR) ou qualquer cadastro;
+    - criar proposta, análise de crédito, lead, consulta paga (CheckTudo/SCR) ou qualquer cadastro; agir na proposta de teste V3-CR-TESTE-AGS-0001 (ver ADENDO 27/11);
     - baixar PDF ou exportar relatório: algumas telas gravam EXPORT na auditoria, e isso faz a reversão parar.
 
     Esses cadastros geram custo, notificam a Mesa, e uma proposta apareceria nas mesas da V3 com a tarja "AGS Teste" nas cores da AGS, podendo ser confundida com o cliente real.
@@ -61,7 +61,7 @@ O que muda: o usuário de teste "Teste AGS V3" (07668ecf-b524-4495-8bf2-ef18bb23
 - Reversão: restaura **todas** as colunas do snapshot do passo 1, inclusive as que o master de teste consegue gravar (razão social, CNPJ, domínio). Assim nada que o teste gravou nessas colunas fica para trás.
 - LGPD e compliance: não há dado pessoal novo. A conta é de teste da V3, e as cores, o logo e o nome da AGS já são públicos na tela de login dela. A razão social e o CNPJ da AGS **não** são copiados.
 - Segurança de acesso ao banco (anon, RLS, views, funções): nada muda em políticas, grants nem funções. A escrita é feita pela service role, num script local, com o env de produção apagado ao final.
-- Comissões, relatórios e listas: o usuário de teste não tem propostas, então nada muda em comissão nem em relatório. Ele aparece como Enterprise separado na aba Enterprises do ADMIN durante o teste.
+- Comissões, relatórios e listas: o usuário de teste não tinha propostas na ida. Desde o ADENDO de 27/11 ele tem 1 proposta fictícia, que conta nos painéis enquanto existir e é apagada até 30/11 (ver ADENDO). Ele aparece como Enterprise separado na aba Enterprises do ADMIN durante o teste.
 - Performance: nenhuma.
 - Vercel timeout (60s): não se aplica.
 
@@ -80,7 +80,7 @@ Colunas do snapshot (S): `enterprise_id`, `enterprise_repasse_percent`, `enterpr
 Conferências de "nada gravado" (C), para o id 07668ecf-…:
 - `audit_logs` **de escrita** com `user_id` = 07668ecf-… e `created_at` depois do registro de ida é 0. Escrita quer dizer `action in ('CREATE','UPDATE','DELETE','OVERRIDE','EXPORT')`; LOGIN, LOGOUT e ACCESS ficam de fora, porque o próprio login do teste grava LOGIN. Cobre as rotas auditadas, não todas;
 - equipe: `profiles` com `enterprise_id` = 07668ecf-… é 0;
-- `credit_desk_proposals` com `partner_id` = 07668ecf-… é 0;
+- `credit_desk_proposals` com `partner_id` = 07668ecf-… é 0 (na reversão, depois do passo 0 do ADENDO de 27/11);
 - `crm_leads` com `partner_id` = 07668ecf-… é 0;
 - `enterprise_repasses` com `enterprise_id` = 07668ecf-… é 0;
 - pasta `07668ecf-…/` no bucket `white-label`: lista de arquivos.
@@ -194,3 +194,24 @@ Sugestões aplicadas:
 ## REGISTRO DE EXECUÇÃO
 - Ida: 26/11/2026, depois do go do Hamilton. C da ida: equipe 0, propostas 0, leads 0, repasses 0, pasta vazia. Snapshot S igual ao esperado. Auditoria gravada antes, com o user_id do ADMIN do Hamilton (75c6cac4…). As 2 cópias foram feitas e o update afetou 1 linha. Conferência: `enterprise_id` nulo, "AGS Teste", tema com as cópias. Os originais do Marciano e as cópias respondem HTTP 200. O env e o script foram apagados.
 - Volta: pendente (prazo 30/11/2026).
+
+---
+
+## ADENDO 27/11/2026: proposta de teste (BRIEF `2026-11-27_operacao-teste-ags-teste.md`)
+Este adendo vale junto com aquele BRIEF e só depois do go dele.
+- Existe 1 proposta fictícia do usuário de teste: `V3-CR-TESTE-AGS-0001`, "CLIENTE TESTE (NÃO ANALISAR)". O id fica no REGISTRO DE EXECUÇÃO daquele BRIEF.
+- **"Só olhar" vale também para ela.**
+  - Proibido ao testador: abrir a proposta na Mesa de Crédito para agir, responder a pendência, enviar documento, abrir ou escrever no chat da proposta, pedir análise ou consulta.
+  - Proibido à mesa: mover de etapa, rodar avaliação, cobrar, enviar a instituição, gerar mandato ou consentimento, comentar ou anexar.
+- **Passo 0 da reversão** (antes do passo C da reversão):
+  - roda a REVERSÃO daquele BRIEF;
+  - critério único: `id = e09a6eec-81a8-468b-829d-7baa1028e018`, `code = 'V3-CR-TESTE-AGS-0001'`, `partner_id = '07668ecf-b524-4495-8bf2-ef18bb23db51'` e `metadata->>teste_ags = 'true'`;
+  - o SELECT com esse critério devolve exatamente 1 linha;
+  - a linha está intacta;
+  - o inventário de tudo que aponta para a proposta (tabelas, Storage e notificações) está vazio;
+  - a auditoria com old_data é gravada antes;
+  - o DELETE devolve exatamente aquele id.
+
+  Se qualquer item falhar, a reversão para e avisa o Hamilton.
+- Depois do passo 0, a trava continua igual: **qualquer outra** proposta do usuário de teste para a reversão (propostas = 0).
+- O passo 0 também pode rodar sozinho, antes da reversão, para a proposta não entrar no relatório enviado em 01/12.

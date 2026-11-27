@@ -1,14 +1,16 @@
 "use client";
 
-// Mesa Operacional do master Enterprise: Kanban só de leitura das operações da equipe.
-// BRIEF docs/briefs/2026-11-26_mesa-operacional-master-enterprise.md
-// Nada aqui move, aprova, comenta ou envia. Documentos aparecem sem link para baixar.
-import { useMemo, useState } from "react";
-import { AlertCircle, FileText, Search, User } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+// Mesa Operacional do master Enterprise: Kanban das operações da equipe.
+// BRIEF docs/briefs/2026-11-26_mesa-operacional-master-enterprise.md (Kanban, cards mascarados)
+// BRIEF docs/briefs/2026-11-27_mesa-operacional-master-modal-mesa-credito.md (clique abre a janela da
+// Mesa de Crédito, com as mesmas props de partner de N1/N2/N3: não move etapa, não aprova, não gera contrato).
+import { useCallback, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AlertCircle, FileText, Loader2, Search, User } from "lucide-react";
+import { PropostaDetailModal, type ProposalFull } from "@/components/mesa-credito/proposta-detail-modal";
 import type { CardMesa } from "@/lib/enterprise/mesa-equipe";
 import {
-  COLUNAS, dataBR, LIMITE_MESA, resumoDaMesa, ROTULO_COLUNA, valorBR,
+  COLUNAS, dataBR, LIMITE_MESA, propostaDaMesaDeCredito, resumoDaMesa, ROTULO_COLUNA, valorBR,
 } from "@/app/(platform)/enterprise/mesa-operacional/exibicao";
 
 interface Props {
@@ -18,12 +20,18 @@ interface Props {
   limiteAtingido: boolean;
 }
 
+type Proposta = ReturnType<typeof propostaDaMesaDeCredito>;
+
 const normalizar = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 export function MesaEquipeClient({ cards, usuarios, originadorId, limiteAtingido }: Props) {
+  const router = useRouter();
   const [usuario, setUsuario] = useState("todos");
   const [busca, setBusca] = useState("");
-  const [aberto, setAberto] = useState<CardMesa | null>(null);
+  const [aberta, setAberta] = useState<Proposta | null>(null);
+  const [abrindo, setAbrindo] = useState<string | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  const pedido = useRef<AbortController | null>(null);
 
   const filtrados = useMemo(() => {
     const q = normalizar(busca.trim());
@@ -36,12 +44,43 @@ export function MesaEquipeClient({ cards, usuarios, originadorId, limiteAtingido
   const resumo = useMemo(() => resumoDaMesa(filtrados), [filtrados]);
   const temFiltro = usuario !== "todos" || busca.trim() !== "";
 
+  // Mesma rota e mesmo recorte por papel que a Mesa de Crédito usa. A janela nunca abre com dado parcial.
+  const abrir = useCallback(async (id: string) => {
+    pedido.current?.abort();
+    const ctrl = new AbortController();
+    pedido.current = ctrl;
+    setErro(null);
+    setAbrindo(id);
+    try {
+      const res = await fetch(`/api/credit-proposals?id=${encodeURIComponent(id)}`, { signal: ctrl.signal });
+      if (res.status === 404) { setErro("Esta proposta não está mais disponível."); return; }
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.proposal) { setErro("Não foi possível abrir a proposta agora. Tente de novo."); return; }
+      if (!ctrl.signal.aborted) setAberta(propostaDaMesaDeCredito(json.proposal as Record<string, unknown>));
+    } catch (e) {
+      if ((e as { name?: string })?.name !== "AbortError") setErro("Não foi possível abrir a proposta agora. Tente de novo.");
+    } finally {
+      if (pedido.current === ctrl) { pedido.current = null; setAbrindo(null); }
+    }
+  }, []);
+
+  // Igual ao handleProposalUpdate de nivel1-client: a janela recebe por aqui o que o servidor gravou.
+  const aoAtualizar = useCallback((proposalId: string, updates: Partial<ProposalFull>) => {
+    setAberta((prev) => (prev && prev.id === proposalId ? { ...prev, ...(updates as Partial<Proposta>) } : prev));
+  }, []);
+
+  // Várias ações da janela gravam sem avisar o pai (remover documento, checklist, chat): atualiza sempre ao fechar.
+  const fechar = useCallback(() => {
+    setAberta(null);
+    router.refresh();
+  }, [router]);
+
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-semibold text-[#F0ECE4]">Mesa Operacional</h1>
         <p className="text-sm text-[#7A8FA8] mt-1">
-          Operações da sua equipe, em tempo real. Só acompanhamento: a análise é feita pela mesa.
+          Operações da sua equipe, em tempo real. As etapas são movidas pela mesa de análise.
         </p>
       </div>
 
@@ -78,6 +117,13 @@ export function MesaEquipeClient({ cards, usuarios, originadorId, limiteAtingido
 
       {limiteAtingido && <p className="text-xs text-[#7A8FA8]">Mostrando as {LIMITE_MESA} operações mais recentes.</p>}
 
+      {erro && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-lg border border-[#C9A84C]/35 bg-[#C9A84C]/10 px-4 py-2.5 text-sm text-[#E8C97A]">
+          <span>{erro}</span>
+          <button type="button" onClick={() => setErro(null)} className="text-xs underline">Fechar</button>
+        </div>
+      )}
+
       {cards.length === 0 ? (
         <Vazio texto="Nenhuma operação da equipe ainda. As propostas criadas por você e pelos usuários da sua equipe aparecem aqui." />
       ) : filtrados.length === 0 && temFiltro ? (
@@ -96,7 +142,9 @@ export function MesaEquipeClient({ cards, usuarios, originadorId, limiteAtingido
                   <div className="space-y-2 mt-1">
                     {lista.length === 0 ? (
                       <p className="text-[11px] text-[#7A8FA8] px-1 py-3">Nenhuma operação nesta etapa</p>
-                    ) : lista.map((c) => <Card key={c.id} c={c} onAbrir={() => setAberto(c)} />)}
+                    ) : lista.map((c) => (
+                      <Card key={c.id} c={c} abrindo={abrindo === c.id} bloqueado={abrindo !== null} onAbrir={() => abrir(c.id)} />
+                    ))}
                   </div>
                 </section>
               );
@@ -105,11 +153,18 @@ export function MesaEquipeClient({ cards, usuarios, originadorId, limiteAtingido
         </div>
       )}
 
-      <Dialog open={!!aberto} onOpenChange={(o) => { if (!o) setAberto(null); }}>
-        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
-          {aberto && <Detalhe c={aberto} />}
-        </DialogContent>
-      </Dialog>
+      <PropostaDetailModal
+        open={!!aberta}
+        onClose={fechar}
+        proposal={aberta as ProposalFull | null}
+        onStageChange={() => {}}
+        onProposalUpdate={aoAtualizar}
+        canChangeStage={false}
+        canEditValorSolicitado={false}
+        canEditInstituicao={false}
+        canGenerateContract={false}
+        isAdmin={false}
+      />
     </div>
   );
 }
@@ -134,16 +189,20 @@ function docsEnviados(c: CardMesa) {
   return `${c.documentos_recebidos.length} de ${total} enviados`;
 }
 
-function Card({ c, onAbrir }: { c: CardMesa; onAbrir: () => void }) {
+function Card({ c, abrindo, bloqueado, onAbrir }: { c: CardMesa; abrindo: boolean; bloqueado: boolean; onAbrir: () => void }) {
   return (
     <button
       type="button"
       onClick={onAbrir}
-      className="w-full text-left rounded-lg bg-[#162744] border border-[#243A66] hover:border-[#C9A84C]/50 p-3 space-y-1.5 transition-colors"
+      disabled={bloqueado}
+      aria-busy={abrindo}
+      className="w-full text-left rounded-lg bg-[#162744] border border-[#243A66] hover:border-[#C9A84C]/50 p-3 space-y-1.5 transition-colors disabled:cursor-wait disabled:opacity-70"
     >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] font-bold text-[#C9A84C]">{c.codigo}</span>
-        {c.pendencia && (
+        {abrindo ? (
+          <span className="flex items-center gap-1 text-[10px] text-[#7A8FA8]"><Loader2 className="w-3 h-3 animate-spin" /> Abrindo…</span>
+        ) : c.pendencia && (
           <span className="flex items-center gap-1 rounded-full bg-[#C9A84C]/15 px-2 py-0.5 text-[9px] font-bold uppercase text-[#E8C97A]">
             <AlertCircle className="w-3 h-3" /> Pendência
           </span>
@@ -158,101 +217,5 @@ function Card({ c, onAbrir }: { c: CardMesa; onAbrir: () => void }) {
       <p className="flex items-center gap-1 text-[11px] text-[#7A8FA8]"><FileText className="w-3 h-3" /> {docsEnviados(c)}</p>
       <p className="text-[10px] text-[#7A8FA8]">Atualizado em {dataBR(c.atualizado_em)}</p>
     </button>
-  );
-}
-
-function Linha({ rotulo, valor }: { rotulo: string; valor: string }) {
-  return (
-    <div className="flex justify-between gap-4 text-sm">
-      <span className="text-[#7A8FA8]">{rotulo}</span>
-      <span className="text-[#F0ECE4] text-right break-words">{valor}</span>
-    </div>
-  );
-}
-
-function Detalhe({ c }: { c: CardMesa }) {
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>{c.codigo} · {c.cliente.nome || "Cliente sem nome"}</DialogTitle>
-        <DialogDescription>{ROTULO_COLUNA[c.coluna]} · só acompanhamento</DialogDescription>
-      </DialogHeader>
-      <div className="space-y-4">
-        <div className="space-y-1.5">
-          <Linha rotulo="CPF/CNPJ" valor={c.cliente.cpf_cnpj ?? "Não informado"} />
-          <Linha rotulo="Linha" valor={c.linha || "Não informado"} />
-          <Linha rotulo="Valor solicitado" valor={valorBR(c.valor_solicitado)} />
-          {c.valor_aprovado != null && <Linha rotulo="Valor aprovado" valor={valorBR(c.valor_aprovado)} />}
-          <Linha rotulo="Prazo" valor={c.prazo ? `${c.prazo} meses` : "Não informado"} />
-          <Linha rotulo="Finalidade" valor={c.finalidade || "Não informado"} />
-          <Linha rotulo="Usuário" valor={c.originador} />
-          <Linha rotulo="Documentos" valor={docsEnviados(c)} />
-          <Linha rotulo="Criada em" valor={dataBR(c.criada_em)} />
-          <Linha rotulo="Atualizada em" valor={dataBR(c.atualizado_em)} />
-        </div>
-
-        {c.pendencia && (
-          <Bloco titulo="Pendência aberta">
-            <p className="text-sm text-[#F0ECE4] whitespace-pre-wrap">{c.pendencia.motivo}</p>
-            <p className="text-[11px] text-[#7A8FA8] mt-1">
-              Responsável: {c.pendencia.responsavel ?? "Não informado"} · desde {dataBR(c.pendencia.desde, true)}
-            </p>
-          </Bloco>
-        )}
-
-        {c.pendencias_documentos.length > 0 && (
-          <Bloco titulo="Pendências de documentos">
-            <ul className="space-y-1.5">
-              {c.pendencias_documentos.map((p, i) => (
-                <li key={i} className="text-sm text-[#F0ECE4]">
-                  {p.documento}: {p.motivo || "Não informado"}
-                  <span className="block text-[11px] text-[#7A8FA8]">desde {dataBR(p.desde, true)}</span>
-                </li>
-              ))}
-            </ul>
-          </Bloco>
-        )}
-
-        <Bloco titulo="Documentos recebidos">
-          {c.documentos_recebidos.length === 0 ? (
-            <p className="text-sm text-[#7A8FA8]">Nenhum documento recebido.</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {c.documentos_recebidos.map((d, i) => (
-                <li key={i} className="text-sm text-[#F0ECE4]">
-                  {d.tipo_documento}
-                  <span className="block text-[11px] text-[#7A8FA8] break-all">
-                    {d.nome_arquivo || "Arquivo sem nome"} · {dataBR(d.recebido_em, true)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Bloco>
-
-        <Bloco titulo="Documentos que faltam">
-          {c.documentos_pendentes.length === 0 ? (
-            <p className="text-sm text-[#7A8FA8]">Nenhum documento obrigatório faltando.</p>
-          ) : (
-            <ul className="list-disc pl-5 space-y-1">
-              {c.documentos_pendentes.map((d, i) => <li key={i} className="text-sm text-[#F0ECE4]">{d}</li>)}
-            </ul>
-          )}
-        </Bloco>
-
-        <p className="text-[11px] text-[#7A8FA8] border-t border-[#243A66] pt-3">
-          Para tratar uma pendência, o usuário responsável abre a proposta na Mesa de Crédito.
-        </p>
-      </div>
-    </>
-  );
-}
-
-function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-[9px] font-bold tracking-[0.18em] uppercase text-[#C9A84C] mb-1.5">{titulo}</p>
-      {children}
-    </div>
   );
 }

@@ -97,3 +97,34 @@ test("cardDaEquipe: nomes de documento no lugar dos ids", () => {
   assert.deepEqual(c.documentos_pendentes, ["Comprovante de renda"]);
   assert.deepEqual(c.documentos_recebidos.map((d) => d.tipo_documento).sort(), [OUTRO_DOCUMENTO, "RG ou CNH"].sort());
 });
+
+// BRIEF docs/briefs/2026-11-27_mesa-operacional-master-modal-mesa-credito.md
+import { propostaDaMesaDeCredito } from "../../app/(platform)/enterprise/mesa-operacional/exibicao";
+
+test("propostaDaMesaDeCredito: mesma conversão da Mesa de Crédito (nivel1-client)", () => {
+  const p = propostaDaMesaDeCredito({
+    id: "p1", code: "C1", title: "T", client_name: "Cli", client_cpf_cnpj: "123.456.789-01",
+    credit_line: "HOME EQUITY", requested_value: 850000, approved_value: null, current_level: "NIVEL_1",
+    status: "PENDING", stage: "AVALIACAO_IMOVEL", created_at: "2026-11-27T12:00:00Z",
+    partner: { id: "u1", full_name: "Ana", role: "ENTERPRISE" },
+    metadata: { client_type: "PF", email: "a@b.c", telefone: "+55", prazo: "180", finalidade: "F" },
+    pending_reason: "R", pending_responsible: "Partner", pending_at: "2026-11-27T12:00:00Z",
+    level1_notes: "n1",
+  });
+  assert.deepEqual(Object.keys(p).sort(), [
+    "approved_value", "client_name", "client_type", "code", "comissao_instituicao_perc", "comissao_mandato_perc",
+    "cpf_cnpj", "created_at", "credit_line", "current_level", "email", "enterprise", "finalidade", "id",
+    "level1_at", "level1_notes", "level2_at", "level2_notes", "level3_at", "level3_notes", "metadata",
+    "partner_id", "partner_name", "partner_role", "pending_at", "pending_reason", "pending_resolved_at",
+    "pending_resolved_by", "pending_responsible", "prazo", "requested_value", "stage", "status", "telefone",
+    "title", "valor_credito_atual",
+  ].sort());
+  assert.equal(p.cpf_cnpj, "123.456.789-01");
+  assert.equal(p.client_type, "PF");
+  assert.equal(p.prazo, "180");
+  assert.equal(p.partner_id, "u1");
+  assert.equal(p.partner_name, "Ana");
+  assert.equal(p.approved_value, null);
+  assert.equal(p.enterprise, null);
+  assert.equal(p.pending_reason, "R");
+});

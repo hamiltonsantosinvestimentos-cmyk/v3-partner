@@ -27,7 +27,7 @@ export default async function MesaEquipePage() {
 
   const ids = await idsDaEquipe(svc, user.id);
   const [props, perfis, port] = await Promise.all([
-    svc.from("credit_desk_proposals").select(COLUNAS_VISAO).in("partner_id", ids)
+    svc.from("credit_desk_proposals").select(COLUNAS_VISAO).in("partner_id", ids).is("deleted_at", null)
       .order("updated_at", { ascending: false }).limit(LIMITE_MESA),
     svc.from("profiles").select("id, full_name").in("id", ids),
     svc.from("portfolio_linhas").select("nome, documentos_pf, documentos_pj").eq("ativo", true),
