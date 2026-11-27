@@ -195,12 +195,13 @@ export const COLUNAS_CONTRATACAO =
 export const CAMPOS_LISTA = [
   "id", "code", "segmento", "valor_credito", "parcela_maxima", "prazo_meses", "tem_lance", "lance_valor", "quando",
   "cliente_nome", "status", "created_at", "enviado_por", "origem", "pode_revelar", "whatsapp_mascarado", "email_mascarado",
+  "comentarios",
 ] as const;
 
 type Linha = Record<string, unknown>;
 const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
-export function contratacaoParaLista(o: Linha, viewer: Viewer, extras: { enviadoPor: string; origem: string | null }) {
+export function contratacaoParaLista(o: Linha, viewer: Viewer, extras: { enviadoPor: string; origem: string | null; comentarios?: number }) {
   const pode = podeRevelarContato(viewer, o as { created_by?: string | null });
   return {
     id: String(o.id),
@@ -220,6 +221,7 @@ export function contratacaoParaLista(o: Linha, viewer: Viewer, extras: { enviado
     pode_revelar: pode,
     whatsapp_mascarado: pode ? mascararWhatsapp(o.cliente_whatsapp as string | null) : null,
     email_mascarado: pode ? mascararEmail(o.cliente_email as string | null) : null,
+    comentarios: extras.comentarios ?? 0,
   };
 }
 

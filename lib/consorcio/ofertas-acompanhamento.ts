@@ -3,6 +3,7 @@
 // A resposta é montada campo a campo a partir de uma lista fechada por papel. Campo novo em
 // consorcio_ofertas não sai por aqui sem ser incluído de propósito (teste de paridade).
 import { detectDocumentType, normalizeDocument } from "@/lib/v3-clients-pure";
+import { etapaDaOferta } from "@/lib/consorcio/kanban";
 
 export type StatusOferta = "pendente" | "aceita" | "recusada" | "cancelada";
 export const ORDEM_STATUS: StatusOferta[] = ["pendente", "aceita", "recusada", "cancelada"];
@@ -51,18 +52,18 @@ export const COLUNAS_OFERTA = "id, carta_id, carta_code, carta_credit_value, val
 
 export const CAMPOS_INTERNO = [
   "id", "carta_id", "carta_code", "carta_credit_value", "valor_oferta", "interessado_nome", "status", "created_at",
-  "ofertado_por", "origem",
+  "ofertado_por", "origem", "etapa", "comentarios",
 ] as const;
 
 export const CAMPOS_PARTNER = [
   "id", "carta_code", "carta_credit_value", "valor_oferta", "interessado_nome", "interessado_documento", "status",
-  "created_at", "ofertado_por",
+  "created_at", "ofertado_por", "etapa", "comentarios",
 ] as const;
 
 type Linha = Record<string, unknown>;
 const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
 
-export function ofertaParaAcompanhamento(o: Linha, papel: "interno" | "partner", extras: { ofertadoPor: string; origem?: string }) {
+export function ofertaParaAcompanhamento(o: Linha, papel: "interno" | "partner", extras: { ofertadoPor: string; origem?: string; comentarios?: number }) {
   const base = {
     id: String(o.id),
     carta_code: String(o.carta_code ?? ""),
@@ -72,6 +73,9 @@ export function ofertaParaAcompanhamento(o: Linha, papel: "interno" | "partner",
     status: String(o.status ?? "pendente"),
     created_at: (o.created_at as string | null) ?? null,
     ofertado_por: extras.ofertadoPor,
+    // Kanban (BRIEF 2026-11-27 kanban): etapa de acompanhamento (null = Nova) e comentários visíveis ao viewer.
+    etapa: etapaDaOferta(o.etapa),
+    comentarios: extras.comentarios ?? 0,
   };
   if (papel === "interno") {
     return { ...base, carta_id: String(o.carta_id ?? ""), origem: extras.origem ?? "Não identificada" };

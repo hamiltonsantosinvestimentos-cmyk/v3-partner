@@ -1,0 +1,22 @@
+-- Reversão de 20261127b_consorcio_kanban_comentarios.sql
+-- BRIEF docs/briefs/2026-11-27_kanban-consorcio-projetos.md
+-- 1. Reverter o código antes (as rotas tratam tabela/coluna ausente).
+-- 2. Exportar antes (guardar fora do banco):
+--      select * from public.consorcio_comentarios order by created_at;
+--      select id, etapa, etapa_atualizada_em, etapa_atualizada_por from public.consorcio_ofertas;
+-- 3. Reverter:
+drop table if exists public.consorcio_comentarios;
+
+alter table public.consorcio_ofertas
+  drop constraint if exists consorcio_ofertas_etapa_ck,
+  drop column if exists etapa_atualizada_por,
+  drop column if exists etapa_atualizada_em,
+  drop column if exists etapa;
+
+-- Policy de UPDATE recriada exatamente como em 20260810d_consorcio_folder_governance.sql (linhas 122 a 127):
+drop policy if exists "admin pode atualizar ofertas" on public.consorcio_ofertas;
+create policy "admin pode atualizar ofertas" on public.consorcio_ofertas
+  for update using (exists (
+    select 1 from public.profiles
+    where profiles.id = auth.uid() and profiles.role = any (array['ADMIN','GESTAO','MESA_OPERACIONAL']::user_role[])
+  ));

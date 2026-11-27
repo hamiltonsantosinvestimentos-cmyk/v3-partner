@@ -1,0 +1,63 @@
+-- PROVA DE ACESSO de 20261127b_consorcio_kanban_comentarios.sql
+-- BRIEF docs/briefs/2026-11-27_kanban-consorcio-projetos.md (item 6.8 do QA).
+-- Cada bloco roda num begin ... rollback: nada fica gravado.
+-- Cole SÓ o SQL de cada bloco no SQL Editor. "42501 permission denied" ou "0 linhas" é o ESPERADO.
+-- Ids: partner comum de teste = 07668ecf-b524-4495-8bf2-ef18bb23db51 (master AGS Teste).
+--      MESA_OPERACIONAL e ADMIN: use os ids reais (o bloco 0 lista um de cada).
+
+-- ===== BLOCO 0: ids para os blocos 4 e 5 (só leitura) =====
+select role, id, full_name from public.profiles
+ where role in ('MESA_OPERACIONAL','ADMIN') and is_active = true order by role limit 4;
+
+-- ===== BLOCO 1: privilégios (cole a migration inteira no lugar indicado) =====
+begin;
+-- >>> cole aqui a migration 20261127b inteira <<<
+select
+  has_table_privilege('anon', 'public.consorcio_comentarios', 'select,insert,update,delete') as anon_coment,
+  has_table_privilege('authenticated', 'public.consorcio_comentarios', 'select,insert,update,delete') as auth_coment,
+  (select count(*) from pg_policies where tablename = 'consorcio_ofertas' and cmd = 'UPDATE') as policies_update_ofertas;
+-- ESPERADO: false | false | 0
+rollback;
+
+-- ===== BLOCO 2: anon =====
+begin;
+-- >>> cole a migration <<<
+set local role anon;
+select * from public.consorcio_comentarios;            -- ESPERADO: 42501
+rollback;
+
+-- ===== BLOCO 3: partner comum =====
+begin;
+-- >>> cole a migration <<<
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"07668ecf-b524-4495-8bf2-ef18bb23db51","role":"authenticated"}', true);
+select * from public.consorcio_comentarios;            -- ESPERADO: 42501
+rollback;
+
+-- ===== BLOCO 4: MESA_OPERACIONAL tentando mudar etapa pela REST =====
+begin;
+-- >>> cole a migration <<<
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"<ID DA MESA_OPERACIONAL>","role":"authenticated"}', true);
+with u as (update public.consorcio_ofertas set etapa = 'PERDIDA' returning 1) select count(*) as linhas_alteradas from u;
+-- ESPERADO: 0 (sem policy de UPDATE)
+rollback;
+
+-- ===== BLOCO 5: ADMIN tentando mudar etapa pela REST =====
+begin;
+-- >>> cole a migration <<<
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"<ID DO ADMIN>","role":"authenticated"}', true);
+with u as (update public.consorcio_ofertas set etapa = 'PERDIDA' returning 1) select count(*) as linhas_alteradas from u;
+-- ESPERADO: 0
+rollback;
+
+-- ===== DEPOIS DE APLICAR DE VEZ (segundo go) =====
+select
+  (select count(*) from pg_policies where tablename = 'consorcio_comentarios') as policies_coment,
+  (select count(*) from information_schema.role_table_grants
+     where grantee in ('anon','authenticated') and table_schema = 'public' and table_name = 'consorcio_comentarios') as grants_coment,
+  (select relrowsecurity from pg_class where oid = 'public.consorcio_comentarios'::regclass) as rls_coment;
+-- ESPERADO: 0 | 0 | true
+select policyname, cmd, roles from pg_policies where tablename = 'consorcio_ofertas' order by cmd, policyname;
+-- ESPERADO: nenhuma linha com cmd = UPDATE (colar o resultado no BRIEF)

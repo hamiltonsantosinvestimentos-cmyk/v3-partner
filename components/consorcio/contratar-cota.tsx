@@ -14,6 +14,7 @@ import {
   estimativaParcela, nomeExibido, rotuloStatusContratacao, textoAutorizacao,
   type ContratacaoLista, type Quando, type Segmento,
 } from "@/lib/consorcio/contratacoes";
+import { ModalItem, QuadroKanban, SeletorVisao, SeloComentarios, useVisao } from "./kanban-consorcio";
 
 const EVENTO_ABRIR = "v3:contratar-cota";
 type Marca = { nome: string; logoUrl: string | null } | null;
@@ -347,6 +348,9 @@ export function CotasNovas() {
   const [erro, setErro] = useState(false);
   const [quizAberto, setQuizAberto] = useState(false);
   const [mudando, setMudando] = useState<string | null>(null);
+  const [podeMoverCards, setPodeMoverCards] = useState(false);
+  const [visao, setVisao] = useVisao("v3:consorcio:cotas-novas:visao");
+  const [abertoId, setAbertoId] = useState<string | null>(null);
 
   const carregar = useCallback(() => {
     fetch("/api/consorcio/contratacoes")
@@ -357,6 +361,7 @@ export function CotasNovas() {
         setInterno(!!j.interno);
         setMarca(j.marca ?? null);
         setMercado(j.mercado ?? null);
+        setPodeMoverCards(!!j.pode_mover);
         setErro(false);
       })
       .catch(() => setErro(true));
@@ -369,12 +374,16 @@ export function CotasNovas() {
     return () => window.removeEventListener(EVENTO_ABRIR, abrir);
   }, []);
 
-  const mudarStatus = async (id: string, status: string) => {
+  const mudarStatus = async (id: string, status: string): Promise<boolean> => {
     setMudando(id);
-    const r = await fetch("/api/consorcio/contratacoes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
-    if (r.ok) setLista((l) => l?.map((p) => (p.id === id ? { ...p, status } : p)) ?? l);
+    const anterior = lista?.find((p) => p.id === id)?.status;
+    setLista((l) => l?.map((p) => (p.id === id ? { ...p, status } : p)) ?? l);
+    const r = await fetch("/api/consorcio/contratacoes", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) }).catch(() => null);
+    if (!r?.ok && anterior) setLista((l) => l?.map((p) => (p.id === id ? { ...p, status: anterior } : p)) ?? l);
     setMudando(null);
+    return !!r?.ok;
   };
+  const aberto = lista?.find((p) => p.id === abertoId) ?? null;
 
   const novas = lista?.filter((p) => p.status === "NOVA").length;
   const emCotacao = lista?.filter((p) => p.status === "EM_COTACAO").length;
@@ -388,7 +397,8 @@ export function CotasNovas() {
             {interno ? "Todos os pedidos de cota nova. Mude o status conforme a cotação andar." : `Pedidos que você e sua equipe enviaram. A ${nomeExibido(marca?.nome)} cota nas administradoras e retorna.`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SeletorVisao visao={visao} onTrocar={setVisao} />
           {[["Novas", novas], ["Em cotação", emCotacao], ["Total", lista?.length]].map(([r, v]) => (
             <div key={String(r)} className="rounded-lg border border-[#243A66] bg-[#111F35] px-3 py-1.5 text-center">
               <p className="text-[9px] font-bold tracking-[0.18em] uppercase text-[#C9A84C]">{r}</p>
@@ -404,6 +414,16 @@ export function CotasNovas() {
         <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-[#C9A84C]" /></div>
       ) : lista.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[#243A66] p-6 text-center text-sm text-[#7A8FA8]">Nenhum pedido de cota nova ainda. Use Contratar cota nova para enviar o primeiro.</p>
+      ) : visao === "kanban" ? (
+        <QuadroKanban
+          colunas={ORDEM_STATUS.map((s) => ({ id: s, rotulo: ROTULO_STATUS[s] }))}
+          itens={lista}
+          colunaDe={(p) => p.status}
+          podeMover={podeMoverCards}
+          onMover={(p, coluna) => mudarStatus(p.id, coluna)}
+          onAbrir={(p) => setAbertoId(p.id)}
+          renderCard={(p) => <CardKanbanCota p={p} />}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {lista.map((p) => {
@@ -414,7 +434,7 @@ export function CotasNovas() {
                 <div className="space-y-1.5 p-4">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-bold text-[#C9A84C]">Pedido de cota {p.code} · {seg}</span>
-                    {interno ? (
+                    {podeMoverCards ? (
                       <select
                         aria-label={`Status do pedido ${p.code}`}
                         value={p.status}
@@ -434,7 +454,13 @@ export function CotasNovas() {
                   <Contato pedido={p} />
                   <p className="text-xs text-[#7A8FA8]">Carta de <span className="font-semibold text-[#E8C97A]">{valorBR(p.valor_credito)}</span> · parcela até {valorBR(p.parcela_maxima)} · {p.prazo_meses} meses</p>
                   <p className="text-xs text-[#7A8FA8]">Lance: {p.tem_lance ? valorBR(p.lance_valor) : "não"} · {QUANDO[p.quando as Quando] ?? ""}</p>
-                  <p className="text-[11px] text-[#7A8FA8]">Enviado por {p.enviado_por} em {dataBR(p.created_at, true)}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] text-[#7A8FA8]">Enviado por {p.enviado_por} em {dataBR(p.created_at, true)}</p>
+                    <div className="flex items-center gap-2">
+                      <SeloComentarios n={p.comentarios} />
+                      <button type="button" onClick={() => setAbertoId(p.id)} className="text-xs font-semibold text-[#C9A84C] hover:underline">Abrir</button>
+                    </div>
+                  </div>
                   {interno && p.origem && <span className="inline-block rounded-full border border-[#C9A84C]/35 px-2 py-0.5 text-[10px] text-[#E8C97A]">{p.origem}</span>}
                 </div>
               </div>
@@ -444,6 +470,52 @@ export function CotasNovas() {
       )}
 
       {quizAberto && <Quiz marca={marca} mercado={mercado} onFechar={() => setQuizAberto(false)} onEnviado={carregar} />}
+      {aberto && (
+        <ModalItem
+          tipo="CONTRATACAO"
+          id={aberto.id}
+          titulo={`Pedido de cota ${aberto.code} · ${SEGMENTOS[aberto.segmento as Segmento]?.nome ?? aberto.segmento}`}
+          tarja="Contratação cota nova"
+          detalhes={<DetalhesCota p={aberto} interno={interno} />}
+          etapas={ORDEM_STATUS.map((s) => ({ id: s, rotulo: ROTULO_STATUS[s] }))}
+          etapaAtual={aberto.status}
+          podeMover={podeMoverCards}
+          onMudarEtapa={(e) => mudarStatus(aberto.id, e)}
+          onFechar={() => setAbertoId(null)}
+          onComentou={carregar}
+        />
+      )}
     </section>
+  );
+}
+
+function CardKanbanCota({ p }: { p: ContratacaoLista }) {
+  const seg = SEGMENTOS[p.segmento as Segmento]?.nome ?? p.segmento;
+  return (
+    <>
+      <div className="bg-[#C9A84C] px-3 py-0.5 text-[8px] font-bold tracking-[0.18em] uppercase text-[#09081A]">Contratação cota nova</div>
+      <div className="space-y-1 p-3">
+        <p className="text-[11px] font-bold text-[#C9A84C]">{p.code} · {seg}</p>
+        <p className="break-words text-sm font-medium text-[#F0ECE4]">{p.cliente_nome || "Cliente sem nome"}</p>
+        <p className="text-xs text-[#E8C97A] tabular-nums">{valorBR(p.valor_credito)}</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-[10px] text-[#7A8FA8]">{p.enviado_por} · {dataBR(p.created_at)}</p>
+          <SeloComentarios n={p.comentarios} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+function DetalhesCota({ p, interno }: { p: ContratacaoLista; interno: boolean }) {
+  return (
+    <>
+      <p className="break-words text-sm font-medium text-[#F0ECE4]">{p.cliente_nome || "Cliente sem nome"}</p>
+      <Contato pedido={p} />
+      <p className="text-xs text-[#7A8FA8]">Carta de <span className="font-semibold text-[#E8C97A]">{valorBR(p.valor_credito)}</span> · parcela até {valorBR(p.parcela_maxima)} · {p.prazo_meses} meses</p>
+      <p className="text-xs text-[#7A8FA8]">Lance: {p.tem_lance ? valorBR(p.lance_valor) : "não"} · {QUANDO[p.quando as Quando] ?? ""}</p>
+      <p className="text-[11px] text-[#7A8FA8]">Enviado por {p.enviado_por} em {dataBR(p.created_at, true)}</p>
+      {interno && p.origem && <span className="inline-block rounded-full border border-[#C9A84C]/35 px-2 py-0.5 text-[10px] text-[#E8C97A]">{p.origem}</span>}
+    </>
   );
 }

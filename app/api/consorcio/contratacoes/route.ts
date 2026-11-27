@@ -19,6 +19,8 @@ import {
   COLUNAS_CONTRATACAO, QUANDO, ROTULO_STATUS, SEGMENTOS, contratacaoParaLista, ehStatusValido, ordenarContratacoes,
   podeVerContratacao, textoAutorizacao, validarPedido, type Viewer,
 } from "@/lib/consorcio/contratacoes";
+import { podeMover, textoEvento } from "@/lib/consorcio/kanban";
+import { contarComentarios, registrarEvento } from "@/lib/consorcio/kanban-db";
 
 export const dynamic = "force-dynamic";
 
@@ -112,16 +114,18 @@ export async function GET() {
       : { data: [] as { id: string; full_name: string | null; role: string | null }[] };
     const porId = new Map(((perfis ?? []) as { id: string; full_name: string | null; role: string | null }[]).map((p) => [p.id, p]));
     const marcas = viewer.interno ? await marcasDosPartners(db, criadores) : new Map();
+    const contagem = await contarComentarios(db, "CONTRATACAO", linhas.map((o) => String(o.id)), viewer.interno);
 
     const contratacoes = ordenarContratacoes(linhas.map((o) => {
       const criador = porId.get(String(o.created_by ?? ""));
       return contratacaoParaLista(o, viewer, {
         enviadoPor: criador?.full_name?.trim() || "Usuário sem nome",
         origem: viewer.interno ? origemDaOferta(marcas, o.created_by as string | null, ehInterno(criador?.role)) : null,
+        comentarios: contagem.get(String(o.id)) ?? 0,
       });
     }));
 
-    return NextResponse.json({ contratacoes, interno: viewer.interno, marca, mercado, disponivel: true });
+    return NextResponse.json({ contratacoes, interno: viewer.interno, marca, mercado, disponivel: true, pode_mover: podeMover(s.perfil.role) });
   } catch (e) {
     console.error("[consorcio/contratacoes GET]", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "Não foi possível carregar os pedidos agora." }, { status: 500 });
@@ -248,13 +252,16 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const s = await sessao();
   if (!s) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  if (!ehInterno(s.perfil.role)) return NextResponse.json({ error: "Só a equipe V3 muda o status." }, { status: 403 });
+  // Kanban (BRIEF 2026-11-27): só ADMIN e GESTAO movem; MESA_OPERACIONAL acompanha.
+  if (!podeMover(s.perfil.role)) return NextResponse.json({ error: "Só ADMIN e GESTÃO mudam o status." }, { status: 403 });
   const body = (await req.json().catch(() => null)) as { id?: unknown; status?: unknown } | null;
   const id = typeof body?.id === "string" && /^[0-9a-f-]{36}$/i.test(body.id) ? body.id : null;
   if (!id || !ehStatusValido(body?.status)) return NextResponse.json({ error: "Pedido ou status inválido." }, { status: 400 });
   const status = body.status;
   const db = svc();
   const agora = new Date().toISOString();
+  const { data: antes } = await db.from("consorcio_contratacoes").select("status").eq("id", id).maybeSingle();
+  const de = (antes as { status?: string } | null)?.status ?? null;
   const { data, error } = await db.from("consorcio_contratacoes")
     .update({ status, status_atualizado_em: agora, status_atualizado_por: s.perfil.id, updated_at: agora })
     .eq("id", id).is("deleted_at", null)
@@ -265,6 +272,9 @@ export async function PATCH(req: NextRequest) {
   }
   if (!data) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
 
+  if (de && de !== status) {
+    await registrarEvento(db, "CONTRATACAO", id, s.perfil.id, textoEvento(ROTULO_STATUS[de as keyof typeof ROTULO_STATUS] ?? de, ROTULO_STATUS[status]));
+  }
   const dono = (data as { created_by: string | null }).created_by;
   if (dono && dono !== s.perfil.id) {
     const { error: nErr } = await db.from("notifications").insert({

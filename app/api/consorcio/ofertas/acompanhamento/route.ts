@@ -10,6 +10,8 @@ import { ehInterno } from "../../vitrine";
 import {
   COLUNAS_OFERTA, ofertaParaAcompanhamento, ordenarOfertas, origemDaOferta, podeVerOferta, type Viewer,
 } from "@/lib/consorcio/ofertas-acompanhamento";
+import { podeMover } from "@/lib/consorcio/kanban";
+import { contarComentarios, faltaNoBanco } from "@/lib/consorcio/kanban-db";
 
 export const dynamic = "force-dynamic";
 
@@ -28,17 +30,22 @@ export async function GET() {
     const viewer: Viewer = { id: user.id, interno, equipe: interno ? [] : await idsDaEquipe(svc, user.id) };
 
     // Todas as pendentes + as 300 mais recentes das demais: pendente antiga nunca some da lista.
-    const base = () => {
-      const q = svc.from("consorcio_ofertas").select(COLUNAS_OFERTA);
-      return interno ? q : q.in("created_by", viewer.equipe);
+    // Kanban (BRIEF 2026-11-27): lê `etapa`; antes da migration 20261127b, cai para as colunas antigas (etapa = Nova).
+    const buscar = (colunas: string) => {
+      const base = () => {
+        const q = svc.from("consorcio_ofertas").select(colunas);
+        return interno ? q : q.in("created_by", viewer.equipe);
+      };
+      return Promise.all([
+        base().eq("status", "pendente").order("created_at", { ascending: false }),
+        base().neq("status", "pendente").order("created_at", { ascending: false }).limit(LIMITE_DEMAIS),
+      ]);
     };
-    const [pend, demais] = await Promise.all([
-      base().eq("status", "pendente").order("created_at", { ascending: false }),
-      base().neq("status", "pendente").order("created_at", { ascending: false }).limit(LIMITE_DEMAIS),
-    ]);
+    let [pend, demais] = await buscar(`${COLUNAS_OFERTA}, etapa`);
+    if (faltaNoBanco(pend.error) || faltaNoBanco(demais.error)) [pend, demais] = await buscar(COLUNAS_OFERTA);
     if (pend.error || demais.error) throw new Error((pend.error ?? demais.error)!.message);
 
-    const linhas = ([...(pend.data ?? []), ...(demais.data ?? [])] as Record<string, unknown>[]).filter((o) => {
+    const linhas = ([...(pend.data ?? []), ...(demais.data ?? [])] as unknown as Record<string, unknown>[]).filter((o) => {
       const ok = podeVerOferta(viewer, o as { created_by?: string | null });
       if (!ok) console.error("[consorcio/ofertas/acompanhamento] linha recusada", { oferta: o.id, viewer: user.id });
       return ok;
@@ -50,16 +57,18 @@ export async function GET() {
       : { data: [] as { id: string; full_name: string | null; role: string | null }[] };
     const porId = new Map(((perfis ?? []) as { id: string; full_name: string | null; role: string | null }[]).map((p) => [p.id, p]));
     const marcas = interno ? await marcasDosPartners(svc, criadores) : new Map();
+    const contagem = await contarComentarios(svc, "OFERTA", linhas.map((o) => String(o.id)), interno);
 
     const ofertas = ordenarOfertas(linhas.map((o) => {
       const criador = porId.get(String(o.created_by ?? ""));
       const ofertadoPor = criador?.full_name?.trim() || "Usuário sem nome";
+      const comentarios = contagem.get(String(o.id)) ?? 0;
       return interno
-        ? ofertaParaAcompanhamento(o, "interno", { ofertadoPor, origem: origemDaOferta(marcas, o.created_by as string | null, ehInterno(criador?.role)) })
-        : ofertaParaAcompanhamento(o, "partner", { ofertadoPor });
+        ? ofertaParaAcompanhamento(o, "interno", { ofertadoPor, comentarios, origem: origemDaOferta(marcas, o.created_by as string | null, ehInterno(criador?.role)) })
+        : ofertaParaAcompanhamento(o, "partner", { ofertadoPor, comentarios });
     }));
 
-    return NextResponse.json({ ofertas, interno });
+    return NextResponse.json({ ofertas, interno, pode_mover: podeMover(perfil?.role as string | null) });
   } catch (e) {
     console.error("[consorcio/ofertas/acompanhamento]", e instanceof Error ? e.message : e);
     return NextResponse.json({ error: "Não foi possível carregar as ofertas agora." }, { status: 500 });
