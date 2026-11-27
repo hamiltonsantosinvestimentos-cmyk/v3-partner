@@ -144,6 +144,7 @@ const NAV_SECTIONS: NavSection[] = [
         ],
       },
       { href: "/enterprise", label: "Enterprise", icon: "Building2", roles: ["ENTERPRISE"] },
+      { href: "/enterprise/mesa-operacional", label: "Mesa Operacional", icon: "Headphones", roles: ["ENTERPRISE"] },
       { href: "/ma", label: "M&A", icon: "Building2", roles: ["ADMIN", "GESTAO", "PARTNER", "PARTNER_PRO", "GOLD", "DIAMANTE", "ENTERPRISE", "MESA_OPERACIONAL"] },
       {
         href: "/consorcio", label: "Consórcio", icon: "Trophy",
@@ -251,9 +252,12 @@ interface SidebarProps {
   temCorDeMarca?: boolean;
 }
 
+// Só o master Enterprise vê estes itens (BRIEF 2026-11-26_mesa-operacional-master-enterprise).
+const HREFS_SO_MASTER = ["/enterprise", "/enterprise/mesa-operacional"];
+
 export function Sidebar({ role, starterAntigo = false, enterpriseMaster = false, onClose, marca = null, temCorDeMarca = false }: SidebarProps) {
   const podeVer = (item: { href: string; roles: string[] }) =>
-    (item.href === "/enterprise" && role === "ENTERPRISE" ? enterpriseMaster : item.roles.includes(role))
+    (HREFS_SO_MASTER.includes(item.href) && role === "ENTERPRISE" ? enterpriseMaster : item.roles.includes(role))
     || (starterAntigo && role === "STARTER" && MENU_STARTER_ANTIGO.has(item.href));
   const pathname = usePathname();
   const [expandedItems, setExpandedItems] = useState<string[]>(() => {
@@ -395,7 +399,8 @@ export function Sidebar({ role, starterAntigo = false, enterpriseMaster = false,
               </ul>
               {visibleItems.map(item => {
                 const Icon = iconMap[item.icon];
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                const isActive = (pathname === item.href || pathname.startsWith(item.href + "/"))
+                  && !(item.href === "/enterprise" && pathname.startsWith("/enterprise/mesa-operacional"));
                 const isExpanded = expandedItems.includes(item.href);
                 const hasChildren = item.children && item.children.length > 0;
                 const filteredChildren = item.children?.filter(podeVer);
