@@ -4,6 +4,7 @@
 // que depende de código de servidor. lib/enterprise/mesa-equipe.ts reexporta tudo daqui.
 import { SLA_STAGES, SLA_STAGE_LABELS } from "@/lib/mesa-operacional-sla";
 import { formatCurrencyBRLFromNumber } from "@/lib/utils";
+import type { TarjaEnterpriseDados } from "@/components/shared/tarja-enterprise";
 
 export const COLUNAS = [...SLA_STAGES, "ENCERRADAS"] as const;
 export type ColunaMesa = (typeof COLUNAS)[number];
@@ -58,4 +59,51 @@ export function dataBR(iso: string | null | undefined, comHora = false): string 
 /** "R$ " + máscara BRL; nulo vira "Não informado" (nunca "R$ 0,00" nem "NaN"). */
 export function valorBR(v: number | null | undefined): string {
   return v == null || !Number.isFinite(v) ? NAO_INFORMADO : `R$ ${formatCurrencyBRLFromNumber(v)}`;
+}
+
+/**
+ * Converte a resposta de GET /api/credit-proposals?id= no formato que a janela da Mesa de Crédito
+ * (PropostaDetailModal) recebe. Mesma conversão campo a campo de components/mesa-credito/nivel1-client.tsx
+ * e credit-desk-client.tsx: se ela mudar lá, mude aqui também (o teste congela os campos de hoje).
+ * BRIEF docs/briefs/2026-11-27_mesa-operacional-master-modal-mesa-credito.md
+ */
+export function propostaDaMesaDeCredito(p: Record<string, unknown>) {
+  const meta = p.metadata as Record<string, unknown> | null;
+  const partner = p.partner as { id?: string; full_name?: string; role?: string } | null;
+  return {
+    id: p.id as string, code: p.code as string, title: p.title as string,
+    client_name: p.client_name as string,
+    cpf_cnpj: p.client_cpf_cnpj as string | undefined,
+    client_type: (meta?.client_type ?? p.client_type) as string | undefined,
+    email: meta?.email as string | undefined,
+    telefone: meta?.telefone as string | undefined,
+    prazo: meta?.prazo as string | undefined,
+    finalidade: meta?.finalidade as string | undefined,
+    credit_line: p.credit_line as string,
+    requested_value: p.requested_value as number,
+    approved_value: (p.approved_value as number | null) ?? null,
+    current_level: p.current_level as string,
+    status: p.status as string,
+    stage: p.stage as string | undefined,
+    partner_id: partner?.id,
+    partner_name: partner?.full_name,
+    partner_role: partner?.role,
+    enterprise: (p.enterprise as TarjaEnterpriseDados | null | undefined) ?? null,
+    created_at: p.created_at as string,
+    valor_credito_atual: p.valor_credito_atual as number | undefined,
+    comissao_mandato_perc: p.comissao_mandato_perc as number | undefined,
+    comissao_instituicao_perc: p.comissao_instituicao_perc as number | undefined,
+    metadata: meta ?? undefined,
+    level1_notes: p.level1_notes as string | null | undefined,
+    level2_notes: p.level2_notes as string | null | undefined,
+    level3_notes: p.level3_notes as string | null | undefined,
+    level1_at: p.level1_at as string | null | undefined,
+    level2_at: p.level2_at as string | null | undefined,
+    level3_at: p.level3_at as string | null | undefined,
+    pending_reason: p.pending_reason as string | null | undefined,
+    pending_responsible: p.pending_responsible as string | null | undefined,
+    pending_at: p.pending_at as string | null | undefined,
+    pending_resolved_at: p.pending_resolved_at as string | null | undefined,
+    pending_resolved_by: p.pending_resolved_by as string | null | undefined,
+  };
 }
