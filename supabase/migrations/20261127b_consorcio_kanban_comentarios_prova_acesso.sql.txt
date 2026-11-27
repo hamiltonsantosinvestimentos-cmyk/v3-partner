@@ -1,0 +1,93 @@
+-- PROVA DE ACESSO de 20261127b (BRIEF docs/briefs/2026-11-27_kanban-consorcio-projetos.md, item 6.8).
+-- COLE TUDO NO SQL EDITOR E RODE. Termina com ERRO PROPOSITAL: o erro desfaz tudo (nada fica gravado)
+-- e a mensagem do erro traz o resultado. ESPERADO na mensagem:
+--   anon_coment=false auth_coment=false policies_update_ofertas=0 partner_coment=negado partner_etapa=0 mesa_etapa=0 admin_etapa=0
+-- ("negado" = 42501; um número = linhas alteradas; -1 também significa negado)
+
+begin;
+
+
+alter table public.consorcio_ofertas
+  add column if not exists etapa text default 'NOVA',
+  add column if not exists etapa_atualizada_em timestamptz,
+  add column if not exists etapa_atualizada_por uuid references public.profiles(id);
+
+do $$ begin
+  alter table public.consorcio_ofertas add constraint consorcio_ofertas_etapa_ck
+    check (etapa is null or etapa in ('NOVA','EM_CONTATO','NEGOCIANDO','DOCUMENTACAO','CONCLUIDA','PERDIDA'));
+exception when duplicate_object then null; end $$;
+
+drop policy if exists "admin pode atualizar ofertas" on public.consorcio_ofertas;
+
+create table if not exists public.consorcio_comentarios (
+  id               uuid primary key default gen_random_uuid(),
+  alvo_tipo        text not null check (alvo_tipo in ('CONTRATACAO','OFERTA')),
+  alvo_id          uuid not null,
+  autor_id         uuid not null references public.profiles(id),
+  texto            text not null check (char_length(texto) between 1 and 2000),
+  visivel_partner  boolean not null default true,
+  evento           boolean not null default false,
+  created_at       timestamptz not null default now()
+);
+
+create index if not exists consorcio_comentarios_alvo_idx on public.consorcio_comentarios (alvo_tipo, alvo_id, created_at);
+create index if not exists consorcio_comentarios_autor_idx on public.consorcio_comentarios (autor_id, created_at desc);
+
+alter table public.consorcio_comentarios enable row level security;
+revoke all on public.consorcio_comentarios from anon, authenticated;
+
+comment on table public.consorcio_comentarios is
+  'Comentários e histórico dos itens do Kanban de Consórcio › Projetos (BRIEF 2026-11-27). Só service role.';
+
+do $$
+declare
+  r text;
+  n int;
+  partner_id uuid := '07668ecf-b524-4495-8bf2-ef18bb23db51';
+  mesa_id uuid := (select id from public.profiles where role = 'MESA_OPERACIONAL' and is_active limit 1);
+  admin_id uuid := (select id from public.profiles where role = 'ADMIN' and is_active limit 1);
+  partner_coment text;
+  partner_etapa int;
+  mesa_etapa int;
+  admin_etapa int;
+begin
+  r := format('anon_coment=%s auth_coment=%s policies_update_ofertas=%s',
+    has_table_privilege('anon', 'public.consorcio_comentarios', 'select,insert,update,delete'),
+    has_table_privilege('authenticated', 'public.consorcio_comentarios', 'select,insert,update,delete'),
+    (select count(*) from pg_policies where tablename = 'consorcio_ofertas' and cmd = 'UPDATE'));
+
+  -- partner comum lendo comentários
+  perform set_config('request.jwt.claims', json_build_object('sub', partner_id, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin
+    perform count(*) from public.consorcio_comentarios;
+    partner_coment := 'LEU (FALHA)';
+  exception when insufficient_privilege then partner_coment := 'negado';
+  end;
+  begin
+    update public.consorcio_ofertas set etapa = 'PERDIDA'; get diagnostics partner_etapa = row_count;
+  exception when insufficient_privilege then partner_etapa := -1;
+  end;
+  reset role;
+
+  -- MESA_OPERACIONAL tentando mudar etapa pela REST
+  perform set_config('request.jwt.claims', json_build_object('sub', mesa_id, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin
+    update public.consorcio_ofertas set etapa = 'PERDIDA'; get diagnostics mesa_etapa = row_count;
+  exception when insufficient_privilege then mesa_etapa := -1;
+  end;
+  reset role;
+
+  -- ADMIN tentando mudar etapa pela REST
+  perform set_config('request.jwt.claims', json_build_object('sub', admin_id, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  begin
+    update public.consorcio_ofertas set etapa = 'PERDIDA'; get diagnostics admin_etapa = row_count;
+  exception when insufficient_privilege then admin_etapa := -1;
+  end;
+  reset role;
+
+  raise exception 'RESULTADO (erro proposital, nada gravado): % partner_coment=% partner_etapa=% mesa_etapa=% admin_etapa=%',
+    r, partner_coment, partner_etapa, mesa_etapa, admin_etapa;
+end $$;

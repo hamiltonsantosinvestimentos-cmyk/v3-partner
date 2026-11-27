@@ -11,6 +11,8 @@ import { rotuloStatusOferta, type OfertaAcompanhamento } from "@/lib/consorcio/o
 import { dataBR, valorBR } from "@/app/(platform)/enterprise/mesa-operacional/exibicao";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { BotaoContratarCota, CotasNovas } from "@/components/consorcio/contratar-cota";
+import { ModalItem, QuadroKanban, SeletorVisao, SeloComentarios, useVisao } from "@/components/consorcio/kanban-consorcio";
+import { ETAPAS_OFERTA, ROTULO_ETAPA_OFERTA, divergenciaStatusEtapa } from "@/lib/consorcio/kanban";
 
 interface Project {
   id: string;
@@ -185,17 +187,34 @@ function OfertasCotaContemplada() {
   const [ofertas, setOfertas] = useState<OfertaAcompanhamento[] | null>(null);
   const [interno, setInterno] = useState(false);
   const [erro, setErro] = useState(false);
+  const [podeMoverCards, setPodeMoverCards] = useState(false);
+  const [visao, setVisao] = useVisao("v3:consorcio:ofertas:visao");
+  const [abertoId, setAbertoId] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Kanban (BRIEF docs/briefs/2026-11-27_kanban-consorcio-projetos.md): etapas de acompanhamento, não o status.
+  const carregar = React.useCallback(() => {
     fetch("/api/consorcio/ofertas/acompanhamento")
       .then(async (r) => {
         const j = await r.json().catch(() => null);
         if (!r.ok || !Array.isArray(j?.ofertas)) throw new Error("falha");
         setOfertas(j.ofertas);
         setInterno(!!j.interno);
+        setPodeMoverCards(!!j.pode_mover);
       })
       .catch(() => setErro(true));
   }, []);
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const mudarEtapa = async (id: string, etapa: string): Promise<boolean> => {
+    const anterior = ofertas?.find((o) => o.id === id)?.etapa;
+    setOfertas((l) => l?.map((o) => (o.id === id ? { ...o, etapa: etapa as typeof o.etapa } : o)) ?? l);
+    const r = await fetch(`/api/consorcio/ofertas/${id}/etapa`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ etapa }) }).catch(() => null);
+    if (!r?.ok && anterior) setOfertas((l) => l?.map((o) => (o.id === id ? { ...o, etapa: anterior } : o)) ?? l);
+    return !!r?.ok;
+  };
+  const aberta = ofertas?.find((o) => o.id === abertoId) ?? null;
+  const colunasOferta = ETAPAS_OFERTA.map((e) => ({ id: e, rotulo: ROTULO_ETAPA_OFERTA[e] }));
+  const avisoAberta = aberta ? divergenciaStatusEtapa(aberta.status, aberta.etapa) : null;
 
   const emAnalise = ofertas?.filter((o) => o.status === "pendente").length;
   const aceitas = ofertas?.filter((o) => o.status === "aceita").length;
@@ -209,7 +228,8 @@ function OfertasCotaContemplada() {
             {interno ? "Todas as ofertas feitas nas cartas contempladas. A decisão é feita na carta." : "Ofertas que você e sua equipe fizeram nas cartas contempladas."}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SeletorVisao visao={visao} onTrocar={setVisao} />
           <Contador rotulo="Em análise" valor={emAnalise} />
           <Contador rotulo="Aceitas" valor={aceitas} />
           <Contador rotulo="Total" valor={ofertas?.length} />
@@ -222,6 +242,16 @@ function OfertasCotaContemplada() {
         <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-[#C9A84C]" /></div>
       ) : ofertas.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[#243A66] p-6 text-center text-sm text-[#7A8FA8]">Nenhuma oferta de cota contemplada ainda.</p>
+      ) : visao === "kanban" ? (
+        <QuadroKanban
+          colunas={colunasOferta}
+          itens={ofertas.map((o) => ({ ...o, code: o.carta_code }))}
+          colunaDe={(o) => o.etapa}
+          podeMover={podeMoverCards}
+          onMover={(o, coluna) => mudarEtapa(o.id, coluna)}
+          onAbrir={(o) => setAbertoId(o.id)}
+          renderCard={(o) => <CardKanbanOferta o={o} />}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {ofertas.map((o) => (
@@ -238,7 +268,13 @@ function OfertasCotaContemplada() {
                 {!interno && <p className="text-[11px] text-[#7A8FA8]">{o.interessado_documento}</p>}
                 <p className="text-xs text-[#7A8FA8]">Crédito da carta: <span className="text-[#F0ECE4]">{valorBR(o.carta_credit_value)}</span></p>
                 <p className="text-xs text-[#7A8FA8]">Valor ofertado: <span className="font-semibold text-[#E8C97A]">{valorBR(o.valor_oferta)}</span></p>
-                <p className="text-[11px] text-[#7A8FA8]">Ofertado por {o.ofertado_por} em {dataBR(o.created_at)}</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-[#7A8FA8]">Ofertado por {o.ofertado_por} em {dataBR(o.created_at)}</p>
+                  <div className="flex items-center gap-2">
+                    <SeloComentarios n={o.comentarios} />
+                    <button type="button" onClick={() => setAbertoId(o.id)} className="text-xs font-semibold text-[#C9A84C] hover:underline">Abrir</button>
+                  </div>
+                </div>
                 {interno && (
                   <div className="flex items-center justify-between gap-2 pt-1">
                     <span className="rounded-full border border-[#C9A84C]/35 px-2 py-0.5 text-[10px] text-[#E8C97A]">{o.origem}</span>
@@ -250,7 +286,62 @@ function OfertasCotaContemplada() {
           ))}
         </div>
       )}
+      {aberta && (
+        <ModalItem
+          tipo="OFERTA"
+          id={aberta.id}
+          titulo={`Oferta da carta ${aberta.carta_code}`}
+          tarja="Oferta cota contemplada"
+          detalhes={
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="break-words text-sm font-medium text-[#F0ECE4]">{aberta.interessado_nome || "Interessado sem nome"}</p>
+                <span className="rounded-full bg-[#243A66] px-2 py-0.5 text-[10px] font-semibold text-[#F0ECE4]">{rotuloStatusOferta(aberta.status)}</span>
+              </div>
+              {!interno && <p className="text-[11px] text-[#7A8FA8]">{aberta.interessado_documento}</p>}
+              <p className="text-xs text-[#7A8FA8]">Crédito da carta: <span className="text-[#F0ECE4]">{valorBR(aberta.carta_credit_value)}</span></p>
+              <p className="text-xs text-[#7A8FA8]">Valor ofertado: <span className="font-semibold text-[#E8C97A]">{valorBR(aberta.valor_oferta)}</span></p>
+              <p className="text-[11px] text-[#7A8FA8]">Ofertado por {aberta.ofertado_por} em {dataBR(aberta.created_at, true)}</p>
+              {avisoAberta && <p className="text-[11px] font-semibold text-[#E8C97A]">{avisoAberta}</p>}
+              {interno && (
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <span className="rounded-full border border-[#C9A84C]/35 px-2 py-0.5 text-[10px] text-[#E8C97A]">{aberta.origem}</span>
+                  <Link href="/consorcio/cartas-contempladas" className="text-xs font-semibold text-[#C9A84C] hover:underline">Abrir a carta (aceitar ou recusar)</Link>
+                </div>
+              )}
+            </>
+          }
+          etapas={colunasOferta}
+          etapaAtual={aberta.etapa}
+          podeMover={podeMoverCards}
+          onMudarEtapa={(e) => mudarEtapa(aberta.id, e)}
+          onFechar={() => setAbertoId(null)}
+          onComentou={carregar}
+        />
+      )}
     </section>
+  );
+}
+
+function CardKanbanOferta({ o }: { o: OfertaAcompanhamento }) {
+  const aviso = divergenciaStatusEtapa(o.status, o.etapa);
+  return (
+    <>
+      <div className="bg-[#C9A84C] px-3 py-0.5 text-[8px] font-bold tracking-[0.18em] uppercase text-[#09081A]">Oferta cota contemplada</div>
+      <div className="space-y-1 p-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] font-bold text-[#C9A84C]">Carta {o.carta_code}</span>
+          <span className="rounded-full bg-[#243A66] px-1.5 text-[9px] font-semibold text-[#F0ECE4]">{rotuloStatusOferta(o.status)}</span>
+        </div>
+        <p className="break-words text-sm font-medium text-[#F0ECE4]">{o.interessado_nome || "Interessado sem nome"}</p>
+        <p className="text-xs text-[#E8C97A] tabular-nums">{valorBR(o.valor_oferta)}</p>
+        {aviso && <p className="rounded bg-[#C9A84C]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[#E8C97A]">{aviso}</p>}
+        <div className="flex items-center justify-between gap-2">
+          <p className="truncate text-[10px] text-[#7A8FA8]">{o.ofertado_por} · {dataBR(o.created_at)}</p>
+          <SeloComentarios n={o.comentarios} />
+        </div>
+      </div>
+    </>
   );
 }
 
