@@ -36,6 +36,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/mesa-credito/nivel-3": "High Ticket",
   "/mesa-ma": "Mesa M&A",
   "/mesa-operacional": "Mesa Operacional",
+  "/enterprise/mesa-operacional": "Mesa Operacional",
   "/mesa-consorcio-op": "Mesa Consórcio",
   "/ma": "M&A",
   "/consorcio": "Consórcio",
